@@ -1,0 +1,14 @@
+@use './variables' as *;
+@use './reset';
+
+// Element Plus 主题覆盖
+:root {
+  --el-color-primary: #{$color-primary};
+  --sidebar-width: #{$sidebar-width};
+  --sidebar-collapsed-width: #{$sidebar-collapsed-width};
+  --topbar-height: #{$topbar-height};
+}
+
+.el-menu {
+  border-right: none !important;
+}
