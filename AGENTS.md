@@ -11,10 +11,9 @@ PC 运营后台，使用 Vue 3 + TypeScript + Vite + Element Plus。
 2. **API 层结构**：
    - `src/api/core/` — 手写调用、认证拦截、错误处理
    - `src/api/generated/` — OpenAPI 生成的代码（只读，不手工修改）
-   - `src/api/mock/` — 开发阶段 Mock
 3. **路由权限**：路由守卫在 `src/router/index.ts`，权限过滤在 `src/stores/permission.ts`。
-4. **认证**：基于 JWT Token，存储在 localStorage，认证流程在 `src/stores/auth.ts`。
-5. **Mock**：`VITE_ENABLE_MOCK=true` 时启用，Store action 内优先判断 Mock 还是真实 API。
+4. **认证**：使用 IAM OIDC Authorization Code + PKCE；Access/ID Token 只保存在页面内存，禁止写入 Web Storage。
+5. **数据环境**：当前可在本机运行服务，但仍连接指定 DEV 真实接口和数据库；需要测试数据时在 DEV 数据库按规范构造，不维护运行时 Mock 分支。HTTP 仅允许开发模式下的 loopback 地址。
 6. **指令**：`v-permission` 按权限标识控制元素可见性。
 7. **设计 Token**：定义在 `src/assets/styles/variables.css`，覆盖 Element Plus 主题使用 SCSS 变量。
 
@@ -24,7 +23,7 @@ PC 运营后台，使用 Vue 3 + TypeScript + Vite + Element Plus。
 src/
 ├── api/core/        - 手写 API 客户端
 ├── api/generated/   - OpenAPI 生成代码（请勿修改）
-├── api/mock/        - Mock handlers
+├── auth/            - OIDC PKCE、回调和内存 Token
 ├── stores/          - Pinia stores
 ├── router/          - Vue Router 配置 + 守卫
 ├── layouts/         - 页面布局

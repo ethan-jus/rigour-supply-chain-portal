@@ -13,6 +13,7 @@ export interface LoginResponse {
 
 export interface UserInfo {
   id: string
+  principalScope: 'PLATFORM' | 'TENANT'
   username: string
   displayName: string
   avatar?: string
@@ -20,5 +21,6 @@ export interface UserInfo {
   phone?: string
   roles: string[]
   permissions: string[]
-  tenantId: string
+  tenantId: string | null
+  tenantName: string | null
 }

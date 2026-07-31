@@ -1,6 +1,8 @@
-# 瑞盖优选供应链运营门户 (Portal)
+# 瑞盖优选统一应用门户与供应链管理端 (Portal)
 
-瑞盖优选 B2B 供应链平台 PC 运营门户。
+一期复用一个 Vue 工程承载两层体验：员工登录后先进入“我的应用”卡片目录，点击“供应链平台”后再进入供应链管理 Console。订货宝、飞书销售工作台及其他公司系统作为并列应用入口；是否支持单点登录以各系统真实能力为准。
+
+当前已完成 OIDC Authorization Code + PKCE、ID Token签名/声明校验、内存 Token、“我的应用”、平台管理中心、租户系统管理和数据库导航链路。当前按本地loopback地址开发，但尚未执行真实DEV跨进程浏览器验收，不能把自动构建结果误报为已上线。
 
 ## 技术栈
 
@@ -23,7 +25,7 @@
 
 ```bash
 pnpm install
-pnpm dev        # 开发服务器（Mock 模式）
+pnpm dev        # localhost:5100，通过localhost:26880的Gateway连接真实DEV数据
 pnpm build      # 生产构建
 pnpm test       # 运行测试
 pnpm typecheck  # 类型检查
@@ -36,10 +38,14 @@ pnpm lint:fix   # 代码检查（自动修复）
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `VITE_API_BASE_URL` | `/api/v1` | API 基础路径 |
-| `VITE_ENABLE_MOCK` | `true` | 启用 Mock 数据 |
-| `VITE_APP_ENV` | `local` | 运行环境标识 |
+| `VITE_APP_ENV` | `dev` | 运行环境标识 |
+| `VITE_API_TARGET` | `http://localhost:26880` | 本地Gateway代理目标 |
+| `VITE_OIDC_ISSUER` | `http://localhost:26881` | 当前本地IAM issuer；非开发构建必须HTTPS |
+| `VITE_OIDC_CLIENT_ID` | 无 | Portal 公开客户端 ID |
+| `VITE_OIDC_REDIRECT_URI` | 当前站点 `/oidc/callback` | 精确注册的登录回调 |
+| `VITE_OIDC_POST_LOGOUT_REDIRECT_URI` | 当前站点 `/` | 精确注册的退出回调 |
 
-注意：生产环境不设置 `VITE_DEFAULT_TENANT_ID`；租户 ID 由认证响应或租户选择上下文运行时覆盖。
+Portal 不发送租户身份头；Gateway 从已验签 JWT 重建可信租户上下文。
 
 ## API 契约
 
@@ -55,8 +61,8 @@ pnpm lint:fix   # 代码检查（自动修复）
 src/
 ├── api/               # API 层
 │   ├── core/          # HTTP Client、错误处理
-│   ├── generated/     # OpenAPI 生成代码
-│   └── mock/          # Mock 数据适配器（开发阶段请求拦截）
+│   └── generated/     # OpenAPI 生成代码
+├── auth/              # OIDC PKCE、回调与内存 Token
 ├── assets/styles/     # 设计 Token 和全局样式
 ├── components/        # 通用组件
 ├── composables/       # 组合式函数
@@ -71,34 +77,18 @@ src/
 
 ## 认证与安全
 
-### 当前实现（过渡）
+Portal 是公开 PKCE 客户端，不接收 Refresh Token。Access Token 和 ID Token 仅保存于页面内存；刷新页面或短期 Token 失效后，重新发起授权并复用 IAM 的 Secure/HttpOnly 会话。退出使用 OIDC RP-Initiated Logout，卡片跳往外部系统时不转发 Portal Token。
 
-Token 存储在 `localStorage`，每次请求通过 `Authorization: Bearer <token>` 传递。
+## 基础管理路由
 
-**风险**：localStorage 受 XSS 攻击影响，恶意脚本可读取 token。
-
-### 生产建议
-
-- 使用 HttpOnly + SameSite=Strict Cookie 存储 token
-- 配合 CSRF Token 双重提交或 SameSite Cookie 防御
-- 短期 token + refresh token 轮转
-- CSP 策略限制内联脚本
-
-`src/utils/token.ts` 为过渡封装层，接入后端认证服务后应替换为 Cookie 方案。
-
-## 模块路由
-
-| 模块 | 路径 | 图标 |
+| 层级 | 路径 | 数据库授权 |
 |---|---|---|
-| 工作台 | `/dashboard` | Odometer |
-| 总部管理 | `/hq` | OfficeBuilding |
-| ERP | `/erp` | SetUp |
-| 订单管理 | `/order` | List |
-| 销售管理 | `/sales` | User |
-| 数据分析 | `/bi` | DataAnalysis |
-| 人事管理 | `/hr` | Avatar |
-| 城市运营 | `/city` | MapLocation |
-| 代理管理 | `/channel` | Connection |
+| 我的应用 | `/apps` | IAM应用卡片 |
+| 平台管理 | `/platform-admin` | 租户、套餐、应用、资源、审计 |
+| 租户系统管理 | `/system-admin` | 组织、用户、角色、DataScope、设置、审计 |
+| 供应链Console | `/supply-chain` | CRM、订单、销售、ERP、HR、城市、渠道、BI占位页 |
+
+导航由IAM返回的MENU/PAGE资源决定，`routeKey`必须匹配Portal已编译白名单。BUTTON/API使用`permissionCode`；前端只控制体验，最终授权由Gateway和后端执行。
 
 ## 职责边界
 

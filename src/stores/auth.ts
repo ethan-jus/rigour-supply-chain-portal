@@ -1,25 +1,27 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { LoginRequest, UserInfo } from '@/types'
+import type { UserInfo } from '@/types'
 import { apiClient } from '@/api'
-import { getToken, setToken, removeToken, setRefreshToken } from '@/utils/token'
+import { getToken, removeToken } from '@/utils/token'
+import { beginOidcLogin, beginOidcLogout } from '@/auth/oidc'
 import { usePermissionStore } from './permission'
+import { useApplicationStore } from './application'
+import { useNavigationStore } from './navigation'
 
 /**
  * 认证 Store
  *
  * 职责：
- * - 管理用户登录状态、当前用户信息、token
+ * - 发起OIDC Authorization Code + PKCE并管理内存Access Token
  * - 提供 hasPermission / hasRole 权限判定方法
  * - 登录/获取用户信息后触发权限路由初始化
  *
  * 边界：
- * - token 存取委托给 utils/token.ts（隔离存储实现）
+ * - Token不进入localStorage/sessionStorage；PKCE临时材料只在sessionStorage中跨重定向保存
  * - 权限路由初始化委托给 permissionStore.initRoutes()
- * - 不处理 token 过期刷新逻辑（待接入后端 refresh 接口）
+ * - 公开SPA不接收Refresh Token；页面刷新或Token失效后复用IAM会话重新授权
  *
  * 风险：
- * - localStorage 存储 token 受 XSS 影响，生产应迁移至 HttpOnly Cookie
  * - fetchUser 失败会导致菜单为空，已通过 catch 中的 logout 处理
  */
 
@@ -28,18 +30,13 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(getToken())
   const isAuthenticated = ref(!!getToken())
 
-  async function login(credentials: LoginRequest) {
-    const result = (await apiClient.post('/auth/login', credentials)) as {
-      accessToken: string
-      refreshToken?: string
-    }
-    setToken(result.accessToken)
-    if (result.refreshToken) {
-      setRefreshToken(result.refreshToken)
-    }
-    token.value = result.accessToken
-    isAuthenticated.value = true
-    await fetchUser()
+  async function login(returnPath = '/apps') {
+    await beginOidcLogin(returnPath)
+  }
+
+  function synchronizeTokenState() {
+    token.value = getToken()
+    isAuthenticated.value = !!token.value
   }
 
   /**
@@ -49,27 +46,29 @@ export const useAuthStore = defineStore('auth', () => {
    * 这是登录、页面刷新恢复会话的统一入口。
    */
   async function fetchUser() {
-    const userData = (await apiClient.get('/auth/me')) as UserInfo
+    const userData = (await apiClient.get('/me')) as UserInfo
     user.value = userData
-
-    // 租户上下文仅保留在当前浏览器会话，供后续 API 请求注入可信租户头。
-    sessionStorage.setItem('portal_tenant_id', userData.tenantId)
 
     // 根据用户权限初始化侧边菜单
     const permissionStore = usePermissionStore()
     permissionStore.initRoutes(userData.permissions)
   }
 
-  function logout() {
+  function clearLocalSession() {
     removeToken()
     token.value = null
     user.value = null
     isAuthenticated.value = false
-    sessionStorage.removeItem('portal_tenant_id')
-
     // 清空菜单状态
     const permissionStore = usePermissionStore()
     permissionStore.reset()
+    useApplicationStore().reset()
+    useNavigationStore().reset()
+  }
+
+  function logout() {
+    clearLocalSession()
+    beginOidcLogout()
   }
 
   function hasPermission(permission: string): boolean {
@@ -88,8 +87,10 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     isAuthenticated,
     login,
+    synchronizeTokenState,
     fetchUser,
     logout,
+    clearLocalSession,
     hasPermission,
     hasRole,
   }

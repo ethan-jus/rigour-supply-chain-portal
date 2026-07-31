@@ -1,5 +1,16 @@
 import type { Router } from 'vue-router'
-import { useAuthStore } from '@/stores'
+import { useApplicationStore, useAuthStore, useNavigationStore } from '@/stores'
+
+interface ApiFailure {
+  code?: string
+  response?: { status?: number }
+}
+
+function isApiFailure(error: unknown, status: number, code: string): boolean {
+  if (!error || typeof error !== 'object') return false
+  const failure = error as ApiFailure
+  return failure.code === code || failure.response?.status === status
+}
 
 /**
  * 路由权限守卫
@@ -48,8 +59,43 @@ export function setupPermissionGuard(router: Router): void {
         await authStore.fetchUser()
         // fetchUser 成功后 permissionStore.accessibleRoutes 已填充
       } catch {
-        authStore.logout()
+        authStore.clearLocalSession()
         next({ path: '/login', query: { redirect: to.fullPath } })
+        return
+      }
+    }
+
+    const applicationCode = to.meta?.applicationCode as string | undefined
+    if (applicationCode) {
+      const applicationStore = useApplicationStore()
+      try {
+        if (!applicationStore.loaded) await applicationStore.fetchApplications()
+      } catch (error) {
+        if (isApiFailure(error, 401, 'IAM_UNAUTHORIZED')) {
+          authStore.clearLocalSession()
+          next({ path: '/login', query: { redirect: to.fullPath } })
+          return
+        }
+        next({ path: '/apps', query: { launchError: 'applications-unavailable' } })
+        return
+      }
+      if (!applicationStore.applications.some((application) => application.code === applicationCode)) {
+        next({ path: '/403' })
+        return
+      }
+      const navigationStore = useNavigationStore()
+      try {
+        if (!navigationStore.isLoaded(applicationCode)) await navigationStore.fetchNavigation(applicationCode)
+      } catch (error) {
+        if (isApiFailure(error, 403, 'IAM_FORBIDDEN')) {
+          next({ path: '/403' })
+          return
+        }
+        next({ path: '/apps', query: { launchError: 'navigation-unavailable' } })
+        return
+      }
+      if (!navigationStore.hasPath(applicationCode, to.path)) {
+        next({ path: '/403' })
         return
       }
     }

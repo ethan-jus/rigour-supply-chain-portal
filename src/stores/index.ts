@@ -1,4 +1,6 @@
 export { useAuthStore } from './auth'
+export { useApplicationStore } from './application'
+export { useNavigationStore } from './navigation'
 export { useAppStore } from './app'
 export { usePermissionStore } from './permission'
 export type { PermissionRoute } from './permission'

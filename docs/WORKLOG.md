@@ -1,5 +1,29 @@
 # PC Portal Worklog
 
+## 2026-07-31 — 登录、统一入口与系统管理收口
+
+- 重做登录引导页、统一应用入口、应用卡片和错误/空数据/加载状态；入口展示当前用户、主体范围和租户名称。
+- OIDC回调失败不再静默吞错；Access/ID Token保持页面内存存储，刷新后复用IAM HttpOnly会话重新授权。
+- 用户管理补齐强密码确认、密码重置及会话撤销提示、角色/组织分配；系统角色只读保护。
+- 租户管理补齐套餐预约生效、用户上限提示、订阅历史和有效状态展示。
+- Portal不转发完整用户资料给其他系统；独立应用打开自己的OIDC登录入口，由IAM已有会话完成单点登录。
+- `pnpm typecheck`、`pnpm lint`、25项Vitest和`pnpm build`全部通过；共享DEV和真实浏览器E2E尚未执行。
+
+## 2026-07-31 — 平台/租户基础管理与数据库导航
+
+- 新增平台管理Shell：租户与订阅、套餐与版本、应用与OIDC客户端、MENU/PAGE/BUTTON/API资源、审计。
+- 新增租户系统管理Shell：组织、用户、角色与套餐授权边界、DataScope、租户设置、审计。
+- 应用卡片与侧边导航均从IAM加载；`routeKey`仅映射已编译路由，未知或路径不一致时失败关闭。
+- 新增权限/应用Gate；前端显隐不代替后端授权。开发运行时可使用loopback HTTP，无运行时Mock。
+- `pnpm typecheck`、`pnpm lint`、25项Vitest和`pnpm build`全部通过；真实DEV浏览器E2E尚未执行。
+
+## 2026-07-31 — IAM OIDC 与统一应用门户接入
+
+- 运行时移除 Mock 分支和 Web Storage Token，接入 Authorization Code + PKCE、state 校验、S256、内存 Access/ID Token。
+- 接入 `/api/v1/me`、`/api/v1/portal/apps`，新增“我的应用”Shell、授权卡片和受控启动。
+- 浏览器不再发送租户身份头；外部卡片不携带 Portal Token；退出使用 OIDC RP-Initiated Logout。
+- `pnpm typecheck`、`pnpm lint`、19 项测试和 `pnpm build` 通过；共享 DEV E2E 尚未执行。
+
 ## 2026-07-29 — Portal 骨架搭建
 
 ### 完成内容

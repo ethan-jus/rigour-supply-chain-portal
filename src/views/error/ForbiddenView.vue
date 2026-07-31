@@ -6,8 +6,8 @@
     <p class="error-desc">
       您没有权限访问此页面
     </p>
-    <el-button type="primary" @click="$router.push('/dashboard')">
-      返回工作台
+    <el-button type="primary" @click="$router.push('/apps')">
+      返回应用门户
     </el-button>
   </div>
 </template>

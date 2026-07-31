@@ -11,7 +11,7 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
  * - Element Plus 按需引入：unplugin-vue-components 的 ElementPlusResolver
  *   + importStyle: 'css' 自动导入组件样式，不需要在 main.ts 全量注册
  * - 路径别名 @ → src/
- * - 开发代理 /api → 后端（默认 localhost:8080）
+ * - 开发代理 /api → Gateway（默认 localhost:26880）
  * - 生产关闭 sourcemap
  */
 export default defineConfig(({ mode }) => {
@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => {
       port: 5100,
       proxy: {
         '/api': {
-          target: env.VITE_API_TARGET || 'http://localhost:8080',
+          target: env.VITE_API_TARGET || 'http://localhost:26880',
           changeOrigin: true,
         },
       },
