@@ -1,17 +1,25 @@
 <template>
   <div class="portal-shell">
     <header class="portal-header">
-      <router-link class="brand" to="/apps"><span>R</span><strong>瑞盖统一应用门户</strong></router-link>
-      <div class="account">
-        <div class="account__avatar">{{ authStore.user?.displayName?.slice(0, 1) || '用' }}</div>
-        <div class="account__copy">
-          <strong>{{ authStore.user?.displayName || '当前用户' }}</strong>
-          <span>{{ accountContext }}</span>
+      <router-link class="brand" to="/apps">
+        <img class="brand__logo" src="@/assets/brand/ruigai-logo.png" alt="瑞盖优选">
+        <strong>瑞盖优选</strong>
+        <span class="brand__divider" aria-hidden="true">/</span>
+        <span class="brand__sub">统一门户</span>
+      </router-link>
+
+      <div class="topbar-right">
+        <span class="verified"><i aria-hidden="true" />身份已由 IAM 验证</span>
+        <div class="account">
+          <div class="account__avatar">{{ authStore.user?.displayName?.slice(0, 1) || '用' }}</div>
+          <div class="account__copy">
+            <strong>{{ authStore.user?.displayName || '当前用户' }}</strong>
+            <span>{{ accountContext }}</span>
+          </div>
+          <el-button class="logout" text @click="logout">退出</el-button>
         </div>
-        <el-button class="logout" text @click="logout">退出</el-button>
       </div>
     </header>
-    <div class="security-bar"><span><i />身份已由 IAM 验证</span><span>应用与权限以当前数据库配置为准</span></div>
     <main class="portal-content"><router-view /></main>
   </div>
 </template>
@@ -22,23 +30,132 @@ import { useAuthStore } from '@/stores'
 
 const authStore = useAuthStore()
 const accountContext = computed(() => authStore.user?.principalScope === 'PLATFORM'
-  ? '平台管理员'
+  ? '平台管理'
   : authStore.user?.tenantName || '企业用户')
 function logout() { authStore.logout() }
 </script>
 
 <style scoped lang="scss">
-.portal-shell { min-height: 100vh; color: #17233b; background: #f4f7fb; }
-.portal-header { display: flex; justify-content: space-between; align-items: center; height: 70px; padding: 0 clamp(20px, 4vw, 56px); background: white; border-bottom: 1px solid #e6ebf2; }
-.brand { display: flex; gap: 12px; align-items: center; color: #17233b; text-decoration: none; }
-.brand > span { display: grid; width: 36px; height: 36px; color: white; background: linear-gradient(145deg, #174a8b, #1d70ba); border-radius: 11px; font-weight: 800; place-items: center; }
-.brand strong { font-size: 17px; letter-spacing: .01em; }
-.account { display: flex; gap: 11px; align-items: center; }
-.account__avatar { display: grid; width: 36px; height: 36px; color: #1a5f9f; background: #eaf2fa; border-radius: 50%; font-weight: 700; place-items: center; }
-.account__copy { display: grid; gap: 2px; min-width: 110px; }
-.account__copy strong { font-size: 13px; }.account__copy span { color: #7c8a9e; font-size: 11px; }
-.logout { color: #536278; }.security-bar { display: flex; justify-content: space-between; gap: 16px; padding: 8px clamp(20px, 4vw, 56px); color: #627188; background: #f8fafc; border-bottom: 1px solid #e8edf3; font-size: 12px; }
-.security-bar span:first-child { display: flex; gap: 8px; align-items: center; color: #2a6b50; }.security-bar i { width: 7px; height: 7px; background: #23a36d; border-radius: 50%; }
-.portal-content { max-width: 1280px; margin: 0 auto; padding: clamp(28px, 4vw, 52px) clamp(20px, 4vw, 44px); }
-@media(max-width:640px){.portal-header{height:64px}.brand strong{display:none}.account__copy{min-width:0}.security-bar span:last-child{display:none}.portal-content{padding-top:28px}}
+@use '@/assets/styles/variables' as *;
+
+.portal-shell {
+  min-height: 100vh;
+  color: $color-text-primary;
+  background: $color-bg-base;
+}
+
+.portal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: $topbar-height;
+  padding: 0 clamp(20px, 4vw, 48px);
+  background: $color-bg-white;
+  border-bottom: 1px solid $color-border-base;
+}
+
+.brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: $color-text-primary;
+  text-decoration: none;
+
+  &__logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+  }
+
+  strong {
+    font-size: $font-size-md;
+    font-weight: 600;
+  }
+
+  &__divider {
+    color: $color-border-base;
+  }
+
+  &__sub {
+    color: $color-text-secondary;
+    font-size: $font-size-base;
+  }
+}
+
+.topbar-right {
+  display: flex;
+  gap: $spacing-lg;
+  align-items: center;
+}
+
+.verified {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  color: $color-success;
+  font-size: $font-size-sm;
+
+  i {
+    width: 7px;
+    height: 7px;
+    background: $color-success;
+    border-radius: 50%;
+  }
+}
+
+.account {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-left: $spacing-lg;
+  border-left: 1px solid $color-border-base;
+
+  &__avatar {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    color: $color-primary;
+    background: #eff6ff;
+    border-radius: 50%;
+    font-weight: 600;
+    place-items: center;
+  }
+
+  &__copy {
+    display: grid;
+    gap: 1px;
+
+    strong {
+      font-size: $font-size-sm;
+      font-weight: 500;
+    }
+
+    span {
+      color: $color-text-secondary;
+      font-size: $font-size-xs;
+    }
+  }
+}
+
+.logout {
+  color: $color-text-secondary;
+}
+
+.portal-content {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 40px clamp(20px, 4vw, 40px) 56px;
+}
+
+@media (max-width: 640px) {
+  .brand__sub,
+  .brand__divider,
+  .verified {
+    display: none;
+  }
+
+  .portal-content {
+    padding-top: 28px;
+  }
+}
 </style>

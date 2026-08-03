@@ -1,5 +1,5 @@
-<template>
-  <div>
-    <!-- 供应链 Console 首页空骨架。 -->
-  </div>
-</template>
+<template><ConsoleDashboard /></template>
+
+<script setup lang="ts">
+import ConsoleDashboard from '@/components/console/ConsoleDashboard.vue'
+</script>

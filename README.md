@@ -60,13 +60,10 @@ Portal 不发送租户身份头；Gateway 从已验签 JWT 重建可信租户上
 ```
 src/
 ├── api/               # API 层
-│   ├── core/          # HTTP Client、错误处理
-│   └── generated/     # OpenAPI 生成代码
+│   └── core/          # HTTP Client、错误处理
 ├── auth/              # OIDC PKCE、回调与内存 Token
 ├── assets/styles/     # 设计 Token 和全局样式
 ├── components/        # 通用组件
-├── composables/       # 组合式函数
-├── directives/        # 自定义指令（v-permission）
 ├── layouts/           # 页面布局
 ├── router/            # 路由配置和权限守卫
 ├── stores/            # Pinia Store

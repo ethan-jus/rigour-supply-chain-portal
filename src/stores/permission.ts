@@ -14,7 +14,7 @@ import { filterAsyncRoutes } from '@/utils/route-filter'
  *
  * 边界：
  * - 菜单过滤与导航守卫独立：路由仍静态全量注册到 router，
- *   accessibleRoutes 仅供 AppSidebar 渲染菜单使用。
+ *   accessibleRoutes 仅供当前管理布局渲染菜单使用。
  *   无权限的 URL 直接访问由导航守卫跳转 /403。
  * - 不使用 addRoute/removeRoute，避免重复注册问题。
  *

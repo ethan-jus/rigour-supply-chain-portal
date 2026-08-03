@@ -11,6 +11,8 @@ declare module 'vue-router' {
     permission?: string
     applicationCode?: string
     keepAlive?: boolean
+    dictionaryScope?: 'platform' | 'tenant'
+    pageKey?: string
   }
 }
 

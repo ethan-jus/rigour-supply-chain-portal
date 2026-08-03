@@ -27,7 +27,7 @@ describe('路由守卫：未登录', () => {
 
   it('未登录访问需认证页面应该跳转 /login', async () => {
     const router = createTestRouter()
-    router.push('/dashboard')
+    router.push('/platform-admin')
     await router.isReady()
     expect(router.currentRoute.value.path).toBe('/login')
   })
@@ -46,35 +46,49 @@ describe('路由守卫：无权限跳转 403', () => {
     localStorage.clear()
   })
 
-  it('普通用户访问需要权限的页面应该跳转 /403', async () => {
+  it('普通用户访问未授权应用页面应该跳转 /403', async () => {
     const authStore = useAuthStore()
     authStore.user = {
       id: 'u002', principalScope: 'TENANT', username: 'viewer', displayName: '访客',
-      roles: ['viewer'], permissions: ['dashboard:view'], tenantId: 'demo', tenantName: '测试租户',
+      roles: ['viewer'], permissions: [], tenantId: 'demo', tenantName: '测试租户',
     }
     ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
+    const applicationStore = useApplicationStore()
+    applicationStore.applications = []
+    applicationStore.loaded = true
 
     const router = createTestRouter()
-    router.push('/erp/sku')
+    router.push('/system-admin/users')
     await router.isReady()
     expect(router.currentRoute.value.path).toBe('/403')
   })
 
-  it('有权限的用户访问对应页面应该放行', async () => {
+  it('已授权应用且导航路径存在时访问页面应该放行', async () => {
     const authStore = useAuthStore()
     authStore.user = {
-      id: 'u003', principalScope: 'TENANT', username: 'operator', displayName: '操作员',
-      roles: ['operator'], permissions: ['erp:sku:list', 'dashboard:view'], tenantId: 'demo', tenantName: '测试租户',
+      id: 'u003', principalScope: 'TENANT', username: 'admin', displayName: '管理员',
+      roles: ['super_admin'], permissions: ['*:*:*'], tenantId: 'demo', tenantName: '测试租户',
     }
     ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
 
-    const permissionStore = usePermissionStore()
-    permissionStore.initRoutes(authStore.user.permissions)
+    const applicationStore = useApplicationStore()
+    applicationStore.applications = [{
+      id: 'app-2', code: 'SYSTEM_ADMIN', name: '系统管理', iconKey: null,
+      launchMode: 'INTERNAL_ROUTE', targetUri: '/system-admin', sortOrder: 20,
+    }]
+    applicationStore.loaded = true
+    const navigationStore = useNavigationStore()
+    navigationStore.navigationByApplication.SYSTEM_ADMIN = [{
+      id: 'nav-2', parentId: null, code: 'SYSTEM_ADMIN.PAGE.USER_LIST', type: 'PAGE',
+      displayName: '用户管理', permissionCode: 'iam:user:read', routeKey: 'system.user.list',
+      routePath: '/system-admin/users', iconKey: null, sortOrder: 30, visible: true, keepAlive: false, children: [],
+    }]
+    navigationStore.loadedApplications.push('SYSTEM_ADMIN')
 
     const router = createTestRouter()
-    router.push('/erp/sku')
+    router.push('/system-admin/users')
     await router.isReady()
-    expect(router.currentRoute.value.path).toBe('/erp/sku')
+    expect(router.currentRoute.value.path).toBe('/system-admin/users')
   })
 })
 
@@ -125,7 +139,7 @@ describe('路由守卫：应用许可', () => {
     expect(router.currentRoute.value.path).toBe('/403')
   })
 
-  it('菜单接口异常时返回应用门户而不是伪装成403', async () => {
+  it('菜单接口异常时进入服务不可用页而不是静默回到应用门户', async () => {
     authenticatedPlatformUser()
     const applicationStore = useApplicationStore()
     applicationStore.applications = [{
@@ -140,58 +154,62 @@ describe('路由守卫：应用许可', () => {
     router.push('/platform-admin')
     await router.isReady()
 
-    expect(router.currentRoute.value.path).toBe('/apps')
-    expect(router.currentRoute.value.query.launchError).toBe('navigation-unavailable')
+    expect(router.currentRoute.value.path).toBe('/service-unavailable')
+    expect(router.currentRoute.value.query.reason).toBe('navigation-unavailable')
+  })
+
+  it('恢复用户信息遇到服务异常时不应清除会话或跳转登录', async () => {
+    const authStore = useAuthStore()
+    ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
+    vi.spyOn(authStore, 'fetchUser').mockRejectedValue({ code: 'NETWORK_ERROR' })
+
+    const router = createTestRouter()
+    router.push('/apps')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/service-unavailable')
+    expect(authStore.isAuthenticated).toBe(true)
+  })
+
+  it('恢复用户信息明确返回401时才清除会话并跳转登录', async () => {
+    const authStore = useAuthStore()
+    ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
+    vi.spyOn(authStore, 'fetchUser').mockRejectedValue({ code: 'IAM_UNAUTHORIZED' })
+
+    const router = createTestRouter()
+    router.push('/apps')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/login')
+    expect(authStore.isAuthenticated).toBe(false)
   })
 })
 
 describe('filterAsyncRoutes：路由过滤', () => {
-  it('超级管理员应该看到全部模块路由', () => {
+  it('超级管理员可以看到统一门户入口', () => {
     const result = filterAsyncRoutes(asyncRoutes, ['*:*:*'])
-    expect(result.length).toBe(10)
-    for (const route of result) {
-      if (route.children) expect(route.children.length).toBeGreaterThan(0)
-    }
+    expect(result.length).toBe(1)
+    expect(result[0]?.path).toBe('/apps')
   })
 
-  it('仅 dashboard 权限的用户只看到通用工作台', () => {
+  it('门户入口不依赖业务权限', () => {
     const result = filterAsyncRoutes(asyncRoutes, ['dashboard:view'])
     const routePaths = result.map((r) => r.path)
-    // 工作台是所有已认证用户的通用入口。
-    expect(routePaths).toContain('/')
-    expect(routePaths).not.toContain('/hq')
-    expect(routePaths).not.toContain('/erp')
+    expect(routePaths).toContain('/apps')
   })
 
-  it('有限权限用户只看到授权的模块和子路由', () => {
+  it('业务模块菜单不再由前端权限列表决定', () => {
     const result = filterAsyncRoutes(asyncRoutes, [
       'erp:sku:list', 'erp:warehouse:list', 'order:order:list',
     ])
     const routePaths = result.map((r) => r.path)
-    expect(routePaths).toContain('/')
-    expect(routePaths).not.toContain('/hq')
-    expect(routePaths).toContain('/erp')
-    expect(routePaths).toContain('/order')
-
-    const erpRoute = result.find((r) => r.path === '/erp')
-    const erpChildPaths = erpRoute?.children?.map((c) => c.path) || []
-    expect(erpChildPaths).toContain('sku')
-    expect(erpChildPaths).toContain('warehouse')
-    expect(erpChildPaths).not.toContain('purchase')
-    expect(erpChildPaths).not.toContain('supplier')
+    expect(routePaths).toEqual(['/apps'])
   })
 
-  it('空权限数组只保留无 permission 要求的子路由', () => {
+  it('空权限数组仍保留统一门户入口', () => {
     const result = filterAsyncRoutes(asyncRoutes, [])
     const routePaths = result.map((r) => r.path)
-    // 只有通用工作台不要求模块权限。
-    expect(routePaths).toContain('/')
-    expect(routePaths).not.toContain('/hq')
-    expect(routePaths).not.toContain('/erp')
-    // 有 permission 要求的模块被过滤
-    expect(routePaths).not.toContain('/order')
-    expect(routePaths).not.toContain('/sales')
-    expect(routePaths).not.toContain('/bi')
+    expect(routePaths).toEqual(['/apps'])
   })
 })
 
@@ -204,7 +222,7 @@ describe('permissionStore：initRoutes / reset', () => {
     const store = usePermissionStore()
     expect(store.accessibleRoutes.length).toBe(0)
     store.initRoutes(['*:*:*'])
-    expect(store.accessibleRoutes.length).toBe(10)
+    expect(store.accessibleRoutes.length).toBe(1)
     expect(store.loaded).toBe(true)
   })
 
@@ -232,7 +250,7 @@ describe('authStore 生命周期触发权限路由', () => {
       roles: ['super_admin'], permissions: ['*:*:*'], tenantId: 'demo', tenantName: '测试租户',
     }
     permStore.initRoutes(['*:*:*'])
-    expect(permStore.accessibleRoutes.length).toBe(10)
+    expect(permStore.accessibleRoutes.length).toBe(1)
 
     authStore.clearLocalSession()
     expect(permStore.accessibleRoutes.length).toBe(0)

@@ -55,6 +55,14 @@ export interface DataScopeRecord {
   scopeType: string; status: string; version: number
 }
 export interface SettingRecord { key: string; valueJson: string; version: number }
+export interface DictionaryTypeRecord {
+  id: string; tenantId: string | null; code: string; name: string
+  description: string | null; status: string; version: number
+}
+export interface DictionaryItemRecord {
+  id: string; typeId: string; tenantId: string | null; code: string; label: string
+  value: string | null; sortOrder: number; status: string; version: number
+}
 export interface AuditRecord {
   id: string; tenantId: string | null; actorScope: string; actorId: string | null
   action: string; targetType: string; targetId: string | null; result: string; occurredAt: string

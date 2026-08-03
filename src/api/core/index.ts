@@ -1,2 +1,2 @@
-export { apiClient } from './client'
-export { getErrorMessage, showError } from './error'
+export { apiClient, registerUnauthorizedSessionHandler } from './client'
+export { getErrorMessage } from './error'

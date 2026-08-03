@@ -18,16 +18,13 @@
 ```
 src/
 ├── api/                  API 通信层
-│   ├── core/             手写 HTTP Client、认证拦截、错误处理
-│   └── generated/        OpenAPI 生成代码（只读，不手改）
+│   └── core/             手写 HTTP Client、认证拦截、错误处理
 ├── auth/                 OIDC PKCE、回调和内存 Token
 ├── stores/               全局状态（Pinia）
 ├── router/               路由配置 + 权限守卫
 ├── views/                页面组件（按模块）
-├── layouts/              页面布局（DefaultLayout）
-├── components/            共享组件（Sidebar、Topbar）
-├── composables/           组合式函数（useAuth）
-├── directives/            自定义指令（v-permission）
+├── layouts/              页面布局（Portal、ConsoleShell）
+├── components/            共享组件（Console导航/看板、CRUD、供应链占位）
 ├── types/                 TypeScript 类型定义
 ├── utils/                 工具函数（token、request-id）
 └── assets/styles/         设计 Token 和全局样式
@@ -38,8 +35,7 @@ src/
 ```
 views → stores → api/core → axios
        router    auth/oidc
-       directives
-       composables
+       views/components
 ```
 
 - views 不直接操作 axios 或 token，通过 store 和 api 层
@@ -53,7 +49,7 @@ views → stores → api/core → axios
 2. IAM 完成统一登录并返回 Authorization Code；Portal 校验 state 并换码，再根据Discovery/JWKS校验ID Token的RS256签名、issuer、audience/azp、nonce和时间声明。
 3. Token 只保存在页面内存，PKCE 临时材料只在 `sessionStorage` 跨重定向保存。
 4. Portal 通过 Gateway 获取 `/me` 和 `/portal/apps`，初始化用户、应用许可和功能权限。
-5. 登录成功先进入“我的应用”，卡片目标不接收 Portal Token。
+5. 登录成功先进入“我的应用”，卡片目标不接收 Portal Token；Portal 登录路由只负责发起 OIDC，不再提供独立欢迎中间页。
 6. 退出通过 `/connect/logout` 撤销 IAM 会话；旧 Access Token 随即失效。
 
 ## 授权模型
@@ -66,7 +62,6 @@ views → stores → api/core → axios
 - 角色是应用许可、功能权限和 DataScope 的授权集合，不在前端硬编码角色名称
 - `*:*:*` 表示超级管理员，拥有全部权限
 - 路由 `meta.permission` 定义页面所需权限
-- `v-permission` 指令控制元素显隐
 - 403 使用独立 ForbiddenView，不复用 404
 - 前端显隐不是最终安全边界，Gateway 和领域服务必须逐接口复核
 
@@ -88,8 +83,9 @@ views → stores → api/core → axios
 ## 当前未实现或未验收范围
 
 - 订货宝、飞书销售工作台及其他系统的受控启动配置
-- 开放 API 代码生成（`src/api/generated/` 为空占位）
+- 开放 API 代码生成尚未接入；接入后生成代码必须落在独立只读目录
 - 业务领域接口对DataScope的实际消费（IAM的DataScope管理已完成）
 - 多租户切换 UI
 - Keep-alive 缓存策略细化
+- 后台看板当前显示明确的空数据状态，待订单、客户、审批等领域 API 契约冻结后接入真实指标
 - 本地IAM/Gateway/Portal连接真实DEV数据的跨进程浏览器E2E验收；域名和HTTPS留待部署阶段

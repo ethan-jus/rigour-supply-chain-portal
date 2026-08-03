@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { clearOidcTokens, createPkcePair, getAccessToken, safeReturnPath, validateIdTokenClaims } from '@/auth/oidc'
+import { clearOidcTokens, consumeLogoutPending, createPkcePair, getAccessToken, safeReturnPath, validateIdTokenClaims } from '@/auth/oidc'
 import { getToken, removeToken } from '@/utils/token'
 
 describe('OIDC PKCE 与Token存储边界', () => {
@@ -30,6 +30,12 @@ describe('OIDC PKCE 与Token存储边界', () => {
     expect(getAccessToken()).toBeNull()
     removeToken()
     expect(getToken()).toBeNull()
+  })
+
+  it('退出标记只消费一次，避免退出后自动重新登录', () => {
+    sessionStorage.setItem('rigour_oidc_logout_pending', '1')
+    expect(consumeLogoutPending()).toBe(true)
+    expect(consumeLogoutPending()).toBe(false)
   })
 
   it('校验ID Token issuer audience nonce和时间', () => {

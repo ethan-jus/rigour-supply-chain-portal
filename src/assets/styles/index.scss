@@ -12,3 +12,50 @@
 .el-menu {
   border-right: none !important;
 }
+
+// Console 内页统一表格和表单基线，避免每个管理页面各自覆盖出不同风格。
+.console {
+  .el-card {
+    --el-card-border-color: #{$color-border-base};
+    border-radius: $border-radius-lg;
+    box-shadow: none;
+  }
+
+  .el-card__header {
+    padding: 18px 20px;
+    border-bottom-color: $color-border-lighter;
+  }
+
+  .el-card__body {
+    padding: 0;
+  }
+
+  .el-table {
+    --el-table-border-color: #{$color-border-lighter};
+    --el-table-header-bg-color: #{$color-bg-base};
+    --el-table-row-hover-bg-color: #eff6ff;
+    color: $color-text-regular;
+  }
+
+  .el-table th.el-table__cell {
+    color: $color-text-secondary;
+    font-size: $font-size-xs;
+    font-weight: 500;
+  }
+
+  .el-table td.el-table__cell,
+  .el-table th.el-table__cell {
+    height: 52px;
+  }
+
+  .el-button--primary {
+    --el-button-bg-color: #{$color-primary};
+    --el-button-border-color: #{$color-primary};
+    --el-button-hover-bg-color: #{$color-primary-dark};
+    --el-button-hover-border-color: #{$color-primary-dark};
+  }
+
+  .el-dialog {
+    border-radius: $border-radius-lg;
+  }
+}

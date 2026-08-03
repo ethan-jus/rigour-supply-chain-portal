@@ -1,5 +1,6 @@
 <template>
-  <div>
-    <!-- 人事页面目录空骨架；任职和薪酬业务事实由 hr-payroll-service 持有。 -->
-  </div>
+  <SupplyModulePlaceholder title="人事" description="人事页面框架已就绪；任职与薪酬事实由 hr-payroll-service 持有。" />
 </template>
+<script setup lang="ts">
+import SupplyModulePlaceholder from '@/components/supply/SupplyModulePlaceholder.vue'
+</script>

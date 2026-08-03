@@ -1,3 +1,5 @@
+import { devInfo, devWarn } from '@/utils/dev-log'
+
 interface OidcTokenResponse {
   access_token: string
   id_token: string
@@ -9,9 +11,15 @@ const STATE_KEY = 'rigour_oidc_state'
 const VERIFIER_KEY = 'rigour_oidc_code_verifier'
 const REDIRECT_KEY = 'rigour_oidc_return_path'
 const NONCE_KEY = 'rigour_oidc_nonce'
+const LOGOUT_PENDING_KEY = 'rigour_oidc_logout_pending'
 
 let accessToken: string | null = null
 let idToken: string | null = null
+
+export interface OidcLoginOptions {
+  /** 要求IAM重新显示登录表单，避免退出后复用旧浏览器会话。 */
+  prompt?: 'login'
+}
 
 function config() {
   const issuer = import.meta.env.VITE_OIDC_ISSUER?.replace(/\/$/, '')
@@ -61,8 +69,20 @@ export function safeReturnPath(value: string | null | undefined): string {
   return value?.startsWith('/') && !value.startsWith('//') ? value : '/apps'
 }
 
-export async function beginOidcLogin(returnPath = '/apps'): Promise<void> {
+export async function beginOidcLogin(
+  returnPath = '/apps',
+  options: OidcLoginOptions = {},
+): Promise<void> {
+  // 用户明确点击重新登录时，解除退出后的暂停标记。
+  sessionStorage.removeItem(LOGOUT_PENDING_KEY)
   const { issuer, clientId, redirectUri } = config()
+  devInfo('开始OIDC登录', {
+    issuer,
+    clientId,
+    redirectUri,
+    returnPath: safeReturnPath(returnPath),
+    prompt: options.prompt ?? '-',
+  })
   const state = randomUrlSafe(32)
   const nonce = randomUrlSafe(32)
   const { verifier, challenge } = await createPkcePair()
@@ -71,7 +91,7 @@ export async function beginOidcLogin(returnPath = '/apps'): Promise<void> {
   sessionStorage.setItem(REDIRECT_KEY, safeReturnPath(returnPath))
   sessionStorage.setItem(NONCE_KEY, nonce)
   const url = new URL(`${issuer}/oauth2/authorize`)
-  url.search = new URLSearchParams({
+  const parameters = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -80,7 +100,9 @@ export async function beginOidcLogin(returnPath = '/apps'): Promise<void> {
     code_challenge: challenge,
     code_challenge_method: 'S256',
     nonce,
-  }).toString()
+  })
+  if (options.prompt) parameters.set('prompt', options.prompt)
+  url.search = parameters.toString()
   window.location.assign(url)
 }
 
@@ -90,6 +112,7 @@ export function isOidcCallback(): boolean {
 
 export async function completeOidcCallback(): Promise<string | null> {
   if (!isOidcCallback()) return null
+  devInfo('开始处理OIDC回调')
   const parameters = new URLSearchParams(window.location.search)
   const expectedState = sessionStorage.getItem(STATE_KEY)
   const verifier = sessionStorage.getItem(VERIFIER_KEY)
@@ -122,7 +145,11 @@ export async function completeOidcCallback(): Promise<string | null> {
     await validateIdToken(tokens.id_token, issuer, clientId, expectedNonce)
     accessToken = tokens.access_token
     idToken = tokens.id_token
+    devInfo('OIDC回调完成，Token已保存在当前页面内存')
     return safeReturnPath(sessionStorage.getItem(REDIRECT_KEY))
+  } catch (error) {
+    devWarn('OIDC回调处理失败', { message: error instanceof Error ? error.message : error })
+    throw error
   } finally {
     sessionStorage.removeItem(STATE_KEY)
     sessionStorage.removeItem(VERIFIER_KEY)
@@ -225,12 +252,25 @@ export function clearOidcTokens(): void {
   idToken = null
 }
 
+/** 标记一次跨域OIDC退出，防止退出回到Portal后立即静默重新登录。 */
+function markLogoutPending(): void {
+  sessionStorage.setItem(LOGOUT_PENDING_KEY, '1')
+}
+
+/** 仅消费一次退出标记；刷新登录页不会重复显示退出提示。 */
+export function consumeLogoutPending(): boolean {
+  const pending = sessionStorage.getItem(LOGOUT_PENDING_KEY) === '1'
+  sessionStorage.removeItem(LOGOUT_PENDING_KEY)
+  return pending
+}
+
 export function beginOidcLogout(): void {
   const { issuer, postLogoutRedirectUri } = config()
   const currentIdToken = idToken
+  markLogoutPending()
   clearOidcTokens()
   if (!currentIdToken) {
-    window.location.assign('/#/login')
+    window.location.assign('/#/login?reason=logout')
     return
   }
   const url = new URL(`${issuer}/connect/logout`)

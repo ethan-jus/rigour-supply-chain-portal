@@ -1,1 +1,1 @@
-export { apiClient, showError, getErrorMessage } from './core'
+export { apiClient, getErrorMessage, registerUnauthorizedSessionHandler } from './core'

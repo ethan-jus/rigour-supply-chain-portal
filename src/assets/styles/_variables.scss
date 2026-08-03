@@ -1,33 +1,44 @@
-// ========== 设计 Token ==========
-// 色彩
-$color-primary: #409eff;
-$color-primary-light: #66b1ff;
-$color-primary-dark: #3a8ee6;
-$color-success: #67c23a;
-$color-warning: #e6a23c;
-$color-danger: #f56c6c;
-$color-info: #909399;
+// ========== 瑞盖优选设计 Token（2025 企业级设计语言） ==========
+// 主色
+$color-primary: #2563eb;
+$color-primary-light: #3b82f6;
+$color-primary-dark: #1d4ed8;
 
-// 中性色
-$color-text-primary: #303133;
-$color-text-regular: #606266;
-$color-text-secondary: #909399;
-$color-text-placeholder: #c0c4cc;
+// 墨色（深色导航 / 品牌区）
+$color-ink: #0b1220;
+$color-ink-hover: rgba(255, 255, 255, 0.08);
+$color-ink-text: #e2e8f0;
+$color-ink-text-muted: #94a3b8;
+$color-ink-text-faint: #64748b;
+$color-ink-divider: rgba(255, 255, 255, 0.1);
 
-$color-bg-base: #f5f7fa;
-$color-bg-page: #f0f2f5;
+// 语义色
+$color-success: #059669;
+$color-warning: #d97706;
+$color-danger: #dc2626;
+$color-info: #64748b;
+
+// 中性色（Slate 体系）
+$color-text-primary: #0f172a;
+$color-text-regular: #334155;
+$color-text-secondary: #64748b;
+$color-text-placeholder: #94a3b8;
+
+$color-bg-base: #f8fafc;
+$color-bg-page: #f8fafc;
 $color-bg-white: #ffffff;
+$color-bg-muted: #f1f5f9;
 
-$color-border-base: #dcdfe6;
-$color-border-light: #e4e7ed;
-$color-border-lighter: #ebeef5;
+$color-border-base: #e2e8f0;
+$color-border-light: #e2e8f0;
+$color-border-lighter: #f1f5f9;
 
 // 布局
-$sidebar-width: 220px;
+$sidebar-width: 232px;
 $sidebar-collapsed-width: 64px;
-$topbar-height: 56px;
+$topbar-height: 64px;
 
-// 间距
+// 间距（8px 网格）
 $spacing-xs: 4px;
 $spacing-sm: 8px;
 $spacing-md: 16px;
@@ -38,20 +49,21 @@ $spacing-xl: 32px;
 $font-size-xs: 12px;
 $font-size-sm: 13px;
 $font-size-base: 14px;
-$font-size-md: 16px;
+$font-size-md: 15px;
 $font-size-lg: 18px;
-$font-size-xl: 20px;
+$font-size-xl: 22px;
 
 // 圆角
-$border-radius-sm: 4px;
-$border-radius-base: 6px;
-$border-radius-lg: 8px;
+$border-radius-sm: 6px;
+$border-radius-base: 8px;
+$border-radius-lg: 12px;
+$border-radius-xl: 16px;
 
-// 阴影
-$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-$shadow-base: 0 2px 8px rgba(0, 0, 0, 0.08);
-$shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+// 阴影（克制使用）
+$shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+$shadow-base: 0 1px 3px rgba(15, 23, 42, 0.08);
+$shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.1);
 
 // 过渡
-$transition-fast: 0.2s ease;
-$transition-base: 0.3s ease;
+$transition-fast: 0.15s ease;
+$transition-base: 0.25s ease;

@@ -7,6 +7,7 @@ import { beginOidcLogin, beginOidcLogout } from '@/auth/oidc'
 import { usePermissionStore } from './permission'
 import { useApplicationStore } from './application'
 import { useNavigationStore } from './navigation'
+import { devInfo, devWarn } from '@/utils/dev-log'
 
 /**
  * 认证 Store
@@ -30,8 +31,8 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(getToken())
   const isAuthenticated = ref(!!getToken())
 
-  async function login(returnPath = '/apps') {
-    await beginOidcLogin(returnPath)
+  async function login(returnPath = '/apps', forceLogin = false) {
+    await beginOidcLogin(returnPath, forceLogin ? { prompt: 'login' } : {})
   }
 
   function synchronizeTokenState() {
@@ -46,12 +47,29 @@ export const useAuthStore = defineStore('auth', () => {
    * 这是登录、页面刷新恢复会话的统一入口。
    */
   async function fetchUser() {
-    const userData = (await apiClient.get('/me')) as UserInfo
-    user.value = userData
+    devInfo('开始恢复当前用户会话')
+    try {
+      const userData = (await apiClient.get('/me')) as UserInfo
+      user.value = userData
 
-    // 根据用户权限初始化侧边菜单
-    const permissionStore = usePermissionStore()
-    permissionStore.initRoutes(userData.permissions)
+      // 根据用户权限初始化侧边菜单
+      const permissionStore = usePermissionStore()
+      permissionStore.initRoutes(userData.permissions)
+      devInfo('当前用户会话恢复成功', {
+        principalScope: userData.principalScope,
+        tenantId: userData.tenantId,
+        rolesCount: userData.roles.length,
+        permissionsCount: userData.permissions.length,
+      })
+    } catch (error) {
+      devWarn('当前用户会话恢复失败', {
+        code: typeof error === 'object' && error !== null && 'code' in error
+          ? (error as { code?: string }).code : undefined,
+        status: typeof error === 'object' && error !== null && 'response' in error
+          ? (error as { response?: { status?: number } }).response?.status : undefined,
+      })
+      throw error
+    }
   }
 
   function clearLocalSession() {
@@ -67,8 +85,13 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
-    clearLocalSession()
-    beginOidcLogout()
+    // IAM退出需要当前ID Token作为id_token_hint；必须先构造并发起OIDC退出，
+    // 再清理Pinia状态。提前clearLocalSession会同时删除ID Token，导致只退出Portal。
+    try {
+      beginOidcLogout()
+    } finally {
+      clearLocalSession()
+    }
   }
 
   function hasPermission(permission: string): boolean {
