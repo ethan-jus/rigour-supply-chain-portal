@@ -1,9 +1,16 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
 import type { ApiResponse } from '@/types'
-import { getToken, removeToken } from '@/utils/token'
+import { getAuthorizationHeader, removeToken } from '@/utils/token'
 import { generateRequestId } from '@/utils/request-id'
 import { devInfo, devWarn } from '@/utils/dev-log'
 import { getErrorMessage } from './error'
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** 当前业务请求失败时保留页面，不触发全局会话跳转。 */
+    stayOnUnauthorized?: boolean
+  }
+}
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
@@ -41,7 +48,8 @@ function isApiResponse(value: unknown): value is ApiResponse {
  * - 不接受浏览器注入租户身份头；Gateway只从已验签JWT重建可信上下文
  * - 注入 X-Request-Id（每次请求生成唯一追踪 ID）
  * - 统一解包 ApiResponse，提取 data 或 reject 非 OK 响应
- * - 401 自动清除 token 并跳转登录
+ * - 认证请求的401自动清除token并跳转登录
+ * - 业务请求可通过 stayOnUnauthorized 保留当前页面，由业务页面自行提示和重试
  *
  * 边界：不包含业务判定逻辑；错误码映射在 error.ts 维护。
  * Access Token仅在当前页面内存中保存；刷新页面后通过IAM会话重新授权。
@@ -58,9 +66,9 @@ function createClient(): AxiosInstance {
 
   /** 请求拦截器：注入认证、租户、追踪头 */
   client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-    const token = getToken()
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    const authorization = getAuthorizationHeader()
+    if (authorization) {
+      config.headers.Authorization = authorization
     }
 
     const requestId = generateRequestId()
@@ -97,7 +105,7 @@ function createClient(): AxiosInstance {
         code: error.response?.data?.code,
         url: error.config?.url,
       })
-      if (error.response?.status === 401) {
+      if (error.response?.status === 401 && !error.config?.stayOnUnauthorized) {
         devWarn('IAM返回401，清理本地会话并回到登录页', { requestId })
         if (unauthorizedSessionHandler) {
           unauthorizedSessionHandler()
@@ -110,6 +118,18 @@ function createClient(): AxiosInstance {
       }
 
       const errorBody = error.response?.data
+      if (error.response?.status === 401 && error.config?.stayOnUnauthorized) {
+        return Promise.reject({
+          code: errorBody?.code || 'UNAUTHORIZED',
+          message: errorBody?.code
+            ? getErrorMessage(errorBody.code, errorBody.message)
+            : '订单接口暂时无法访问，请检查订单服务配置后重试',
+          requestId: requestId ? String(requestId) : '',
+          timestamp: errorBody?.timestamp || new Date().toISOString(),
+          response: error.response,
+        })
+      }
+
       if (errorBody?.code) {
         const message = getErrorMessage(errorBody.code, errorBody.message)
         return Promise.reject({ ...errorBody, message })

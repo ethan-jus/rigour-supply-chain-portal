@@ -7,24 +7,7 @@
       </router-link>
 
       <nav class="sidebar__nav" aria-label="应用菜单">
-        <template v-for="node in navigation" :key="node.id">
-          <!-- 有子节点的顶级节点渲染为分组 -->
-          <div v-if="node.visible && visibleChildren(node).length && !node.routePath" class="nav-group">
-            <p class="nav-group__label">{{ node.displayName }}</p>
-            <router-link v-for="child in visibleChildren(node)" :key="child.id"
-              class="nav-item" :class="{ 'nav-item--active': isActive(child) }"
-              :to="child.routePath || ''">
-              <ConsoleNavIcon :icon-key="child.iconKey" />
-              <span>{{ child.displayName }}</span>
-            </router-link>
-          </div>
-          <!-- 无子节点的顶级节点渲染为独立菜单项 -->
-          <router-link v-else-if="node.visible && node.routePath" class="nav-item"
-            :class="{ 'nav-item--active': isActive(node) }" :to="node.routePath">
-            <ConsoleNavIcon :icon-key="node.iconKey" />
-            <span>{{ node.displayName }}</span>
-          </router-link>
-        </template>
+        <ConsoleNavTree :nodes="navigation" />
       </nav>
 
       <div class="sidebar__footer">
@@ -65,13 +48,13 @@
  *
  * 职责：深色分组侧栏 + 顶栏 + 内容区的统一骨架。
  * 菜单数据由 navigationStore 按应用编码从 IAM 实时加载，
- * 顶级节点有子菜单时渲染为分组标签，否则渲染为独立菜单项。
+ * 菜单树由递归导航组件渲染，支持业务分组、二级菜单和三级页面。
  */
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore, useNavigationStore } from '@/stores'
 import type { NavigationNode } from '@/types/management'
-import ConsoleNavIcon from '@/components/console/ConsoleNavIcon.vue'
+import ConsoleNavTree from '@/components/console/ConsoleNavTree.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -90,21 +73,17 @@ const tenantLabel = computed(() => authStore.user?.principalScope === 'PLATFORM'
   : authStore.user?.tenantName || '企业空间')
 
 const currentPageName = computed(() => {
-  const path = route.path
-  for (const node of navigation.value) {
-    if (node.routePath === path) return node.displayName
-    const child = node.children.find((item) => item.routePath === path)
-    if (child) return child.displayName
-  }
-  return (route.meta.title as string) || '工作台'
+  return findCurrentPageName(navigation.value) || (route.meta.title as string) || '工作台'
 })
 
-function visibleChildren(node: NavigationNode): NavigationNode[] {
-  return node.children.filter((child) => child.visible)
-}
-
-function isActive(node: NavigationNode): boolean {
-  return node.routePath === route.path
+function findCurrentPageName(nodes: NavigationNode[]): string | undefined {
+  for (const node of nodes) {
+    if (!node.visible) continue
+    if (node.routePath === route.path) return node.displayName
+    const childName = findCurrentPageName(node.children)
+    if (childName) return childName
+  }
+  return undefined
 }
 
 function logout(): void {
@@ -164,59 +143,6 @@ onMounted(() => {
   &__footer {
     padding: 12px;
     border-top: 1px solid $color-ink-divider;
-  }
-}
-
-.nav-group {
-  margin-top: 18px;
-
-  &:first-child {
-    margin-top: 4px;
-  }
-
-  &__label {
-    margin: 0 0 6px;
-    padding: 0 10px;
-    color: $color-ink-text-faint;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-  }
-}
-
-.nav-item {
-  position: relative;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  height: 38px;
-  margin: 2px 0;
-  padding: 0 10px;
-  color: $color-ink-text-muted;
-  font-size: $font-size-base;
-  text-decoration: none;
-  border-radius: $border-radius-base;
-  transition: background $transition-fast, color $transition-fast;
-
-  &:hover {
-    color: $color-ink-text;
-    background: $color-ink-hover;
-  }
-
-  &--active {
-    color: #fff;
-    background: $color-ink-hover;
-
-    &::before {
-      position: absolute;
-      top: 8px;
-      bottom: 8px;
-      left: -12px;
-      width: 3px;
-      background: $color-primary;
-      border-radius: 0 2px 2px 0;
-      content: '';
-    }
   }
 }
 

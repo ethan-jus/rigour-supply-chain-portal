@@ -24,6 +24,22 @@ function unauthorizedAdapter() {
   }
 }
 
+function gatewayUnauthorizedAdapter() {
+  return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
+    const response = {
+      data: {
+        timestamp: '2026-08-03T00:00:00Z', status: 401,
+        error: 'Unauthorized', path: '/api/v1/orders/dhb',
+      },
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: {},
+      config,
+    } as AxiosResponse
+    throw new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', config, undefined, response)
+  }
+}
+
 let unregisterUnauthorizedHandler: (() => void) | undefined
 
 afterEach(() => {
@@ -62,5 +78,22 @@ describe('API响应解包', () => {
 
     expect(clearSession).toHaveBeenCalledOnce()
     expect(window.location.hash).toBe('#/login')
+  })
+
+  it('订货宝接口401时保留当前页面并返回业务错误', async () => {
+    const clearSession = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(clearSession)
+    window.location.hash = '#/supply-chain/order/orders'
+
+    await expect(apiClient.get('/orders/dhb', {
+      stayOnUnauthorized: true,
+      adapter: gatewayUnauthorizedAdapter(),
+    })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+      response: { status: 401 },
+    })
+
+    expect(clearSession).not.toHaveBeenCalled()
+    expect(window.location.hash).toBe('#/supply-chain/order/orders')
   })
 })
