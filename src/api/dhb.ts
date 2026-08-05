@@ -88,10 +88,10 @@ export interface DhbOrderQuery {
 const basePath = '/orders/dhb'
 const orderRequestOptions = { stayOnUnauthorized: true }
 
-export function getDinghuobaoOrders(params: DhbOrderQuery) {
+export function getDhbOrders(params: DhbOrderQuery) {
   return apiClient.get<DhbOrderPage>(basePath, { params, ...orderRequestOptions })
 }
 
-export function getDinghuobaoOrderDetail(orderSn: string) {
+export function getDhbOrderDetail(orderSn: string) {
   return apiClient.get<DhbOrderDetail>(`${basePath}/${encodeURIComponent(orderSn)}`, orderRequestOptions)
 }

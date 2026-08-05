@@ -71,7 +71,7 @@ const THEMES: Record<string, CardTheme> = {
 const theme = computed<CardTheme>(() => {
   const byCode = THEMES[props.application.code]
   if (byCode) return byCode
-  if (props.application.code.includes('DINGHUOBAO') || props.application.code.includes('DHB')) {
+  if (props.application.code.includes('DHB')) {
     return { key: 'mall', description: '第三方商城 · 数据同步 · 免密进入' }
   }
   if (props.application.launchMode === 'FEISHU_DEEPLINK') {

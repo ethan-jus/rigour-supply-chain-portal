@@ -10,8 +10,15 @@
 </template>
 
 <script setup lang="ts">
+import { useRoute, useRouter } from 'vue-router'
+import { safeReturnPath } from '@/auth/oidc'
+
+const route = useRoute()
+const router = useRouter()
+
 function retry() {
-  window.location.reload()
+  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
+  void router.replace(safeReturnPath(redirect))
 }
 
 function goLogin() {

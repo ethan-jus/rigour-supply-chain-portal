@@ -3,7 +3,7 @@ import type { PortalApplication } from '@/types/application'
 import { devInfo, devWarn } from '@/utils/dev-log'
 
 const INTERNAL_ROUTES = new Set([
-  '/platform-admin', '/system-admin', '/supply-chain', '/supply-chain/dinghuobao',
+  '/platform-admin', '/system-admin', '/supply-chain', '/supply-chain/dhb',
 ])
 
 /** 启动IAM已授权卡片；外部窗口不携带Portal Bearer Token。 */

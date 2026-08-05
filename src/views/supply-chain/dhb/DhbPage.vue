@@ -1,5 +1,5 @@
 <template>
-  <div class="dinghuobao-page">
+  <div class="dhb-page">
     <template v-if="pageKey === 'overview'">
       <el-row :gutter="16">
         <el-col v-for="card in overviewCards" :key="card.label" :xs="12" :md="6">
@@ -35,7 +35,7 @@
           <el-form-item label="连接编码" required><el-input v-model="connectorForm.code" :disabled="!!editingConnectorId" /></el-form-item>
           <el-form-item label="名称" required><el-input v-model="connectorForm.name" /></el-form-item>
           <el-form-item label="Base URL"><el-input v-model="connectorForm.baseUrl" placeholder="https://..." /></el-form-item>
-          <el-form-item label="Secret引用"><el-input v-model="connectorForm.authSecretRef" placeholder="例如 secret-ref:dev/dinghuobao/main，禁止粘贴明文Secret" /></el-form-item>
+          <el-form-item label="Secret引用"><el-input v-model="connectorForm.authSecretRef" placeholder="例如 env://RIGOUR_DHB_DEV，禁止粘贴明文Secret" /></el-form-item>
           <el-form-item label="状态"><el-select v-model="connectorForm.status"><el-option label="启用" value="ACTIVE"/><el-option label="停用" value="DISABLED"/></el-select></el-form-item>
         </el-form>
         <template #footer><el-button @click="connectorDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveConnector">保存</el-button></template>
@@ -162,12 +162,12 @@ const connectorForm = reactive({ code: '', name: '', baseUrl: '', authSecretRef:
 const taskForm = reactive({ connectorId: '', code: '', objectType: 'ORDER', status: 'IDLE', nextRunAt: null as string | null, version: 0 })
 const mappingForm = reactive({ connectorId: '', sourceField: '', targetField: '', transformType: 'DIRECT', enabled: true, version: 0 })
 
-const base = '/integration/dinghuobao'
+const base = '/integration/dhb'
 
 async function loadOverview() {
   const [connectorResult, taskResult, mirrorResult, logResult] = await Promise.allSettled([
     apiClient.get(`${base}/connectors`), apiClient.get(`${base}/sync-tasks`),
-    apiClient.get(`${base}/order-mirrors?limit=1`), apiClient.get(`${base}/sync-logs?limit=1`),
+    apiClient.get(`${base}/orders/mirrors?limit=1`), apiClient.get(`${base}/sync-logs?limit=1`),
   ])
   const values = [connectorResult, taskResult, mirrorResult, logResult].map((result) =>
     result.status === 'fulfilled' ? (result.value as unknown[]).length : '—')
@@ -180,7 +180,7 @@ async function loadPage() {
     if (pageKey.value === 'overview') await loadOverview()
     else if (pageKey.value === 'connections' || ['sync-tasks', 'field-mappings'].includes(pageKey.value)) await loadConnectors()
     if (pageKey.value === 'sync-tasks') tasks.value = (await apiClient.get(`${base}/sync-tasks`)) as SyncTask[]
-    if (pageKey.value === 'order-mirror') mirrors.value = (await apiClient.get(`${base}/order-mirrors?limit=100`)) as OrderMirror[]
+    if (pageKey.value === 'order-mirror') mirrors.value = (await apiClient.get(`${base}/orders/mirrors?limit=100`)) as OrderMirror[]
     if (pageKey.value === 'sync-logs') logs.value = (await apiClient.get(`${base}/sync-logs?limit=200`)) as SyncLog[]
   } catch (reason) {
     ElMessage.error(errorMessage(reason, '数据加载失败'))
