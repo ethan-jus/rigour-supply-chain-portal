@@ -313,6 +313,8 @@ import {
   type DhbDocumentPage,
   type DhbDocumentQuery,
   type DhbFinancialDocument,
+  getDhbOrderDetail,
+  getDhbOrders,
   type DhbOrder,
   type DhbOrderDetail,
   type DhbOrderPage,
@@ -411,7 +413,7 @@ async function loadOrders() {
   if (!isOrderQueryPage.value) return
   loading.value = true
   requestError.value = null
-  try { pageData.value = await getDinghuobaoOrders(buildQuery()) }
+  try { pageData.value = await getDhbOrders(buildQuery()) }
   catch (reason) {
     requestError.value = errorMessage(reason, '订单查询失败')
     ElMessage.error(requestError.value)
@@ -425,7 +427,7 @@ async function openDetail(order: DhbOrder) {
   detailVisible.value = true
   detailLoading.value = true
   detail.value = null
-  try { detail.value = await getDinghuobaoOrderDetail(order.orderSn) }
+  try { detail.value = await getDhbOrderDetail(order.orderSn) }
   catch (reason) { ElMessage.error(errorMessage(reason, '订单详情加载失败')) }
   finally { detailLoading.value = false }
 }
