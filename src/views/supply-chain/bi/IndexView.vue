@@ -1,5 +1,5 @@
 <template>
-  <SupplyModulePlaceholder title="BI 数据分析" description="BI页面框架已就绪；指标与分析副本由 analytics-bi-service 持有。" note="一期先接入订货宝订单镜像与销售监管数据，再定义看板指标。" />
+  <SupplyModulePlaceholder title="经营驾驶舱" description="订单、销售、城市、客户、商品库存和同步质量指标由 analytics-bi-service 统一定义与发布。" note="业务域只展示工作摘要，完整经营分析统一进入BI数据看板。" />
 </template>
 <script setup lang="ts">
 import SupplyModulePlaceholder from '@/components/supply/SupplyModulePlaceholder.vue'

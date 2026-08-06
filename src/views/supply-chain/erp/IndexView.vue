@@ -1,5 +1,5 @@
 <template>
-  <SupplyModulePlaceholder title="ERP" description="ERP页面框架已就绪；商品、库存与采购事实由 erp-core-service 持有。" />
+  <SupplyModulePlaceholder title="ERP 工作台" description="商品与主数据、供应商、采购、仓库作业、库存和采购成本由 erp-core-service 统一持有。" />
 </template>
 <script setup lang="ts">
 import SupplyModulePlaceholder from '@/components/supply/SupplyModulePlaceholder.vue'

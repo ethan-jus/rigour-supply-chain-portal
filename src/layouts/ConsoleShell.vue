@@ -3,7 +3,10 @@
     <aside class="sidebar">
       <router-link class="sidebar__brand" to="/apps">
         <img src="@/assets/brand/ruigai-logo.png" alt="瑞盖优选">
-        <strong>瑞盖优选</strong>
+        <span class="sidebar__brand-copy">
+          <strong>瑞盖优选</strong>
+          <small>{{ title }}</small>
+        </span>
       </router-link>
 
       <nav class="sidebar__nav" aria-label="应用菜单">
@@ -112,13 +115,14 @@ onMounted(() => {
   flex-direction: column;
   min-height: 100vh;
   background: $color-ink;
+  border-right: 1px solid rgba(148, 163, 184, 0.1);
 
   &__brand {
     display: flex;
     gap: 10px;
     align-items: center;
-    height: $topbar-height;
-    padding: 0 20px;
+    height: 72px;
+    padding: 0 18px;
     color: #fff;
     text-decoration: none;
 
@@ -130,14 +134,30 @@ onMounted(() => {
 
     strong {
       font-size: $font-size-md;
-      font-weight: 600;
+      font-weight: 650;
+      letter-spacing: 0.01em;
+    }
+  }
+
+  &__brand-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+
+    small {
+      color: $color-ink-text-faint;
+      font-size: 11px;
+      font-weight: 500;
     }
   }
 
   &__nav {
     flex: 1;
-    padding: 8px 12px;
+    padding: 12px 12px 20px;
     overflow-y: auto;
+    scrollbar-color: rgba(148, 163, 184, 0.24) transparent;
+    scrollbar-width: thin;
   }
 
   &__footer {
@@ -249,8 +269,7 @@ onMounted(() => {
     justify-content: center;
     padding: 0;
 
-    strong,
-    img + strong {
+    .sidebar__brand-copy {
       display: none;
     }
   }
@@ -259,13 +278,14 @@ onMounted(() => {
     padding: 8px;
   }
 
-  .nav-group__label,
-  .nav-item span,
+  :deep(.nav-branch__text),
+  :deep(.nav-item span),
   .back-portal {
     display: none;
   }
 
-  .nav-item {
+  :deep(.nav-item),
+  :deep(.nav-branch) {
     justify-content: center;
     padding: 0;
   }

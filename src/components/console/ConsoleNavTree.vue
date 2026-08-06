@@ -1,62 +1,50 @@
 <template>
-  <div class="nav-tree">
-    <template v-for="node in nodes" :key="node.id">
-      <div v-if="node.visible" class="nav-node">
+  <div class="nav-tree" :class="`nav-tree--depth-${Math.min(depth, 3)}`">
+    <template v-for="node in visibleNodes" :key="node.id">
+      <div
+        class="nav-node"
+        :class="[
+          `nav-node--depth-${Math.min(depth, 3)}`,
+          { 'nav-node--active-branch': containsActiveRoute(node) },
+        ]"
+      >
         <button
-          v-if="!node.routePath && visibleChildren(node).length"
+          v-if="visibleChildren(node).length"
           type="button"
+          class="nav-branch"
           :class="[
-            depth === 0 ? 'nav-group__label' : 'nav-subgroup__label',
-            'nav-group__toggle',
+            `nav-branch--depth-${Math.min(depth, 3)}`,
+            { 'nav-branch--active': containsActiveRoute(node) },
           ]"
           :aria-expanded="isExpanded(node)"
+          :aria-controls="`nav-children-${node.id}`"
           @click="toggleNode(node)"
         >
-          {{ node.displayName }}
+          <ConsoleNavIcon v-if="depth === 0" :icon-key="node.iconKey" />
+          <span class="nav-branch__text">{{ node.displayName }}</span>
           <span class="nav-chevron" :class="{ 'nav-chevron--collapsed': !isExpanded(node) }" aria-hidden="true" />
         </button>
-        <p v-else-if="!node.routePath" :class="depth === 0 ? 'nav-group__label' : 'nav-subgroup__label'">
-          {{ node.displayName }}
-        </p>
-        <button
-          v-else-if="visibleChildren(node).length"
-          type="button"
-          class="nav-item nav-item--group-toggle"
-          :class="[
-            `nav-item--depth-${Math.min(depth, 3)}`,
-            { 'nav-item--active': isActive(node) },
-          ]"
-          :aria-label="`${isExpanded(node) ? '收起' : '展开'}${node.displayName}`"
-          :aria-expanded="isExpanded(node)"
-          @click="toggleNode(node)"
-        >
-          <ConsoleNavIcon :icon-key="node.iconKey" />
-          <span>{{ node.displayName }}</span>
-          <span class="nav-chevron" :class="{ 'nav-chevron--collapsed': !isExpanded(node) }" aria-hidden="true" />
-        </button>
+
         <router-link
           v-else-if="node.routePath"
           class="nav-item"
           :class="[
             `nav-item--depth-${Math.min(depth, 3)}`,
-            { 'nav-item--active': isActive(node) },
+            { 'nav-item--active': isExactActive(node) },
           ]"
           :to="node.routePath"
         >
-          <ConsoleNavIcon :icon-key="node.iconKey" />
+          <ConsoleNavIcon v-if="depth === 0" :icon-key="node.iconKey" />
           <span>{{ node.displayName }}</span>
         </router-link>
+
         <div
           v-if="visibleChildren(node).length"
+          v-show="isExpanded(node)"
           :id="`nav-children-${node.id}`"
           class="nav-children"
-          :class="{ 'nav-children--collapsed': !isExpanded(node) }"
-          :aria-hidden="!isExpanded(node)"
         >
-          <ConsoleNavTree
-            :nodes="visibleChildren(node)"
-            :depth="depth + 1"
-          />
+          <ConsoleNavTree :nodes="visibleChildren(node)" :depth="depth + 1" />
         </div>
       </div>
     </template>
@@ -64,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { NavigationNode } from '@/types/management'
 import ConsoleNavIcon from '@/components/console/ConsoleNavIcon.vue'
@@ -78,174 +66,170 @@ const props = withDefaults(defineProps<{
 
 const route = useRoute()
 const expandedByNode = ref<Record<string, boolean>>({})
+const visibleNodes = computed(() => props.nodes.filter((node) => node.visible))
 
 function visibleChildren(node: NavigationNode): NavigationNode[] {
   return node.children.filter((child) => child.visible)
 }
 
-function isActive(node: NavigationNode): boolean {
+function isExactActive(node: NavigationNode): boolean {
   return node.routePath === route.path
-    || node.children.filter((child) => child.visible).some(isActive)
+}
+
+function containsActiveRoute(node: NavigationNode): boolean {
+  return isExactActive(node) || visibleChildren(node).some(containsActiveRoute)
 }
 
 function isExpanded(node: NavigationNode): boolean {
-  return expandedByNode.value[node.id] ?? true
+  return expandedByNode.value[node.id] ?? containsActiveRoute(node)
 }
 
 function toggleNode(node: NavigationNode): void {
-  expandedByNode.value[node.id] = !isExpanded(node)
+  const shouldExpand = !isExpanded(node)
+
+  if (shouldExpand) {
+    visibleNodes.value.forEach((sibling) => {
+      if (visibleChildren(sibling).length) {
+        expandedByNode.value[sibling.id] = false
+      }
+    })
+  }
+
+  expandedByNode.value[node.id] = shouldExpand
 }
 
-// 通过其他入口进入子页面时，自动展开其父分组，避免当前页面被收起的菜单遮挡。
-watch(() => route.path, () => {
-  props.nodes.forEach((node) => {
-    if (node.children.filter((child) => child.visible).some(isActive)) {
-      expandedByNode.value[node.id] = true
+function syncActiveBranch(nodes: NavigationNode[]): void {
+  nodes.forEach((node) => {
+    if (visibleChildren(node).length) {
+      expandedByNode.value[node.id] = visibleChildren(node).some(containsActiveRoute)
     }
   })
-}, { immediate: true })
+}
+
+watch(() => route.path, () => syncActiveBranch(props.nodes), { immediate: true })
 </script>
 
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
 
-.nav-tree {
+.nav-tree,
+.nav-node {
   display: block;
 }
 
-.nav-node {
-  margin-top: 18px;
-
-  &:first-child {
-    margin-top: 4px;
-  }
+.nav-node--depth-0 {
+  margin: 3px 0;
 }
 
-.nav-node > .nav-tree {
-  margin-top: 4px;
-}
-
-.nav-group__label,
-.nav-subgroup__label {
-  margin: 0 0 6px;
-  color: $color-ink-text-faint;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-}
-
-.nav-group__toggle,
-.nav-subgroup__toggle {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-
-  &:hover {
-    color: $color-ink-text;
-  }
-}
-
-.nav-group__label {
-  padding: 0 10px;
-}
-
-.nav-subgroup__label {
-  margin-left: 26px;
-  padding: 0 10px;
-  color: $color-ink-text-muted;
-  font-size: 12px;
-  letter-spacing: 0;
-}
-
-.nav-chevron {
-  width: 6px;
-  height: 6px;
-  margin-right: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform $transition-fast;
-
-  &--collapsed {
-    transform: rotate(-45deg) translate(-1px, 1px);
-  }
-}
-
-.nav-item--group-toggle {
-  justify-content: flex-start;
-  color: $color-ink-text-faint;
-  font: inherit;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-
-  &:hover {
-    color: $color-ink-text;
-    background: $color-ink-hover;
-  }
-
-  .nav-chevron {
-    margin-left: auto;
-  }
-}
-
+.nav-branch,
 .nav-item {
   position: relative;
   display: flex;
-  gap: 10px;
+  width: 100%;
   align-items: center;
-  height: 38px;
-  margin: 2px 0;
-  padding: 0 10px;
-  color: $color-ink-text-muted;
-  font-size: $font-size-base;
+  color: #fff;
+  text-align: left;
   text-decoration: none;
-  border-radius: $border-radius-base;
-  transition: background $transition-fast, color $transition-fast;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: color $transition-fast, background $transition-fast, transform $transition-fast;
 
   &:hover {
-    color: $color-ink-text;
-    background: $color-ink-hover;
-  }
-
-  &--depth-2 {
-    margin-left: 16px;
-  }
-
-  &--depth-3 {
-    margin-left: 32px;
-  }
-
-  &--active {
     color: #fff;
-    background: $color-ink-hover;
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
 
-    &::before {
-      position: absolute;
-      top: 8px;
-      bottom: 8px;
-      left: -12px;
-      width: 3px;
-      background: $color-primary;
-      border-radius: 0 2px 2px 0;
-      content: '';
-    }
+.nav-branch--depth-0,
+.nav-item--depth-0 {
+  gap: 11px;
+  min-height: 44px;
+  padding: 0 12px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.nav-branch--depth-0.nav-branch--active,
+.nav-item--depth-0.nav-item--active {
+  color: #fff;
+  background: rgba(37, 99, 235, 0.2);
+  box-shadow: inset 3px 0 0 $color-primary-light;
+}
+
+.nav-branch--depth-1,
+.nav-item--depth-1 {
+  min-height: 38px;
+  padding: 0 12px 0 16px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.nav-branch--depth-2,
+.nav-item--depth-2,
+.nav-branch--depth-3,
+.nav-item--depth-3 {
+  min-height: 36px;
+  padding: 0 10px 0 28px;
+  color: #fff;
+  font-size: $font-size-sm;
+  font-weight: 600;
+}
+
+.nav-branch--depth-1.nav-branch--active {
+  color: #fff;
+}
+
+.nav-item--active {
+  color: #fff;
+  background: rgba(37, 99, 235, 0.24);
+
+  &::before {
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: 0;
+    width: 3px;
+    background: $color-primary-light;
+    border-radius: 0 3px 3px 0;
+    content: '';
   }
 }
 
 .nav-children {
-  display: block;
+  margin: 4px 0 8px 20px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.nav-tree--depth-2 .nav-children {
+  margin-left: 10px;
+}
+
+.nav-branch__text,
+.nav-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-chevron {
+  width: 7px;
+  height: 7px;
+  margin: 0 3px 3px auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  opacity: 0.72;
+  transform: rotate(45deg);
+  transition: transform $transition-fast;
 
   &--collapsed {
-    display: none;
+    margin-bottom: 0;
+    transform: rotate(-45deg);
   }
 }
 </style>

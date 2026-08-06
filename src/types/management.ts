@@ -24,6 +24,20 @@ export interface ResourceRecord {
   routeKey: string | null; routePath: string | null; iconKey: string | null
   visible: boolean; keepAlive: boolean; version: number
 }
+export interface TenantMenuRecord {
+  resourceId: string; applicationId: string; applicationCode: string; applicationName: string
+  parentId: string | null; code: string; type: 'MENU' | 'PAGE'
+  originalDisplayName: string; displayName: string
+  originalSortOrder: number; sortOrder: number
+  originalIconKey: string | null; iconKey: string | null
+  platformVisible: boolean; visible: boolean; parentGroupId: string | null
+  configured: boolean; version: number
+}
+export interface TenantMenuGroupRecord {
+  id: string; applicationId: string; applicationCode: string; applicationName: string
+  parentId: string | null; code: string; displayName: string; iconKey: string | null
+  sortOrder: number; visible: boolean; status: string; version: number
+}
 export interface TenantRecord {
   id: string; code: string; companyName: string; status: string; policyVersion: number; version: number
 }
