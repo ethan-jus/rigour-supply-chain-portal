@@ -44,21 +44,23 @@
 
     <template v-else-if="pageKey === 'sync-tasks'">
       <el-card>
-        <template #header><div class="header"><strong>同步任务</strong><el-button type="primary" @click="openTask()">新增任务</el-button></div></template>
+        <template #header><div class="header"><strong>同步任务</strong><el-button type="primary" @click="openTask()">新增扩展任务</el-button></div></template>
+        <el-alert class="task-hint" type="info" :closable="false" show-icon title="每个订货宝连接器的订单域同步任务由系统自动创建；此处新增任务用于后续扩展其他对象类型。" />
         <el-table v-loading="loading" :data="tasks" row-key="id">
           <el-table-column prop="code" label="任务编码" min-width="160" />
           <el-table-column label="连接"><template #default="scope">{{ connectorName(scope.row.connectorId) }}</template></el-table-column>
-          <el-table-column prop="objectType" label="对象类型" width="120" />
+          <el-table-column label="对象类型" min-width="170"><template #default="scope">{{ objectTypeLabel(scope.row.objectType) }}</template></el-table-column>
           <el-table-column prop="status" label="状态" width="100" />
           <el-table-column prop="nextRunAt" label="下次运行" min-width="180" />
-          <el-table-column label="操作" width="100"><template #default="scope"><el-button link type="primary" @click="openTask(scope.row)">编辑</el-button></template></el-table-column>
+          <el-table-column label="操作" width="170"><template #default="scope"><el-button link type="primary" @click="openTask(scope.row)">编辑</el-button><el-button v-if="scope.row.objectType === 'ORDER'" link type="success" :loading="runningTaskId === scope.row.id" :disabled="scope.row.status === 'RUNNING' || scope.row.status === 'PAUSED'" @click="runTask(scope.row)">立即同步</el-button></template></el-table-column>
         </el-table>
       </el-card>
       <el-dialog v-model="taskDialog" :title="editingTaskId ? '编辑任务' : '新增任务'" width="560px">
         <el-form label-width="100px">
           <el-form-item label="连接" required><el-select v-model="taskForm.connectorId" style="width:100%"><el-option v-for="item in connectors" :key="item.id" :label="item.name" :value="item.id" /></el-select></el-form-item>
           <el-form-item label="任务编码" required><el-input v-model="taskForm.code" :disabled="!!editingTaskId" /></el-form-item>
-          <el-form-item label="对象类型" required><el-input v-model="taskForm.objectType" placeholder="ORDER" /></el-form-item>
+          <el-form-item label="对象类型" required><el-select v-model="taskForm.objectType" style="width:100%"><el-option v-for="item in syncObjectTypes" :key="item.value" :disabled="!editingTaskId && item.value === 'ORDER'" :label="item.label" :value="item.value"><span>{{ item.label }}</span><span class="option-code">{{ item.value }}</span></el-option></el-select></el-form-item>
+          <el-alert type="info" :closable="false" show-icon title="一期只读同步：订单详情使用不自动签收、不自动审核参数；不会回写下载状态。" />
           <el-form-item label="状态"><el-select v-model="taskForm.status"><el-option v-for="item in taskStatuses" :key="item" :label="item" :value="item" /></el-select></el-form-item>
         </el-form>
         <template #footer><el-button @click="taskDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveTask">保存</el-button></template>
@@ -138,12 +140,14 @@ interface SyncTask { id: string; connectorId: string; code: string; objectType: 
 interface OrderMirror { id: string; sourceOrderId: string; orderNo: string; sourceStatus: string | null; amount: number; orderTime: string | null; mirrorStatus: string; version: number }
 interface SyncLog { id: string; taskId: string; level: string; message: string; errorCode: string | null; occurredAt: string }
 interface FieldMapping { id: string; connectorId: string; sourceField: string; targetField: string; transformType: string; enabled: boolean; version: number }
+interface SyncRunResult { runId: string; objectType: string; status: 'SUCCEEDED'; fetched: number; changed: number; completedObjects: string[] }
 
 const route = useRoute()
 const pageKey = computed(() => String(route.meta.pageKey || 'overview'))
 const pageTitle = computed(() => String(route.meta.title || '订货宝数据同步'))
 const loading = ref(false)
 const saving = ref(false)
+const runningTaskId = ref('')
 const testingConnectorId = ref('')
 const connectors = ref<Connector[]>([])
 const tasks = ref<SyncTask[]>([])
@@ -153,6 +157,11 @@ const mappings = ref<FieldMapping[]>([])
 const selectedConnectorId = ref('')
 const overviewCards = ref([{ label: '连接', value: '-' }, { label: '同步任务', value: '-' }, { label: '订单镜像', value: '-' }, { label: '日志', value: '-' }])
 const taskStatuses = ['IDLE', 'RUNNING', 'PAUSED', 'FAILED', 'COMPLETED']
+const syncObjectTypes = [
+  { value: 'ORDER_DOMAIN', label: '全部订单域' }, { value: 'ORDER', label: '订单域（系统默认）' },
+  { value: 'SHIPMENT', label: '发货单' }, { value: 'RETURN', label: '退货单' },
+  { value: 'RECEIPT', label: '收款单' }, { value: 'PAYMENT', label: '付款单' },
+]
 const transformTypes = ['DIRECT', 'CONSTANT', 'EXPRESSION', 'DICTIONARY']
 const connectorDialog = ref(false)
 const taskDialog = ref(false)
@@ -161,7 +170,7 @@ const editingConnectorId = ref('')
 const editingTaskId = ref('')
 const editingMappingId = ref('')
 const connectorForm = reactive({ code: '', name: '', baseUrl: '', authSecretRef: '', status: 'ACTIVE', version: 0 })
-const taskForm = reactive({ connectorId: '', code: '', objectType: 'ORDER', status: 'IDLE', nextRunAt: null as string | null, version: 0 })
+const taskForm = reactive({ connectorId: '', code: '', objectType: 'SHIPMENT', status: 'IDLE', nextRunAt: null as string | null, version: 0 })
 const mappingForm = reactive({ connectorId: '', sourceField: '', targetField: '', transformType: 'DIRECT', enabled: true, version: 0 })
 
 const base = '/integration/dhb'
@@ -203,6 +212,7 @@ async function loadMappings() {
 }
 
 function connectorName(id: string) { return connectors.value.find((item) => item.id === id)?.name || id }
+function objectTypeLabel(value: string) { return syncObjectTypes.find((item) => item.value === value)?.label || value }
 
 function openConnector(row?: Connector) {
   editingConnectorId.value = row?.id || ''
@@ -238,7 +248,7 @@ async function testConnector(connectorId: string) {
 
 function openTask(row?: SyncTask) {
   editingTaskId.value = row?.id || ''
-  Object.assign(taskForm, row || { connectorId: connectors.value[0]?.id || '', code: '', objectType: 'ORDER', status: 'IDLE', nextRunAt: null, version: 0 })
+  Object.assign(taskForm, row || { connectorId: connectors.value[0]?.id || '', code: '', objectType: 'SHIPMENT', status: 'IDLE', nextRunAt: null, version: 0 })
   taskDialog.value = true
 }
 
@@ -249,6 +259,21 @@ async function saveTask() {
     else await apiClient.post(`${base}/sync-tasks`, taskForm)
     ElMessage.success('任务已保存'); taskDialog.value = false; tasks.value = (await apiClient.get(`${base}/sync-tasks`)) as SyncTask[]
   } catch (reason) { ElMessage.error(errorMessage(reason, '任务保存失败')) } finally { saving.value = false }
+}
+
+/** 立即同步只调用Order Center；Order Center再编排Integration并完成本地业务落库。 */
+async function runTask(task: SyncTask) {
+  runningTaskId.value = task.id
+  try {
+    const result = await apiClient.post<SyncRunResult>(
+      `/orders/dhb/sync/${task.connectorId}`,
+      { includeDetails: true, maxPages: 100 },
+      { timeout: 300000 },
+    )
+    ElMessage.success(`同步完成：获取${result.fetched}条，新增或变化${result.changed}条`)
+    tasks.value = (await apiClient.get(`${base}/sync-tasks`)) as SyncTask[]
+  } catch (reason) { ElMessage.error(errorMessage(reason, '同步任务执行失败')) }
+  finally { runningTaskId.value = '' }
 }
 
 function openMapping(row?: FieldMapping) {
@@ -282,5 +307,7 @@ onMounted(() => { void loadPage() })
 .summary-value { font-size: 30px; font-weight: 700; }
 .summary-label { margin-top: 6px; color: #8a97a8; font-size: 13px; }
 .section-card { margin-top: 4px; }
+.task-hint { margin-bottom: 12px; }
 .empty-hint { margin-top: 24px; color: #8a97a8; text-align: center; font-size: 13px; }
+.option-code { float: right; margin-left: 20px; color: #98a2b3; font-size: 12px; }
 </style>
