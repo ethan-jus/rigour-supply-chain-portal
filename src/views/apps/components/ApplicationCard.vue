@@ -65,7 +65,7 @@ const THEMES: Record<string, CardTheme> = {
   PLATFORM_ADMIN: { key: 'admin', description: '统一门户管理、系统设置与权限策略' },
   SYSTEM_ADMIN: { key: 'admin', description: '租户内的组织、用户、角色与菜单管理' },
   SUPPLY_CHAIN: { key: 'supply', description: '订单 · 商品 · 库存 · 客户' },
-  SALES_WORKBENCH: { key: 'sales', description: '拜访打卡 · 业绩看板 · 飞书端作业' },
+  FEISHU_SALES: { key: 'sales', description: '移动考勤 · 门店拜访 · 录音证据' },
 }
 
 const theme = computed<CardTheme>(() => {

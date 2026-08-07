@@ -291,8 +291,13 @@
 
     <el-card v-else shadow="never" class="placeholder-card">
       <template #header><strong>{{ pageTitle }}</strong></template>
-      <el-empty description="一期仅实现订单域查询和落库；该菜单暂不提供新增、修改等写操作。" />
-      <el-alert type="info" :closable="false" show-icon title="一期已覆盖订单、发货单、退货单、收款单和付款单；商品、库存、客户等模块暂不改动。" />
+      <el-empty description="当前页面为订单域能力入口，已接入能力使用订单中心本地投影；其他能力按领域逐步接入。" />
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="订货宝仅作为过渡期数据来源；订单主数据统一落入订单中心，不在菜单层复制第三方系统。当前已覆盖订单、发货单、退货单、收款单和付款单查询。"
+      />
     </el-card>
   </div>
 </template>
@@ -328,8 +333,21 @@ import {
 const route = useRoute()
 const pageKey = computed(() => String(route.meta.pageKey || 'order'))
 const pageTitle = computed(() => ({
-  order: '订单',
-  'order-list': '订货单',
+  order: '订单工作台',
+  'order-all': '全部订单',
+  'order-pending': '待处理订单',
+  'order-exceptions': '异常订单',
+  'order-backstage': '后台代客下单',
+  'order-source-exceptions': '来源异常',
+  'fulfillment-ownership': '履约归属',
+  'fulfillment-inventory': '库存与仓库协同',
+  'fulfillment-exceptions': '履约异常',
+  'after-sales-exchanges': '换货与补发',
+  'after-sales-approvals': '售后审批',
+  'settlement-receivable': '应收依据',
+  'settlement-collections': '回款状态',
+  'settlement-reconciliation': '对账差异',
+  'order-list': '订货宝订单',
   'stock-up': '出库发货',
   shipments: '发货单',
   returns: '退货单',
@@ -340,7 +358,7 @@ const pageTitle = computed(() => ({
   'stats-shipped': '已出库统计',
   'stats-pending-delivery': '待发货统计',
   'stats-returns': '退单商品统计',
-}[pageKey.value] || String(route.meta.title || '订货宝')))
+}[pageKey.value] || String(route.meta.title || '订单管理')))
 // 一期订单域页面均查询订单中心本地投影；页面不直连订货宝。
 const isOrderQueryPage = computed(() => pageKey.value === 'order-list')
 const isShipmentPage = computed(() => pageKey.value === 'shipments')

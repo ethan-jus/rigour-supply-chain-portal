@@ -5,7 +5,7 @@
 本仓库为前端展示层，一期在同一 Vue 工程中承载两个职责隔离的 Shell：
 
 1. 统一应用门户：登录、“我的应用”、应用卡片过滤和安全启动。
-2. 供应链管理 Console：点击供应链平台卡片后进入，承载 CRM、ERP、订单、销售监管和 BI 等业务页面。
+2. 供应链管理 Console：点击供应链平台卡片后进入，承载 CRM、ERP、订单、销售管理和 BI 等业务页面。
 
 两层只共享认证、设计 Token 和 API Core，不把供应链菜单直接放在登录后的应用目录首页，也不复制任何业务状态机。
 
@@ -56,6 +56,8 @@ views → stores → api/core → axios
 
 - 应用许可决定“我的应用”展示哪些卡片以及能否启动对应管理Shell
 - MENU/PAGE资源决定侧边导航和页面访问；数据库只下发稳定`routeKey`和路径，未知映射失败关闭
+- 租户菜单配置只覆盖套餐内资源的名称、图标、排序、显示状态和无路由分组，不修改平台资源事实
+- 菜单启用和角色授权是两个独立步骤，最终用户导航取资源、套餐、租户配置和角色授权的交集
 - BUTTON/API资源共用`permissionCode`，允许同一能力的UI显隐与后端授权对齐
 - 功能权限决定供应链 Console 内的菜单、页面、按钮和接口
 - DataScope 决定进入页面后可访问的数据范围
@@ -73,16 +75,18 @@ views → stores → api/core → axios
 | 我的应用 | `/apps` | 已登录 |
 | 平台管理 | `/platform-admin` | `PLATFORM_ADMIN`应用许可 + 数据库导航 |
 | 租户系统管理 | `/system-admin` | `SYSTEM_ADMIN`应用许可 + 数据库导航 |
+| 租户菜单管理 | `/system-admin/menus` | `iam:menu:read`，编辑需`iam:menu:write` |
 | 供应链 Console | `/supply-chain` | `SUPPLY_CHAIN` 应用许可 |
 | ERP | `/supply-chain/erp` | 应用许可 + `erp:*` |
 | 订单管理 | `/supply-chain/order` | 应用许可 + `order:*` |
 | 销售管理 | `/supply-chain/sales` | 应用许可 + `sales:*` |
+| 飞书销售工作台启动页 | `/sales-workbench` | IAM应用卡片；只启动独立H5，不承载主管后台 |
 | 数据分析 | `/supply-chain/bi` | 应用许可 + `bi:*` |
 | 人事/城市/代理 | `/supply-chain/...` | 对应功能权限和 DataScope |
 
 ## 当前未实现或未验收范围
 
-- 订货宝、飞书销售工作台及其他系统的受控启动配置
+- 飞书生产H5域名、飞书应用发布和真实移动端受控启动验收
 - 开放 API 代码生成尚未接入；接入后生成代码必须落在独立只读目录
 - 业务领域接口对DataScope的实际消费（IAM的DataScope管理已完成）
 - 多租户切换 UI

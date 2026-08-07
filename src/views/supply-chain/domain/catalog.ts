@@ -1,0 +1,152 @@
+export interface SupplyDomainPage {
+  domainKey: string
+  domainTitle: string
+  groupTitle: string | null
+  title: string
+  routeKey: string
+  path: string
+  owner: string
+}
+
+interface PageSeed { key: string; title: string }
+interface GroupSeed { key: string; title: string; pages: PageSeed[] }
+
+const groupPages = (
+  domainKey: string,
+  domainTitle: string,
+  owner: string,
+  groups: GroupSeed[],
+): SupplyDomainPage[] => groups.flatMap((group) => group.pages.map((item) => ({
+  domainKey,
+  domainTitle,
+  groupTitle: group.title,
+  title: item.title,
+  routeKey: `supply.${domainKey}.${group.key}.${item.key}`,
+  path: `/supply-chain/${domainKey}/${group.key}/${item.key}`,
+  owner,
+})))
+
+const directPages = (
+  domainKey: string,
+  domainTitle: string,
+  owner: string,
+  pages: PageSeed[],
+): SupplyDomainPage[] => pages.map((item) => ({
+  domainKey,
+  domainTitle,
+  groupTitle: null,
+  title: item.title,
+  routeKey: `supply.${domainKey}.${item.key}`,
+  path: `/supply-chain/${domainKey}/${item.key}`,
+  owner,
+}))
+
+export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
+  'supply.erp.master-data.menu',
+  'supply.erp.suppliers.menu',
+  'supply.erp.procurement.menu',
+  'supply.erp.warehouse.menu',
+  'supply.erp.inventory.menu',
+  'supply.erp.cost-settlement.menu',
+  'supply.crm.customers.menu',
+  'supply.crm.assignments.menu',
+  'supply.crm.credit-policy.menu',
+  'supply.city.scope.menu',
+  'supply.city.tasks.menu',
+  'supply.city.configuration.menu',
+]
+
+export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
+  ...groupPages('erp', 'ERP', 'erp-core-service', [
+    { key: 'master-data', title: '商品与主数据', pages: [
+      { key: 'products', title: '商品/SPU' }, { key: 'skus', title: 'SKU' },
+      { key: 'categories', title: '分类' }, { key: 'brands', title: '品牌' },
+      { key: 'specifications', title: '规格与包装' },
+    ] },
+    { key: 'suppliers', title: '供应商', pages: [
+      { key: 'profiles', title: '供应商档案' }, { key: 'products', title: '供应商商品' },
+      { key: 'prices', title: '供应商价格' },
+    ] },
+    { key: 'procurement', title: '采购管理', pages: [
+      { key: 'requests', title: '采购申请' }, { key: 'orders', title: '采购订单' },
+      { key: 'receipts', title: '到货与入库' }, { key: 'returns', title: '采购退货' },
+    ] },
+    { key: 'warehouse', title: '仓库作业', pages: [
+      { key: 'locations', title: '仓库与库位' }, { key: 'inbound', title: '入库作业' },
+      { key: 'outbound', title: '出库作业' }, { key: 'transfers', title: '调拨作业' },
+      { key: 'stocktaking', title: '盘点作业' },
+    ] },
+    { key: 'inventory', title: '库存管理', pages: [
+      { key: 'overview', title: '库存总览' }, { key: 'availability', title: '可用/锁定/在途库存' },
+      { key: 'movements', title: '库存流水' }, { key: 'batches', title: '批次与效期' },
+      { key: 'alerts', title: '库存预警' },
+    ] },
+    { key: 'cost-settlement', title: '成本与采购结算', pages: [
+      { key: 'purchase-prices', title: '采购价格' }, { key: 'receipt-costs', title: '入库成本' },
+      { key: 'inventory-costs', title: '库存成本' }, { key: 'payable-basis', title: '供应商应付依据' },
+    ] },
+  ]),
+  ...groupPages('crm', 'CRM', 'merchant-crm-service', [
+    { key: 'customers', title: '客户与商家', pages: [
+      { key: 'profiles', title: '客户/商家档案' }, { key: 'stores', title: '门店档案' },
+      { key: 'levels-tags', title: '客户等级与标签' }, { key: 'customer-360', title: '客户 360' },
+    ] },
+    { key: 'assignments', title: '客户归属', pages: [
+      { key: 'sales', title: '销售归属' }, { key: 'city-teams', title: '城市与团队归属' },
+      { key: 'history', title: '归属变更记录' },
+    ] },
+    { key: 'credit-policy', title: '信用与结算政策', pages: [
+      { key: 'limits', title: '信用额度' }, { key: 'terms', title: '账期与结算周期' },
+      { key: 'payment-methods', title: '付款方式' }, { key: 'invoicing', title: '开票资料' },
+      { key: 'approvals', title: '政策审批记录' },
+    ] },
+  ]),
+  ...groupPages('city', '城市运营', 'city-operations-service', [
+    { key: 'scope', title: '城市与服务范围', pages: [
+      { key: 'profiles', title: '城市运营档案' }, { key: 'service-areas', title: '服务区域' },
+      { key: 'fulfillment-nodes', title: '履约节点' }, { key: 'owners', title: '城市责任人' },
+    ] },
+    { key: 'tasks', title: '运营任务', pages: [
+      { key: 'todos', title: '城市待办' }, { key: 'fulfillment-exceptions', title: '履约异常' },
+      { key: 'customer-exceptions', title: '客户经营异常' }, { key: 'activities', title: '城市活动与复盘' },
+    ] },
+    { key: 'configuration', title: '城市配置', pages: [
+      { key: 'targets', title: '城市目标' }, { key: 'budgets', title: '预算与成本配置' },
+      { key: 'partners', title: '合作方配置' },
+    ] },
+  ]),
+  ...directPages('bi', 'BI 数据看板', 'analytics-bi-service', [
+    { key: 'orders-fulfillment', title: '订单与履约' }, { key: 'sales', title: '销售经营' },
+    { key: 'cities', title: '城市经营' }, { key: 'customers-stores', title: '客户与门店' },
+    { key: 'products-procurement-inventory', title: '商品、采购与库存' },
+    { key: 'finance-collections', title: '财务与回款' }, { key: 'sync-quality', title: '数据同步质量' },
+    { key: 'metrics', title: '指标中心' }, { key: 'dashboards', title: '看板管理' },
+  ]),
+  ...directPages('hr', '人事与绩效', 'hr-payroll-service', [
+    { key: 'assignments', title: '任职与调动' }, { key: 'calendar-policies', title: '工作日历与考勤政策' },
+    { key: 'attendance-appeals', title: '正式考勤与申诉' }, { key: 'payroll-commission', title: '薪酬与提成' },
+    { key: 'performance', title: '绩效核算' }, { key: 'monthly-close', title: '月结与冲回' },
+  ]),
+  ...directPages('channel', '渠道代理', 'channel-agent-service', [
+    { key: 'relationships', title: '代理关系树' }, { key: 'levels', title: '代理等级' },
+    { key: 'quotas', title: '额度与占用' }, { key: 'approvals', title: '审批与释放' },
+  ]),
+  ...directPages('settings', '业务设置', '各领域服务', [
+    { key: 'product-inventory', title: '商品与库存参数' }, { key: 'procurement', title: '采购规则' },
+    { key: 'customer-levels-tags', title: '客户等级与标签' },
+    { key: 'credit-policy-templates', title: '信用与结算政策模板' },
+    { key: 'order-after-sales', title: '订单和售后规则' },
+    { key: 'fulfillment-allocation', title: '履约分配规则' },
+    { key: 'city-service-scope', title: '城市服务范围' },
+    { key: 'numbering-dictionaries', title: '业务编号与领域字典' },
+  ]),
+  ...directPages('integration', '外部集成与数据同步', 'integration-migration-service', [
+    { key: 'sync-batches', title: '同步批次与游标' },
+    { key: 'external-id-mappings', title: '外部 ID 映射' },
+  ]),
+]
+
+export const SUPPLY_DOMAIN_ROUTE_MAP: Record<string, string | null> = {
+  ...Object.fromEntries(SUPPLY_DOMAIN_MENU_KEYS.map((key) => [key, null])),
+  ...Object.fromEntries(SUPPLY_DOMAIN_PAGES.map((item) => [item.routeKey, item.path])),
+}

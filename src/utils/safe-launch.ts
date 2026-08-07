@@ -3,8 +3,9 @@ import type { PortalApplication } from '@/types/application'
 import { devInfo, devWarn } from '@/utils/dev-log'
 
 const INTERNAL_ROUTES = new Set([
-  '/platform-admin', '/system-admin', '/supply-chain', '/supply-chain/dhb',
+  '/platform-admin', '/system-admin', '/supply-chain', '/supply-chain/sales',
 ])
+const FEISHU_LAUNCH_ROUTES = new Set(['/sales-workbench'])
 
 /** 启动IAM已授权卡片；外部窗口不携带Portal Bearer Token。 */
 export async function launchApplication(app: PortalApplication, router: Router): Promise<void> {
@@ -39,6 +40,13 @@ export async function launchApplication(app: PortalApplication, router: Router):
     if (target.protocol !== 'https:' && !local) throw new Error('OIDC应用必须使用HTTPS或本地loopback地址')
     window.open(target, '_blank', 'noopener,noreferrer')
     devInfo('OIDC应用已打开', { code: app.code, host: target.host })
+    return
+  }
+  if (app.launchMode === 'FEISHU_DEEPLINK') {
+    if (!FEISHU_LAUNCH_ROUTES.has(app.targetUri)) throw new Error('飞书应用引导页未注册')
+    await router.push(app.targetUri)
+    if (router.currentRoute.value.path !== app.targetUri) throw new Error('飞书应用入口未打开')
+    devInfo('飞书应用引导页打开成功', { code: app.code, targetUri: app.targetUri })
     return
   }
   throw new Error('该应用的单点启动协议尚未接入')
