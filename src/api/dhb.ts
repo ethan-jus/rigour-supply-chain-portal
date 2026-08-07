@@ -64,6 +64,29 @@ export interface DhbOrderPage {
   items: DhbOrder[]
 }
 
+export interface DhbOrderSyncResult {
+  runId: string
+  objectType: string
+  status: string
+  fetched: number
+  changed: number
+  ordersChanged: number
+  shipmentsChanged: number
+  shipmentLogisticsChanged: number
+  returnsChanged: number
+  financialDocumentsChanged: number
+  completedObjects: string[]
+}
+
+export type DhbOrderSyncScope =
+  | 'ALL'
+  | 'ORDER'
+  | 'RETURN'
+  | 'SHIPMENT'
+  | 'SHIPMENT_LOGISTICS'
+  | 'RECEIPT'
+  | 'PAYMENT'
+
 export interface DhbOrderDetail {
   order: DhbOrder
   lines: DhbOrderLine[]
@@ -77,6 +100,8 @@ export interface DhbDocumentQuery {
   step: number
   /** 订货宝来源状态原值；不传表示全部。 */
   status?: string
+  /** 订货宝出库类型；-2采购退货、10销售出库、11盘亏出库、17其他出库、18调拨出库、19联营出库。 */
+  typeId?: string
   /** 关联订货宝订单号；精确匹配。 */
   orderNo?: string
   /** 来源业务开始时间，格式yyyy-MM-dd或yyyy-MM-dd HH:mm:ss，含边界。 */
@@ -94,6 +119,7 @@ export interface DhbShipmentDocument {
   orderNo: string | null
   status: string | null
   statusName: string | null
+  typeId: string | null
   typeName: string | null
   customerNo: string | null
   customerName: string | null
@@ -123,6 +149,50 @@ export interface DhbShipmentLine {
 }
 
 export interface DhbShipmentDetail { shipment: DhbShipmentDocument; lines: DhbShipmentLine[] }
+
+/** getWaitShips按订货单返回的出库/发货物流快照；只有本地同步后才可查询。 */
+export interface DhbShipmentLogistics {
+  orderNo: string
+  shipmentNo: string | null
+  status: string | null
+  logisticsName: string | null
+  logisticsCode: string | null
+  trackingNo: string | null
+  shipmentAt: string | null
+  stockUpAt: string | null
+  warehouseNo: string | null
+  warehouseName: string | null
+  shippedCount: number
+  waitStockCount: number
+  syncedAt: string | null
+}
+
+export interface DhbShipmentLogisticsLine {
+  lineType: 'SHIPPED' | 'WAIT_STOCK' | string
+  sourceLineId: string
+  orderLineId: string | null
+  productId: string | null
+  skuNo: string | null
+  productCode: string | null
+  productName: string | null
+  specification: string | null
+  unit: string | null
+  containerUnit: string | null
+  conversionNumber: number | null
+  quantity: number | null
+  orderedQuantity: number | null
+  stockedQuantity: number | null
+  realStock: number | null
+  waitQuantity: number | null
+  warehouseNo: string | null
+  warehouseName: string | null
+  remark: string | null
+}
+
+export interface DhbShipmentLogisticsDetail {
+  logistics: DhbShipmentLogistics
+  lines: DhbShipmentLogisticsLine[]
+}
 
 /** 退货单；status：return_audit待审核、shipp_cust待客户发货、shipped待收货、refunded待退款、finished已完成、cancelled已取消。 */
 export interface DhbReturnDocument {
@@ -205,14 +275,32 @@ export function getDhbOrderDetail(orderSn: string) {
   return apiClient.get<DhbOrderDetail>(`${basePath}/${encodeURIComponent(orderSn)}`, orderRequestOptions)
 }
 
-/** 查询订单中心已落库的独立发货单，不实时调用订货宝。 */
+/** 通过Order Center按当前登录租户自动解析连接器并执行同步；Portal不直接调用Integration。 */
+export function syncDhbOrders(body: { includeDetails: boolean; maxPages: number; scope: DhbOrderSyncScope }) {
+  return apiClient.post<DhbOrderSyncResult>(`${basePath}/sync`, body, {
+    timeout: 300000,
+    ...orderRequestOptions,
+  })
+}
+
+/** 查询订单中心已落库的统一出库/发货单，不实时调用订货宝。 */
 export function getDinghuobaoShipments(params: DhbDocumentQuery) {
   return apiClient.get<DhbDocumentPage<DhbShipmentDocument>>(`${basePath}/shipments`, { params, ...orderRequestOptions })
+}
+
+/** 查询getWaitShips落库的出库/发货物流快照；不读取getShipsList发货单表。 */
+export function getDinghuobaoShipmentLogistics(params: DhbDocumentQuery) {
+  return apiClient.get<DhbDocumentPage<DhbShipmentLogistics>>(`${basePath}/shipment-logistics`, { params, ...orderRequestOptions })
 }
 
 /** 按发货单号查询本地主信息和商品明细。 */
 export function getDinghuobaoShipmentDetail(shipmentNo: string) {
   return apiClient.get<DhbShipmentDetail>(`${basePath}/shipments/${encodeURIComponent(shipmentNo)}`, orderRequestOptions)
+}
+
+/** 按订货宝订单号查询getWaitShips物流快照详情。 */
+export function getDinghuobaoShipmentLogisticsDetail(orderNo: string) {
+  return apiClient.get<DhbShipmentLogisticsDetail>(`${basePath}/shipment-logistics/${encodeURIComponent(orderNo)}`, orderRequestOptions)
 }
 
 /** 查询订单中心已落库的退货单，不实时调用订货宝。 */
