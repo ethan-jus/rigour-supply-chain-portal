@@ -60,6 +60,22 @@ describe('数据库导航注册表', () => {
     ])).toHaveLength(4)
   })
 
+  it('接受V28收付记录分组及其页面路由', () => {
+    expect(validateNavigation([
+      menuNode('supply.order.settlement.collections'),
+      node('supply.order.settlement.receipts', '/supply-chain/order/settlement/receipts'),
+      node('supply.order.settlement.payments', '/supply-chain/order/settlement/payments'),
+      node('supply.order.settlement.reconciliation', '/supply-chain/order/settlement/reconciliation'),
+      node('supply.order.settlement.differences', '/supply-chain/order/settlement/differences'),
+    ])).toHaveLength(5)
+  })
+
+  it('拒绝V28前已废弃的收付记录页面路径', () => {
+    expect(() => validateNavigation([
+      node('supply.order.settlement.collections', '/supply-chain/order/settlement/collections'),
+    ])).toThrow('未注册或路径不一致')
+  })
+
   it('接受V2.1 ERP、CRM与城市运营三级路由', () => {
     expect(validateNavigation([
       node('supply.erp.master-data.menu', null),

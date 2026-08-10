@@ -14,8 +14,15 @@ interface ImportMetaEnv {
   readonly VITE_OIDC_CLIENT_ID: string
   readonly VITE_OIDC_REDIRECT_URI?: string
   readonly VITE_OIDC_POST_LOGOUT_REDIRECT_URI?: string
+  readonly VITE_AMAP_JS_KEY?: string
+  readonly VITE_AMAP_SECURITY_CODE?: string
 }
 
 interface ImportMeta {
   readonly env: ImportMetaEnv
+}
+
+interface Window {
+  AMap?: unknown
+  _AMapSecurityConfig?: { securityJsCode: string }
 }

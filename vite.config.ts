@@ -36,6 +36,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      // 允许手机、飞书 WebView 通过本机局域网 IP 访问开发门户。
+      // 仅使用默认 localhost 时，192.168.x.x 会被操作系统拒绝连接。
+      host: '0.0.0.0',
       port: 5100,
       proxy: {
         '/api': {

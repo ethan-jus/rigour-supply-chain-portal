@@ -5,13 +5,13 @@ import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const configuredUrl = (import.meta.env.VITE_FEISHU_SALES_WORKBENCH_URL || '').trim()
+const targetUrl = computed(() => resolveWorkbenchUrl(configuredUrl))
 
 const launchState = computed(() => {
-  if (!configuredUrl) return { ready: false, text: '尚未配置飞书H5地址' }
+  if (!targetUrl.value) return { ready: false, text: '尚未配置飞书H5地址' }
   try {
-    const target = new URL(configuredUrl)
-    const local = import.meta.env.DEV && target.protocol === 'http:'
-      && ['localhost', '127.0.0.1', '[::1]'].includes(target.hostname)
+    const target = new URL(targetUrl.value)
+    const local = import.meta.env.DEV && target.protocol === 'http:' && isLoopbackOrPrivateHost(target.hostname)
     if (target.protocol === 'https:' || local) return { ready: true, text: '移动工作台入口已就绪' }
   } catch {
     // 统一返回不可启动状态，不把无效地址交给window.open。
@@ -24,7 +24,42 @@ function openWorkbench(): void {
     ElMessage.warning('请先配置飞书销售工作台地址')
     return
   }
-  window.open(configuredUrl, '_blank', 'noopener,noreferrer')
+  window.open(targetUrl.value, '_blank', 'noopener,noreferrer')
+}
+
+function resolveWorkbenchUrl(value: string): string {
+  if (!value) return ''
+  try {
+    const target = new URL(value)
+    const currentHost = window.location.hostname
+    const isLocalDevTarget = import.meta.env.DEV && target.protocol === 'http:' && isLoopbackHost(target.hostname)
+    if (isLocalDevTarget && isPrivateIpv4Host(currentHost)) {
+      // Portal与工作台运行在同一台开发机时，局域网设备不能把localhost解析成自己。
+      // 仅替换开发环境的loopback工作台地址；生产HTTPS地址保持配置原值。
+      target.hostname = currentHost
+    }
+    return target.toString()
+  } catch {
+    return ''
+  }
+}
+
+function isLoopbackHost(host: string): boolean {
+  return ['localhost', '127.0.0.1', '[::1]'].includes(host)
+}
+
+function isLoopbackOrPrivateHost(host: string): boolean {
+  return isLoopbackHost(host) || isPrivateIpv4Host(host)
+}
+
+function isPrivateIpv4Host(host: string): boolean {
+  const segments = host.split('.')
+  if (segments.length !== 4 || segments.some((segment) => !/^\d+$/.test(segment))) return false
+  const octets = segments.map(Number)
+  if (octets.some((octet) => octet < 0 || octet > 255)) return false
+  return octets[0] === 10
+    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+    || (octets[0] === 192 && octets[1] === 168)
 }
 </script>
 

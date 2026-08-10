@@ -39,7 +39,7 @@ export const SALES_PAGES: Record<string, SalesPageDefinition> = {
   'tasks-targets': page('目标分配', '任务与目标', '配置人员、团队和城市的销售工作目标。', 'Sales Work', '/api/v1/sales/management/targets', ['目标带期间和版本', '完成值由BI计算', '不在页面现算业绩']),
   'tasks-exemptions': page('目标减免', '任务与目标', '记录审批后的目标减免和调整。', 'Sales Work', '/api/v1/sales/management/target-exemptions', ['只追加调整', '保留审批依据', '进入BI锁定快照']),
   'exceptions-punch': page('打卡异常', '异常与复核', '聚合重复、缺卡、超窗和设备事件异常。', 'Sales Work', '/api/v1/sales/management/exceptions?type=punch', ['不直接扣工资', '可发起补卡', '最终考勤归HR']),
-  'exceptions-location': page('定位异常', '异常与复核', '查看定位中断、低精度和不合理移动风险。', 'Sales Work', '/api/v1/sales/management/exceptions?type=location', ['完整轨迹单独授权', '风险不等于违规', '查看行为审计']),
+  'exceptions-location': page('轨迹对比', '异常与复核', '按销售和两个工作日叠加精确路线，结合门店顺序排查重复路线、低精度和不合理移动风险。', 'Sales Work', '/api/v1/sales/management/profiles/{salesProfileId}/track', ['完整轨迹单独授权', '风险不等于违规', '每次查看行为审计']),
   'exceptions-evidence': page('拜访证据异常', '异常与复核', '查看越界签到、停留不足和照片缺失。', 'Sales Work', '/api/v1/sales/management/exceptions?type=evidence', ['规则版本可追溯', '支持主管复核', '异常理由标准化']),
   'exceptions-recording': page('录音与AI异常', '异常与复核', '查看录音时长、重复、静音和AI低置信度风险。', 'Sales Work', '/api/v1/sales/management/exceptions?type=recording', ['录音播放独立授权', '服务端验证时长', 'AI不自动处罚']),
   'exceptions-reviews': page('主管复核', '异常与复核', '统一处理拜访和外勤人工复核任务。', 'Sales Work', '/api/v1/sales/management/review-queue', ['队列按DataScope过滤', '决定必须审计', '超时可升级']),

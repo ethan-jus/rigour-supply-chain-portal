@@ -25,7 +25,7 @@
 
 ```bash
 pnpm install
-pnpm dev        # localhost:5100，通过localhost:26880的Gateway连接真实DEV数据
+pnpm dev        # 监听0.0.0.0:5100；电脑访问localhost:5100，手机使用电脑局域网IP:5100
 pnpm build      # 生产构建
 pnpm test       # 运行测试
 pnpm typecheck  # 类型检查
@@ -39,12 +39,12 @@ pnpm lint:fix   # 代码检查（自动修复）
 |---|---|---|
 | `VITE_API_BASE_URL` | `/api/v1` | API 基础路径 |
 | `VITE_APP_ENV` | `dev` | 运行环境标识 |
-| `VITE_API_TARGET` | `http://localhost:26880` | 本地Gateway代理目标 |
+| `VITE_API_TARGET` | `http://localhost:26880` | 仅由Vite开发服务器读取的Gateway代理目标；换服务器时在`.env.local`覆盖 |
 | `VITE_OIDC_ISSUER` | `http://localhost:26881` | 当前本地IAM issuer；非开发构建必须HTTPS |
 | `VITE_OIDC_CLIENT_ID` | 无 | Portal 公开客户端 ID |
 | `VITE_OIDC_REDIRECT_URI` | 当前站点 `/oidc/callback` | 精确注册的登录回调 |
 | `VITE_OIDC_POST_LOGOUT_REDIRECT_URI` | 当前站点 `/` | 精确注册的退出回调 |
-| `VITE_FEISHU_SALES_WORKBENCH_URL` | 开发环境`http://localhost:5200/#/home` | 飞书H5地址；生产必须配置HTTPS或飞书受控地址 |
+| `VITE_FEISHU_SALES_WORKBENCH_URL` | 开发环境`http://localhost:5200/#/home` | 本地开发从局域网访问门户时自动替换为当前页面主机名；生产必须配置HTTPS或飞书受控地址 |
 
 Portal 不发送租户身份头；Gateway 从已验签 JWT 重建可信租户上下文。
 
