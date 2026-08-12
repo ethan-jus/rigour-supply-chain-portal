@@ -1,10 +1,33 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { SUPPLY_DOMAIN_PAGES } from '@/views/supply-chain/domain/catalog'
 
+const erpProductMasterDataRouteKeys = new Set([
+  'supply.erp.master-data.products',
+  'supply.erp.master-data.skus',
+  'supply.erp.master-data.attributes.categories',
+  'supply.erp.master-data.attributes.brands',
+  'supply.erp.master-data.attributes.specifications',
+  'supply.erp.master-data.attributes.tags',
+])
+
+const erpSupplyDataRouteKeys = new Set([
+  'supply.erp.suppliers.profiles',
+  'supply.erp.procurement.orders',
+  'supply.erp.procurement.receipts',
+  'supply.erp.procurement.returns',
+  'supply.erp.warehouse.locations',
+  'supply.erp.warehouse.inbound',
+  'supply.erp.inventory.overview',
+])
+
 const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.map((page) => ({
   path: page.path.replace('/supply-chain/', ''),
   name: `SupplyDomain${page.routeKey.split('.').map((part) => part.replace(/(^|-)([a-z])/g, (_, __, letter) => letter.toUpperCase())).join('')}`,
-  component: () => import('@/views/supply-chain/domain/CapabilityView.vue'),
+  component: erpProductMasterDataRouteKeys.has(page.routeKey)
+    ? () => import('@/views/supply-chain/erp/ProductMasterDataView.vue')
+    : erpSupplyDataRouteKeys.has(page.routeKey)
+      ? () => import('@/views/supply-chain/erp/SupplyDataView.vue')
+      : () => import('@/views/supply-chain/domain/CapabilityView.vue'),
   meta: {
     title: page.title,
     requiresAuth: true,

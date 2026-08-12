@@ -41,6 +41,39 @@ const directPages = (
   owner,
 }))
 
+const erpProductCenterPages: SupplyDomainPage[] = [
+  {
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '商品/SPU',
+    routeKey: 'supply.erp.master-data.products',
+    path: '/supply-chain/erp/master-data/products', owner: 'erp-core-service',
+  },
+  {
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: 'SKU',
+    routeKey: 'supply.erp.master-data.skus',
+    path: '/supply-chain/erp/master-data/skus', owner: 'erp-core-service',
+  },
+  {
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '分类',
+    routeKey: 'supply.erp.master-data.attributes.categories',
+    path: '/supply-chain/erp/master-data/attributes/categories', owner: 'erp-core-service',
+  },
+  {
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '品牌',
+    routeKey: 'supply.erp.master-data.attributes.brands',
+    path: '/supply-chain/erp/master-data/attributes/brands', owner: 'erp-core-service',
+  },
+  {
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '规格与包装',
+    routeKey: 'supply.erp.master-data.attributes.specifications',
+    path: '/supply-chain/erp/master-data/attributes/specifications', owner: 'erp-core-service',
+  },
+  {
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '商品标签',
+    routeKey: 'supply.erp.master-data.attributes.tags',
+    path: '/supply-chain/erp/master-data/attributes/tags', owner: 'erp-core-service',
+  },
+]
+
 export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
   'supply.erp.master-data.menu',
   'supply.erp.suppliers.menu',
@@ -57,12 +90,8 @@ export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
 ]
 
 export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
+  ...erpProductCenterPages,
   ...groupPages('erp', 'ERP', 'erp-core-service', [
-    { key: 'master-data', title: '商品与主数据', pages: [
-      { key: 'products', title: '商品/SPU' }, { key: 'skus', title: 'SKU' },
-      { key: 'categories', title: '分类' }, { key: 'brands', title: '品牌' },
-      { key: 'specifications', title: '规格与包装' },
-    ] },
     { key: 'suppliers', title: '供应商', pages: [
       { key: 'profiles', title: '供应商档案' }, { key: 'products', title: '供应商商品' },
       { key: 'prices', title: '供应商价格' },

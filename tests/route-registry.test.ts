@@ -80,9 +80,19 @@ describe('数据库导航注册表', () => {
     expect(validateNavigation([
       node('supply.erp.master-data.menu', null),
       node('supply.erp.master-data.products', '/supply-chain/erp/master-data/products'),
+      node('supply.erp.master-data.skus', '/supply-chain/erp/master-data/skus'),
+      node('supply.erp.master-data.attributes.tags', '/supply-chain/erp/master-data/attributes/tags'),
+      node('supply.erp.cost-settlement.menu', null),
+      node('supply.erp.cost-settlement.inventory-costs', '/supply-chain/erp/cost-settlement/inventory-costs'),
       node('supply.crm.assignments.sales', '/supply-chain/crm/assignments/sales'),
       node('supply.city.scope.service-areas', '/supply-chain/city/scope/service-areas'),
-    ])).toHaveLength(4)
+    ])).toHaveLength(8)
+  })
+
+  it('接受ERP商品主数据下的独立SKU页面', () => {
+    expect(validateNavigation([
+      node('supply.erp.master-data.skus', '/supply-chain/erp/master-data/skus'),
+    ])).toHaveLength(1)
   })
 
   it('接受独立integration pathroot与订单补充能力', () => {
@@ -101,7 +111,7 @@ describe('数据库导航注册表', () => {
     ]
 
     expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(12)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(78)
-    expect(validateNavigation(navigation)).toHaveLength(90)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(79)
+    expect(validateNavigation(navigation)).toHaveLength(91)
   })
 })
