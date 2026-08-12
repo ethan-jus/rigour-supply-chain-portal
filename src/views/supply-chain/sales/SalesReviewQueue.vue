@@ -48,9 +48,29 @@
         <el-table-column label="录音证据" min-width="150">
           <template #default="scope">
             <span v-if="scope.row.minimumRecordingSeconds <= 0">规则未要求</span>
-            <span v-else :class="{ 'evidence-warning': scope.row.uploadedRecordingSeconds < scope.row.minimumRecordingSeconds }">
-              {{ formatSeconds(scope.row.uploadedRecordingSeconds) }} / {{ formatSeconds(scope.row.minimumRecordingSeconds) }}
+            <div v-else class="evidence-cell">
+              <span :class="{ 'evidence-warning': scope.row.verifiedRecordingSeconds < scope.row.minimumRecordingSeconds }">
+                已核验 {{ formatSeconds(scope.row.verifiedRecordingSeconds) }} / {{ formatSeconds(scope.row.minimumRecordingSeconds) }}
+              </span>
+              <small>客户端上传 {{ formatSeconds(scope.row.uploadedRecordingSeconds) }}</small>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="门头照" width="110">
+          <template #default="scope">
+            <span :class="{ 'evidence-warning': scope.row.verifiedStorefrontPhotoCount < scope.row.requiredStorefrontPhotoCount }">
+              {{ scope.row.verifiedStorefrontPhotoCount }} / {{ scope.row.requiredStorefrontPhotoCount }} 张
             </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="异常原因" min-width="190">
+          <template #default="scope">
+            <div v-if="scope.row.anomalyCodes.length" class="anomaly-list">
+              <el-tag v-for="code in scope.row.anomalyCodes" :key="code" type="warning" size="small">
+                {{ anomalyLabel(code) }}
+              </el-tag>
+            </div>
+            <span v-else>历史数据待主管确认</span>
           </template>
         </el-table-column>
         <el-table-column label="拜访结果" min-width="180">
@@ -93,10 +113,33 @@
     <el-dialog v-model="reviewDialog" title="拜访有效性复核" width="520px" destroy-on-close>
       <div v-if="selectedVisit" class="review-context">
         <strong>{{ selectedVisit.storeName }}</strong>
-        <span>{{ selectedVisit.salesNo }} · 停留 {{ selectedVisit.dwellMinutes }}/{{ selectedVisit.minimumDwellMinutes }} 分钟 · 录音 {{ formatSeconds(selectedVisit.uploadedRecordingSeconds) }}/{{ formatSeconds(selectedVisit.minimumRecordingSeconds) }}</span>
+        <span>{{ selectedVisit.salesNo }} · 停留 {{ selectedVisit.dwellMinutes }}/{{ selectedVisit.minimumDwellMinutes }} 分钟 · 核验录音 {{ formatSeconds(selectedVisit.verifiedRecordingSeconds) }}/{{ formatSeconds(selectedVisit.minimumRecordingSeconds) }} · 门头照 {{ selectedVisit.verifiedStorefrontPhotoCount }}/{{ selectedVisit.requiredStorefrontPhotoCount }} 张</span>
         <span>{{ contactOutcomeLabel(selectedVisit.contactOutcome) }}<template v-if="selectedVisit.contactOutcome === 'CONTACTED'"> · KP {{ selectedVisit.kpName || '未填写' }} · {{ intentionLabel(selectedVisit.intentionLevel) }}</template></span>
+        <div v-if="selectedVisit.anomalyCodes.length" class="anomaly-list">
+          <el-tag v-for="code in selectedVisit.anomalyCodes" :key="code" type="warning" size="small">{{ anomalyLabel(code) }}</el-tag>
+        </div>
         <p>{{ selectedVisit.resultNote || '未填写拜访结果说明' }}</p>
       </div>
+      <section class="evidence-review">
+        <div class="evidence-review__heading">
+          <strong>现场门头照</strong>
+          <span v-if="evidence">已核验 {{ evidence.verifiedStorefrontPhotoCount }} / {{ evidence.requiredStorefrontPhotoCount }} 张</span>
+        </div>
+        <div v-if="evidenceLoading" class="recording-review__state"><el-icon class="is-loading"><Loading /></el-icon> 正在读取照片证据</div>
+        <el-alert v-else-if="evidenceError" :title="evidenceError" type="warning" :closable="false" show-icon />
+        <div v-else-if="evidence?.photos.length" class="photo-list">
+          <div v-for="photo in evidence.photos" :key="photo.evidenceId" class="photo-item">
+            <img v-if="photoUrls[photo.evidenceId]" :src="photoUrls[photo.evidenceId]" alt="现场门头照" />
+            <el-button v-else plain :loading="loadingPhotoId === photo.evidenceId" @click="loadPhoto(photo)">授权查看</el-button>
+            <div>
+              <strong>{{ photo.evidenceStatus === 'TECHNICALLY_VERIFIED' ? '技术校验通过' : photo.evidenceStatus }}</strong>
+              <span>距门店约 {{ Math.round(photo.distanceToTargetMeters || 0) }} 米 · {{ formatDateTime(photo.capturedAt) }}</span>
+            </div>
+          </div>
+        </div>
+        <el-empty v-else description="本次拜访没有门头照" :image-size="64" />
+        <small>照片只在具备敏感证据权限后加载，每次查看都会记录审计；是否真正包含门头仍需主管判断。</small>
+      </section>
       <section class="recording-review">
         <div class="recording-review__heading">
           <strong>现场录音证据</strong>
@@ -166,12 +209,16 @@ interface VisitReviewQueueItem {
   dwellMinutes: number
   minimumDwellMinutes: number
   uploadedRecordingSeconds: number
+  verifiedRecordingSeconds: number
   minimumRecordingSeconds: number
+  verifiedStorefrontPhotoCount: number
+  requiredStorefrontPhotoCount: number
   contactOutcome: string | null
   kpName: string | null
   intentionLevel: string | null
   resultNote: string | null
   visitType: string
+  anomalyCodes: string[]
 }
 
 interface VisitReviewQueue {
@@ -199,6 +246,25 @@ interface ManagementRecordingSession {
   clips: ManagementRecordingClip[]
 }
 
+interface ManagementPhotoEvidence {
+  evidenceId: string
+  evidenceRole: string
+  captureSource: string
+  capturedAt: string
+  mediaType: string
+  objectSizeBytes: number
+  distanceToTargetMeters: number | null
+  evidenceStatus: string
+  serverReceivedAt: string
+}
+
+interface ManagementVisitEvidence {
+  visitId: string
+  requiredStorefrontPhotoCount: number
+  verifiedStorefrontPhotoCount: number
+  photos: ManagementPhotoEvidence[]
+}
+
 const today = localDate(new Date())
 const monthStart = `${today.slice(0, 7)}-01`
 const dateRange = ref<[string, string]>([monthStart, today])
@@ -210,6 +276,11 @@ const saving = ref(false)
 const errorMessage = ref('')
 const reviewDialog = ref(false)
 const selectedVisit = ref<VisitReviewQueueItem | null>(null)
+const evidence = ref<ManagementVisitEvidence | null>(null)
+const evidenceLoading = ref(false)
+const evidenceError = ref('')
+const loadingPhotoId = ref('')
+const photoUrls = ref<Record<string, string>>({})
 const recordings = ref<ManagementRecordingSession | null>(null)
 const recordingsLoading = ref(false)
 const recordingsError = ref('')
@@ -274,6 +345,17 @@ function contactOutcomeLabel(value: string | null): string {
   return value ? labels[value] || value : '未填写接触结果'
 }
 
+function anomalyLabel(value: string): string {
+  const labels: Record<string, string> = {
+    VISIT_TIME_INVALID: '到离店时间异常', RESULT_MISSING: '拜访结果缺失',
+    CONTACT_NOT_CONFIRMED: '未实际接触 KP', DWELL_TOO_SHORT: '停留时长不足',
+    STOREFRONT_PHOTO_MISSING: '门头照缺失', RECORDING_UNVERIFIED: '录音未通过服务端核验',
+    RECORDING_TOO_SHORT: '有效录音时长不足', AI_PENDING: 'AI 分析未完成',
+    AI_REVIEW_REQUIRED: 'AI 建议人工复核', AI_LOW_CONFIDENCE: 'AI 置信度不足',
+  }
+  return labels[value] || value
+}
+
 function errorMessageOf(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error) return String(error.message)
   return '待复核列表加载失败'
@@ -308,12 +390,44 @@ function changePage(value: number) {
 
 function openReview(item: VisitReviewQueueItem) {
   revokeClipUrls()
+  revokePhotoUrls()
   selectedVisit.value = item
+  evidence.value = null
+  evidenceError.value = ''
   recordings.value = null
   recordingsError.value = ''
   Object.assign(reviewForm, { decision: 'EFFECTIVE', reasonCode: '', reviewNote: '' })
   reviewDialog.value = true
+  void loadEvidence(item.visitId)
   void loadRecordings(item.visitId)
+}
+
+async function loadEvidence(visitId: string) {
+  evidenceLoading.value = true
+  evidenceError.value = ''
+  try {
+    evidence.value = await apiClient.get(`/sales/management/visits/${visitId}/evidence`) as ManagementVisitEvidence
+  } catch (error) {
+    evidenceError.value = errorMessageOf(error)
+  } finally {
+    evidenceLoading.value = false
+  }
+}
+
+async function loadPhoto(photo: ManagementPhotoEvidence) {
+  if (!selectedVisit.value) return
+  loadingPhotoId.value = photo.evidenceId
+  try {
+    const body = await apiClient.get(
+      `/sales/management/visits/${selectedVisit.value.visitId}/evidence/photos/${photo.evidenceId}`,
+      { responseType: 'blob' },
+    ) as Blob
+    photoUrls.value = { ...photoUrls.value, [photo.evidenceId]: URL.createObjectURL(body) }
+  } catch (error) {
+    ElMessage.error(errorMessageOf(error))
+  } finally {
+    loadingPhotoId.value = ''
+  }
 }
 
 async function loadRecordings(visitId: string) {
@@ -349,6 +463,11 @@ function revokeClipUrls() {
   clipUrls.value = {}
 }
 
+function revokePhotoUrls() {
+  Object.values(photoUrls.value).forEach((url) => URL.revokeObjectURL(url))
+  photoUrls.value = {}
+}
+
 async function saveReview() {
   if (!selectedVisit.value || !reviewForm.reasonCode) {
     ElMessage.warning('请选择复核原因')
@@ -372,8 +491,8 @@ async function saveReview() {
 }
 
 onMounted(() => { void load() })
-onBeforeUnmount(revokeClipUrls)
-watch(reviewDialog, (visible) => { if (!visible) revokeClipUrls() })
+onBeforeUnmount(() => { revokeClipUrls(); revokePhotoUrls() })
+watch(reviewDialog, (visible) => { if (!visible) { revokeClipUrls(); revokePhotoUrls() } })
 </script>
 
 <style scoped lang="scss">
@@ -386,15 +505,23 @@ watch(reviewDialog, (visible) => { if (!visible) revokeClipUrls() })
 .review-toolbar p { margin: 5px 0 0; color: $color-text-secondary; font-size: $font-size-xs; }
 .primary-cell, .time-cell, .result-cell { display: flex; flex-direction: column; gap: 5px; }
 .primary-cell span, .time-cell, .result-cell { color: $color-text-secondary; font-size: $font-size-xs; }
+.evidence-cell { display: flex; flex-direction: column; gap: 4px; }
+.evidence-cell small { color: $color-text-secondary; font-size: $font-size-xs; }
+.anomaly-list { display: flex; flex-wrap: wrap; gap: 5px; }
 .evidence-warning { color: $color-danger; font-weight: 600; }
 .pagination { display: flex; align-items: center; justify-content: space-between; gap: $spacing-md; margin-top: $spacing-md; color: $color-text-secondary; font-size: $font-size-sm; }
 .review-context { display: flex; flex-direction: column; gap: 6px; margin-bottom: $spacing-lg; padding: $spacing-md; background: $color-bg-muted; border-radius: $border-radius-base; }
 .review-context span { color: $color-text-secondary; font-size: $font-size-sm; }
 .review-context p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.6; }
-.recording-review { display: grid; gap: $spacing-sm; margin-bottom: $spacing-lg; padding: $spacing-md; border: 1px solid $color-border-base; border-radius: $border-radius-base; }
-.recording-review__heading { display: flex; align-items: center; justify-content: space-between; }
-.recording-review__heading span, .recording-review > small { color: $color-text-secondary; font-size: $font-size-xs; }
+.recording-review, .evidence-review { display: grid; gap: $spacing-sm; margin-bottom: $spacing-lg; padding: $spacing-md; border: 1px solid $color-border-base; border-radius: $border-radius-base; }
+.recording-review__heading, .evidence-review__heading { display: flex; align-items: center; justify-content: space-between; }
+.recording-review__heading span, .evidence-review__heading span, .recording-review > small, .evidence-review > small { color: $color-text-secondary; font-size: $font-size-xs; }
 .recording-review__state { color: $color-text-secondary; font-size: $font-size-sm; }
+.photo-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: $spacing-sm; }
+.photo-item { display: grid; gap: 8px; padding: 10px; background: $color-bg-muted; border-radius: $border-radius-base; }
+.photo-item img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: $border-radius-base; }
+.photo-item > div { display: flex; flex-direction: column; gap: 4px; }
+.photo-item span { color: $color-text-secondary; font-size: $font-size-xs; }
 .recording-list { display: grid; gap: $spacing-sm; }
 .recording-item { display: grid; grid-template-columns: minmax(110px, .6fr) minmax(190px, 1.4fr); gap: $spacing-sm; align-items: center; padding: 10px; background: $color-bg-muted; border-radius: $border-radius-base; }
 .recording-item > div { display: flex; flex-direction: column; gap: 4px; }

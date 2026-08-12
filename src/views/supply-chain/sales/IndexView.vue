@@ -11,6 +11,7 @@
     </header>
 
     <SalesDashboard v-if="pageKey === 'dashboard'" />
+    <SalesVisitPlans v-else-if="pageKey === 'visit-plans'" />
     <SalesReviewQueue v-else-if="isReviewPage" />
     <SalesTrackComparison v-else-if="isTrackPage" />
     <template v-else>
@@ -48,6 +49,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { SALES_PAGES } from './catalog'
 import SalesDashboard from './SalesDashboard.vue'
+import SalesVisitPlans from './SalesVisitPlans.vue'
 import SalesReviewQueue from './SalesReviewQueue.vue'
 import SalesTrackComparison from './SalesTrackComparison.vue'
 
@@ -56,7 +58,7 @@ const pageKey = computed(() => String(route.meta.pageKey || 'dashboard'))
 const definition = computed(() => SALES_PAGES[pageKey.value] || SALES_PAGES.dashboard)
 const isReviewPage = computed(() => ['visit-reviews', 'exceptions-reviews'].includes(pageKey.value))
 const isTrackPage = computed(() => pageKey.value === 'exceptions-location')
-const isImplemented = computed(() => pageKey.value === 'dashboard' || isReviewPage.value || isTrackPage.value)
+const isImplemented = computed(() => ['dashboard', 'visit-plans'].includes(pageKey.value) || isReviewPage.value || isTrackPage.value)
 
 </script>
 
