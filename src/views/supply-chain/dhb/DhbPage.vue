@@ -45,7 +45,7 @@
     <template v-else-if="pageKey === 'sync-tasks'">
       <el-card>
         <template #header><div class="header"><strong>同步任务</strong><el-button type="primary" @click="openTask()">新增扩展任务</el-button></div></template>
-        <el-alert class="task-hint" type="info" :closable="false" show-icon title="每个订货宝连接器的订单域同步任务由系统自动创建；此处新增任务用于后续扩展其他对象类型。" />
+        <el-alert class="task-hint" type="info" :closable="false" show-icon title="每个订货宝连接器的订单域和商品主数据同步目标由系统自动创建；业务同步分别由 Order Center 和 ERP 编排。" />
         <el-table v-loading="loading" :data="tasks" row-key="id">
           <el-table-column prop="code" label="任务编码" min-width="160" />
           <el-table-column label="连接"><template #default="scope">{{ connectorName(scope.row.connectorId) }}</template></el-table-column>
@@ -59,7 +59,7 @@
         <el-form label-width="100px">
           <el-form-item label="连接" required><el-select v-model="taskForm.connectorId" style="width:100%"><el-option v-for="item in connectors" :key="item.id" :label="item.name" :value="item.id" /></el-select></el-form-item>
           <el-form-item label="任务编码" required><el-input v-model="taskForm.code" :disabled="!!editingTaskId" /></el-form-item>
-          <el-form-item label="对象类型" required><el-select v-model="taskForm.objectType" style="width:100%"><el-option v-for="item in syncObjectTypes" :key="item.value" :disabled="!editingTaskId && item.value === 'ORDER'" :label="item.label" :value="item.value"><span>{{ item.label }}</span><span class="option-code">{{ item.value }}</span></el-option></el-select></el-form-item>
+          <el-form-item label="对象类型" required><el-select v-model="taskForm.objectType" style="width:100%"><el-option v-for="item in syncObjectTypes" :key="item.value" :disabled="!editingTaskId && ['ORDER', 'PRODUCT_MASTER_DATA'].includes(item.value)" :label="item.label" :value="item.value"><span>{{ item.label }}</span><span class="option-code">{{ item.value }}</span></el-option></el-select></el-form-item>
           <el-alert type="info" :closable="false" show-icon title="一期只读同步：订单详情使用不自动签收、不自动审核参数；不会回写下载状态。" />
           <el-form-item label="状态"><el-select v-model="taskForm.status"><el-option v-for="item in taskStatuses" :key="item" :label="item" :value="item" /></el-select></el-form-item>
         </el-form>
@@ -159,6 +159,7 @@ const overviewCards = ref([{ label: '连接', value: '-' }, { label: '同步任�
 const taskStatuses = ['IDLE', 'RUNNING', 'PAUSED', 'FAILED', 'COMPLETED']
 const syncObjectTypes = [
   { value: 'ORDER_DOMAIN', label: '全部订单域' }, { value: 'ORDER', label: '订单域（系统默认）' },
+  { value: 'PRODUCT_MASTER_DATA', label: '商品主数据（系统默认）' },
   { value: 'SHIPMENT', label: '发货单' }, { value: 'RETURN', label: '退货单' },
   { value: 'RECEIPT', label: '收款单' }, { value: 'PAYMENT', label: '付款单' },
 ]
