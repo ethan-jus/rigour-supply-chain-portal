@@ -84,9 +84,12 @@ describe('数据库导航注册表', () => {
       node('supply.erp.master-data.attributes.tags', '/supply-chain/erp/master-data/attributes/tags'),
       node('supply.erp.cost-settlement.menu', null),
       node('supply.erp.cost-settlement.inventory-costs', '/supply-chain/erp/cost-settlement/inventory-costs'),
+      node('supply.crm.customers.areas', '/supply-chain/crm/customers/areas'),
+      node('supply.crm.customers.shipping-addresses', '/supply-chain/crm/customers/shipping-addresses'),
+      node('supply.crm.assignments.external-staff', '/supply-chain/crm/assignments/external-staff'),
       node('supply.crm.assignments.sales', '/supply-chain/crm/assignments/sales'),
       node('supply.city.scope.service-areas', '/supply-chain/city/scope/service-areas'),
-    ])).toHaveLength(8)
+    ])).toHaveLength(11)
   })
 
   it('接受ERP商品主数据下的独立SKU页面', () => {
@@ -111,7 +114,9 @@ describe('数据库导航注册表', () => {
     ]
 
     expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(12)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(79)
-    expect(validateNavigation(navigation)).toHaveLength(91)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(81)
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
+      .not.toContain('supply.crm.customers.customer-360')
+    expect(validateNavigation(navigation)).toHaveLength(93)
   })
 })

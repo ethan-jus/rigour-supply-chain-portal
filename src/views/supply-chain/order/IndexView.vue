@@ -66,33 +66,63 @@
         :title="requestError"
       />
 
-      <div class="summary-bar">
-        <span>本地订单 <strong>{{ pageData.total }}</strong> 条</span>
+      <div class="result-heading">
+        <div>
+          <h2>{{ pageTitle }}列表</h2>
+          <p>共 {{ pageData.total }} 条订单，本页 {{ pageData.items.length }} 条；点击订单行可查看客户、收货、商品和发货信息。</p>
+        </div>
         <span class="summary-note">同步任务由 Integration 负责</span>
       </div>
 
-      <el-card shadow="never">
-        <el-table v-loading="loading" :data="pageData.items" row-key="orderSn" @row-click="openDetail">
-          <el-table-column prop="orderSn" label="订单编号" min-width="190" fixed="left" />
-          <el-table-column label="下单时间" min-width="165">
-            <template #default="scope">{{ formatTime(scope.row.orderDate) }}</template>
-          </el-table-column>
-          <el-table-column prop="clientName" label="客户名称" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="receiveCompany" label="收货单位" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="receiveName" label="收货人" width="110" />
-          <el-table-column prop="receivePhone" label="联系电话" width="140" />
-          <el-table-column label="订单金额" width="120" align="right">
-            <template #default="scope">{{ formatMoney(scope.row.orderTotal) }}</template>
-          </el-table-column>
-          <el-table-column label="订单状态" width="110">
-            <template #default="scope">{{ formatStatus(scope.row.orderStatus) }}</template>
-          </el-table-column>
-          <el-table-column label="收款状态" width="110">
-            <template #default="scope">{{ formatPayStatus(scope.row.payStatus) }}</template>
-          </el-table-column>
-          <el-table-column label="明细" width="90" fixed="right">
+      <el-card class="list-card" shadow="never">
+        <el-table class="business-table" v-loading="loading" :data="pageData.items" row-key="orderSn" @row-click="openDetail">
+          <el-table-column label="订单信息" width="280" fixed="left">
             <template #default="scope">
-              <el-button link type="primary" @click.stop="openDetail(scope.row)">查看</el-button>
+              <div class="record-identity">
+                <span class="record-avatar">单</span>
+                <div class="record-identity-content">
+                  <strong>{{ scope.row.orderSn }}</strong>
+                  <span>{{ formatTime(scope.row.orderDate) }}</span>
+                  <small>来源更新 {{ formatTime(scope.row.orderUpdateDate) }}</small>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="客户" min-width="220">
+            <template #default="scope">
+              <div class="stacked-cell">
+                <span>{{ scope.row.clientName || '-' }}</span>
+                <small>客户编号 {{ scope.row.clientNo || '-' }}</small>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="订单金额" min-width="150" align="right" header-align="right">
+            <template #default="scope">
+              <div class="amount-cell"><strong>{{ formatMoney(scope.row.orderTotal) }}</strong><small>订单总额</small></div>
+            </template>
+          </el-table-column>
+          <el-table-column label="收货信息" min-width="230">
+            <template #default="scope">
+              <div class="stacked-cell">
+                <span>{{ scope.row.receiveCompany || scope.row.receiveName || '-' }}</span>
+                <small>{{ [scope.row.receiveName, scope.row.receivePhone].filter(Boolean).join(' · ') || '暂无联系人' }}</small>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="140">
+            <template #default="scope">
+              <div class="status-cell">
+                <el-tag :type="orderStatusTagType(scope.row.orderStatus)" effect="light" size="small">{{ formatStatus(scope.row.orderStatus) }}</el-tag>
+                <small>{{ formatPayStatus(scope.row.payStatus) }}</small>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="配送日期" width="150">
+            <template #default="scope"><span class="sync-time">{{ scope.row.deliveryDate || '-' }}</span></template>
+          </el-table-column>
+          <el-table-column label="操作" width="96" fixed="right" align="center">
+            <template #default="scope">
+              <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无本地订单投影" /></template>
@@ -110,7 +140,26 @@
         </div>
       </el-card>
 
-      <el-dialog v-model="detailVisible" title="订单详情" width="920px">
+      <el-drawer
+        v-model="detailVisible"
+        class="order-detail-drawer"
+        size="min(1080px, 92vw)"
+        :with-header="false"
+      >
+        <div class="detail-shell">
+          <header class="detail-hero">
+            <div>
+              <span>订单详情</span>
+              <h2>{{ selectedOrder?.orderSn || '-' }}</h2>
+              <p>{{ selectedOrder?.clientName || '暂无客户名称' }} · 下单 {{ formatTime(selectedOrder?.orderDate || null) }}</p>
+              <div class="detail-tags">
+                <el-tag :type="orderStatusTagType(selectedOrder?.orderStatus || null)" effect="light">{{ formatStatus(selectedOrder?.orderStatus || null) }}</el-tag>
+                <el-tag effect="plain">{{ formatPayStatus(selectedOrder?.payStatus || null) }}</el-tag>
+              </div>
+            </div>
+            <el-button circle plain aria-label="关闭订单详情" @click="detailVisible = false">×</el-button>
+          </header>
+          <div class="detail-content">
         <el-skeleton v-if="detailLoading" :rows="8" animated />
         <template v-else-if="detail">
           <div class="detail-summary">
@@ -121,11 +170,24 @@
           </div>
           <el-descriptions :column="3" border>
             <el-descriptions-item label="下单时间">{{ formatTime(detail.order.orderDate) }}</el-descriptions-item>
+            <el-descriptions-item label="来源更新时间">{{ formatTime(detail.order.orderUpdateDate) }}</el-descriptions-item>
+            <el-descriptions-item label="配送日期">{{ detail.order.deliveryDate || '-' }}</el-descriptions-item>
             <el-descriptions-item label="订单状态">{{ formatStatus(detail.order.orderStatus) }}</el-descriptions-item>
             <el-descriptions-item label="收款状态">{{ formatPayStatus(detail.order.payStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="接口状态">{{ detail.order.orderApi || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="异常状态">{{ detail.order.orderException || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="订单类型">{{ detail.order.orderType || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="发货类型">{{ detail.order.orderSendType || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="拆单类型">{{ detail.order.splitTypeName || detail.order.splitType || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="来源设备">{{ detail.order.sourceDevice || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="客户编号">{{ detail.order.clientNo || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="客户 GUID">{{ detail.order.clientGuid || '-' }}</el-descriptions-item>
             <el-descriptions-item label="收货单位">{{ detail.order.receiveCompany || '-' }}</el-descriptions-item>
             <el-descriptions-item label="收货人">{{ detail.order.receiveName || '-' }}</el-descriptions-item>
             <el-descriptions-item label="联系电话">{{ detail.order.receivePhone || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="省 / 市 / 区" :span="3">
+              {{ [detail.order.province, detail.order.city, detail.order.district].filter(Boolean).join(' / ') || '-' }}
+            </el-descriptions-item>
             <el-descriptions-item label="收货地址" :span="3">{{ detail.order.receiveAddress || '-' }}</el-descriptions-item>
             <el-descriptions-item label="订单备注" :span="3">{{ detail.order.orderRemark || '-' }}</el-descriptions-item>
           </el-descriptions>
@@ -138,6 +200,12 @@
             <el-table-column label="单价" width="110" align="right">
               <template #default="scope">{{ formatMoney(scope.row.unitPrice) }}</template>
             </el-table-column>
+            <el-table-column label="明细金额" width="120" align="right">
+              <template #default="scope">{{ formatMoney(scope.row.lineAmount) }}</template>
+            </el-table-column>
+            <el-table-column prop="optionsBarcode" label="条码" min-width="140" />
+            <el-table-column prop="multiName" label="规格" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="remark" label="明细备注" min-width="150" show-overflow-tooltip />
           </el-table>
           <h3 class="detail-title">发货信息</h3>
           <el-table :data="detail.shipments" size="small">
@@ -148,10 +216,9 @@
           </el-table>
         </template>
         <el-empty v-else description="暂无详情" />
-        <template #footer>
-          <el-button @click="detailVisible = false">关闭</el-button>
-        </template>
-      </el-dialog>
+          </div>
+        </div>
+      </el-drawer>
     </template>
 
     <template v-else-if="isShipmentPage">
@@ -180,23 +247,25 @@
         </el-form>
       </el-card>
       <el-alert v-if="documentError" class="request-error" type="error" :closable="false" show-icon :title="documentError" />
-      <el-card shadow="never">
-        <el-table v-loading="documentLoading" :data="shipmentRows" :row-key="isOutboundPage ? 'shipmentNo' : 'orderNo'" @row-click="openShipmentDetail">
-          <el-table-column :label="isOutboundPage ? '出库/发货单号' : '出库/发货物流单号'" min-width="200" fixed="left"><template #default="scope">{{ scope.row.shipmentNo || scope.row.orderNo || '-' }}</template></el-table-column>
-          <el-table-column prop="orderNo" label="订单编号" min-width="180" />
-          <el-table-column v-if="isOutboundPage" prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
-          <el-table-column label="状态" width="110"><template #default="scope">{{ statusLabel(shipmentStatuses, scope.row.status) }}</template></el-table-column>
-          <el-table-column v-if="isOutboundPage" prop="typeName" label="出库类型" min-width="130" />
-          <el-table-column prop="warehouseName" label="出库仓库" min-width="140" />
-          <el-table-column :label="isOutboundPage ? '出库/发货时间' : '物流同步时间'" min-width="170"><template #default="scope">{{ formatTime(isOutboundPage ? scope.row.shipmentAt : scope.row.syncedAt) }}</template></el-table-column>
-          <el-table-column prop="logisticsName" label="物流公司" min-width="130" />
-          <el-table-column prop="trackingNo" label="物流单号" min-width="160" />
-          <el-table-column label="明细" width="90" fixed="right"><template #default="scope"><el-button link type="primary" @click.stop="openShipmentDetail(scope.row)">查看</el-button></template></el-table-column>
+      <div class="result-heading"><div><h2>{{ pageTitle }}列表</h2><p>共 {{ shipmentTotal }} 条，本页 {{ shipmentRows.length }} 条；点击行查看单据与商品明细。</p></div></div>
+      <el-card class="list-card" shadow="never">
+        <el-table class="business-table" v-loading="documentLoading" :data="shipmentRows" :row-key="isOutboundPage ? 'shipmentNo' : 'orderNo'" @row-click="openShipmentDetail">
+          <el-table-column label="单据信息" width="280" fixed="left">
+            <template #default="scope"><div class="record-identity"><span class="record-avatar">发</span><div class="record-identity-content"><strong>{{ scope.row.shipmentNo || scope.row.orderNo || '-' }}</strong><span>订单 {{ scope.row.orderNo || '-' }}</span><small>{{ formatTime(isOutboundPage ? scope.row.shipmentAt : scope.row.syncedAt) }}</small></div></div></template>
+          </el-table-column>
+          <el-table-column label="客户与仓库" min-width="220"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.customerName || scope.row.warehouseName || '-' }}</span><small>仓库 {{ scope.row.warehouseName || '-' }}</small></div></template></el-table-column>
+          <el-table-column label="物流信息" min-width="220"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.logisticsName || '-' }}</span><small>{{ scope.row.trackingNo || '暂无物流单号' }}</small></div></template></el-table-column>
+          <el-table-column label="状态" width="140"><template #default="scope"><div class="status-cell"><el-tag effect="light" size="small" :type="documentStatusTagType(scope.row.status)">{{ statusLabel(shipmentStatuses, scope.row.status) }}</el-tag><small>{{ scope.row.typeName || (isOutboundPage ? '出库/发货' : '物流跟踪') }}</small></div></template></el-table-column>
+          <el-table-column :label="isOutboundPage ? '发货时间' : '同步时间'" width="165"><template #default="scope"><span class="sync-time">{{ formatTime(isOutboundPage ? scope.row.shipmentAt : scope.row.syncedAt) }}</span></template></el-table-column>
+          <el-table-column label="操作" width="96" fixed="right" align="center"><template #default="scope"><el-button link type="primary" @click.stop="openShipmentDetail(scope.row)">详情</el-button></template></el-table-column>
           <template #empty><el-empty :description="isOutboundPage ? '暂无本地出库/发货单' : '暂无本地出库/发货物流'" /></template>
         </el-table>
         <div class="pagination-row"><el-pagination v-model:current-page="documentPage" v-model:page-size="documentPageSize" layout="total, sizes, prev, pager, next" :page-sizes="[20, 50, 100]" :total="shipmentTotal" @current-change="loadDocumentPage" @size-change="changeDocumentPageSize" /></div>
       </el-card>
-      <el-dialog v-model="shipmentDetailVisible" :title="isOutboundPage ? '出库/发货详情' : '出库/发货物流详情'" width="900px">
+      <el-drawer v-model="shipmentDetailVisible" class="order-detail-drawer" size="min(960px, 92vw)" :with-header="false">
+        <div class="detail-shell">
+          <header class="detail-hero"><div><span>{{ isOutboundPage ? '出库/发货详情' : '物流详情' }}</span><h2>{{ selectedShipment?.shipmentNo || selectedShipment?.orderNo || '-' }}</h2><p>关联订单 {{ selectedShipment?.orderNo || '-' }} · {{ selectedShipment?.warehouseName || '暂无仓库' }}</p><div class="detail-tags"><el-tag :type="documentStatusTagType(selectedShipment?.status || null)" effect="light">{{ statusLabel(shipmentStatuses, selectedShipment?.status || null) }}</el-tag></div></div><el-button circle plain aria-label="关闭详情" @click="shipmentDetailVisible = false">×</el-button></header>
+          <div class="detail-content">
         <el-skeleton v-if="detailLoading" :rows="7" animated />
         <template v-else-if="displayShipmentDetail">
           <el-descriptions :column="3" border>
@@ -221,7 +290,9 @@
             <el-table-column v-if="isOutboundPage" label="金额" width="110"><template #default="scope">{{ formatMoney(scope.row.amount) }}</template></el-table-column>
           </el-table>
         </template>
-      </el-dialog>
+          </div>
+        </div>
+      </el-drawer>
     </template>
 
     <template v-else-if="isReturnPage">
@@ -241,22 +312,23 @@
         </el-form>
       </el-card>
       <el-alert v-if="documentError" class="request-error" type="error" :closable="false" show-icon :title="documentError" />
-      <el-card shadow="never">
-        <el-table v-loading="documentLoading" :data="returnPage.items" row-key="returnNo" @row-click="openReturnDetail">
-          <el-table-column prop="returnNo" label="退货单号" min-width="180" fixed="left" />
-          <el-table-column prop="orderNo" label="订单编号" min-width="180" />
-          <el-table-column label="状态" width="120"><template #default="scope">{{ statusLabel(returnStatuses, scope.row.status) }}</template></el-table-column>
-          <el-table-column label="退货日期" min-width="170"><template #default="scope">{{ formatTime(scope.row.returnedAt) }}</template></el-table-column>
-          <el-table-column label="退货金额" width="120"><template #default="scope">{{ formatMoney(scope.row.returnAmount) }}</template></el-table-column>
-          <el-table-column label="结算金额" width="120"><template #default="scope">{{ formatMoney(scope.row.settlementAmount) }}</template></el-table-column>
-          <el-table-column prop="reason" label="退货原因" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="logisticsNo" label="退货物流单号" min-width="170" />
-          <el-table-column label="明细" width="90" fixed="right"><template #default="scope"><el-button link type="primary" @click.stop="openReturnDetail(scope.row)">查看</el-button></template></el-table-column>
+      <div class="result-heading"><div><h2>退货单列表</h2><p>共 {{ returnPage.total }} 条，本页 {{ returnPage.items.length }} 条；点击行查看退货原因和商品明细。</p></div></div>
+      <el-card class="list-card" shadow="never">
+        <el-table class="business-table" v-loading="documentLoading" :data="returnPage.items" row-key="returnNo" @row-click="openReturnDetail">
+          <el-table-column label="退货单信息" width="280" fixed="left"><template #default="scope"><div class="record-identity"><span class="record-avatar">退</span><div class="record-identity-content"><strong>{{ scope.row.returnNo }}</strong><span>订单 {{ scope.row.orderNo || '-' }}</span><small>{{ formatTime(scope.row.returnedAt) }}</small></div></div></template></el-table-column>
+          <el-table-column label="退货原因" min-width="240"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.reason || '-' }}</span><small>物流 {{ scope.row.logisticsNo || '暂无物流单号' }}</small></div></template></el-table-column>
+          <el-table-column label="退货金额" min-width="150" align="right" header-align="right"><template #default="scope"><div class="amount-cell"><strong>{{ formatMoney(scope.row.returnAmount) }}</strong><small>结算 {{ formatMoney(scope.row.settlementAmount) }}</small></div></template></el-table-column>
+          <el-table-column label="状态" width="140"><template #default="scope"><div class="status-cell"><el-tag :type="documentStatusTagType(scope.row.status)" effect="light" size="small">{{ statusLabel(returnStatuses, scope.row.status) }}</el-tag><small>退货业务</small></div></template></el-table-column>
+          <el-table-column label="退货日期" width="165"><template #default="scope"><span class="sync-time">{{ formatTime(scope.row.returnedAt) }}</span></template></el-table-column>
+          <el-table-column label="操作" width="96" fixed="right" align="center"><template #default="scope"><el-button link type="primary" @click.stop="openReturnDetail(scope.row)">详情</el-button></template></el-table-column>
           <template #empty><el-empty description="暂无本地退货单" /></template>
         </el-table>
         <div class="pagination-row"><el-pagination v-model:current-page="documentPage" v-model:page-size="documentPageSize" layout="total, sizes, prev, pager, next" :page-sizes="[20, 50, 100]" :total="returnPage.total" @current-change="loadDocumentPage" @size-change="changeDocumentPageSize" /></div>
       </el-card>
-      <el-dialog v-model="returnDetailVisible" title="退货单详情" width="900px">
+      <el-drawer v-model="returnDetailVisible" class="order-detail-drawer" size="min(960px, 92vw)" :with-header="false">
+        <div class="detail-shell">
+          <header class="detail-hero"><div><span>退货单详情</span><h2>{{ selectedReturn?.returnNo || '-' }}</h2><p>关联订单 {{ selectedReturn?.orderNo || '-' }} · {{ formatTime(selectedReturn?.returnedAt || null) }}</p><div class="detail-tags"><el-tag :type="documentStatusTagType(selectedReturn?.status || null)" effect="light">{{ statusLabel(returnStatuses, selectedReturn?.status || null) }}</el-tag></div></div><el-button circle plain aria-label="关闭退货详情" @click="returnDetailVisible = false">×</el-button></header>
+          <div class="detail-content">
         <el-skeleton v-if="detailLoading" :rows="7" animated />
         <template v-else-if="returnDetail">
           <el-descriptions :column="3" border>
@@ -279,7 +351,9 @@
             <el-table-column prop="warehouseName" label="退货仓库" min-width="130" />
           </el-table>
         </template>
-      </el-dialog>
+          </div>
+        </div>
+      </el-drawer>
     </template>
 
     <template v-else-if="isFinancePage">
@@ -316,21 +390,23 @@
             </el-form>
           </el-card>
           <el-alert v-if="documentError" class="request-error" type="error" :closable="false" show-icon :title="documentError" />
-          <el-table v-loading="documentLoading" :data="financialPage.items" row-key="documentNo">
-            <el-table-column prop="documentNo" :label="financialType === 'RECEIPT' ? '收款单号' : '付款单号'" min-width="180" fixed="left" />
-            <el-table-column prop="orderNo" label="订单编号" min-width="180" />
-            <el-table-column prop="relatedDocumentNo" label="关联单号" min-width="150" />
-            <el-table-column label="状态" width="110"><template #default="scope">{{ statusLabel(financialStatuses, scope.row.status) }}</template></el-table-column>
-            <el-table-column label="金额" width="130" align="right"><template #default="scope">{{ formatMoney(scope.row.amount) }}</template></el-table-column>
-            <el-table-column prop="businessType" label="业务类型" min-width="120" />
-            <el-table-column prop="paymentMethod" label="支付方式" min-width="120" />
-            <el-table-column label="交易日期" min-width="170"><template #default="scope">{{ formatTime(scope.row.transactionAt) }}</template></el-table-column>
-            <el-table-column prop="serialNumber" label="流水号" min-width="160" />
-            <el-table-column prop="accountName" label="账户名称" min-width="140" />
-            <el-table-column prop="bankName" label="开户行" min-width="150" />
+          <el-table class="business-table" v-loading="documentLoading" :data="financialPage.items" row-key="documentNo" @row-click="openFinancialDetail">
+            <el-table-column label="单据信息" width="280" fixed="left"><template #default="scope"><div class="record-identity"><span class="record-avatar">{{ financialType === 'RECEIPT' ? '收' : '付' }}</span><div class="record-identity-content"><strong>{{ scope.row.documentNo }}</strong><span>订单 {{ scope.row.orderNo || '-' }}</span><small>关联 {{ scope.row.relatedDocumentNo || '-' }}</small></div></div></template></el-table-column>
+            <el-table-column label="交易信息" min-width="220"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.paymentMethod || '-' }}</span><small>{{ scope.row.businessType || '暂无业务类型' }} · 流水 {{ scope.row.serialNumber || '-' }}</small></div></template></el-table-column>
+            <el-table-column label="金额" min-width="150" align="right" header-align="right"><template #default="scope"><div class="amount-cell"><strong>{{ formatMoney(scope.row.amount) }}</strong><small>{{ financialType === 'RECEIPT' ? '收款金额' : '付款金额' }}</small></div></template></el-table-column>
+            <el-table-column label="账户" min-width="210"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.accountName || '-' }}</span><small>{{ scope.row.bankName || '暂无开户行' }}</small></div></template></el-table-column>
+            <el-table-column label="状态" width="130"><template #default="scope"><div class="status-cell"><el-tag :type="documentStatusTagType(scope.row.status)" effect="light" size="small">{{ statusLabel(financialStatuses, scope.row.status) }}</el-tag><small>{{ financialType === 'RECEIPT' ? '收款单' : '付款单' }}</small></div></template></el-table-column>
+            <el-table-column label="交易日期" width="165"><template #default="scope"><span class="sync-time">{{ formatTime(scope.row.transactionAt) }}</span></template></el-table-column>
+            <el-table-column label="操作" width="96" fixed="right" align="center"><template #default="scope"><el-button link type="primary" @click.stop="openFinancialDetail(scope.row)">详情</el-button></template></el-table-column>
             <template #empty><el-empty :description="`暂无本地${financialType === 'RECEIPT' ? '收款单' : '付款单'}`" /></template>
           </el-table>
           <div class="pagination-row"><el-pagination v-model:current-page="documentPage" v-model:page-size="documentPageSize" layout="total, sizes, prev, pager, next" :page-sizes="[20, 50, 100]" :total="financialPage.total" @current-change="loadDocumentPage" @size-change="changeDocumentPageSize" /></div>
+          <el-drawer v-model="financialDetailVisible" class="order-detail-drawer" size="min(820px, 92vw)" :with-header="false">
+            <div v-if="selectedFinancial" class="detail-shell">
+              <header class="detail-hero"><div><span>{{ financialType === 'RECEIPT' ? '收款单详情' : '付款单详情' }}</span><h2>{{ selectedFinancial.documentNo }}</h2><p>关联订单 {{ selectedFinancial.orderNo || '-' }} · {{ formatTime(selectedFinancial.transactionAt) }}</p><div class="detail-tags"><el-tag :type="documentStatusTagType(selectedFinancial.status)" effect="light">{{ statusLabel(financialStatuses, selectedFinancial.status) }}</el-tag></div></div><el-button circle plain aria-label="关闭收付详情" @click="financialDetailVisible = false">×</el-button></header>
+              <div class="detail-content"><div class="detail-summary"><div><span>交易金额</span><strong>{{ formatMoney(selectedFinancial.amount) }}</strong></div><div><span>支付方式</span><strong>{{ selectedFinancial.paymentMethod || '-' }}</strong></div><div><span>业务类型</span><strong>{{ selectedFinancial.businessType || '-' }}</strong></div><div><span>交易时间</span><strong>{{ formatTime(selectedFinancial.transactionAt) }}</strong></div></div><el-descriptions :column="2" border><el-descriptions-item label="关联单号">{{ selectedFinancial.relatedDocumentNo || '-' }}</el-descriptions-item><el-descriptions-item label="交易流水号">{{ selectedFinancial.serialNumber || '-' }}</el-descriptions-item><el-descriptions-item label="账户名称">{{ selectedFinancial.accountName || '-' }}</el-descriptions-item><el-descriptions-item label="开户行">{{ selectedFinancial.bankName || '-' }}</el-descriptions-item></el-descriptions></div>
+            </div>
+          </el-drawer>
         </template>
 
         <template v-else-if="settlementTab === 'reconciliation'">
@@ -507,6 +583,7 @@ const pageData = ref<DhbOrderPage>({ total: 0, providerTotal: 0, synchronizedCou
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<DhbOrderDetail | null>(null)
+const selectedOrder = ref<DhbOrder | null>(null)
 const documentFilters = reactive({ status: '', typeId: '', orderNo: '', from: '', to: '' })
 const documentLoading = ref(false)
 const documentError = ref<string | null>(null)
@@ -519,8 +596,12 @@ const financialPage = ref<DhbDocumentPage<DhbFinancialDocument>>({ total: 0, ite
 const shipmentDetailVisible = ref(false)
 const shipmentDetail = ref<DhbShipmentDetail | null>(null)
 const logisticsDetail = ref<DhbShipmentLogisticsDetail | null>(null)
+const selectedShipment = ref<DhbShipmentDocument | DhbShipmentLogistics | null>(null)
 const returnDetailVisible = ref(false)
 const returnDetail = ref<DhbReturnDetail | null>(null)
+const selectedReturn = ref<DhbReturnDocument | null>(null)
+const financialDetailVisible = ref(false)
+const selectedFinancial = ref<DhbFinancialDocument | null>(null)
 function financialTypeForPage(value: string): 'RECEIPT' | 'PAYMENT' {
   return value === 'settlement-payments' ? 'PAYMENT' : 'RECEIPT'
 }
@@ -597,6 +678,7 @@ async function loadOrders() {
 async function handleQuery() { currentPage.value = 1; await loadOrders() }
 
 async function openDetail(order: DhbOrder) {
+  selectedOrder.value = order
   detailVisible.value = true
   detailLoading.value = true
   detail.value = null
@@ -691,6 +773,7 @@ function changeDocumentPageSize(size: number) {
 }
 
 async function openShipmentDetail(row: DhbShipmentDocument | DhbShipmentLogistics) {
+  selectedShipment.value = row
   shipmentDetailVisible.value = true
   detailLoading.value = true
   shipmentDetail.value = null
@@ -704,12 +787,18 @@ async function openShipmentDetail(row: DhbShipmentDocument | DhbShipmentLogistic
 }
 
 async function openReturnDetail(row: DhbReturnDocument) {
+  selectedReturn.value = row
   returnDetailVisible.value = true
   detailLoading.value = true
   returnDetail.value = null
   try { returnDetail.value = await getDinghuobaoReturnDetail(row.returnNo) }
   catch (reason) { ElMessage.error(errorMessage(reason, '退货单详情加载失败')) }
   finally { detailLoading.value = false }
+}
+
+function openFinancialDetail(row: DhbFinancialDocument) {
+  selectedFinancial.value = row
+  financialDetailVisible.value = true
 }
 
 function handleSizeChange(size: number) { pageSize.value = size; currentPage.value = 1; void loadOrders() }
@@ -734,6 +823,19 @@ function formatStatus(value: string | null): string {
 
 function formatPayStatus(value: string | null): string {
   return payStatuses.find((item) => item.value === value)?.label || value || '-'
+}
+
+function orderStatusTagType(value: string | null) {
+  if (['finished', 'forcedone', 'received'].includes(value || '')) return 'success'
+  if (['cancelled'].includes(value || '')) return 'info'
+  if (['pricing', 'pending'].includes(value || '')) return 'warning'
+  return 'primary'
+}
+
+function documentStatusTagType(value: string | null) {
+  if (['finished', 'received', 'pend_receipted'].includes(value || '')) return 'success'
+  if (['cancelled', 'canceled'].includes(value || '')) return 'info'
+  return 'warning'
 }
 
 function statusLabel(options: { label: string; value: string }[], value: string | null): string {
@@ -767,6 +869,7 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
+@use '@/assets/styles/variables' as *;
 .dhb-order-page { min-width: 0; }
 .page-heading { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
 .heading-actions { display: flex; align-items: center; gap: 10px; }
@@ -784,16 +887,61 @@ onMounted(() => {
 .summary-bar { display: flex; align-items: center; gap: 24px; min-height: 48px; color: #6f7b8f; font-size: 13px; }
 .summary-bar strong { color: #172033; font-size: 16px; }
 .summary-note { margin-left: auto; color: #8a94a6; }
+.result-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: $spacing-lg; margin: $spacing-md 0; }
+.result-heading h2 { margin: 0 0 5px; color: $color-text-primary; font-size: $font-size-lg; }
+.result-heading p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.list-card :deep(.el-card__body) { padding: 0; }
+.business-table { overflow: hidden; border: 1px solid $color-border-base; border-radius: $border-radius-base; }
+.list-card .business-table { border: 0; border-radius: 0; }
+.business-table :deep(.el-table__header th) { height: 48px; background: $color-bg-muted; color: $color-text-secondary; font-weight: 600; }
+.business-table :deep(.el-table__row) { cursor: pointer; transition: background-color $transition-fast; }
+.business-table :deep(.el-table__row td) { padding: 12px 0; }
+.business-table :deep(.el-table__row:hover > td) { background: #eff6ff !important; }
+.business-table :deep(.el-table__fixed-right::before), .business-table :deep(.el-table__fixed::before) { display: none; }
+.record-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.record-avatar { display: inline-flex; flex: 0 0 46px; width: 46px; height: 46px; align-items: center; justify-content: center; border: 1px solid $color-border-base; border-radius: $border-radius-lg; background: $color-bg-muted; color: $color-primary; font-weight: 700; }
+.record-identity-content { min-width: 0; }
+.record-identity-content strong, .record-identity-content span, .record-identity-content small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-identity-content strong { color: $color-text-primary; line-height: 1.4; }
+.record-identity-content span { margin-top: 4px; color: $color-text-regular; font-size: $font-size-sm; }
+.record-identity-content small { margin-top: 3px; color: $color-text-placeholder; font-size: $font-size-xs; }
+.stacked-cell, .amount-cell, .status-cell { display: flex; align-items: flex-start; flex-direction: column; gap: 5px; min-width: 0; }
+.stacked-cell span, .stacked-cell small { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
+.stacked-cell span { color: $color-text-regular; }
+.stacked-cell small, .amount-cell small, .status-cell small { color: $color-text-secondary; font-size: $font-size-xs; }
+.amount-cell { align-items: flex-end; }
+.amount-cell strong { color: $color-text-primary; font-size: 17px; font-variant-numeric: tabular-nums; }
+.sync-time { color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.5; }
 .pagination-row { display: flex; justify-content: flex-end; padding-top: 18px; }
+.list-card .pagination-row { padding: 18px; }
 .detail-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; padding: 14px; background: #f7f9fc; border-radius: 6px; }
 .detail-summary div { display: flex; flex-direction: column; gap: 6px; }
 .detail-summary span { color: #8a94a6; font-size: 12px; }
 .detail-summary strong { color: #172033; font-size: 14px; }
 .detail-title { margin: 22px 0 10px; color: #172033; font-size: 15px; }
+:deep(.order-detail-drawer) { background: $color-bg-page; }
+:deep(.order-detail-drawer .el-drawer__body) { padding: 0; }
+.detail-shell { min-height: 100%; background: $color-bg-page; }
+.detail-hero { position: sticky; z-index: 4; top: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: $spacing-lg; padding: $spacing-lg $spacing-xl; border-bottom: 1px solid $color-border-base; background: rgba(255, 255, 255, .96); backdrop-filter: blur(10px); }
+.detail-hero > div { min-width: 0; }
+.detail-hero span { color: $color-primary; font-size: $font-size-xs; font-weight: 600; }
+.detail-hero h2 { overflow: hidden; margin: 5px 0; color: $color-text-primary; font-size: 21px; text-overflow: ellipsis; white-space: nowrap; }
+.detail-hero p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.detail-tags { display: flex; flex-wrap: wrap; gap: $spacing-sm; margin-top: 10px; }
+.detail-content { padding: $spacing-lg $spacing-xl $spacing-xl; }
+.detail-content :deep(.el-descriptions) { overflow: hidden; border: 1px solid $color-border-base; border-radius: $border-radius-lg; background: $color-bg-white; box-shadow: $shadow-sm; }
+.detail-content :deep(.el-descriptions__label) { color: $color-text-secondary; font-weight: 500; }
+.detail-content > .el-table, .detail-content > :deep(.el-table) { overflow: hidden; border: 1px solid $color-border-base; border-radius: $border-radius-base; }
 .placeholder-card { min-height: 420px; }
 @media (max-width: 1000px) {
   .summary-bar { flex-wrap: wrap; padding: 10px 0; }
   .summary-note { margin-left: 0; }
   .detail-summary { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .page-heading, .result-heading { align-items: flex-start; flex-direction: column; }
+  .summary-note { margin-left: 0; }
+  :deep(.order-detail-drawer) { width: 100% !important; }
+  .detail-hero, .detail-content { padding: $spacing-md; }
 }
 </style>

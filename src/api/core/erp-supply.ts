@@ -49,7 +49,7 @@ export interface ErpWarehouseView {
   sourceStatusCode: string | null
   defaultFlag: boolean
   acreage: number | null
-  phoneMasked: string | null
+  phone: string | null
   address: string | null
   collaboratorSourceId: string | null
   remark: string | null
@@ -105,6 +105,7 @@ export interface ErpPurchaseOrderLineView {
   warehousedQuantity: number
   returnedQuantity: number
   remark: string | null
+  sourceFields: Record<string, unknown>
 }
 
 export interface ErpPurchaseOrderDetailView {
@@ -132,6 +133,7 @@ export interface ErpPurchaseOrderDetailView {
   downloaded: boolean | null
   remark: string | null
   internalCommunication: string | null
+  sourceFields: Record<string, unknown>
   lines: ErpPurchaseOrderLineView[]
 }
 
@@ -159,8 +161,8 @@ export interface ErpPurchaseReturnView {
   remark: string | null
   detailCount: number | null
   contactName: string | null
-  contactPhoneMasked: string | null
-  contactAddressMasked: string | null
+  contactPhone: string | null
+  contactAddress: string | null
   cityIds: string[]
   cityNames: string[]
   sourceDevice: string | null
@@ -194,6 +196,7 @@ export interface ErpPurchaseReturnLineView {
   categoryName: string | null
   brandName: string | null
   remark: string | null
+  sourceFields: Record<string, unknown>
 }
 
 export interface ErpPurchaseReturnDetailView {
@@ -219,14 +222,15 @@ export interface ErpPurchaseReturnDetailView {
   remark: string | null
   detailCount: number | null
   contactName: string | null
-  contactPhoneMasked: string | null
-  contactAddressMasked: string | null
+  contactPhone: string | null
+  contactAddress: string | null
   cityIds: string[]
   cityNames: string[]
   sourceDevice: string | null
   parentReturnSourceId: string | null
   parentCompanySourceId: string | null
   downloaded: boolean | null
+  sourceFields: Record<string, unknown>
   lines: ErpPurchaseReturnLineView[]
 }
 
@@ -288,6 +292,7 @@ export interface ErpWarehousingLineView {
   collaboratorSourceId: string | null
   collaboratorName: string | null
   remark: string | null
+  sourceFields: Record<string, unknown>
 }
 
 export interface ErpPurchaseLinkView {
@@ -323,6 +328,7 @@ export interface ErpWarehousingReceiptDetailView {
   apiFlag: boolean | null
   splitType: string | null
   remark: string | null
+  sourceFields: Record<string, unknown>
   lines: ErpWarehousingLineView[]
   purchaseLinks: ErpPurchaseLinkView[]
 }

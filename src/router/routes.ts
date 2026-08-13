@@ -20,6 +20,14 @@ const erpSupplyDataRouteKeys = new Set([
   'supply.erp.inventory.overview',
 ])
 
+const crmMasterDataRouteKeys = new Set([
+  'supply.crm.customers.profiles',
+  'supply.crm.customers.shipping-addresses',
+  'supply.crm.customers.levels-tags',
+  'supply.crm.customers.areas',
+  'supply.crm.assignments.external-staff',
+])
+
 const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.map((page) => ({
   path: page.path.replace('/supply-chain/', ''),
   name: `SupplyDomain${page.routeKey.split('.').map((part) => part.replace(/(^|-)([a-z])/g, (_, __, letter) => letter.toUpperCase())).join('')}`,
@@ -27,12 +35,15 @@ const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.map((page) => (
     ? () => import('@/views/supply-chain/erp/ProductMasterDataView.vue')
     : erpSupplyDataRouteKeys.has(page.routeKey)
       ? () => import('@/views/supply-chain/erp/SupplyDataView.vue')
-      : () => import('@/views/supply-chain/domain/CapabilityView.vue'),
+      : crmMasterDataRouteKeys.has(page.routeKey)
+        ? () => import('@/views/supply-chain/crm/CrmMasterDataView.vue')
+        : () => import('@/views/supply-chain/domain/CapabilityView.vue'),
   meta: {
     title: page.title,
     requiresAuth: true,
     applicationCode: 'SUPPLY_CHAIN',
     routeKey: page.routeKey,
+    permission: crmMasterDataRouteKeys.has(page.routeKey) ? 'crm:customer:read' : undefined,
   },
 }))
 
@@ -137,7 +148,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     children: [
       { path: '', name: 'SupplyChainDashboard', component: () => import('@/views/supply-chain/dashboard/IndexView.vue'), meta: { title: '供应链系统', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
       { path: 'city', name: 'SupplyCity', component: () => import('@/views/supply-chain/city/IndexView.vue'), meta: { title: '城市运营', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
-      { path: 'crm', name: 'SupplyCrm', component: () => import('@/views/supply-chain/crm/IndexView.vue'), meta: { title: 'CRM', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
+      { path: 'crm', name: 'SupplyCrm', component: () => import('@/views/supply-chain/crm/IndexView.vue'), meta: { title: 'CRM', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'crm:customer:read' } },
       { path: 'order', name: 'SupplyOrder', component: () => import('@/views/supply-chain/order/IndexView.vue'), meta: { title: '订单工作台', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'order' } },
       { path: 'order/all', name: 'SupplyOrderAll', component: () => import('@/views/supply-chain/order/IndexView.vue'), meta: { title: '全部订单', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'order-all' } },
       { path: 'order/pending', name: 'SupplyOrderPending', component: () => import('@/views/supply-chain/order/IndexView.vue'), meta: { title: '待处理订单', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'order-pending' } },

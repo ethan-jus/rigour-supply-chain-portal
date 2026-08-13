@@ -1,5 +1,6 @@
 export { apiClient, registerUnauthorizedSessionHandler } from './client'
 export { getErrorMessage } from './error'
+export * from './crm'
 export * from './erp-product'
 export * from './erp-supply'
 export * from './erp-sync'

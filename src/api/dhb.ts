@@ -46,6 +46,7 @@ export interface DhbOrderLine {
   multiName: string | null
   unitPrice: number | null
   quantity: number | null
+  lineAmount: number | null
   unit: string | null
   remark: string | null
 }

@@ -116,13 +116,14 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     ] },
   ]),
   ...groupPages('crm', 'CRM', 'merchant-crm-service', [
-    { key: 'customers', title: '客户与商家', pages: [
-      { key: 'profiles', title: '客户/商家档案' }, { key: 'stores', title: '门店档案' },
-      { key: 'levels-tags', title: '客户等级与标签' }, { key: 'customer-360', title: '客户 360' },
+    { key: 'customers', title: '客户管理', pages: [
+      { key: 'profiles', title: '客户档案' }, { key: 'shipping-addresses', title: '收货地址簿' },
+      { key: 'stores', title: '门店档案' },
+      { key: 'levels-tags', title: '客户类型' }, { key: 'areas', title: '归属地区' },
     ] },
     { key: 'assignments', title: '客户归属', pages: [
       { key: 'sales', title: '销售归属' }, { key: 'city-teams', title: '城市与团队归属' },
-      { key: 'history', title: '归属变更记录' },
+      { key: 'history', title: '归属变更记录' }, { key: 'external-staff', title: '外部员工' },
     ] },
     { key: 'credit-policy', title: '信用与结算政策', pages: [
       { key: 'limits', title: '信用额度' }, { key: 'terms', title: '账期与结算周期' },
