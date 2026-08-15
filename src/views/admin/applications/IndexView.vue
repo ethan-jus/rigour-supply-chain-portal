@@ -10,11 +10,12 @@ import { ElMessage } from 'element-plus'
 import { apiClient } from '@/api'
 import ManagementCrudPage, { type CrudColumn, type CrudField } from '@/components/management/ManagementCrudPage.vue'
 import type { ApplicationRecord } from '@/types/management'
+import { formatPortalApplicationScope, formatPortalApplicationType, formatPortalLaunchMode, formatPortalStatus } from '@/utils/portal-labels'
 interface OidcClientRecord { id:string;applicationId:string|null;clientId:string;clientName:string;redirectUri:string;postLogoutRedirectUri:string }
 const columns: CrudColumn[] = [
-  { key:'code',label:'编码' }, { key:'name',label:'名称' }, { key:'scope',label:'范围' },
-  { key:'type',label:'类型' }, { key:'launchMode',label:'启动方式' }, { key:'targetUri',label:'启动地址',width:180 },
-  { key:'status',label:'状态' },
+  { key:'code',label:'编码' }, { key:'name',label:'名称' }, { key:'scope',label:'范围',formatter:(value)=>formatPortalApplicationScope(value as string) },
+  { key:'type',label:'类型',formatter:(value)=>formatPortalApplicationType(value as string) }, { key:'launchMode',label:'启动方式',formatter:(value)=>formatPortalLaunchMode(value as string) }, { key:'targetUri',label:'启动地址',width:180 },
+  { key:'status',label:'状态',formatter:(value)=>formatPortalStatus(value as string) },
 ]
 const fields: CrudField[] = [
   { key:'code',label:'应用编码',required:true }, { key:'name',label:'应用名称',required:true },

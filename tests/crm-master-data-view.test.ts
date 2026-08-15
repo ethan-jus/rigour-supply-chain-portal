@@ -20,6 +20,9 @@ const messages = vi.hoisted(() => ({
 const routeMeta = vi.hoisted(() => ({ routeKey: 'supply.crm.customers.profiles' }))
 
 vi.mock('@/api', () => crmApi)
+vi.mock('@/api/core/business-settings', () => ({
+  resolveBizDict: vi.fn().mockResolvedValue({ dictionary: {}, items: [] }),
+}))
 vi.mock('vue-router', () => ({ useRoute: () => ({ meta: routeMeta }) }))
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ hasPermission: (permission: string) => permission === 'crm:customer:write' }),
@@ -29,6 +32,10 @@ vi.mock('element-plus', () => ({
 }))
 
 import CrmMasterDataView from '@/views/supply-chain/crm/CrmMasterDataView.vue'
+import {
+  clearBusinessDictionariesForTest,
+  seedBusinessDictionaryForTest,
+} from '@/utils/business-dictionary'
 
 const passthrough = defineComponent({ template: '<div><slot /></div>' })
 const cardStub = defineComponent({ template: '<section><slot name="header" /><slot /></section>' })
@@ -72,6 +79,13 @@ function mountPage() {
 describe('CRM 主数据页面', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearBusinessDictionariesForTest()
+    seedBusinessDictionaryForTest('CRM', 'DHB_CUSTOMER_STATUS', [{
+      code: 'A', name: '待激活', value: 'A', status: 'ACTIVE', sortNo: 10,
+    }])
+    seedBusinessDictionaryForTest('CRM', 'DHB_CUSTOMER_CLEARING_FORM', [{
+      code: 'FORWARD', name: '现付', value: 'forward', status: 'ACTIVE', sortNo: 10,
+    }])
     routeMeta.routeKey = 'supply.crm.customers.profiles'
     crmApi.getCrmCustomers.mockResolvedValue({
       total: 1,

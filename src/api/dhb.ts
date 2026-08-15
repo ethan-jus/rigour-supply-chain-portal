@@ -29,6 +29,31 @@ export interface DhbOrder {
   district: string | null
   splitType: string | null
   splitTypeName: string | null
+  customerType: string | null
+  customerArea: string | null
+  adminUser: string | null
+  operationName: string | null
+  salesPerson: string | null
+  salesPersonMobile: string | null
+  assistantSalesPersons: string | null
+  auditAt: string | null
+  settlementMethod: string | null
+  goodsWeight: number | null
+  taxAmount: number | null
+  discountPrice: number | null
+  discountTotal: number | null
+  freightAmount: number | null
+  applyTotal: number | null
+  couponDiscountedAmount: number | null
+  customerRemark: string | null
+  internalComment: string | null
+  invoiceTitle: string | null
+  invoiceContent: string | null
+  invoiceBank: string | null
+  invoiceBankAccount: string | null
+  taxpayerNumber: string | null
+  customerTag: string | null
+  invoiceType: string | null
   detailAvailable: boolean
   syncedAt: string | null
 }
@@ -49,6 +74,15 @@ export interface DhbOrderLine {
   lineAmount: number | null
   unit: string | null
   remark: string | null
+  purchasePrice: number | null
+  conversionNumber: number | null
+  offerPrice: number | null
+  actualAmount: number | null
+  goodsWeight: number | null
+  preSale: string | null
+  contentType: string | null
+  invoiceTax: string | null
+  contentPercent: number | null
 }
 
 export interface DhbShipment {
@@ -77,6 +111,8 @@ export interface DhbOrderSyncResult {
   returnsChanged: number
   financialDocumentsChanged: number
   completedObjects: string[]
+  unmapped: number
+  dictionaryRevisions: Record<string, number>
 }
 
 export type DhbOrderSyncScope =
@@ -92,7 +128,16 @@ export interface DhbOrderDetail {
   order: DhbOrder
   lines: DhbOrderLine[]
   shipments: DhbShipment[]
+  financialDocuments: DhbFinancialDocument[]
+  sourceRecords: DhbOrderSourceRecord[]
   synchronizedFromProvider: boolean
+}
+
+export interface DhbOrderSourceRecord {
+  payloadType: string
+  payloadJson: string
+  payloadHash: string
+  receivedAt: string | null
 }
 
 /** 发货/退货/收付款单的本地分页参数；begin为零基偏移，step范围1..1000。 */
@@ -137,6 +182,8 @@ export interface DhbShipmentDocument {
 /** 发货商品明细；数量、单价和金额沿用订货宝来源单位。 */
 export interface DhbShipmentLine {
   lineId: string
+  lineType?: 'SHIPPED' | 'WAIT_STOCK' | string
+  orderLineId?: string | null
   productGuid: string | null
   skuNo: string | null
   productCode: string | null
@@ -147,6 +194,10 @@ export interface DhbShipmentLine {
   unit: string | null
   warehouseNo: string | null
   remark: string | null
+  orderedQuantity?: number | null
+  stockedQuantity?: number | null
+  realStock?: number | null
+  waitQuantity?: number | null
 }
 
 export interface DhbShipmentDetail { shipment: DhbShipmentDocument; lines: DhbShipmentLine[] }
@@ -203,11 +254,18 @@ export interface DhbReturnDocument {
   returnAmount: number | null
   settlementAmount: number | null
   returnedAt: string | null
+  sourceUpdatedAt: string | null
   reason: string | null
   customerNo: string | null
+  customerGuid: string | null
   consignee: string | null
+  phone: string | null
+  address: string | null
   logisticsCompany: string | null
   logisticsNo: string | null
+  staffName: string | null
+  returnType: string | null
+  deliveryMode: string | null
   detailAvailable: boolean
   syncedAt: string | null
 }
@@ -238,11 +296,19 @@ export interface DhbFinancialDocument {
   relatedDocumentNo: string | null
   orderNo: string | null
   customerNo: string | null
+  customerGuid: string | null
+  /** 收款单/付款单 IncexpId；收款类型和付款类型按来源单据分别解释。 */
   businessType: string | null
+  /** 收付款单 TypeId；订货宝支付方式编码，页面转换为中文描述。 */
   paymentMethod: string | null
   amount: number | null
   status: string | null
+  /** 订货宝 ReceiptsDate，统一命名为交易时间。 */
   transactionAt: string | null
+  /** 订货宝 CreateDate。 */
+  sourceCreatedAt: string | null
+  /** 订货宝 UpdateDate；付款单可能为空。 */
+  sourceUpdatedAt: string | null
   serialNumber: string | null
   accountName: string | null
   bankName: string | null
@@ -254,6 +320,7 @@ export interface DhbFinancialDocument {
 export interface DhbOrderQuery {
   begin: number
   step: number
+  keyword?: string
   order_status_val?: string
   starttime?: string
   endtime?: string

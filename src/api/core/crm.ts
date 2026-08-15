@@ -163,6 +163,8 @@ export interface CrmSyncObjectResult {
   duplicates: number
   absent: number
   rejected: number
+  unmapped: number
+  dictionaryRevisions: Record<string, number>
   pages: number
   finishedAt: string | null
 }

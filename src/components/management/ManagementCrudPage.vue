@@ -7,8 +7,9 @@
       </div>
     </template>
     <el-table v-loading="loading" :data="rows" row-key="id">
-      <el-table-column v-for="column in columns" :key="column.key" :prop="column.key"
-        :label="column.label" :min-width="column.width || 120" />
+      <el-table-column v-for="column in columns" :key="column.key" :label="column.label" :min-width="column.width || 120">
+        <template #default="scope">{{ formatColumnValue(column, scope.row[column.key]) }}</template>
+      </el-table-column>
       <el-table-column v-if="writePermission ? authStore.hasPermission(writePermission) : true"
         label="操作" width="100" fixed="right">
         <template #default="scope"><el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button></template>
@@ -36,8 +37,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiClient } from '@/api'
 import { useAuthStore } from '@/stores'
+import { formatPortalColumnValue } from '@/utils/portal-labels'
 
-export interface CrudColumn { key: string; label: string; width?: number }
+export interface CrudColumn { key: string; label: string; width?: number; formatter?: (value: unknown) => string }
 export interface CrudField {
   key: string; label: string; type?: 'text' | 'textarea' | 'number' | 'boolean' | 'select'
   required?: boolean; createOnly?: boolean; defaultValue?: string | number | boolean | null
@@ -81,6 +83,9 @@ function openEdit(row: Row) {
   })
   form.version = typeof row.version === 'number' ? row.version : 0
   dialogVisible.value = true
+}
+function formatColumnValue(column: CrudColumn, value: unknown): string {
+  return column.formatter?.(value) || formatPortalColumnValue(column.key, value as string | number | boolean | null | undefined)
 }
 async function save() {
   const payload = Object.fromEntries(Object.entries(form).map(([key, value]) => [key, value === '' ? null : value]))

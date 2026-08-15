@@ -16,6 +16,10 @@ export interface ErpDataSyncResult {
   changed: number
   duplicates: number
   rejected: number
+  /** 未能从当前有效字典精确解析的来源值出现次数。 */
+  unmapped: number
+  /** 当前同步批次各字典使用的整本内容修订号。 */
+  dictionaryRevisions: Record<string, number>
   pages: number
   completedAt: string
 }

@@ -6,15 +6,15 @@
       </el-select><el-button type="primary" :disabled="!applicationId" @click="openCreate">新增资源</el-button>
     </div></div></template>
     <el-table :data="resources" row-key="id"><el-table-column prop="displayName" label="名称" />
-      <el-table-column prop="code" label="资源编码" min-width="220" /><el-table-column prop="type" label="类型" />
+      <el-table-column prop="code" label="资源编码" min-width="220" /><el-table-column label="类型"><template #default="scope">{{ formatPortalResourceType(scope.row.type) }}</template></el-table-column>
       <el-table-column prop="permissionCode" label="权限码" min-width="180" /><el-table-column prop="routePath" label="路由" min-width="180" />
-      <el-table-column prop="status" label="状态" /><el-table-column label="操作"><template #default="scope"><el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button></template></el-table-column>
+      <el-table-column label="状态"><template #default="scope">{{ formatPortalStatus(scope.row.status) }}</template></el-table-column><el-table-column label="操作"><template #default="scope"><el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button></template></el-table-column>
     </el-table>
   </el-card>
   <el-dialog v-model="dialog" title="资源配置" width="620px"><el-form label-width="110px">
     <el-form-item label="父资源"><el-select v-model="form.parentId" clearable style="width:100%"><el-option v-for="item in resources" :key="item.id" :label="item.displayName" :value="item.id" /></el-select></el-form-item>
     <el-form-item label="资源编码"><el-input v-model="form.code" /></el-form-item>
-    <el-form-item label="资源类型"><el-select v-model="form.type"><el-option v-for="item in resourceTypes" :key="item" :label="item" :value="item" /></el-select></el-form-item>
+    <el-form-item label="资源类型"><el-select v-model="form.type"><el-option v-for="item in resourceTypes" :key="item" :label="formatPortalResourceType(item)" :value="item" /></el-select></el-form-item>
     <el-form-item label="显示名称"><el-input v-model="form.displayName" /></el-form-item>
     <el-form-item label="权限码"><el-input v-model="form.permissionCode" placeholder="如 iam:user:read" /></el-form-item>
     <el-form-item label="路由标识"><el-input v-model="form.routeKey" placeholder="仅菜单和页面必填" /></el-form-item>
@@ -30,6 +30,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiClient } from '@/api'
 import type { ApplicationRecord, ResourceRecord } from '@/types/management'
+import { formatPortalResourceType, formatPortalStatus } from '@/utils/portal-labels'
 const applications=ref<ApplicationRecord[]>([]); const resources=ref<ResourceRecord[]>([]); const applicationId=ref(''); const dialog=ref(false); const editingId=ref('')
 const resourceTypes=['APPLICATION','MENU','PAGE','BUTTON','API']
 const form=reactive({applicationId:'',parentId:null as string|null,code:'',type:'MENU',permissionCode:'',displayName:'',sortOrder:0,status:'ACTIVE',routeKey:'',routePath:'',iconKey:'',visible:true,keepAlive:false,version:0})

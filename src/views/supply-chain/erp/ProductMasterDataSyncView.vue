@@ -59,7 +59,7 @@
           <div class="result-header">
             <span>最近一次同步结果</span>
             <el-tag :type="result.status === 'SUCCEEDED' ? 'success' : 'warning'" effect="plain">
-              {{ result.status }}
+              {{ formatPortalStatus(result.status) }}
             </el-tag>
           </div>
         </template>
@@ -72,6 +72,7 @@
           <el-descriptions-item label="变更数量">{{ result.changed }}</el-descriptions-item>
           <el-descriptions-item label="重复跳过">{{ result.duplicates }}</el-descriptions-item>
           <el-descriptions-item label="拒绝数量">{{ result.rejected }}</el-descriptions-item>
+          <el-descriptions-item label="字典未解析">{{ result.unmapped }}</el-descriptions-item>
           <el-descriptions-item label="读取页数">{{ result.pages }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
@@ -88,6 +89,7 @@ import {
   type ErpMasterDataObjectType,
 } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { formatPortalStatus } from '@/utils/portal-labels'
 
 const syncOptions: Array<{ value: ErpMasterDataObjectType; label: string }> = [
   { value: 'PRODUCT_SPU', label: '商品/SPU（包含 SKU）' },
@@ -109,7 +111,8 @@ async function synchronize() {
   syncing.value = true
   try {
     result.value = await syncErpData(objectType.value, maxPages.value)
-    ElMessage.success(`${objectLabel(result.value.objectType)}同步完成`)
+    const warning = result.value.unmapped > 0 ? `，字典未解析${result.value.unmapped}项` : ''
+    ElMessage.success(`${objectLabel(result.value.objectType)}同步完成${warning}`)
   } catch (reason) {
     ElMessage.error(errorMessage(reason, '商品主数据同步失败'))
   } finally {
@@ -118,7 +121,7 @@ async function synchronize() {
 }
 
 function objectLabel(value: string) {
-  return syncOptions.find((item) => item.value === value)?.label ?? value
+  return syncOptions.find((item) => item.value === value)?.label ?? `未知同步对象（${value}）`
 }
 
 function formatTime(value: string | null) {

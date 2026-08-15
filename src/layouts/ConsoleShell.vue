@@ -40,7 +40,7 @@
           </div>
         </div>
       </header>
-      <main class="console__content"><router-view /></main>
+      <main class="console__content"><router-view :key="route.path" /></main>
     </section>
   </div>
 </template>

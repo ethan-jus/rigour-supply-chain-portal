@@ -4,7 +4,8 @@
 </template>
 <script setup lang="ts">
 import ManagementCrudPage, { type CrudColumn, type CrudField } from '@/components/management/ManagementCrudPage.vue'
-const columns: CrudColumn[] = [{key:'code',label:'编码'},{key:'name',label:'名称'},{key:'type',label:'类型'},{key:'path',label:'组织路径',width:220},{key:'status',label:'状态'}]
+import { formatPortalOrganizationType, formatPortalStatus } from '@/utils/portal-labels'
+const columns: CrudColumn[] = [{key:'code',label:'编码'},{key:'name',label:'名称'},{key:'type',label:'类型',formatter:(value)=>formatPortalOrganizationType(value as string)},{key:'path',label:'组织路径',width:220},{key:'status',label:'状态',formatter:(value)=>formatPortalStatus(value as string)}]
 const fields: CrudField[] = [
   {key:'parentId',label:'上级组织ID'},{key:'code',label:'组织编码',required:true},{key:'name',label:'组织名称',required:true},
   {key:'type',label:'组织类型',type:'select',defaultValue:'DEPARTMENT',options:[{label:'公司',value:'COMPANY'},{label:'区域',value:'REGION'},{label:'城市',value:'CITY'},{label:'部门',value:'DEPARTMENT'},{label:'团队',value:'TEAM'}]},

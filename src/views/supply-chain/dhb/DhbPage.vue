@@ -26,7 +26,7 @@
           <el-table-column prop="name" label="名称" min-width="150" />
           <el-table-column prop="baseUrl" label="Base URL" min-width="240" />
           <el-table-column prop="authSecretRef" label="Secret引用" min-width="220" />
-          <el-table-column prop="status" label="状态" width="90" />
+          <el-table-column label="状态" width="90"><template #default="scope">{{ statusLabel(scope.row.status) }}</template></el-table-column>
           <el-table-column label="操作" min-width="180"><template #default="scope"><el-button link type="primary" :loading="testingConnectorId === scope.row.id" @click="testConnector(scope.row.id)">测试连接</el-button><el-button link type="primary" @click="openConnector(scope.row)">编辑</el-button></template></el-table-column>
         </el-table>
       </el-card>
@@ -50,7 +50,7 @@
           <el-table-column prop="code" label="任务编码" min-width="160" />
           <el-table-column label="连接"><template #default="scope">{{ connectorName(scope.row.connectorId) }}</template></el-table-column>
           <el-table-column label="对象类型" min-width="170"><template #default="scope">{{ objectTypeLabel(scope.row.objectType) }}</template></el-table-column>
-          <el-table-column prop="status" label="状态" width="100" />
+          <el-table-column label="状态" width="100"><template #default="scope">{{ statusLabel(scope.row.status) }}</template></el-table-column>
           <el-table-column prop="nextRunAt" label="下次运行" min-width="180" />
           <el-table-column label="操作" width="170"><template #default="scope"><el-button link type="primary" @click="openTask(scope.row)">编辑</el-button><el-button v-if="scope.row.objectType === 'ORDER'" link type="success" :loading="runningTaskId === scope.row.id" :disabled="scope.row.status === 'RUNNING' || scope.row.status === 'PAUSED'" @click="runTask(scope.row)">立即同步</el-button></template></el-table-column>
         </el-table>
@@ -61,7 +61,7 @@
           <el-form-item label="任务编码" required><el-input v-model="taskForm.code" :disabled="!!editingTaskId" /></el-form-item>
           <el-form-item label="对象类型" required><el-select v-model="taskForm.objectType" style="width:100%"><el-option v-for="item in syncObjectTypes" :key="item.value" :disabled="!editingTaskId && ['ORDER', 'PRODUCT_MASTER_DATA'].includes(item.value)" :label="item.label" :value="item.value"><span>{{ item.label }}</span><span class="option-code">{{ item.value }}</span></el-option></el-select></el-form-item>
           <el-alert type="info" :closable="false" show-icon title="一期只读同步：订单详情使用不自动签收、不自动审核参数；不会回写下载状态。" />
-          <el-form-item label="状态"><el-select v-model="taskForm.status"><el-option v-for="item in taskStatuses" :key="item" :label="item" :value="item" /></el-select></el-form-item>
+          <el-form-item label="状态"><el-select v-model="taskForm.status"><el-option v-for="item in taskStatuses" :key="item" :label="statusLabel(item)" :value="item" /></el-select></el-form-item>
         </el-form>
         <template #footer><el-button @click="taskDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveTask">保存</el-button></template>
       </el-dialog>
@@ -73,10 +73,10 @@
         <el-table v-loading="loading" :data="mirrors" row-key="id">
           <el-table-column prop="sourceOrderId" label="来源订单ID" min-width="220" />
           <el-table-column prop="orderNo" label="订单号" min-width="160" />
-          <el-table-column prop="sourceStatus" label="来源状态" min-width="120" />
+          <el-table-column label="来源状态" min-width="120"><template #default="scope">{{ statusLabel(scope.row.sourceStatus) }}</template></el-table-column>
           <el-table-column prop="amount" label="金额" width="120" />
           <el-table-column prop="orderTime" label="下单时间" min-width="180" />
-          <el-table-column prop="mirrorStatus" label="镜像状态" width="100" />
+          <el-table-column label="镜像状态" width="100"><template #default="scope">{{ statusLabel(scope.row.mirrorStatus) }}</template></el-table-column>
         </el-table>
       </el-card>
     </template>
@@ -87,7 +87,7 @@
         <el-table v-loading="loading" :data="logs" row-key="id">
           <el-table-column prop="occurredAt" label="时间" min-width="180" />
           <el-table-column prop="taskId" label="任务ID" min-width="220" />
-          <el-table-column prop="level" label="级别" width="90" />
+          <el-table-column label="级别" width="90"><template #default="scope">{{ levelLabel(scope.row.level) }}</template></el-table-column>
           <el-table-column prop="message" label="消息" min-width="300" />
           <el-table-column prop="errorCode" label="错误码" min-width="140" />
         </el-table>
@@ -101,7 +101,7 @@
         <el-table v-loading="loading" :data="mappings" row-key="id">
           <el-table-column prop="sourceField" label="来源字段" min-width="180" />
           <el-table-column prop="targetField" label="目标字段" min-width="180" />
-          <el-table-column prop="transformType" label="转换方式" width="120" />
+          <el-table-column label="转换方式" width="120"><template #default="scope">{{ transformTypeLabel(scope.row.transformType) }}</template></el-table-column>
           <el-table-column label="启用" width="80"><template #default="scope">{{ scope.row.enabled ? '是' : '否' }}</template></el-table-column>
           <el-table-column label="操作" width="100"><template #default="scope"><el-button link type="primary" @click="openMapping(scope.row)">编辑</el-button></template></el-table-column>
         </el-table>
@@ -110,7 +110,7 @@
         <el-form label-width="100px">
           <el-form-item label="来源字段" required><el-input v-model="mappingForm.sourceField" :disabled="!!editingMappingId" /></el-form-item>
           <el-form-item label="目标字段" required><el-input v-model="mappingForm.targetField" /></el-form-item>
-          <el-form-item label="转换方式"><el-select v-model="mappingForm.transformType"><el-option v-for="item in transformTypes" :key="item" :label="item" :value="item" /></el-select></el-form-item>
+          <el-form-item label="转换方式"><el-select v-model="mappingForm.transformType"><el-option v-for="item in transformTypes" :key="item" :label="transformTypeLabel(item)" :value="item" /></el-select></el-form-item>
           <el-form-item label="启用"><el-switch v-model="mappingForm.enabled" /></el-form-item>
         </el-form>
         <template #footer><el-button @click="mappingDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveMapping">保存</el-button></template>
@@ -129,10 +129,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { apiClient } from '@/api'
+import { createLatestRequestGuard } from '@/utils/latest-request'
 
 interface Connector { id: string; code: string; name: string; baseUrl: string | null; authSecretRef: string | null; status: string; version: number }
 interface DhbConnectionTestResult { success: boolean; code: string; message: string; tokenExpiresAt: string | null }
@@ -144,6 +145,7 @@ interface SyncRunResult { runId: string; objectType: string; status: 'SUCCEEDED'
 
 const route = useRoute()
 const pageKey = computed(() => String(route.meta.pageKey || 'overview'))
+const pageRequest = createLatestRequestGuard()
 const pageTitle = computed(() => String(route.meta.title || '订货宝数据同步'))
 const loading = ref(false)
 const saving = ref(false)
@@ -183,21 +185,43 @@ async function loadOverview() {
   ])
   const values = [connectorResult, taskResult, mirrorResult, logResult].map((result) =>
     result.status === 'fulfilled' ? (result.value as unknown[]).length : '—')
-  overviewCards.value = overviewCards.value.map((card, index) => ({ ...card, value: String(values[index]) }))
+  return overviewCards.value.map((card, index) => ({ ...card, value: String(values[index]) }))
 }
 
 async function loadPage() {
+  const request = pageRequest.begin()
+  const targetPageKey = pageKey.value
   loading.value = true
   try {
-    if (pageKey.value === 'overview') await loadOverview()
-    else if (pageKey.value === 'connections' || ['sync-tasks', 'field-mappings'].includes(pageKey.value)) await loadConnectors()
-    if (pageKey.value === 'sync-tasks') tasks.value = (await apiClient.get(`${base}/sync-tasks`)) as SyncTask[]
-    if (pageKey.value === 'order-mirror') mirrors.value = (await apiClient.get(`${base}/orders/mirrors?limit=100`)) as OrderMirror[]
-    if (pageKey.value === 'sync-logs') logs.value = (await apiClient.get(`${base}/sync-logs?limit=200`)) as SyncLog[]
+    if (targetPageKey === 'overview') {
+      const cards = await loadOverview()
+      if (!pageRequest.isCurrent(request)) return
+      overviewCards.value = cards
+    } else if (targetPageKey === 'connections' || ['sync-tasks', 'field-mappings'].includes(targetPageKey)) {
+      const result = (await apiClient.get(`${base}/connectors`)) as Connector[]
+      if (!pageRequest.isCurrent(request)) return
+      connectors.value = result
+    }
+    if (targetPageKey === 'sync-tasks') {
+      const result = (await apiClient.get(`${base}/sync-tasks`)) as SyncTask[]
+      if (!pageRequest.isCurrent(request)) return
+      tasks.value = result
+    }
+    if (targetPageKey === 'order-mirror') {
+      const result = (await apiClient.get(`${base}/orders/mirrors?limit=100`)) as OrderMirror[]
+      if (!pageRequest.isCurrent(request)) return
+      mirrors.value = result
+    }
+    if (targetPageKey === 'sync-logs') {
+      const result = (await apiClient.get(`${base}/sync-logs?limit=200`)) as SyncLog[]
+      if (!pageRequest.isCurrent(request)) return
+      logs.value = result
+    }
   } catch (reason) {
+    if (!pageRequest.isCurrent(request)) return
     ElMessage.error(errorMessage(reason, '数据加载失败'))
   } finally {
-    loading.value = false
+    if (pageRequest.isCurrent(request)) loading.value = false
   }
 }
 
@@ -213,7 +237,31 @@ async function loadMappings() {
 }
 
 function connectorName(id: string) { return connectors.value.find((item) => item.id === id)?.name || id }
-function objectTypeLabel(value: string) { return syncObjectTypes.find((item) => item.value === value)?.label || value }
+function objectTypeLabel(value: string) {
+  return syncObjectTypes.find((item) => item.value === value)?.label || (/[^\u0000-\u007f]/.test(value) ? value : `未知对象类型（${value}）`)
+}
+function statusLabel(value: string | null | undefined) {
+  if (!value) return '-'
+  const labels: Record<string, string> = {
+    ACTIVE: '启用', DISABLED: '停用', INACTIVE: '停用', IDLE: '待运行', RUNNING: '运行中',
+    PAUSED: '已暂停', FAILED: '失败', COMPLETED: '已完成', SUCCEEDED: '成功', SUCCESS: '成功',
+    T: '正常', F: '停用', PRESENT: '已存在', ABSENT: '已缺失', SYNCED: '已同步',
+  }
+  if (/[^\u0000-\u007f]/.test(value)) return value
+  return labels[value.toUpperCase()] || `未知状态（${value}）`
+}
+function levelLabel(value: string | null | undefined) {
+  if (!value) return '-'
+  const labels: Record<string, string> = { INFO: '信息', WARN: '警告', WARNING: '警告', ERROR: '错误', DEBUG: '调试' }
+  if (/[^\u0000-\u007f]/.test(value)) return value
+  return labels[value.toUpperCase()] || `未知级别（${value}）`
+}
+function transformTypeLabel(value: string | null | undefined) {
+  if (!value) return '-'
+  const labels: Record<string, string> = { DIRECT: '直接映射', CONSTANT: '固定值', EXPRESSION: '表达式', DICTIONARY: '数据字典' }
+  if (/[^\u0000-\u007f]/.test(value)) return value
+  return labels[value.toUpperCase()] || `未知转换方式（${value}）`
+}
 
 function openConnector(row?: Connector) {
   editingConnectorId.value = row?.id || ''
@@ -298,6 +346,7 @@ function errorMessage(reason: unknown, fallback: string): string {
   return fallback
 }
 
+watch(pageKey, () => { void loadPage() })
 onMounted(() => { void loadPage() })
 </script>
 

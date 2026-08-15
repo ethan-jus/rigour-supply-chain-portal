@@ -250,8 +250,8 @@ function errorMessage(error: unknown, fallback: string) {
   if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') return error.message
   return fallback
 }
-function statusLabel(status: string) { return { ACTIVE: '启用', SUSPENDED: '暂停', EXPIRED: '过期', CLOSED: '关闭' }[status] || status }
-function subscriptionStatusLabel(status: string) { return { ACTIVE: '生效中', SCHEDULED: '待生效', TERMINATED: '已终止', EXPIRED: '已过期' }[status] || status }
+function statusLabel(status: string) { return { ACTIVE: '启用', SUSPENDED: '暂停', EXPIRED: '已过期', CLOSED: '已关闭' }[status] || `未知状态（${status}）` }
+function subscriptionStatusLabel(status: string) { return { ACTIVE: '生效中', SCHEDULED: '待生效', TERMINATED: '已终止', EXPIRED: '已过期' }[status] || `未知状态（${status}）` }
 function subscriptionStatusType(status: string): 'success' | 'warning' | 'info' { return status === 'ACTIVE' ? 'success' : status === 'SCHEDULED' ? 'warning' : 'info' }
 function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) }
 

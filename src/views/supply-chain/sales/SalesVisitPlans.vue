@@ -296,7 +296,7 @@ async function cancelPlan(plan: ManagementVisitPlan) {
 }
 
 function statusLabel(status: string) {
-  return { PLANNED: '待执行', IN_PROGRESS: '进行中', COMPLETED: '已完成', CANCELLED: '已取消' }[status] || status
+  return { PLANNED: '待执行', IN_PROGRESS: '进行中', COMPLETED: '已完成', CANCELLED: '已取消' }[status] || `未知状态（${status}）`
 }
 
 function statusType(status: string): 'primary' | 'success' | 'info' | 'warning' | 'danger' {

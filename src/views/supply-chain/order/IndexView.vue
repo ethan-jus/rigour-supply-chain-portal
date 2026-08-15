@@ -21,6 +21,9 @@
 
       <el-card class="filter-card" shadow="never">
         <el-form :model="filters" inline @submit.prevent="handleQuery">
+          <el-form-item label="关键词">
+            <el-input v-model="filters.keyword" clearable placeholder="订单号/客户/收货人/电话/备注" style="width: 260px" />
+          </el-form-item>
           <el-form-item v-if="!isExceptionOrderPage" label="订单状态">
             <el-select
               v-model="filters.orderStatus"
@@ -82,11 +85,13 @@
                 <span class="record-avatar">单</span>
                 <div class="record-identity-content">
                   <strong>{{ scope.row.orderSn }}</strong>
-                  <span>{{ formatTime(scope.row.orderDate) }}</span>
-                  <small>来源更新 {{ formatTime(scope.row.orderUpdateDate) }}</small>
+                  <small>订货宝更新时间 {{ formatTime(scope.row.orderUpdateDate) }}</small>
                 </div>
               </div>
             </template>
+          </el-table-column>
+          <el-table-column label="下单时间" width="170">
+            <template #default="scope"><span class="sync-time">{{ formatTime(scope.row.orderDate) }}</span></template>
           </el-table-column>
           <el-table-column label="客户" min-width="220">
             <template #default="scope">
@@ -96,10 +101,19 @@
               </div>
             </template>
           </el-table-column>
+          <el-table-column label="归属地区" min-width="140">
+            <template #default="scope">{{ scope.row.customerArea || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="订单业务员" min-width="150">
+            <template #default="scope">{{ scope.row.salesPerson || '-' }}</template>
+          </el-table-column>
           <el-table-column label="订单金额" min-width="150" align="right" header-align="right">
             <template #default="scope">
               <div class="amount-cell"><strong>{{ formatMoney(scope.row.orderTotal) }}</strong><small>订单总额</small></div>
             </template>
+          </el-table-column>
+          <el-table-column label="运费" width="110" align="right" header-align="right">
+            <template #default="scope">{{ formatMoney(scope.row.freightAmount) }}</template>
           </el-table-column>
           <el-table-column label="收货信息" min-width="230">
             <template #default="scope">
@@ -109,16 +123,45 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="140">
+          <el-table-column label="订单状态" width="125">
             <template #default="scope">
               <div class="status-cell">
-                <el-tag :type="orderStatusTagType(scope.row.orderStatus)" effect="light" size="small">{{ formatStatus(scope.row.orderStatus) }}</el-tag>
-                <small>{{ formatPayStatus(scope.row.payStatus) }}</small>
+                <el-tag :type="orderStatusTagType(scope.row.orderStatus)" effect="light" size="small">{{ formatOrderStatus(scope.row.orderStatus) }}</el-tag>
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="配送日期" width="150">
-            <template #default="scope"><span class="sync-time">{{ scope.row.deliveryDate || '-' }}</span></template>
+          <el-table-column label="收款状态" width="125">
+            <template #default="scope">
+              <div class="status-cell">
+                <el-tag :type="documentStatusTagType(scope.row.payStatus)" effect="light" size="small">{{ formatPaymentStatus(scope.row.payStatus) }}</el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="同步状态" width="150">
+            <template #default="scope">
+              <div class="status-cell">
+                <el-tag :type="documentStatusTagType(scope.row.orderApi)" effect="light" size="small">{{ formatApiStatus(scope.row.orderApi) }}</el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="同步异常" width="120">
+            <template #default="scope">
+              <span class="status-text">{{ formatExceptionStatus(scope.row.orderException) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="订单类型" width="125">
+            <template #default="scope">{{ formatOrderType(scope.row.orderType) }}</template>
+          </el-table-column>
+          <el-table-column label="下单来源" width="125">
+            <template #default="scope">{{ formatAdminOrder(scope.row.isAdminOrder) }}</template>
+          </el-table-column>
+          <el-table-column label="下单端" width="125">
+            <template #default="scope">{{ formatSourceDevice(scope.row.sourceDevice) }}</template>
+          </el-table-column>
+          <el-table-column label="结算方式" width="125">
+            <template #default="scope">
+              {{ formatSettlementMethod(scope.row.settlementMethod) }}
+            </template>
           </el-table-column>
           <el-table-column label="操作" width="96" fixed="right" align="center">
             <template #default="scope">
@@ -153,8 +196,8 @@
               <h2>{{ selectedOrder?.orderSn || '-' }}</h2>
               <p>{{ selectedOrder?.clientName || '暂无客户名称' }} · 下单 {{ formatTime(selectedOrder?.orderDate || null) }}</p>
               <div class="detail-tags">
-                <el-tag :type="orderStatusTagType(selectedOrder?.orderStatus || null)" effect="light">{{ formatStatus(selectedOrder?.orderStatus || null) }}</el-tag>
-                <el-tag effect="plain">{{ formatPayStatus(selectedOrder?.payStatus || null) }}</el-tag>
+                <el-tag :type="orderStatusTagType(selectedOrder?.orderStatus || null)" effect="light">{{ formatOrderStatus(selectedOrder?.orderStatus || null) }}</el-tag>
+                <el-tag effect="plain">{{ formatPaymentStatus(selectedOrder?.payStatus || null) }}</el-tag>
               </div>
             </div>
             <el-button circle plain aria-label="关闭订单详情" @click="detailVisible = false">×</el-button>
@@ -170,16 +213,29 @@
           </div>
           <el-descriptions :column="3" border>
             <el-descriptions-item label="下单时间">{{ formatTime(detail.order.orderDate) }}</el-descriptions-item>
-            <el-descriptions-item label="来源更新时间">{{ formatTime(detail.order.orderUpdateDate) }}</el-descriptions-item>
-            <el-descriptions-item label="配送日期">{{ detail.order.deliveryDate || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="订单状态">{{ formatStatus(detail.order.orderStatus) }}</el-descriptions-item>
-            <el-descriptions-item label="收款状态">{{ formatPayStatus(detail.order.payStatus) }}</el-descriptions-item>
-            <el-descriptions-item label="接口状态">{{ detail.order.orderApi || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="异常状态">{{ detail.order.orderException || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="订单类型">{{ detail.order.orderType || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="发货类型">{{ detail.order.orderSendType || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="拆单类型">{{ detail.order.splitTypeName || detail.order.splitType || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="来源设备">{{ detail.order.sourceDevice || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝更新时间">{{ formatTime(detail.order.orderUpdateDate) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝更新时间原值">{{ detail.order.orderUpdateTime || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="配送日期">{{ formatDeliveryDate(detail.order.deliveryDate) }}</el-descriptions-item>
+            <el-descriptions-item label="订单状态">{{ formatOrderStatus(detail.order.orderStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="收款状态">{{ formatPaymentStatus(detail.order.payStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="同步状态">{{ formatApiStatus(detail.order.orderApi) }}</el-descriptions-item>
+            <el-descriptions-item label="同步异常">{{ formatExceptionStatus(detail.order.orderException) }}</el-descriptions-item>
+            <el-descriptions-item label="订单类型">{{ formatOrderType(detail.order.orderType) }}</el-descriptions-item>
+            <el-descriptions-item label="发货方式">{{ formatSendType(detail.order.orderSendType) }}</el-descriptions-item>
+            <el-descriptions-item label="拆单类型">{{ formatSplitType(detail.order.splitTypeName, detail.order.splitType) }}</el-descriptions-item>
+            <el-descriptions-item label="下单来源">{{ formatAdminOrder(detail.order.isAdminOrder) }}</el-descriptions-item>
+            <el-descriptions-item label="下单端">{{ formatSourceDevice(detail.order.sourceDevice) }}</el-descriptions-item>
+            <el-descriptions-item label="客户最近下单时间">{{ detail.order.lastOrderAt || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="客户类型">{{ formatCustomerType(detail.order.customerType) }}</el-descriptions-item>
+            <el-descriptions-item label="客户标签">{{ detail.order.customerTag || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="客户区域">{{ detail.order.customerArea || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="结算方式">{{ formatSettlementMethod(detail.order.settlementMethod) }}</el-descriptions-item>
+            <el-descriptions-item label="管理员">{{ detail.order.adminUser || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="操作人">{{ detail.order.operationName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="业务员">{{ detail.order.salesPerson || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="业务员电话">{{ detail.order.salesPersonMobile || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="辅助业务员">{{ detail.order.assistantSalesPersons || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="审核时间">{{ detail.order.auditAt || '-' }}</el-descriptions-item>
             <el-descriptions-item label="客户编号">{{ detail.order.clientNo || '-' }}</el-descriptions-item>
             <el-descriptions-item label="客户 GUID">{{ detail.order.clientGuid || '-' }}</el-descriptions-item>
             <el-descriptions-item label="收货单位">{{ detail.order.receiveCompany || '-' }}</el-descriptions-item>
@@ -190,6 +246,26 @@
             </el-descriptions-item>
             <el-descriptions-item label="收货地址" :span="3">{{ detail.order.receiveAddress || '-' }}</el-descriptions-item>
             <el-descriptions-item label="订单备注" :span="3">{{ detail.order.orderRemark || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="客户留言" :span="3">{{ detail.order.customerRemark || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="内部沟通" :span="3">{{ detail.order.internalComment || '-' }}</el-descriptions-item>
+          </el-descriptions>
+          <div class="detail-summary detail-summary-finance">
+            <div><span>商品重量</span><strong>{{ formatNumber(detail.order.goodsWeight, 'kg') }}</strong></div>
+            <div><span>税费</span><strong>{{ formatMoney(detail.order.taxAmount) }}</strong></div>
+            <div><span>运费</span><strong>{{ formatMoney(detail.order.freightAmount) }}</strong></div>
+            <div><span>特批优惠价</span><strong>{{ formatMoney(detail.order.discountPrice) }}</strong></div>
+            <div><span>结算价</span><strong>{{ formatMoney(detail.order.discountTotal) }}</strong></div>
+            <div><span>申请优惠合计</span><strong>{{ formatMoney(detail.order.applyTotal) }}</strong></div>
+            <div><span>优惠券优惠</span><strong>{{ formatMoney(detail.order.couponDiscountedAmount) }}</strong></div>
+          </div>
+          <h3 class="detail-title">发票信息</h3>
+          <el-descriptions :column="3" border>
+            <el-descriptions-item label="发票类型">{{ formatInvoiceType(detail.order.invoiceType) }}</el-descriptions-item>
+            <el-descriptions-item label="发票抬头">{{ detail.order.invoiceTitle || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="发票内容">{{ detail.order.invoiceContent || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="纳税人识别号">{{ detail.order.taxpayerNumber || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="开户行">{{ detail.order.invoiceBank || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="银行账号" :span="2">{{ detail.order.invoiceBankAccount || '-' }}</el-descriptions-item>
           </el-descriptions>
           <h3 class="detail-title">商品明细</h3>
           <el-table :data="detail.lines" size="small">
@@ -203,16 +279,76 @@
             <el-table-column label="明细金额" width="120" align="right">
               <template #default="scope">{{ formatMoney(scope.row.lineAmount) }}</template>
             </el-table-column>
+            <el-table-column label="商品属性" width="150">
+              <template #default="scope">{{ formatPreSale(scope.row.preSale) }} · {{ formatContentType(scope.row.contentType) }}</template>
+            </el-table-column>
+            <el-table-column label="进货价" width="110" align="right">
+              <template #default="scope">{{ formatMoney(scope.row.purchasePrice) }}</template>
+            </el-table-column>
+            <el-table-column label="换算关系" width="110" align="right">
+              <template #default="scope">{{ formatNumber(scope.row.conversionNumber) }}</template>
+            </el-table-column>
+            <el-table-column label="折扣比例" width="110" align="right">
+              <template #default="scope">{{ formatNumber(scope.row.contentPercent) }}</template>
+            </el-table-column>
+            <el-table-column label="发票税率" width="110" align="right">
+              <template #default="scope">{{ scope.row.invoiceTax || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="整箱优惠" width="110" align="right">
+              <template #default="scope">{{ formatMoney(scope.row.offerPrice) }}</template>
+            </el-table-column>
+            <el-table-column label="折后金额" width="120" align="right">
+              <template #default="scope">{{ formatMoney(scope.row.actualAmount ?? scope.row.lineAmount) }}</template>
+            </el-table-column>
+            <el-table-column label="重量" width="100" align="right">
+              <template #default="scope">{{ formatNumber(scope.row.goodsWeight, 'kg') }}</template>
+            </el-table-column>
             <el-table-column prop="optionsBarcode" label="条码" min-width="140" />
             <el-table-column prop="multiName" label="规格" min-width="150" show-overflow-tooltip />
             <el-table-column prop="remark" label="明细备注" min-width="150" show-overflow-tooltip />
           </el-table>
-          <h3 class="detail-title">发货信息</h3>
+          <h3 class="detail-title">发货单信息</h3>
           <el-table :data="detail.shipments" size="small">
             <el-table-column prop="shipmentNo" label="发货单号" min-width="180" />
-            <el-table-column prop="status" label="状态" width="120" />
+            <el-table-column label="发货状态" width="120">
+              <template #default="scope">{{ statusLabel(shipmentStatuses, scope.row.status) }}</template>
+            </el-table-column>
             <el-table-column prop="shipmentDate" label="发货时间" min-width="180" />
             <el-table-column prop="stockUpTime" label="备货时间" min-width="180" />
+          </el-table>
+          <h3 class="detail-title">发货物流明细</h3>
+          <el-table v-if="orderLogisticsDetail" :data="orderLogisticsDetail.lines" size="small">
+            <el-table-column label="明细类型" width="110"><template #default="scope">{{ formatShipmentLineType(scope.row.lineType) }}</template></el-table-column>
+            <el-table-column prop="productName" label="商品名称" min-width="190" />
+            <el-table-column prop="skuNo" label="SKU" min-width="130" />
+            <el-table-column prop="warehouseName" label="仓库" min-width="130" />
+            <el-table-column prop="quantity" label="已出库数量" width="110" />
+            <el-table-column prop="orderedQuantity" label="订购数量" width="100" />
+            <el-table-column prop="stockedQuantity" label="已出库" width="100" />
+            <el-table-column prop="realStock" label="实际库存" width="100" />
+            <el-table-column prop="waitQuantity" label="待出库" width="100" />
+            <el-table-column prop="remark" label="商品备注" min-width="150" show-overflow-tooltip />
+          </el-table>
+          <el-empty v-else description="暂无已落库的出库/物流快照" />
+          <h3 class="detail-title">收付款记录</h3>
+          <div class="detail-summary detail-summary-finance">
+            <div><span>关联收付款单</span><strong>{{ detail.financialDocuments?.length || 0 }}</strong></div>
+            <div><span>已确认收款</span><strong>{{ formatMoney(financialSummary.received) }}</strong></div>
+            <div><span>待确认收款</span><strong>{{ formatMoney(financialSummary.pending) }}</strong></div>
+            <div><span>已取消收款</span><strong>{{ formatMoney(financialSummary.canceled) }}</strong></div>
+            <div><span>付款金额</span><strong>{{ formatMoney(financialSummary.paid) }}</strong></div>
+          </div>
+          <el-table :data="detail.financialDocuments || []" size="small">
+            <el-table-column label="单据类型" width="100"><template #default="scope">{{ scope.row.documentType === 'RECEIPT' ? '收款单' : '付款单' }}</template></el-table-column>
+            <el-table-column prop="documentNo" label="单号" min-width="170" />
+            <el-table-column label="业务类型" min-width="140"><template #default="scope">{{ formatFinancialBusinessType(scope.row.businessType, scope.row.documentType) }}</template></el-table-column>
+            <el-table-column label="支付方式" min-width="180"><template #default="scope">{{ formatPaymentMethod(scope.row.paymentMethod) }}</template></el-table-column>
+            <el-table-column prop="serialNumber" label="流水号" min-width="190" />
+            <el-table-column label="金额" width="140" align="right"><template #default="scope"><div class="amount-cell"><strong>{{ formatMoney(scope.row.amount) }}</strong><small>{{ scope.row.documentType === 'RECEIPT' ? '收款金额' : '付款金额' }}</small></div></template></el-table-column>
+            <el-table-column prop="accountName" label="结算账户" min-width="150" />
+            <el-table-column label="单据状态" width="120"><template #default="scope">{{ statusLabel(financialStatuses, scope.row.status) }}</template></el-table-column>
+            <el-table-column prop="transactionAt" label="交易时间" min-width="170" />
+            <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
           </el-table>
         </template>
         <el-empty v-else description="暂无详情" />
@@ -230,7 +366,7 @@
       </div>
       <el-card class="filter-card" shadow="never">
         <el-form :model="documentFilters" inline @submit.prevent="queryDocuments">
-          <el-form-item :label="isOutboundPage ? '出库/发货状态' : '物流状态'">
+          <el-form-item :label="isOutboundPage ? '发货状态' : '物流状态'">
             <el-select v-model="documentFilters.status" clearable placeholder="全部状态" style="width: 170px">
               <el-option v-for="item in shipmentStatuses" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
@@ -250,41 +386,49 @@
       <div class="result-heading"><div><h2>{{ pageTitle }}列表</h2><p>共 {{ shipmentTotal }} 条，本页 {{ shipmentRows.length }} 条；点击行查看单据与商品明细。</p></div></div>
       <el-card class="list-card" shadow="never">
         <el-table class="business-table" v-loading="documentLoading" :data="shipmentRows" :row-key="isOutboundPage ? 'shipmentNo' : 'orderNo'" @row-click="openShipmentDetail">
-          <el-table-column label="单据信息" width="280" fixed="left">
+          <el-table-column :label="isOutboundPage ? '发货单信息' : '物流信息'" width="280" fixed="left">
             <template #default="scope"><div class="record-identity"><span class="record-avatar">发</span><div class="record-identity-content"><strong>{{ scope.row.shipmentNo || scope.row.orderNo || '-' }}</strong><span>订单 {{ scope.row.orderNo || '-' }}</span><small>{{ formatTime(isOutboundPage ? scope.row.shipmentAt : scope.row.syncedAt) }}</small></div></div></template>
           </el-table-column>
-          <el-table-column label="客户与仓库" min-width="220"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.customerName || scope.row.warehouseName || '-' }}</span><small>仓库 {{ scope.row.warehouseName || '-' }}</small></div></template></el-table-column>
-          <el-table-column label="物流信息" min-width="220"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.logisticsName || '-' }}</span><small>{{ scope.row.trackingNo || '暂无物流单号' }}</small></div></template></el-table-column>
-          <el-table-column label="状态" width="140"><template #default="scope"><div class="status-cell"><el-tag effect="light" size="small" :type="documentStatusTagType(scope.row.status)">{{ statusLabel(shipmentStatuses, scope.row.status) }}</el-tag><small>{{ scope.row.typeName || (isOutboundPage ? '出库/发货' : '物流跟踪') }}</small></div></template></el-table-column>
+          <el-table-column label="客户" min-width="180"><template #default="scope">{{ scope.row.customerName || '-' }}</template></el-table-column>
+          <el-table-column label="仓库" min-width="150"><template #default="scope">{{ scope.row.warehouseName || '-' }}</template></el-table-column>
+          <el-table-column label="物流公司" min-width="180"><template #default="scope">{{ scope.row.logisticsName || '-' }}</template></el-table-column>
+          <el-table-column label="物流单号" min-width="180"><template #default="scope">{{ scope.row.trackingNo || '-' }}</template></el-table-column>
+          <el-table-column v-if="isOutboundPage" label="出库类型" width="130"><template #default="scope">{{ formatShipmentType(scope.row.typeName) }}</template></el-table-column>
+          <el-table-column :label="isOutboundPage ? '发货状态' : '物流状态'" width="140"><template #default="scope"><div class="status-cell"><el-tag effect="light" size="small" :type="documentStatusTagType(scope.row.status)">{{ statusLabel(shipmentStatuses, scope.row.status) }}</el-tag></div></template></el-table-column>
           <el-table-column :label="isOutboundPage ? '发货时间' : '同步时间'" width="165"><template #default="scope"><span class="sync-time">{{ formatTime(isOutboundPage ? scope.row.shipmentAt : scope.row.syncedAt) }}</span></template></el-table-column>
           <el-table-column label="操作" width="96" fixed="right" align="center"><template #default="scope"><el-button link type="primary" @click.stop="openShipmentDetail(scope.row)">详情</el-button></template></el-table-column>
-          <template #empty><el-empty :description="isOutboundPage ? '暂无本地出库/发货单' : '暂无本地出库/发货物流'" /></template>
+          <template #empty><el-empty :description="isOutboundPage ? '暂无本地发货单' : '暂无本地物流快照'" /></template>
         </el-table>
         <div class="pagination-row"><el-pagination v-model:current-page="documentPage" v-model:page-size="documentPageSize" layout="total, sizes, prev, pager, next" :page-sizes="[20, 50, 100]" :total="shipmentTotal" @current-change="loadDocumentPage" @size-change="changeDocumentPageSize" /></div>
       </el-card>
       <el-drawer v-model="shipmentDetailVisible" class="order-detail-drawer" size="min(960px, 92vw)" :with-header="false">
         <div class="detail-shell">
-          <header class="detail-hero"><div><span>{{ isOutboundPage ? '出库/发货详情' : '物流详情' }}</span><h2>{{ selectedShipment?.shipmentNo || selectedShipment?.orderNo || '-' }}</h2><p>关联订单 {{ selectedShipment?.orderNo || '-' }} · {{ selectedShipment?.warehouseName || '暂无仓库' }}</p><div class="detail-tags"><el-tag :type="documentStatusTagType(selectedShipment?.status || null)" effect="light">{{ statusLabel(shipmentStatuses, selectedShipment?.status || null) }}</el-tag></div></div><el-button circle plain aria-label="关闭详情" @click="shipmentDetailVisible = false">×</el-button></header>
+          <header class="detail-hero"><div><span>{{ isOutboundPage ? '发货单详情' : '物流详情' }}</span><h2>{{ selectedShipment?.shipmentNo || selectedShipment?.orderNo || '-' }}</h2><p>关联订单 {{ selectedShipment?.orderNo || '-' }} · {{ selectedShipment?.warehouseName || '暂无仓库' }}</p><div class="detail-tags"><el-tag :type="documentStatusTagType(selectedShipment?.status || null)" effect="light">{{ statusLabel(shipmentStatuses, selectedShipment?.status || null) }}</el-tag></div></div><el-button circle plain aria-label="关闭详情" @click="shipmentDetailVisible = false">×</el-button></header>
           <div class="detail-content">
         <el-skeleton v-if="detailLoading" :rows="7" animated />
         <template v-else-if="displayShipmentDetail">
           <el-descriptions :column="3" border>
-            <el-descriptions-item :label="isOutboundPage ? '出库/发货单号' : '出库/发货物流单号'">{{ displayShipmentDetail.shipment.shipmentNo || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="isOutboundPage ? '发货单号' : '物流快照单号'">{{ displayShipmentDetail.shipment.shipmentNo || '-' }}</el-descriptions-item>
             <el-descriptions-item label="订单编号">{{ displayShipmentDetail.shipment.orderNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="状态">{{ statusLabel(shipmentStatuses, displayShipmentDetail.shipment.status) }}</el-descriptions-item>
-            <el-descriptions-item label="出库类型">{{ displayShipmentDetail.shipment.typeName || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="isOutboundPage ? '发货状态' : '物流状态'">{{ statusLabel(shipmentStatuses, displayShipmentDetail.shipment.status) }}</el-descriptions-item>
+            <el-descriptions-item label="出库类型">{{ formatShipmentType(displayShipmentDetail.shipment.typeName) }}</el-descriptions-item>
             <el-descriptions-item label="客户">{{ displayShipmentDetail.shipment.customerName || '-' }}</el-descriptions-item>
             <el-descriptions-item label="仓库">{{ displayShipmentDetail.shipment.warehouseName || '-' }}</el-descriptions-item>
             <el-descriptions-item label="发货时间">{{ formatTime(displayShipmentDetail.shipment.shipmentAt) }}</el-descriptions-item>
-            <el-descriptions-item label="物流信息" :span="3">{{ [displayShipmentDetail.shipment.logisticsName, displayShipmentDetail.shipment.trackingNo].filter(Boolean).join(' / ') || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="物流公司">{{ displayShipmentDetail.shipment.logisticsName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="物流单号">{{ displayShipmentDetail.shipment.trackingNo || '-' }}</el-descriptions-item>
             <el-descriptions-item label="备注" :span="3">{{ displayShipmentDetail.shipment.remark || '-' }}</el-descriptions-item>
           </el-descriptions>
           <h3 class="detail-title">商品明细</h3>
           <el-table :data="displayShipmentDetail.lines" size="small">
-            <el-table-column v-if="!isOutboundPage" prop="lineType" label="明细类型" width="110" />
+            <el-table-column v-if="!isOutboundPage" label="明细类型" width="110"><template #default="scope">{{ formatShipmentLineType(scope.row.lineType) }}</template></el-table-column>
             <el-table-column prop="productName" label="商品名称" min-width="200" />
             <el-table-column prop="skuNo" label="SKU" min-width="130" />
             <el-table-column prop="quantity" :label="isOutboundPage ? '发货数量' : '数量'" width="100" />
+            <el-table-column v-if="!isOutboundPage" prop="orderedQuantity" label="订购数量" width="100" />
+            <el-table-column v-if="!isOutboundPage" prop="stockedQuantity" label="已出库" width="100" />
+            <el-table-column v-if="!isOutboundPage" prop="realStock" label="实际库存" width="100" />
+            <el-table-column v-if="!isOutboundPage" prop="waitQuantity" label="待出库" width="100" />
             <el-table-column prop="unit" label="单位" width="80" />
             <el-table-column v-if="isOutboundPage" label="单价" width="110"><template #default="scope">{{ formatMoney(scope.row.unitPrice) }}</template></el-table-column>
             <el-table-column v-if="isOutboundPage" label="金额" width="110"><template #default="scope">{{ formatMoney(scope.row.amount) }}</template></el-table-column>
@@ -316,9 +460,11 @@
       <el-card class="list-card" shadow="never">
         <el-table class="business-table" v-loading="documentLoading" :data="returnPage.items" row-key="returnNo" @row-click="openReturnDetail">
           <el-table-column label="退货单信息" width="280" fixed="left"><template #default="scope"><div class="record-identity"><span class="record-avatar">退</span><div class="record-identity-content"><strong>{{ scope.row.returnNo }}</strong><span>订单 {{ scope.row.orderNo || '-' }}</span><small>{{ formatTime(scope.row.returnedAt) }}</small></div></div></template></el-table-column>
-          <el-table-column label="退货原因" min-width="240"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.reason || '-' }}</span><small>物流 {{ scope.row.logisticsNo || '暂无物流单号' }}</small></div></template></el-table-column>
-          <el-table-column label="退货金额" min-width="150" align="right" header-align="right"><template #default="scope"><div class="amount-cell"><strong>{{ formatMoney(scope.row.returnAmount) }}</strong><small>结算 {{ formatMoney(scope.row.settlementAmount) }}</small></div></template></el-table-column>
-          <el-table-column label="状态" width="140"><template #default="scope"><div class="status-cell"><el-tag :type="documentStatusTagType(scope.row.status)" effect="light" size="small">{{ statusLabel(returnStatuses, scope.row.status) }}</el-tag><small>退货业务</small></div></template></el-table-column>
+          <el-table-column label="退货原因" min-width="220"><template #default="scope">{{ scope.row.reason || '-' }}</template></el-table-column>
+          <el-table-column label="物流单号" min-width="170"><template #default="scope">{{ scope.row.logisticsNo || '-' }}</template></el-table-column>
+          <el-table-column label="退货金额" min-width="140" align="right" header-align="right"><template #default="scope">{{ formatMoney(scope.row.returnAmount) }}</template></el-table-column>
+          <el-table-column label="结算金额" min-width="140" align="right" header-align="right"><template #default="scope">{{ formatMoney(scope.row.settlementAmount) }}</template></el-table-column>
+          <el-table-column label="退货状态" width="140"><template #default="scope"><div class="status-cell"><el-tag :type="documentStatusTagType(scope.row.status)" effect="light" size="small">{{ statusLabel(returnStatuses, scope.row.status) }}</el-tag><small>退货业务</small></div></template></el-table-column>
           <el-table-column label="退货日期" width="165"><template #default="scope"><span class="sync-time">{{ formatTime(scope.row.returnedAt) }}</span></template></el-table-column>
           <el-table-column label="操作" width="96" fixed="right" align="center"><template #default="scope"><el-button link type="primary" @click.stop="openReturnDetail(scope.row)">详情</el-button></template></el-table-column>
           <template #empty><el-empty description="暂无本地退货单" /></template>
@@ -334,11 +480,20 @@
           <el-descriptions :column="3" border>
             <el-descriptions-item label="退货单号">{{ returnDetail.returnDocument.returnNo }}</el-descriptions-item>
             <el-descriptions-item label="订单编号">{{ returnDetail.returnDocument.orderNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="状态">{{ statusLabel(returnStatuses, returnDetail.returnDocument.status) }}</el-descriptions-item>
+            <el-descriptions-item label="退货状态">{{ statusLabel(returnStatuses, returnDetail.returnDocument.status) }}</el-descriptions-item>
+            <el-descriptions-item label="经办人">{{ returnDetail.returnDocument.staffName || '-' }}</el-descriptions-item>
             <el-descriptions-item label="退货金额">{{ formatMoney(returnDetail.returnDocument.returnAmount) }}</el-descriptions-item>
             <el-descriptions-item label="结算金额">{{ formatMoney(returnDetail.returnDocument.settlementAmount) }}</el-descriptions-item>
             <el-descriptions-item label="退货日期">{{ formatTime(returnDetail.returnDocument.returnedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="客户编号">{{ returnDetail.returnDocument.customerNo || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="退货类型">{{ formatReturnType(returnDetail.returnDocument.returnType) }}</el-descriptions-item>
+            <el-descriptions-item label="配送方式">{{ formatDeliveryMode(returnDetail.returnDocument.deliveryMode) }}</el-descriptions-item>
             <el-descriptions-item label="退货原因" :span="3">{{ returnDetail.returnDocument.reason || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="收货人">{{ returnDetail.returnDocument.consignee || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="联系电话">{{ returnDetail.returnDocument.phone || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="退货地址" :span="2">{{ returnDetail.returnDocument.address || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="物流公司">{{ returnDetail.returnDocument.logisticsCompany || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="物流单号">{{ returnDetail.returnDocument.logisticsNo || '-' }}</el-descriptions-item>
           </el-descriptions>
           <h3 class="detail-title">商品明细</h3>
           <el-table :data="returnDetail.lines" size="small">
@@ -380,7 +535,7 @@
           <div class="section-heading">
             <div><h2>{{ financialType === 'RECEIPT' ? '收款单' : '付款单' }}</h2><p>查询订单中心已落库的订货宝{{ financialType === 'RECEIPT' ? '收款单' : '付款单' }}。</p></div>
           </div>
-          <el-alert class="request-error" type="info" :closable="false" show-icon title="这里展示订货宝已同步的收款单或付款单原始记录；它不是订单主表上的收款状态，状态字段缺失时显示为“-”。" />
+          <el-alert class="request-hint" type="info" :closable="false" show-icon title="支付方式按订货宝 TypeId 转换为中文；收款类型/付款类型按 IncexpId 展示，接口未返回的字段显示为“-”。" />
           <el-card class="filter-card" shadow="never">
             <el-form :model="documentFilters" inline @submit.prevent="queryDocuments">
               <el-form-item label="订单编号"><el-input v-model="documentFilters.orderNo" clearable placeholder="精确查询" /></el-form-item>
@@ -391,11 +546,14 @@
           </el-card>
           <el-alert v-if="documentError" class="request-error" type="error" :closable="false" show-icon :title="documentError" />
           <el-table class="business-table" v-loading="documentLoading" :data="financialPage.items" row-key="documentNo" @row-click="openFinancialDetail">
-            <el-table-column label="单据信息" width="280" fixed="left"><template #default="scope"><div class="record-identity"><span class="record-avatar">{{ financialType === 'RECEIPT' ? '收' : '付' }}</span><div class="record-identity-content"><strong>{{ scope.row.documentNo }}</strong><span>订单 {{ scope.row.orderNo || '-' }}</span><small>关联 {{ scope.row.relatedDocumentNo || '-' }}</small></div></div></template></el-table-column>
-            <el-table-column label="交易信息" min-width="220"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.paymentMethod || '-' }}</span><small>{{ scope.row.businessType || '暂无业务类型' }} · 流水 {{ scope.row.serialNumber || '-' }}</small></div></template></el-table-column>
+            <el-table-column :label="financialType === 'RECEIPT' ? '收款单信息' : '付款单信息'" width="280" fixed="left"><template #default="scope"><div class="record-identity"><span class="record-avatar">{{ financialType === 'RECEIPT' ? '收' : '付' }}</span><div class="record-identity-content"><strong>{{ scope.row.documentNo }}</strong><span>订单 {{ scope.row.orderNo || '-' }}</span><small>关联单号 {{ scope.row.relatedDocumentNo || '-' }}</small></div></div></template></el-table-column>
+            <el-table-column label="客户编号" width="140"><template #default="scope">{{ scope.row.customerNo || '-' }}</template></el-table-column>
+            <el-table-column :label="financialType === 'RECEIPT' ? '收款类型' : '付款类型'" min-width="150"><template #default="scope">{{ formatFinancialBusinessType(scope.row.businessType, scope.row.documentType) }}</template></el-table-column>
+            <el-table-column label="支付方式" min-width="190"><template #default="scope">{{ formatPaymentMethod(scope.row.paymentMethod) }}</template></el-table-column>
+            <el-table-column :label="financialType === 'RECEIPT' ? '收款流水号' : '付款流水号'" min-width="190"><template #default="scope">{{ scope.row.serialNumber || '-' }}</template></el-table-column>
             <el-table-column label="金额" min-width="150" align="right" header-align="right"><template #default="scope"><div class="amount-cell"><strong>{{ formatMoney(scope.row.amount) }}</strong><small>{{ financialType === 'RECEIPT' ? '收款金额' : '付款金额' }}</small></div></template></el-table-column>
-            <el-table-column label="账户" min-width="210"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.accountName || '-' }}</span><small>{{ scope.row.bankName || '暂无开户行' }}</small></div></template></el-table-column>
-            <el-table-column label="状态" width="130"><template #default="scope"><div class="status-cell"><el-tag :type="documentStatusTagType(scope.row.status)" effect="light" size="small">{{ statusLabel(financialStatuses, scope.row.status) }}</el-tag><small>{{ financialType === 'RECEIPT' ? '收款单' : '付款单' }}</small></div></template></el-table-column>
+            <el-table-column label="结算账户" min-width="210"><template #default="scope"><div class="stacked-cell"><span>{{ scope.row.accountName || '-' }}</span><small>{{ scope.row.bankName || '暂无开户行' }}</small></div></template></el-table-column>
+            <el-table-column label="单据状态" width="130"><template #default="scope"><div class="status-cell"><el-tag :type="documentStatusTagType(scope.row.status)" effect="light" size="small">{{ statusLabel(financialStatuses, scope.row.status) }}</el-tag><small>{{ financialType === 'RECEIPT' ? '收款单' : '付款单' }}</small></div></template></el-table-column>
             <el-table-column label="交易日期" width="165"><template #default="scope"><span class="sync-time">{{ formatTime(scope.row.transactionAt) }}</span></template></el-table-column>
             <el-table-column label="操作" width="96" fixed="right" align="center"><template #default="scope"><el-button link type="primary" @click.stop="openFinancialDetail(scope.row)">详情</el-button></template></el-table-column>
             <template #empty><el-empty :description="`暂无本地${financialType === 'RECEIPT' ? '收款单' : '付款单'}`" /></template>
@@ -404,7 +562,7 @@
           <el-drawer v-model="financialDetailVisible" class="order-detail-drawer" size="min(820px, 92vw)" :with-header="false">
             <div v-if="selectedFinancial" class="detail-shell">
               <header class="detail-hero"><div><span>{{ financialType === 'RECEIPT' ? '收款单详情' : '付款单详情' }}</span><h2>{{ selectedFinancial.documentNo }}</h2><p>关联订单 {{ selectedFinancial.orderNo || '-' }} · {{ formatTime(selectedFinancial.transactionAt) }}</p><div class="detail-tags"><el-tag :type="documentStatusTagType(selectedFinancial.status)" effect="light">{{ statusLabel(financialStatuses, selectedFinancial.status) }}</el-tag></div></div><el-button circle plain aria-label="关闭收付详情" @click="financialDetailVisible = false">×</el-button></header>
-              <div class="detail-content"><div class="detail-summary"><div><span>交易金额</span><strong>{{ formatMoney(selectedFinancial.amount) }}</strong></div><div><span>支付方式</span><strong>{{ selectedFinancial.paymentMethod || '-' }}</strong></div><div><span>业务类型</span><strong>{{ selectedFinancial.businessType || '-' }}</strong></div><div><span>交易时间</span><strong>{{ formatTime(selectedFinancial.transactionAt) }}</strong></div></div><el-descriptions :column="2" border><el-descriptions-item label="关联单号">{{ selectedFinancial.relatedDocumentNo || '-' }}</el-descriptions-item><el-descriptions-item label="交易流水号">{{ selectedFinancial.serialNumber || '-' }}</el-descriptions-item><el-descriptions-item label="账户名称">{{ selectedFinancial.accountName || '-' }}</el-descriptions-item><el-descriptions-item label="开户行">{{ selectedFinancial.bankName || '-' }}</el-descriptions-item></el-descriptions></div>
+              <div class="detail-content"><div class="detail-summary"><div><span>{{ financialType === 'RECEIPT' ? '收款金额' : '付款金额' }}</span><strong>{{ formatMoney(selectedFinancial.amount) }}</strong></div><div><span>支付方式</span><strong>{{ formatPaymentMethod(selectedFinancial.paymentMethod) }}</strong></div><div><span>{{ financialType === 'RECEIPT' ? '收款类型' : '付款类型' }}</span><strong>{{ formatFinancialBusinessType(selectedFinancial.businessType, selectedFinancial.documentType) }}</strong></div><div><span>交易时间</span><strong>{{ formatTime(selectedFinancial.transactionAt) }}</strong></div></div><el-descriptions :column="2" border><el-descriptions-item :label="financialType === 'RECEIPT' ? '收款单号' : '付款单号'">{{ selectedFinancial.documentNo }}</el-descriptions-item><el-descriptions-item label="单据状态">{{ statusLabel(financialStatuses, selectedFinancial.status) }}</el-descriptions-item><el-descriptions-item label="关联订单号">{{ selectedFinancial.orderNo || '-' }}</el-descriptions-item><el-descriptions-item label="关联收付款单号">{{ selectedFinancial.relatedDocumentNo || '-' }}</el-descriptions-item><el-descriptions-item label="客户编号">{{ selectedFinancial.customerNo || '-' }}</el-descriptions-item><el-descriptions-item label="客户ERP外码">{{ selectedFinancial.customerGuid || '-' }}</el-descriptions-item><el-descriptions-item label="交易流水号">{{ selectedFinancial.serialNumber || '-' }}</el-descriptions-item><el-descriptions-item label="录入时间">{{ formatTime(selectedFinancial.sourceCreatedAt) }}</el-descriptions-item><el-descriptions-item label="来源更新时间">{{ formatTime(selectedFinancial.sourceUpdatedAt) }}</el-descriptions-item><el-descriptions-item label="结算账户">{{ selectedFinancial.accountName || '-' }}</el-descriptions-item><el-descriptions-item label="开户行">{{ selectedFinancial.bankName || '-' }}</el-descriptions-item><el-descriptions-item label="账号">{{ selectedFinancial.accountNumber || '-' }}</el-descriptions-item><el-descriptions-item label="备注" :span="2">{{ selectedFinancial.remark || '-' }}</el-descriptions-item></el-descriptions></div>
             </div>
           </el-drawer>
         </template>
@@ -479,9 +637,38 @@ import {
   type DhbShipmentLogisticsDetail,
 } from '@/api'
 import { buildDhbOrderQuery, type DhbOrderPageKey } from '@/utils/dhb-order-query'
+import { businessDictionaryOptions, loadBusinessDictionaries } from '@/utils/business-dictionary'
+import { createLatestRequestGuard } from '@/utils/latest-request'
+import {
+  formatAdminOrder,
+  formatApiStatus,
+  formatBusinessType,
+  formatFinancialBusinessType,
+  formatCustomerType,
+  formatExceptionStatus,
+  formatInvoiceType,
+  formatOrderStatus,
+  formatOrderType,
+  formatPaymentMethod,
+  formatPaymentStatus,
+  formatSendType,
+  formatPreSale,
+  formatContentType,
+  formatDeliveryMode,
+  formatSettlementMethod,
+  formatShipmentType,
+  formatSplitType,
+  formatSourceDevice,
+  formatReturnType,
+  formatShipmentLineType,
+  pendingOrderStatusValues,
+  statusLabel,
+} from '@/utils/dhb-order-status'
 
 const route = useRoute()
 const pageKey = computed(() => String(route.meta.pageKey || 'order'))
+const orderListRequest = createLatestRequestGuard()
+const documentListRequest = createLatestRequestGuard()
 const pageTitle = computed(() => ({
   order: '订单工作台',
   'order-all': '全部订单',
@@ -540,41 +727,16 @@ const orderScopeHint = computed(() => {
   return ''
 })
 
-const orderStatuses = [
-  { label: '待核价', value: 'pricing' }, { label: '待审核', value: 'pending' },
-  { label: '待出库', value: 'stock_up' }, { label: '待发货', value: 'shipped' },
-  { label: '待收货', value: 'received' }, { label: '已完成', value: 'finished' },
-  { label: '强制完成', value: 'forcedone' }, { label: '已取消', value: 'cancelled' },
-]
-const pendingOrderStatusValues = new Set(['pricing', 'pending', 'stock_up', 'shipped', 'received'])
+const orderStatuses = computed(() => businessDictionaryOptions('ORDER', 'DHB_ORDER_STATUS'))
+const payStatuses = computed(() => businessDictionaryOptions('ORDER', 'DHB_ORDER_PAYMENT_STATUS'))
+const shipmentStatuses = computed(() => businessDictionaryOptions('ORDER', 'DHB_SHIPMENT_STATUS'))
+const shipmentTypes = computed(() => businessDictionaryOptions('ORDER', 'DHB_SHIPMENT_TYPE'))
+const returnStatuses = computed(() => businessDictionaryOptions('ORDER', 'DHB_RETURN_STATUS'))
+const financialStatuses = computed(() => businessDictionaryOptions('ORDER', 'DHB_FINANCIAL_STATUS'))
 const availableOrderStatuses = computed(() => isPendingOrderPage.value
-  ? orderStatuses.filter((item) => pendingOrderStatusValues.has(item.value))
-  : orderStatuses)
-const payStatuses = [
-  { label: '待收款', value: 'oblig' }, { label: '部分收款', value: 'uncollect' },
-  { label: '已收款', value: 'paided' }, { label: '已取消', value: 'cancelled' },
-  { label: '待确认', value: 'wait' }, { label: '部分确认', value: 'part' },
-  { label: '待确认付款（详情）', value: 'unoblig' },
-]
-const shipmentStatuses = [
-  { label: '待发货', value: 'shipped' }, { label: '待收货', value: 'receivedin' },
-  { label: '已收货', value: 'received' }, { label: '已取消', value: 'cancelled' },
-]
-const shipmentTypes = [
-  { label: '采购退货', value: '-2' }, { label: '销售出库', value: '10' },
-  { label: '盘亏出库', value: '11' }, { label: '其他出库', value: '17' },
-  { label: '调拨出库', value: '18' }, { label: '联营出库', value: '19' },
-]
-const returnStatuses = [
-  { label: '待审核', value: 'return_audit' }, { label: '待客户发货', value: 'shipp_cust' },
-  { label: '待收货', value: 'shipped' }, { label: '待退款', value: 'refunded' },
-  { label: '已完成', value: 'finished' }, { label: '已取消', value: 'cancelled' },
-]
-const financialStatuses = [
-  { label: '待确认', value: 'pend_receipt' }, { label: '已确认', value: 'pend_receipted' },
-  { label: '已取消', value: 'canceled' },
-]
-const filters = reactive({ orderStatus: '', startDate: '', endDate: '', payStatus: '', apiStatus: 'all' })
+  ? orderStatuses.value.filter((item) => pendingOrderStatusValues.has(item.value))
+  : orderStatuses.value)
+const filters = reactive({ keyword: '', orderStatus: '', startDate: '', endDate: '', payStatus: '', apiStatus: 'all' })
 const loading = ref(false)
 const requestError = ref<string | null>(null)
 const currentPage = ref(1)
@@ -583,6 +745,7 @@ const pageData = ref<DhbOrderPage>({ total: 0, providerTotal: 0, synchronizedCou
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<DhbOrderDetail | null>(null)
+const orderLogisticsDetail = ref<DhbShipmentLogisticsDetail | null>(null)
 const selectedOrder = ref<DhbOrder | null>(null)
 const documentFilters = reactive({ status: '', typeId: '', orderNo: '', from: '', to: '' })
 const documentLoading = ref(false)
@@ -608,6 +771,19 @@ function financialTypeForPage(value: string): 'RECEIPT' | 'PAYMENT' {
 
 const financialType = ref<'RECEIPT' | 'PAYMENT'>(financialTypeForPage(pageKey.value))
 const syncLoading = ref(false)
+
+const financialSummary = computed(() => {
+  const documents = detail.value?.financialDocuments || []
+  const sum = (predicate: (document: DhbFinancialDocument) => boolean) => documents
+    .filter(predicate)
+    .reduce((total, document) => total + Number(document.amount || 0), 0)
+  return {
+    received: sum(document => document.documentType === 'RECEIPT' && document.status === 'pend_receipted'),
+    pending: sum(document => document.documentType === 'RECEIPT' && document.status === 'pend_receipt'),
+    canceled: sum(document => document.documentType === 'RECEIPT' && document.status === 'canceled'),
+    paid: sum(document => document.documentType === 'PAYMENT'),
+  }
+})
 
 const shipmentRows = computed(() => isOutboundPage.value ? shipmentPage.value.items : logisticsPage.value.items)
 const shipmentTotal = computed(() => isOutboundPage.value ? shipmentPage.value.total : logisticsPage.value.total)
@@ -642,6 +818,12 @@ const displayShipmentDetail = computed<DhbShipmentDetail | null>(() => {
       productCode: line.productCode,
       productName: line.productName,
       quantity: line.lineType === 'SHIPPED' ? line.quantity : line.waitQuantity,
+      lineType: line.lineType,
+      orderLineId: line.orderLineId,
+      orderedQuantity: line.orderedQuantity,
+      stockedQuantity: line.stockedQuantity,
+      realStock: line.realStock,
+      waitQuantity: line.waitQuantity,
       unitPrice: null,
       amount: null,
       unit: line.unit,
@@ -653,12 +835,15 @@ const displayShipmentDetail = computed<DhbShipmentDetail | null>(() => {
 
 async function loadOrders() {
   if (!isOrderQueryPage.value) return
+  const request = orderListRequest.begin()
+  const targetPageKey = pageKey.value as DhbOrderPageKey
+  const targetPageTitle = pageTitle.value
   loading.value = true
   requestError.value = null
   pageData.value = { total: 0, providerTotal: 0, synchronizedCount: 0, items: [] }
   try {
-    pageData.value = await getDhbOrders(buildDhbOrderQuery({
-      pageKey: pageKey.value as DhbOrderPageKey,
+    const result = await getDhbOrders(buildDhbOrderQuery({
+      pageKey: targetPageKey,
       begin: (currentPage.value - 1) * pageSize.value,
       step: pageSize.value,
       orderStatus: filters.orderStatus,
@@ -666,13 +851,19 @@ async function loadOrders() {
       endDate: filters.endDate,
       payStatus: filters.payStatus,
       apiStatus: filters.apiStatus,
+      keyword: filters.keyword,
     }))
+    if (!orderListRequest.isCurrent(request)) return
+    pageData.value = result
   }
   catch (reason) {
-    requestError.value = errorMessage(reason, `${pageTitle.value}查询失败`)
+    if (!orderListRequest.isCurrent(request)) return
+    requestError.value = errorMessage(reason, `${targetPageTitle}查询失败`)
     ElMessage.error(requestError.value)
   }
-  finally { loading.value = false }
+  finally {
+    if (orderListRequest.isCurrent(request)) loading.value = false
+  }
 }
 
 async function handleQuery() { currentPage.value = 1; await loadOrders() }
@@ -682,8 +873,11 @@ async function openDetail(order: DhbOrder) {
   detailVisible.value = true
   detailLoading.value = true
   detail.value = null
+  orderLogisticsDetail.value = null
   try { detail.value = await getDhbOrderDetail(order.orderSn) }
   catch (reason) { ElMessage.error(errorMessage(reason, '订单详情加载失败')) }
+  try { orderLogisticsDetail.value = await getDinghuobaoShipmentLogisticsDetail(order.orderSn) }
+  catch { /* 没有物流快照时仍展示订单详情 */ }
   finally { detailLoading.value = false }
 }
 
@@ -710,14 +904,15 @@ function currentSyncScope(): DhbOrderSyncScope {
   return 'ALL'
 }
 
-function syncSuccessMessage(scope: DhbOrderSyncScope, result: { ordersChanged: number; shipmentsChanged: number; shipmentLogisticsChanged: number; returnsChanged: number; financialDocumentsChanged: number }): string {
-  if (scope === 'ORDER') return `订货单同步完成：订单${result.ordersChanged}`
-  if (scope === 'RETURN') return `退货单同步完成：退货单${result.returnsChanged}`
-  if (scope === 'SHIPMENT') return `出库/发货同步完成：单据${result.shipmentsChanged}`
-  if (scope === 'SHIPMENT_LOGISTICS') return `物流同步完成：物流${result.shipmentLogisticsChanged}`
-  if (scope === 'RECEIPT') return `收款单同步完成：收款单${result.financialDocumentsChanged}`
-  if (scope === 'PAYMENT') return `付款单同步完成：付款单${result.financialDocumentsChanged}`
-  return `同步完成：订单${result.ordersChanged}，出库/发货${result.shipmentsChanged}，物流${result.shipmentLogisticsChanged}，退货${result.returnsChanged}，收付款${result.financialDocumentsChanged}`
+function syncSuccessMessage(scope: DhbOrderSyncScope, result: { ordersChanged: number; shipmentsChanged: number; shipmentLogisticsChanged: number; returnsChanged: number; financialDocumentsChanged: number; unmapped: number }): string {
+  const warning = result.unmapped > 0 ? `，字典未解析${result.unmapped}项` : ''
+  if (scope === 'ORDER') return `订货单同步完成：订单${result.ordersChanged}${warning}`
+  if (scope === 'RETURN') return `退货单同步完成：退货单${result.returnsChanged}${warning}`
+  if (scope === 'SHIPMENT') return `出库/发货同步完成：单据${result.shipmentsChanged}${warning}`
+  if (scope === 'SHIPMENT_LOGISTICS') return `物流同步完成：物流${result.shipmentLogisticsChanged}${warning}`
+  if (scope === 'RECEIPT') return `收款单同步完成：收款单${result.financialDocumentsChanged}${warning}`
+  if (scope === 'PAYMENT') return `付款单同步完成：付款单${result.financialDocumentsChanged}${warning}`
+  return `同步完成：订单${result.ordersChanged}，出库/发货${result.shipmentsChanged}，物流${result.shipmentLogisticsChanged}，退货${result.returnsChanged}，收付款${result.financialDocumentsChanged}${warning}`
 }
 
 async function reloadCurrentPage() {
@@ -726,13 +921,13 @@ async function reloadCurrentPage() {
 }
 
 /** 生成本地单据分页参数；截止日期扩展到当天23:59:59，避免遗漏当天记录。 */
-function buildDocumentQuery(): DhbDocumentQuery {
+function buildDocumentQuery(outbound = isOutboundPage.value): DhbDocumentQuery {
   const query: DhbDocumentQuery = {
     begin: (documentPage.value - 1) * documentPageSize.value,
     step: documentPageSize.value,
   }
   if (documentFilters.status) query.status = documentFilters.status
-  if (isOutboundPage.value && documentFilters.typeId) query.typeId = documentFilters.typeId
+  if (outbound && documentFilters.typeId) query.typeId = documentFilters.typeId
   if (documentFilters.orderNo.trim()) query.orderNo = documentFilters.orderNo.trim()
   if (documentFilters.from) query.from = `${documentFilters.from} 00:00:00`
   if (documentFilters.to) query.to = `${documentFilters.to} 23:59:59`
@@ -742,21 +937,41 @@ function buildDocumentQuery(): DhbDocumentQuery {
 /** 根据当前菜单查询发货、退货或收付款本地投影。 */
 async function loadDocumentPage() {
   if (!isShipmentPage.value && !isReturnPage.value && !isFinancialQueryPage.value) return
+  const request = documentListRequest.begin()
+  const targetPageKey = pageKey.value
+  const targetPageTitle = pageTitle.value
+  const targetOutbound = targetPageKey === 'stock-up'
+  const targetShipment = targetOutbound || targetPageKey === 'shipments'
+  const targetReturn = targetPageKey === 'returns'
+  const targetFinancial = isFinancialQueryPage.value
+  const targetFinancialType = financialType.value
   documentLoading.value = true
   documentError.value = null
   try {
-    const query = buildDocumentQuery()
-    if (isShipmentPage.value) {
-      if (isOutboundPage.value) shipmentPage.value = await getDinghuobaoShipments(query)
-      else logisticsPage.value = await getDinghuobaoShipmentLogistics(query)
+    const query = buildDocumentQuery(targetOutbound)
+    let result: DhbDocumentPage<DhbShipmentDocument> | DhbDocumentPage<DhbShipmentLogistics>
+      | DhbDocumentPage<DhbReturnDocument> | DhbDocumentPage<DhbFinancialDocument>
+    if (targetShipment) {
+      result = targetOutbound
+        ? await getDinghuobaoShipments(query)
+        : await getDinghuobaoShipmentLogistics(query)
     }
-    else if (isReturnPage.value) returnPage.value = await getDinghuobaoReturns(query)
-    else if (isFinancialQueryPage.value) financialPage.value = financialType.value === 'RECEIPT'
+    else if (targetReturn) result = await getDinghuobaoReturns(query)
+    else if (targetFinancial) result = targetFinancialType === 'RECEIPT'
       ? await getDinghuobaoReceipts(query) : await getDinghuobaoPayments(query)
+    else return
+    if (!documentListRequest.isCurrent(request)) return
+    if (targetShipment && targetOutbound) shipmentPage.value = result as DhbDocumentPage<DhbShipmentDocument>
+    else if (targetShipment) logisticsPage.value = result as DhbDocumentPage<DhbShipmentLogistics>
+    else if (targetReturn) returnPage.value = result as DhbDocumentPage<DhbReturnDocument>
+    else financialPage.value = result as DhbDocumentPage<DhbFinancialDocument>
   } catch (reason) {
-    documentError.value = errorMessage(reason, `${pageTitle.value}查询失败`)
+    if (!documentListRequest.isCurrent(request)) return
+    documentError.value = errorMessage(reason, `${targetPageTitle}查询失败`)
     ElMessage.error(documentError.value)
-  } finally { documentLoading.value = false }
+  } finally {
+    if (documentListRequest.isCurrent(request)) documentLoading.value = false
+  }
 }
 
 async function queryDocuments() { documentPage.value = 1; await loadDocumentPage() }
@@ -782,7 +997,7 @@ async function openShipmentDetail(row: DhbShipmentDocument | DhbShipmentLogistic
     if (isOutboundPage.value) shipmentDetail.value = await getDinghuobaoShipmentDetail(row.shipmentNo)
     else logisticsDetail.value = await getDinghuobaoShipmentLogisticsDetail(row.orderNo)
   }
-  catch (reason) { ElMessage.error(errorMessage(reason, '出库/发货物流详情加载失败')) }
+  catch (reason) { ElMessage.error(errorMessage(reason, '发货物流详情加载失败')) }
   finally { detailLoading.value = false }
 }
 
@@ -804,7 +1019,7 @@ function openFinancialDetail(row: DhbFinancialDocument) {
 function handleSizeChange(size: number) { pageSize.value = size; currentPage.value = 1; void loadOrders() }
 
 function resetFilters() {
-  Object.assign(filters, { orderStatus: '', startDate: '', endDate: '', payStatus: '', apiStatus: 'all' })
+  Object.assign(filters, { keyword: '', orderStatus: '', startDate: '', endDate: '', payStatus: '', apiStatus: 'all' })
   void handleQuery()
 }
 
@@ -816,13 +1031,12 @@ function formatTime(value: string | null): string {
 
 function formatMoney(value: number | null): string { return value == null ? '-' : `¥${Number(value).toFixed(2)}` }
 
-function formatStatus(value: string | null): string {
-  if (value === 'stock_up' || value === 'stockup') return '待出库'
-  return orderStatuses.find((item) => item.value === value)?.label || value || '-'
+function formatNumber(value: number | null, suffix = ''): string {
+  return value == null ? '-' : `${Number(value).toFixed(4).replace(/\.0000$/, '')}${suffix}`
 }
 
-function formatPayStatus(value: string | null): string {
-  return payStatuses.find((item) => item.value === value)?.label || value || '-'
+function formatDeliveryDate(value: string | null): string {
+  return !value || value.startsWith('1970-01-01') ? '-' : value
 }
 
 function orderStatusTagType(value: string | null) {
@@ -836,10 +1050,6 @@ function documentStatusTagType(value: string | null) {
   if (['finished', 'received', 'pend_receipted'].includes(value || '')) return 'success'
   if (['cancelled', 'canceled'].includes(value || '')) return 'info'
   return 'warning'
-}
-
-function statusLabel(options: { label: string; value: string }[], value: string | null): string {
-  return options.find((item) => item.value === value)?.label || value || '-'
 }
 
 function errorMessage(reason: unknown, fallback: string): string {
@@ -863,6 +1073,14 @@ watch(pageKey, () => {
   else if (isShipmentPage.value || isReturnPage.value) void loadDocumentPage()
 })
 onMounted(() => {
+  void loadBusinessDictionaries([
+    'DHB_ORDER_STATUS', 'DHB_ORDER_PAYMENT_STATUS', 'DHB_ORDER_TYPE', 'DHB_ORDER_API_STATUS',
+    'DHB_ORDER_EXCEPTION_STATUS', 'DHB_ORDER_ADMIN_FLAG', 'DHB_ORDER_SPLIT_TYPE',
+    'DHB_SETTLEMENT_METHOD', 'DHB_INVOICE_TYPE', 'DHB_ORDER_LINE_TYPE', 'DHB_GOODS_LIST_TYPE',
+    'DHB_SHIPMENT_STATUS', 'DHB_SHIPMENT_TYPE', 'DHB_RETURN_STATUS', 'DHB_RETURN_TYPE',
+    'DHB_FINANCIAL_DOCUMENT_TYPE', 'DHB_FINANCIAL_BUSINESS_TYPE', 'DHB_PAYMENT_METHOD',
+    'DHB_FINANCIAL_STATUS',
+  ].map((code) => ({ moduleCode: 'ORDER', code })))
   if (isOrderQueryPage.value) void loadOrders()
   else if (isShipmentPage.value || isReturnPage.value || isFinancePage.value) void loadDocumentPage()
 })

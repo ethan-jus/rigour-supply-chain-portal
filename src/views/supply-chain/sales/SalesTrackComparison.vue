@@ -54,11 +54,11 @@
       <div class="sequence-grid">
         <div>
           <span class="sequence-title sequence-title--a">{{ dateA }}</span>
-          <ol><li v-for="visit in trackA?.visits || []" :key="visit.visitId"><strong>{{ visit.storeName }}</strong><span>{{ visit.visitType === 'REVISIT' ? '复访' : '首访' }} · {{ statusLabel(visit.reviewStatus) }}</span></li></ol>
+          <ol><li v-for="visit in trackA?.visits || []" :key="visit.visitId"><strong>{{ visit.storeName }}</strong><span>{{ visitTypeLabel(visit.visitType) }} · {{ statusLabel(visit.reviewStatus) }}</span></li></ol>
         </div>
         <div>
           <span class="sequence-title sequence-title--b">{{ dateB || '未选择对比日期' }}</span>
-          <ol><li v-for="visit in trackB?.visits || []" :key="visit.visitId"><strong>{{ visit.storeName }}</strong><span>{{ visit.visitType === 'REVISIT' ? '复访' : '首访' }} · {{ statusLabel(visit.reviewStatus) }}</span></li></ol>
+          <ol><li v-for="visit in trackB?.visits || []" :key="visit.visitId"><strong>{{ visit.storeName }}</strong><span>{{ visitTypeLabel(visit.visitType) }} · {{ statusLabel(visit.reviewStatus) }}</span></li></ol>
         </div>
       </div>
     </el-card>
@@ -142,7 +142,11 @@ function formatMinutes(value: number): string {
 }
 
 function statusLabel(value: string): string {
-  return ({ IN_PROGRESS: '进行中', PENDING_REVIEW: '待复核', EFFECTIVE: '有效', INEFFECTIVE: '无效' } as Record<string, string>)[value] || value
+  return ({ IN_PROGRESS: '进行中', PENDING_REVIEW: '待复核', EFFECTIVE: '有效', INEFFECTIVE: '无效' } as Record<string, string>)[value] || `未知状态（${value}）`
+}
+
+function visitTypeLabel(value: string): string {
+  return ({ FIRST_VISIT: '首访', REVISIT: '复访' } as Record<string, string>)[value] || `未知拜访类型（${value}）`
 }
 
 function errorOf(error: unknown): string {

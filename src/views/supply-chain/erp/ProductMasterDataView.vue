@@ -19,38 +19,43 @@
         type="info"
         :closable="false"
         show-icon
-        title="数据均来自 ERP 本地库；点击“同步商品”可从订货宝刷新，Portal 不保存订货宝凭据。"
+        title="列表仅查询 ERP 本地库；点击同步按钮可从订货宝刷新当前模块，Portal 不保存订货宝凭据。"
       />
 
       <div class="query-panel">
         <el-form class="query-bar" inline @submit.prevent="query">
-          <el-form-item label="关键词">
+          <el-form-item label="搜索条件">
             <el-input
               v-model="filters.keyword"
               clearable
-              :placeholder="`搜索${page.codeLabel}或名称`"
+              :placeholder="`输入${page.codeLabel}或名称`"
               @keyup.enter="query"
             />
           </el-form-item>
-          <el-form-item label="内部状态">
-            <el-select v-model="filters.status" clearable placeholder="全部" style="width: 130px">
+          <el-form-item label="ERP状态">
+            <el-select
+              v-model="filters.status"
+              clearable
+              placeholder="全部ERP状态"
+              style="width: 150px"
+            >
               <el-option label="启用" value="ACTIVE" />
               <el-option label="停用" value="INACTIVE" />
             </el-select>
           </el-form-item>
           <el-form-item
             v-if="page.viewType === 'PRODUCT' || page.viewType === 'SKU'"
-            label="来源上架"
+            label="订货宝上架状态"
           >
             <el-select
               v-model="filters.sourcePutaway"
               clearable
-              placeholder="全部"
+              placeholder="全部上架状态"
               style="width: 130px"
             >
               <el-option label="已上架" value="T" />
               <el-option label="已下架" value="F" />
-              <el-option label="全部" value="A" />
+              <el-option label="全部状态" value="A" />
             </el-select>
           </el-form-item>
           <el-form-item class="query-actions">
@@ -64,19 +69,26 @@
         <div>
           <h2>{{ resultTitle }}</h2>
           <p v-if="page.viewType === 'PRODUCT'">
-            共 {{ data.total }} 个商品，本页 {{ data.items.length }} 个；点击商品行可查看完整资料与
+            共 {{ data.total }} 个商品，本页
+            {{ data.items.length }} 个；字段按订货宝商品业务含义拆分，点击商品行可查看完整资料与
             SKU。
           </p>
           <p v-else-if="page.viewType === 'CATEGORY'">
-            共 {{ categoryMatchCount }} 个匹配分类，当前展示 {{ categoryVisibleCount }} 个层级节点；展开父级可查看子分类。
+            共 {{ categoryMatchCount }} 个匹配分类，当前展示
+            {{ categoryVisibleCount }} 个层级节点；展开父级可查看子分类。
           </p>
           <p v-else>
             共 {{ data.total }} 条数据，本页 {{ data.items.length }} 条；点击数据行可查看完整资料。
           </p>
         </div>
         <div v-if="page.viewType === 'PRODUCT'" class="page-status-summary">
-          <span><i class="status-dot is-online" />本页上架 {{ productPageStats.putaway }}</span>
-          <span><i class="status-dot is-offline" />本页下架 {{ productPageStats.offShelf }}</span>
+          <span
+            ><i class="status-dot is-online" />本页订货宝已上架 {{ productPageStats.putaway }}</span
+          >
+          <span
+            ><i class="status-dot is-offline" />本页订货宝已下架
+            {{ productPageStats.offShelf }}</span
+          >
         </div>
         <div v-else-if="page.viewType === 'CATEGORY'" class="page-status-summary">
           <span><i class="status-dot is-online" />根分类 {{ categoryRootCount }}</span>
@@ -112,7 +124,7 @@
                 <div class="product-name" :title="scope.row.name">{{ scope.row.name }}</div>
                 <div class="product-code">SPU {{ valueOrDash(scope.row.code) }}</div>
                 <div class="product-meta-line">
-                  <span>来源 {{ valueOrDash(scope.row.sourceId) }}</span>
+                  <span>订货宝商品ID {{ valueOrDash(scope.row.sourceId) }}</span>
                   <span v-if="scope.row.product?.model">型号 {{ scope.row.product.model }}</span>
                 </div>
               </div>
@@ -133,51 +145,60 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="SKU 与包装" min-width="180">
+        <el-table-column label="SKU数量" width="100" align="center">
           <template #default="scope">
-            <div class="sku-package-cell">
-              <span class="sku-count">{{ scope.row.product?.skuCount ?? 0 }} 个 SKU</span>
-              <span>基础单位：{{ valueOrDash(scope.row.product?.unit) }}</span>
-              <span class="cell-secondary compact-line">{{
-                packageSummary(scope.row.product)
-              }}</span>
-            </div>
+            <strong>{{ scope.row.product?.skuCount ?? 0 }}</strong>
           </template>
         </el-table-column>
-        <el-table-column label="核心价格" min-width="160" align="right" header-align="right">
+        <el-table-column label="基础单位" width="110">
           <template #default="scope">
-            <div class="price-cell">
-              <strong>{{ money(scope.row.product?.orderPrice) }}</strong>
-              <span>订货价</span>
-              <small>市场 {{ money(scope.row.product?.marketPrice) }}</small>
-            </div>
+            {{ valueOrDash(scope.row.product?.unit) }}
           </template>
         </el-table-column>
-        <el-table-column label="订货规则" min-width="165">
+        <el-table-column label="包装规格" min-width="160">
           <template #default="scope">
-            <div class="ordering-cell">
-              <span>起订 {{ minimumOrderSummary(scope.row.product) }}</span>
-              <small>安全库存 {{ quantity(scope.row.product?.safetyInventory) }}</small>
-            </div>
+            {{ packageSummary(scope.row.product) }}
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="112">
+        <el-table-column label="订货价" width="150" align="right" header-align="right">
           <template #default="scope">
-            <div class="status-cell">
-              <el-tag
-                :type="putawayTagType(scope.row.product?.sourcePutaway)"
-                effect="light"
-                size="small"
-              >
-                {{ putawayLabel(scope.row.product?.sourcePutaway) }}
-              </el-tag>
-              <span :class="['internal-status', scope.row.status === 'ACTIVE' ? 'is-active' : '']">
-                {{ statusLabel(scope.row.status) }}
-              </span>
-            </div>
+            {{ productPriceDisplay(scope.row.product, 'ORDER', 'BASE') }}
           </template>
         </el-table-column>
-        <el-table-column label="最后同步" width="150">
+        <el-table-column label="市场价" width="150" align="right" header-align="right">
+          <template #default="scope">
+            {{ productPriceDisplay(scope.row.product, 'MARKET', 'BASE') }}
+          </template>
+        </el-table-column>
+        <el-table-column label="起订量" width="120">
+          <template #default="scope">
+            {{ minimumOrderSummary(scope.row.product) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="安全库存" width="110" align="right" header-align="right">
+          <template #default="scope">
+            {{ productQuantityDisplay(scope.row.product, 'INVENTORY_SAFETY') }}
+          </template>
+        </el-table-column>
+        <el-table-column label="订货宝上架状态" width="135">
+          <template #default="scope">
+            <el-tag effect="light" size="small">
+              {{ putawayLabel(scope.row.product?.sourcePutaway) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="ERP商品状态" width="120">
+          <template #default="scope">
+            <el-tag
+              :type="scope.row.status === 'ACTIVE' ? 'success' : 'info'"
+              effect="light"
+              size="small"
+            >
+              {{ statusLabel(scope.row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近同步时间" width="150">
           <template #default="scope">
             <span class="sync-time">{{ formatTime(scope.row.syncedAt) }}</span>
           </template>
@@ -210,8 +231,12 @@
               <span class="master-avatar">{{ scope.row.name.slice(0, 1) || '?' }}</span>
               <div class="master-identity-content">
                 <div class="product-name" :title="scope.row.name">{{ scope.row.name }}</div>
-                <div class="product-code">{{ page.codeLabel }} {{ valueOrDash(scope.row.code) }}</div>
-                <div class="product-meta-line">来源 {{ valueOrDash(scope.row.sourceId) }}</div>
+                <div class="product-code">
+                  {{ page.codeLabel }} {{ valueOrDash(scope.row.code) }}
+                </div>
+                <div class="product-meta-line">
+                  订货宝{{ page.title }}ID {{ valueOrDash(scope.row.sourceId) }}
+                </div>
               </div>
             </div>
           </template>
@@ -229,45 +254,78 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column v-else-if="page.viewType === 'SKU'" label="所属商品 / 规格" min-width="260">
+        <el-table-column v-else-if="page.viewType === 'SKU'" label="所属商品" min-width="220">
           <template #default="scope">
             <div class="stacked-cell">
               <span>{{ valueOrDash(scope.row.sku?.productName) }}</span>
-              <small>SPU {{ valueOrDash(scope.row.sku?.spuCode) }} · {{ valueOrDash(scope.row.attribute) }}</small>
+              <small>SPU编码 {{ valueOrDash(scope.row.sku?.spuCode) }}</small>
             </div>
           </template>
         </el-table-column>
-        <el-table-column v-else :label="page.attributeLabel" min-width="220">
+        <el-table-column v-if="page.viewType === 'SKU'" label="规格组合" min-width="190">
           <template #default="scope">
-            <div class="stacked-cell">
-              <span>{{ valueOrDash(scope.row.attribute) }}</span>
-              <small>{{ valueOrDash(scope.row.detail) }}</small>
-            </div>
+            {{ valueOrDash(scope.row.sku?.specificationSummary) }}
           </template>
         </el-table-column>
-        <el-table-column v-if="page.viewType === 'SKU'" label="单位与条码" min-width="175">
+        <el-table-column v-else-if="page.viewType === 'CATEGORY'" label="分类层级" width="110">
           <template #default="scope">
-            <div class="stacked-cell">
-              <span>单位 {{ valueOrDash(scope.row.sku?.unit) }}</span>
-              <small>{{ valueOrDash(scope.row.sku?.barcode) }}</small>
-            </div>
+            第 {{ scope.row.level ?? scope.row.category?.categoryLevel ?? '-' }} 级
           </template>
         </el-table-column>
-        <el-table-column v-if="page.viewType === 'SKU'" label="核心价格" min-width="160" align="right" header-align="right">
+        <el-table-column v-else-if="page.viewType === 'BRAND'" label="品牌说明" min-width="220">
           <template #default="scope">
-            <div class="price-cell">
-              <strong>{{ money(scope.row.sku?.orderPrice) }}</strong>
-              <span>订货价</span>
-              <small>市场 {{ money(scope.row.sku?.marketPrice) }}</small>
-            </div>
+            {{ valueOrDash(scope.row.brand?.sourceDescription) }}
           </template>
         </el-table-column>
-        <el-table-column v-if="page.viewType === 'CATEGORY'" label="层级关系" width="150">
+        <el-table-column
+          v-else-if="page.viewType === 'SPECIFICATION'"
+          label="规格值数量"
+          width="120"
+        >
+          <template #default="scope">{{ scope.row.specification?.valueCount ?? 0 }} 个</template>
+        </el-table-column>
+        <el-table-column v-else-if="page.viewType === 'TAG'" label="标签分组" min-width="160">
+          <template #default="scope">{{ valueOrDash(scope.row.tag?.sourceGroupName) }}</template>
+        </el-table-column>
+        <el-table-column v-if="page.viewType === 'SKU'" label="基础单位" width="105">
+          <template #default="scope">{{ valueOrDash(scope.row.sku?.unit) }}</template>
+        </el-table-column>
+        <el-table-column v-if="page.viewType === 'SKU'" label="基础条码" min-width="150">
+          <template #default="scope">{{ valueOrDash(scope.row.sku?.barcode) }}</template>
+        </el-table-column>
+        <el-table-column
+          v-if="page.viewType === 'SKU'"
+          label="订货价"
+          width="120"
+          align="right"
+          header-align="right"
+        >
+          <template #default="scope">{{ skuPriceDisplay(scope.row.sku, 'ORDER', 'BASE') }}</template>
+        </el-table-column>
+        <el-table-column
+          v-if="page.viewType === 'SKU'"
+          label="市场价"
+          width="120"
+          align="right"
+          header-align="right"
+        >
+          <template #default="scope">{{ skuPriceDisplay(scope.row.sku, 'MARKET', 'BASE') }}</template>
+        </el-table-column>
+        <el-table-column
+          v-if="page.viewType === 'SKU'"
+          label="采购价"
+          width="120"
+          align="right"
+          header-align="right"
+        >
+          <template #default="scope">{{ skuPriceDisplay(scope.row.sku, 'PURCHASE', 'BASE') }}</template>
+        </el-table-column>
+        <el-table-column v-if="page.viewType === 'CATEGORY'" label="直接子分类" width="120">
+          <template #default="scope"> {{ scope.row.childCount ?? 0 }} 个 </template>
+        </el-table-column>
+        <el-table-column v-if="page.viewType === 'CATEGORY'" label="默认分类" width="100">
           <template #default="scope">
-            <div class="stacked-cell">
-              <el-tag size="small" effect="plain">第 {{ scope.row.level }} 级</el-tag>
-              <small>{{ scope.row.childCount }} 个直接子分类</small>
-            </div>
+            {{ scope.row.category?.sourceDefaultFlag ? '是' : '否' }}
           </template>
         </el-table-column>
         <el-table-column v-if="page.viewType === 'SPECIFICATION'" label="规格值" min-width="240">
@@ -278,34 +336,57 @@
                 :key="value.id"
                 size="small"
                 effect="plain"
-              >{{ value.valueName }}</el-tag>
-              <span v-if="(scope.row.specification?.values.length ?? 0) > 4">+{{ (scope.row.specification?.values.length ?? 0) - 4 }}</span>
-              <span v-if="!scope.row.specification?.values.length" class="cell-secondary">暂无规格值</span>
+                >{{ value.valueName }}</el-tag
+              >
+              <span v-if="(scope.row.specification?.values.length ?? 0) > 4"
+                >+{{ (scope.row.specification?.values.length ?? 0) - 4 }}</span
+              >
+              <span v-if="!scope.row.specification?.values.length" class="cell-secondary"
+                >暂无规格值</span
+              >
             </div>
           </template>
         </el-table-column>
         <el-table-column v-if="page.viewType === 'TAG'" label="关联商品" width="120">
-          <template #default="scope"><strong>{{ scope.row.tag?.sourceRelationCount ?? 0 }}</strong> 个</template>
+          <template #default="scope"
+            ><strong>{{ scope.row.tag?.sourceRelationCount ?? 0 }}</strong> 个</template
+          >
         </el-table-column>
-        <el-table-column v-if="page.viewType === 'BRAND'" label="来源排序" width="120">
+        <el-table-column v-if="page.viewType === 'BRAND'" label="订货宝排序" width="120">
           <template #default="scope">{{ valueOrDash(scope.row.brand?.sourceSortOrder) }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="132">
+        <el-table-column v-if="page.viewType !== 'SKU'" label="ERP状态" width="110">
           <template #default="scope">
-            <div class="status-cell">
-              <el-tag :type="scope.row.status === 'ACTIVE' ? 'success' : 'info'" effect="light" size="small">
-                {{ statusLabel(scope.row.status) }}
-              </el-tag>
-              <span class="ownership-text">{{ ownershipLabel(scope.row.ownershipState) }}</span>
-            </div>
+            <el-tag
+              :type="scope.row.status === 'ACTIVE' ? 'success' : 'info'"
+              effect="light"
+              size="small"
+            >
+              {{ statusLabel(scope.row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="最后同步" width="150">
-          <template #default="scope"><span class="sync-time">{{ formatTime(scope.row.syncedAt) }}</span></template>
+        <el-table-column v-if="page.viewType === 'SKU'" label="ERP SKU状态" width="120">
+          <template #default="scope">
+            <el-tag
+              :type="scope.row.status === 'ACTIVE' ? 'success' : 'info'"
+              effect="light"
+              size="small"
+            >
+              {{ statusLabel(scope.row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近同步时间" width="150">
+          <template #default="scope"
+            ><span class="sync-time">{{ formatTime(scope.row.syncedAt) }}</span></template
+          >
         </el-table-column>
         <el-table-column label="操作" width="96" fixed="right" align="center">
           <template #default="scope">
-            <el-button link type="primary" @click.stop="openMasterDetail(scope.row)">详情</el-button>
+            <el-button link type="primary" @click.stop="openMasterDetail(scope.row)"
+              >详情</el-button
+            >
           </template>
         </el-table-column>
         <template #empty>
@@ -351,14 +432,11 @@
               <span class="detail-eyebrow">商品详情</span>
               <h2>{{ selectedProduct.name }}</h2>
               <p>
-                SPU {{ valueOrDash(selectedProduct.code) }} · 来源
+                SPU {{ valueOrDash(selectedProduct.code) }} · 订货宝商品ID
                 {{ valueOrDash(selectedProduct.sourceId) }}
               </p>
               <div class="detail-tags">
-                <el-tag
-                  :type="putawayTagType(selectedProduct.product.sourcePutaway)"
-                  effect="light"
-                >
+                <el-tag effect="light">
                   {{ putawayLabel(selectedProduct.product.sourcePutaway) }}
                 </el-tag>
                 <el-tag
@@ -384,18 +462,18 @@
         <div class="detail-metrics">
           <div class="metric-card">
             <span>基础订货价</span>
-            <strong>{{ money(selectedProduct.product.orderPrice) }}</strong>
+            <strong>{{ productPriceDisplay(selectedProduct.product, 'ORDER', 'BASE') }}</strong>
           </div>
           <div class="metric-card">
             <span>最低订量</span>
-            <strong>{{ minimumOrderSummary(selectedProduct.product) }}</strong>
+            <strong>{{ productQuantityDisplay(selectedProduct.product, 'MIN_ORDER') }}</strong>
           </div>
           <div class="metric-card">
             <span>基础单位</span>
             <strong>{{ valueOrDash(selectedProduct.product.unit) }}</strong>
           </div>
           <div class="metric-card">
-            <span>最后同步</span>
+            <span>最近同步时间</span>
             <strong class="metric-time">{{ formatTime(selectedProduct.syncedAt) }}</strong>
           </div>
         </div>
@@ -489,15 +567,27 @@
               <dl class="inventory-grid">
                 <div>
                   <dt>库存下限</dt>
-                  <dd>{{ quantity(selectedProduct.product.inventoryLower) }}</dd>
+                  <dd>
+                    {{
+                      productQuantityDisplay(selectedProduct.product, 'INVENTORY_LOWER')
+                    }}
+                  </dd>
                 </div>
                 <div>
                   <dt>安全库存</dt>
-                  <dd>{{ quantity(selectedProduct.product.safetyInventory) }}</dd>
+                  <dd>
+                    {{
+                      productQuantityDisplay(selectedProduct.product, 'INVENTORY_SAFETY')
+                    }}
+                  </dd>
                 </div>
                 <div>
                   <dt>库存上限</dt>
-                  <dd>{{ quantity(selectedProduct.product.inventoryUpper) }}</dd>
+                  <dd>
+                    {{
+                      productQuantityDisplay(selectedProduct.product, 'INVENTORY_UPPER')
+                    }}
+                  </dd>
                 </div>
               </dl>
             </section>
@@ -514,7 +604,9 @@
               </div>
               <div class="product-images">
                 <div
-                  v-for="image in selectedProduct.product.images.filter((item) => item.url)"
+                  v-for="(image, imageIndex) in selectedProduct.product.images.filter(
+                    (item) => item.url,
+                  )"
                   :key="image.id"
                   class="product-image-card"
                 >
@@ -526,6 +618,7 @@
                     :preview-src-list="
                       selectedProduct.product.images.map((item) => item.url).filter(Boolean)
                     "
+                    :initial-index="imageIndex"
                     preview-teleported
                   />
                   <small>{{ valueOrDash(image.originalName || image.sourceFileName) }}</small>
@@ -545,7 +638,7 @@
                   <template #default="scope">
                     <strong class="sku-code">{{ valueOrDash(scope.row.skuCode) }}</strong>
                     <small class="cell-secondary"
-                      >来源 {{ valueOrDash(scope.row.sourceSkuId) }}</small
+                      >订货宝SKU ID {{ valueOrDash(scope.row.sourceSkuId) }}</small
                     >
                   </template>
                 </el-table-column>
@@ -557,22 +650,45 @@
                     >
                   </template>
                 </el-table-column>
-                <el-table-column label="单位与条码" min-width="180">
+                <el-table-column label="基础单位" width="110">
                   <template #default="scope">
-                    <span>{{ valueOrDash(scope.row.unit) }}</span>
-                    <small class="cell-secondary">{{ valueOrDash(scope.row.barcode) }}</small>
+                    {{ valueOrDash(scope.row.unit) }}
                   </template>
                 </el-table-column>
-                <el-table-column label="价格" min-width="170" align="right" header-align="right">
+                <el-table-column label="基础条码" min-width="150">
+                  <template #default="scope">{{ valueOrDash(scope.row.barcode) }}</template>
+                </el-table-column>
+                <el-table-column
+                  label="订货价"
+                  width="150"
+                  align="right"
+                  header-align="right"
+                >
                   <template #default="scope">
-                    <strong>{{ money(scope.row.orderPrice) }}</strong>
-                    <small class="cell-secondary"
-                      >市场 {{ money(scope.row.marketPrice) }} · 采购
-                      {{ money(scope.row.purchasePrice) }}</small
-                    >
+                    {{ skuPriceDisplay(scope.row, 'ORDER', 'BASE') }}
                   </template>
                 </el-table-column>
-                <el-table-column label="状态" width="100" align="center">
+                <el-table-column
+                  label="市场价"
+                  width="150"
+                  align="right"
+                  header-align="right"
+                >
+                  <template #default="scope">
+                    {{ skuPriceDisplay(scope.row, 'MARKET', 'BASE') }}
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="采购价"
+                  width="150"
+                  align="right"
+                  header-align="right"
+                >
+                  <template #default="scope">
+                    {{ skuPriceDisplay(scope.row, 'PURCHASE', 'BASE') }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="ERP SKU状态" width="120" align="center">
                   <template #default="scope">
                     <el-tag
                       :type="scope.row.internalStatus === 'ACTIVE' ? 'success' : 'info'"
@@ -598,23 +714,23 @@
               </div>
               <dl class="info-grid">
                 <div>
-                  <dt>商品来源 ID</dt>
+                  <dt>订货宝商品ID</dt>
                   <dd>{{ valueOrDash(selectedProduct.sourceId) }}</dd>
                 </div>
                 <div>
-                  <dt>来源规格维度</dt>
+                  <dt>订货宝规格维度ID</dt>
                   <dd>{{ valueOrDash(selectedProduct.product.sourceMultiId) }}</dd>
                 </div>
                 <div>
-                  <dt>来源分类 ID</dt>
+                  <dt>订货宝分类ID</dt>
                   <dd>{{ valueOrDash(selectedProduct.product.sourceCategoryId) }}</dd>
                 </div>
                 <div>
-                  <dt>来源品牌 ID</dt>
+                  <dt>订货宝品牌ID</dt>
                   <dd>{{ valueOrDash(selectedProduct.product.sourceBrandId) }}</dd>
                 </div>
                 <div>
-                  <dt>来源上下架</dt>
+                  <dt>订货宝上架状态</dt>
                   <dd>{{ putawayLabel(selectedProduct.product.sourcePutaway) }}</dd>
                 </div>
                 <div>
@@ -622,23 +738,6 @@
                   <dd>{{ ownershipLabel(selectedProduct.ownershipState) }}</dd>
                 </div>
               </dl>
-            </section>
-
-            <section class="detail-section">
-              <div class="section-heading">
-                <h3>订货宝自定义字段</h3>
-                <p>完整保留接口返回的非标准字段</p>
-              </div>
-              <dl
-                v-if="customFieldEntries(selectedProduct.product).length"
-                class="source-field-grid"
-              >
-                <div v-for="field in customFieldEntries(selectedProduct.product)" :key="field.key">
-                  <dt>{{ field.key }}</dt>
-                  <dd>{{ field.value }}</dd>
-                </div>
-              </dl>
-              <el-empty v-else description="暂无自定义来源字段" :image-size="72" />
             </section>
           </el-tab-pane>
         </el-tabs>
@@ -659,7 +758,9 @@
               <span class="detail-eyebrow">{{ page.title }}详情</span>
               <h2>{{ selectedMaster.name }}</h2>
               <p>
-                {{ page.codeLabel }} {{ valueOrDash(selectedMaster.code) }} · 来源
+                {{ page.codeLabel }} {{ valueOrDash(selectedMaster.code) }} · 订货宝{{
+                  page.title
+                }}ID
                 {{ valueOrDash(selectedMaster.sourceId) }}
               </p>
               <div class="detail-tags">
@@ -787,6 +888,8 @@ import {
   type ErpTagView,
 } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { businessDictionaryLabel, loadBusinessDictionaries } from '@/utils/business-dictionary'
+import { createLatestRequestGuard } from '@/utils/latest-request'
 
 interface PageDefinition {
   routeKey: string
@@ -829,6 +932,15 @@ interface DetailField {
   wide?: boolean
 }
 
+interface CategoryLoadResult {
+  page: ErpPage<DisplayRow>
+  matchCount: number
+  visibleCount: number
+  rootCount: number
+  maxLevel: number
+  defaultExpandedKeys: string[]
+}
+
 const pageDefinitions: PageDefinition[] = [
   {
     routeKey: 'supply.erp.master-data.products',
@@ -836,7 +948,7 @@ const pageDefinitions: PageDefinition[] = [
     objectType: 'PRODUCT_SPU',
     title: '商品/SPU',
     syncLabel: '商品',
-    description: '管理 ERP 本地商品模型及订货宝来源关系。',
+    description: '管理商品/SPU档案；订货宝商品ID、上架状态和 ERP 商品状态分开查看。',
     codeLabel: 'SPU 编码',
     attributeLabel: '品牌 / 分类',
     detailLabel: '条码 / 单位 / SKU',
@@ -847,7 +959,7 @@ const pageDefinitions: PageDefinition[] = [
     objectType: 'PRODUCT_SPU',
     title: 'SKU',
     syncLabel: '商品与SKU',
-    description: '查询随商品主数据同步落库的 SKU；页面只查询 ERP 本地数据。',
+    description: '查询商品 SKU 档案；所属商品、规格组合、条码、价格和 SKU 状态分开查看。',
     codeLabel: 'SKU 编码',
     attributeLabel: '规格组合',
     detailLabel: '条码 / 单位 / 规格组合ID',
@@ -900,6 +1012,7 @@ const pageDefinitions: PageDefinition[] = [
 
 const route = useRoute()
 const auth = useAuthStore()
+const listRequest = createLatestRequestGuard()
 const page = computed(
   () => pageDefinitions.find((item) => item.routeKey === route.meta.routeKey) ?? pageDefinitions[0],
 )
@@ -940,10 +1053,13 @@ const masterMetrics = computed(() => {
   if (!row) return []
   if (row.sku) {
     return [
-      { label: '基础订货价', value: money(row.sku.orderPrice) },
+      {
+        label: '订货价',
+        value: skuPriceDisplay(row.sku, 'ORDER', 'BASE'),
+      },
       { label: '所属 SPU', value: valueOrDash(row.sku.spuCode) },
       { label: '基础单位', value: valueOrDash(row.sku.unit) },
-      { label: '最后同步', value: formatTime(row.syncedAt), time: true },
+      { label: '最近同步时间', value: formatTime(row.syncedAt), time: true },
     ]
   }
   if (row.category) {
@@ -951,7 +1067,7 @@ const masterMetrics = computed(() => {
       { label: '分类层级', value: `第 ${row.level ?? row.category.categoryLevel} 级` },
       { label: '直接子分类', value: `${row.childCount ?? 0} 个` },
       { label: '默认分类', value: row.category.sourceDefaultFlag ? '是' : '否' },
-      { label: '最后同步', value: formatTime(row.syncedAt), time: true },
+      { label: '最近同步时间', value: formatTime(row.syncedAt), time: true },
     ]
   }
   if (row.specification) {
@@ -959,22 +1075,22 @@ const masterMetrics = computed(() => {
       { label: '规格值', value: `${row.specification.valueCount} 个` },
       { label: '内部状态', value: statusLabel(row.status) },
       { label: '数据主权', value: ownershipLabel(row.ownershipState) },
-      { label: '最后同步', value: formatTime(row.syncedAt), time: true },
+      { label: '最近同步时间', value: formatTime(row.syncedAt), time: true },
     ]
   }
   if (row.tag) {
     return [
       { label: '所属分组', value: valueOrDash(row.tag.sourceGroupName) },
       { label: '关联商品', value: `${row.tag.sourceRelationCount ?? 0} 个` },
-      { label: '来源排序', value: valueOrDash(row.tag.sourceSortOrder) },
-      { label: '最后同步', value: formatTime(row.syncedAt), time: true },
+      { label: '订货宝排序', value: valueOrDash(row.tag.sourceSortOrder) },
+      { label: '最近同步时间', value: formatTime(row.syncedAt), time: true },
     ]
   }
   return [
-    { label: '来源排序', value: valueOrDash(row.brand?.sourceSortOrder) },
+    { label: '订货宝排序', value: valueOrDash(row.brand?.sourceSortOrder) },
     { label: '内部状态', value: statusLabel(row.status) },
     { label: '数据主权', value: ownershipLabel(row.ownershipState) },
-    { label: '最后同步', value: formatTime(row.syncedAt), time: true },
+    { label: '最近同步时间', value: formatTime(row.syncedAt), time: true },
   ]
 })
 const masterOverviewFields = computed<DetailField[]>(() => {
@@ -990,12 +1106,12 @@ const masterOverviewFields = computed<DetailField[]>(() => {
       detailField('基础条码', row.sku.barcode),
       detailField('中包装条码', row.sku.middleBarcode),
       detailField('大包装条码', row.sku.bigBarcode),
-      detailField('基础订货价', money(row.sku.orderPrice)),
-      detailField('市场价', money(row.sku.marketPrice)),
-      detailField('采购价', money(row.sku.purchasePrice)),
-      detailField('中包装价', money(row.sku.middleOrderPrice)),
-      detailField('大包装价', money(row.sku.bigOrderPrice)),
-      detailField('来源上下架', putawayLabel(row.sku.sourcePutaway)),
+      detailField('订货价', skuPriceDisplay(row.sku, 'ORDER', 'BASE')),
+      detailField('市场价', skuPriceDisplay(row.sku, 'MARKET', 'BASE')),
+      detailField('采购价', skuPriceDisplay(row.sku, 'PURCHASE', 'BASE')),
+      detailField('中包装订货价', skuPriceDisplay(row.sku, 'ORDER', 'MIDDLE')),
+      detailField('大包装订货价', skuPriceDisplay(row.sku, 'ORDER', 'BIG')),
+      detailField('订货宝上架状态', putawayLabel(row.sku.sourcePutaway)),
     ]
   }
   if (row.category) {
@@ -1012,7 +1128,7 @@ const masterOverviewFields = computed<DetailField[]>(() => {
     return [
       detailField('品牌名称', row.brand.name),
       detailField('品牌编码', row.brand.brandCode),
-      detailField('来源排序', row.brand.sourceSortOrder),
+      detailField('订货宝排序', row.brand.sourceSortOrder),
       detailField('品牌说明', row.brand.sourceDescription, true),
     ]
   }
@@ -1029,7 +1145,7 @@ const masterOverviewFields = computed<DetailField[]>(() => {
       detailField('标签编码', row.tag.tagCode),
       detailField('标签分组', row.tag.sourceGroupName),
       detailField('颜色标识', row.tag.color),
-      detailField('来源排序', row.tag.sourceSortOrder),
+      detailField('订货宝排序', row.tag.sourceSortOrder),
       detailField('关联商品', `${row.tag.sourceRelationCount ?? 0} 个`),
     ]
   }
@@ -1039,50 +1155,58 @@ const masterSourceFields = computed<DetailField[]>(() => {
   const row = selectedMaster.value
   if (!row) return []
   const common = [
-    detailField('订货宝来源 ID', row.sourceId),
+    detailField('订货宝来源ID', row.sourceId),
     detailField('本地记录 ID', row.id),
     detailField('数据主权', ownershipLabel(row.ownershipState)),
     detailField('内部状态', statusLabel(row.status)),
-    detailField('最后同步', formatTime(row.syncedAt)),
+    detailField('最近同步时间', formatTime(row.syncedAt)),
   ]
   if (row.sku) {
     return [
       ...common,
-      detailField('第一规格值来源 ID', row.sku.firstSpecificationValueSourceId),
-      detailField('第二规格值来源 ID', row.sku.secondSpecificationValueSourceId),
+      detailField('第一规格值订货宝ID', row.sku.firstSpecificationValueSourceId),
+      detailField('第二规格值订货宝ID', row.sku.secondSpecificationValueSourceId),
     ]
   }
   if (row.category) {
     return [
       ...common,
-      detailField('来源父分类 ID', row.category.sourceParentId),
+      detailField('订货宝父分类ID', row.category.sourceParentId),
       detailField('本地父分类 ID', row.category.parentId),
-      detailField('来源分类编号', row.category.sourceCategoryNumber),
+      detailField('订货宝分类编号', row.category.sourceCategoryNumber),
       detailField('外部引用 ID', row.category.externalReferenceId),
     ]
   }
   if (row.brand) {
     return [
       ...common,
-      detailField('来源品牌编号', row.brand.sourceBrandNumber),
+      detailField('订货宝品牌编号', row.brand.sourceBrandNumber),
       detailField('外部引用 ID', row.brand.externalReferenceId),
     ]
   }
   if (row.specification) {
-    return [...common, detailField('来源父级 ID', row.specification.sourceParentId)]
+    return [...common, detailField('订货宝父级ID', row.specification.sourceParentId)]
   }
   if (row.tag) {
     return [
       ...common,
-      detailField('来源分组 ID', row.tag.sourceGroupId),
-      detailField('来源创建时间', formatTime(row.tag.sourceCreatedAt)),
-      detailField('来源更新时间', formatTime(row.tag.sourceUpdatedAt)),
+      detailField('订货宝分组ID', row.tag.sourceGroupId),
+      detailField('订货宝创建时间', formatTime(row.tag.sourceCreatedAt)),
+      detailField('订货宝更新时间', formatTime(row.tag.sourceUpdatedAt)),
     ]
   }
   return common
 })
 
-onMounted(load)
+onMounted(() => {
+  void loadBusinessDictionaries([
+    { moduleCode: 'ERP', code: 'DHB_PRODUCT_STATUS' },
+    { moduleCode: 'ERP', code: 'DHB_PRODUCT_PUTAWAY' },
+    { moduleCode: 'ERP', code: 'INTERNAL_STATUS' },
+    { moduleCode: 'COMMON', code: 'DHB_UNIT' },
+  ])
+  void load()
+})
 watch(
   () => route.meta.routeKey,
   async () => {
@@ -1097,8 +1221,10 @@ watch(
 )
 
 async function load() {
+  const request = listRequest.begin()
+  const targetPage = page.value
   loading.value = true
-  if (page.value.viewType === 'CATEGORY') {
+  if (targetPage.viewType === 'CATEGORY') {
     categoryMatchCount.value = 0
     categoryVisibleCount.value = 0
     categoryRootCount.value = 0
@@ -1112,7 +1238,9 @@ async function load() {
     status: filters.status || undefined,
   }
   try {
-    if (page.value.viewType === 'PRODUCT') {
+    let nextData: ErpPage<DisplayRow>
+    let categoryResult: CategoryLoadResult | null = null
+    if (targetPage.viewType === 'PRODUCT') {
       const result = await getErpProducts({
         ...params,
         internalStatus: params.status,
@@ -1122,8 +1250,8 @@ async function load() {
             ? filters.sourcePutaway
             : undefined,
       })
-      data.value = mapPage(result, mapProduct)
-    } else if (page.value.viewType === 'SKU') {
+      nextData = mapPage(result, mapProduct)
+    } else if (targetPage.viewType === 'SKU') {
       const result = await getErpSkus({
         ...params,
         sourcePutaway:
@@ -1131,21 +1259,32 @@ async function load() {
             ? filters.sourcePutaway
             : undefined,
       })
-      data.value = mapPage(result, mapSku)
-    } else if (page.value.viewType === 'CATEGORY') {
-      data.value = await loadCategoryTree()
-    } else if (page.value.viewType === 'BRAND') {
-      data.value = mapPage(await getErpBrands(params), mapBrand)
-    } else if (page.value.viewType === 'SPECIFICATION') {
-      data.value = mapPage(await getErpSpecifications(params), mapSpecification)
+      nextData = mapPage(result, mapSku)
+    } else if (targetPage.viewType === 'CATEGORY') {
+      categoryResult = await loadCategoryTree(params.q, params.status)
+      nextData = categoryResult.page
+    } else if (targetPage.viewType === 'BRAND') {
+      nextData = mapPage(await getErpBrands(params), mapBrand)
+    } else if (targetPage.viewType === 'SPECIFICATION') {
+      nextData = mapPage(await getErpSpecifications(params), mapSpecification)
     } else {
-      data.value = mapPage(await getErpTags(params), mapTag)
+      nextData = mapPage(await getErpTags(params), mapTag)
+    }
+    if (!listRequest.isCurrent(request)) return
+    data.value = nextData
+    if (categoryResult) {
+      categoryMatchCount.value = categoryResult.matchCount
+      categoryVisibleCount.value = categoryResult.visibleCount
+      categoryRootCount.value = categoryResult.rootCount
+      categoryMaxLevel.value = categoryResult.maxLevel
+      categoryDefaultExpandedKeys.value = categoryResult.defaultExpandedKeys
     }
   } catch (reason) {
+    if (!listRequest.isCurrent(request)) return
     data.value = { total: 0, begin: params.begin, step: params.step, items: [] }
-    ElMessage.error(errorMessage(reason, `${page.value.title}加载失败`))
+    ElMessage.error(errorMessage(reason, `${targetPage.title}加载失败`))
   } finally {
-    loading.value = false
+    if (listRequest.isCurrent(request)) loading.value = false
   }
 }
 
@@ -1176,7 +1315,7 @@ function openMasterDetail(row: DisplayRow) {
   masterDrawerVisible.value = true
 }
 
-async function loadCategoryTree(): Promise<ErpPage<DisplayRow>> {
+async function loadCategoryTree(query?: string, statusFilter?: string): Promise<CategoryLoadResult> {
   const batchSize = 500
   let begin = 0
   let total = 0
@@ -1202,7 +1341,11 @@ async function loadCategoryTree(): Promise<ErpPage<DisplayRow>> {
       : category?.sourceParentId
         ? bySourceId.get(category.sourceParentId)
         : undefined
-    if (parent && parent.id !== row.id && !wouldCreateCategoryCycle(parent, row, byId, bySourceId)) {
+    if (
+      parent &&
+      parent.id !== row.id &&
+      !wouldCreateCategoryCycle(parent, row, byId, bySourceId)
+    ) {
       parent.children ??= []
       parent.children.push(row)
     } else {
@@ -1220,8 +1363,8 @@ async function loadCategoryTree(): Promise<ErpPage<DisplayRow>> {
   roots.sort(compareMasterRows)
   roots.forEach((row) => assignHierarchy(row, [], 1))
 
-  const keyword = filters.keyword.trim().toLocaleLowerCase()
-  const status = filters.status
+  const keyword = (query ?? '').trim().toLocaleLowerCase()
+  const status = statusFilter ?? ''
   const matches = (row: DisplayRow) => {
     const keywordMatches =
       !keyword ||
@@ -1232,7 +1375,7 @@ async function loadCategoryTree(): Promise<ErpPage<DisplayRow>> {
       )
     return keywordMatches && (!status || row.status === status)
   }
-  categoryMatchCount.value = allRows.filter(matches).length
+  const matchCount = allRows.filter(matches).length
   const filterTree = (row: DisplayRow): DisplayRow | null => {
     const children = (row.children ?? [])
       .map(filterTree)
@@ -1241,14 +1384,20 @@ async function loadCategoryTree(): Promise<ErpPage<DisplayRow>> {
     if (!selfMatches && !children.length) return null
     return { ...row, children, isFilterContext: !selfMatches }
   }
-  const filteredRoots = roots
-    .map(filterTree)
-    .filter((row): row is DisplayRow => row !== null)
-  categoryVisibleCount.value = countCategoryRows(filteredRoots)
-  categoryRootCount.value = roots.length
-  categoryMaxLevel.value = allRows.reduce((max, row) => Math.max(max, row.level ?? 1), 0)
-  categoryDefaultExpandedKeys.value = filteredRoots.map((row) => row.id)
-  return { total: categoryMatchCount.value, begin: 0, step: categories.length, items: filteredRoots }
+  const filteredRoots = roots.map(filterTree).filter((row): row is DisplayRow => row !== null)
+  return {
+    page: {
+      total: matchCount,
+      begin: 0,
+      step: categories.length,
+      items: filteredRoots,
+    },
+    matchCount,
+    visibleCount: countCategoryRows(filteredRoots),
+    rootCount: roots.length,
+    maxLevel: allRows.reduce((max, row) => Math.max(max, row.level ?? 1), 0),
+    defaultExpandedKeys: filteredRoots.map((row) => row.id),
+  }
 }
 
 async function synchronize() {
@@ -1308,10 +1457,6 @@ function mapProduct(item: ErpProductView): DisplayRow {
     syncedAt: item.syncedAt,
     product: item,
   }
-}
-
-function customFieldEntries(product: ErpProductView) {
-  return Object.entries(product.customFields ?? {}).map(([key, value]) => ({ key, value }))
 }
 
 function mapSku(item: ErpSkuView): DisplayRow {
@@ -1430,10 +1575,7 @@ function wouldCreateCategoryCycle(
 }
 
 function countCategoryRows(rows: DisplayRow[]): number {
-  return rows.reduce(
-    (count, row) => count + 1 + countCategoryRows(row.children ?? []),
-    0,
-  )
+  return rows.reduce((count, row) => count + 1 + countCategoryRows(row.children ?? []), 0)
 }
 
 function categoryParentName(row: DisplayRow) {
@@ -1446,16 +1588,14 @@ function detailField(label: string, value: unknown, wide = false): DetailField {
 }
 
 function statusLabel(status: string) {
-  if (status === 'ACTIVE') return '启用'
-  if (status === 'INACTIVE') return '停用'
-  return status || '-'
+  return businessDictionaryLabel('ERP', 'INTERNAL_STATUS', status, 'ERP内部状态')
 }
 
 function ownershipLabel(value: string) {
   if (value === 'EXTERNAL_PRIMARY') return '外部主数据'
   if (value === 'INTERNAL_PRIMARY') return '内部主数据'
   if (value === 'INTERNAL_OVERRIDDEN') return '本地已覆盖'
-  return valueOrDash(value)
+  return /[^\u0000-\u007f]/.test(value || '') ? value : value ? `未知主权状态（${value}）` : '-'
 }
 
 function valueOrDash(value: unknown) {
@@ -1466,30 +1606,35 @@ function money(value: number | null | undefined) {
   return value === null || value === undefined ? '-' : `¥${Number(value).toFixed(2)}`
 }
 
+function priceUnitLabel(unit: string | null | undefined) {
+  return unit || '单位未配置'
+}
+
+function moneyWithUnit(value: number | null | undefined, unit: string | null | undefined) {
+  const amount = money(value)
+  return amount === '-' ? '-' : `${amount}/${priceUnitLabel(unit)}`
+}
+
 function quantity(value: number | null | undefined) {
   if (value === null || value === undefined) return '-'
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed.toString() : String(value)
 }
 
+function quantityWithUnit(value: number | null | undefined, unit: string | null | undefined) {
+  const amount = quantity(value)
+  return amount === '-' ? '-' : `${amount}${unit || '（单位未配置）'}`
+}
+
 function minimumOrderUnitLabel(value: string | null | undefined) {
   if (value === 'base_units') return '基础单位'
   if (value === 'middle_units') return '中包装'
   if (value === 'container_units') return '大包装'
-  return valueOrDash(value)
+  return value ? `未知起订单位（${value}）` : '-'
 }
 
 function minimumOrderSummary(product: ErpProductView | undefined) {
-  if (!product || product.minimumOrder == null) return '-'
-  const unit =
-    product.minimumOrderUnit === 'base_units'
-      ? product.unit || '基础单位'
-      : product.minimumOrderUnit === 'middle_units'
-        ? product.middleUnit || '中包装'
-        : product.minimumOrderUnit === 'container_units'
-          ? product.bigUnit || '大包装'
-          : minimumOrderUnitLabel(product.minimumOrderUnit)
-  return `${quantity(product.minimumOrder)} ${unit}`
+  return product ? productQuantityDisplay(product, 'MIN_ORDER') : '-'
 }
 
 function packageSummary(product: ErpProductView | undefined) {
@@ -1503,30 +1648,134 @@ function packageConversion(product: ErpProductView, level: 'middle' | 'big') {
   const rate = level === 'middle' ? product.baseToMiddleRate : product.baseToBigRate
   if (!unit && rate == null) return '-'
   if (!unit) return `单位未配置（换算 ${quantity(rate)}${valueOrDash(product.unit)}）`
-  return `1${valueOrDash(unit)} = ${quantity(rate)}${valueOrDash(product.unit)}`
+  if (rate == null) return `${unit}（换算关系未配置）`
+  return `1${unit} = ${quantity(rate)}${valueOrDash(product.unit)}`
+}
+
+function productPriceDisplay(
+  product: ErpProductView,
+  priceType: string,
+  unitLevel: string,
+) {
+  const projected = product.priceItems?.find(
+    (item) => item.priceType === priceType && item.unitLevel === unitLevel,
+  )
+  if (projected) return projected.displayValue || moneyWithUnit(projected.amount, projected.unitName)
+
+  const legacyAmount =
+    priceType === 'ORDER' && unitLevel === 'BASE'
+      ? product.orderPrice
+      : priceType === 'MARKET' && unitLevel === 'BASE'
+        ? product.marketPrice
+        : priceType === 'PURCHASE' && unitLevel === 'BASE'
+          ? product.purchasePrice
+          : priceType === 'OTHER' && unitLevel === 'BASE'
+            ? product.price4
+            : priceType === 'ORDER' && unitLevel === 'MIDDLE'
+              ? product.middleOrderPrice
+              : priceType === 'ORDER' && unitLevel === 'BIG'
+                ? product.bigOrderPrice
+                : null
+  const legacyUnit =
+    unitLevel === 'BASE'
+      ? product.unit
+      : unitLevel === 'MIDDLE'
+        ? product.middleUnit
+        : unitLevel === 'BIG'
+          ? product.bigUnit
+          : null
+  return moneyWithUnit(legacyAmount, legacyUnit)
+}
+
+function skuPriceDisplay(sku: ErpSkuView, priceType: string, unitLevel: string) {
+  const projected = sku.priceItems?.find(
+    (item) => item.priceType === priceType && item.unitLevel === unitLevel,
+  )
+  if (projected) return projected.displayValue || moneyWithUnit(projected.amount, projected.unitName)
+
+  const legacyAmount =
+    priceType === 'ORDER' && unitLevel === 'BASE'
+      ? sku.orderPrice
+      : priceType === 'MARKET' && unitLevel === 'BASE'
+        ? sku.marketPrice
+        : priceType === 'PURCHASE' && unitLevel === 'BASE'
+          ? sku.purchasePrice
+          : priceType === 'ORDER' && unitLevel === 'MIDDLE'
+            ? sku.middleOrderPrice
+            : priceType === 'ORDER' && unitLevel === 'BIG'
+              ? sku.bigOrderPrice
+              : null
+  return moneyWithUnit(legacyAmount, unitLevel === 'BASE' ? sku.unit : null)
+}
+
+function productQuantityDisplay(product: ErpProductView, quantityType: string) {
+  const projected = product.quantityItems?.find((item) => item.quantityType === quantityType)
+  if (projected) {
+    return projected.displayValue || quantityWithUnit(projected.amount, projected.unitName)
+  }
+
+  if (quantityType === 'MIN_ORDER') {
+    if (product.minimumOrder == null) return '-'
+    const unit =
+      product.minimumOrderUnit === 'base_units'
+        ? product.unit
+        : product.minimumOrderUnit === 'middle_units'
+          ? product.middleUnit
+          : product.minimumOrderUnit === 'container_units'
+            ? product.bigUnit
+            : null
+    if (unit) return quantityWithUnit(product.minimumOrder, unit)
+    const level = minimumOrderUnitLabel(product.minimumOrderUnit)
+    return `${quantity(product.minimumOrder)}（${level}的具体单位未配置）`
+  }
+  const amount =
+    quantityType === 'INVENTORY_LOWER'
+      ? product.inventoryLower
+      : quantityType === 'INVENTORY_SAFETY'
+        ? product.safetyInventory
+        : quantityType === 'INVENTORY_UPPER'
+          ? product.inventoryUpper
+          : null
+  return quantityWithUnit(amount, product.unit)
 }
 
 function productPrices(product: ErpProductView) {
+  if (product.priceItems?.length) {
+    return product.priceItems.map((item) => ({
+      label: `${item.displayLabel}（${priceUnitLabel(item.unitName)}）`,
+      value: item.displayValue || moneyWithUnit(item.amount, item.unitName),
+    }))
+  }
   return [
-    { label: '基础订货价', value: money(product.orderPrice) },
-    { label: '市场价', value: money(product.marketPrice) },
-    { label: '采购价', value: money(product.purchasePrice) },
-    { label: '其他价', value: money(product.price4) },
-    { label: '中包装价', value: money(product.middleOrderPrice) },
-    { label: '大包装价', value: money(product.bigOrderPrice) },
+    {
+      label: `基础订货价（${priceUnitLabel(product.unit)}）`,
+      value: moneyWithUnit(product.orderPrice, product.unit),
+    },
+    {
+      label: `市场价（${priceUnitLabel(product.unit)}）`,
+      value: moneyWithUnit(product.marketPrice, product.unit),
+    },
+    {
+      label: `采购价（${priceUnitLabel(product.unit)}）`,
+      value: moneyWithUnit(product.purchasePrice, product.unit),
+    },
+    {
+      label: `其他价（${priceUnitLabel(product.unit)}）`,
+      value: moneyWithUnit(product.price4, product.unit),
+    },
+    {
+      label: `中包装订货价（${priceUnitLabel(product.middleUnit)}）`,
+      value: moneyWithUnit(product.middleOrderPrice, product.middleUnit),
+    },
+    {
+      label: `大包装订货价（${priceUnitLabel(product.bigUnit)}）`,
+      value: moneyWithUnit(product.bigOrderPrice, product.bigUnit),
+    },
   ]
 }
 
 function putawayLabel(value: string | null | undefined) {
-  if (value === 'T') return '上架'
-  if (value === 'F') return '下架'
-  return valueOrDash(value)
-}
-
-function putawayTagType(value: string | null | undefined) {
-  if (value === 'T') return 'success'
-  if (value === 'F') return 'info'
-  return 'warning'
+  return businessDictionaryLabel('ERP', 'DHB_PRODUCT_PUTAWAY', value, '上下架状态')
 }
 
 function formatTime(value: string | null) {
@@ -2043,8 +2292,7 @@ function errorMessage(reason: unknown, fallback: string) {
 }
 
 .info-grid,
-.inventory-grid,
-.source-field-grid {
+.inventory-grid {
   display: grid;
   margin: 0;
 }
@@ -2052,18 +2300,15 @@ function errorMessage(reason: unknown, fallback: string) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 22px $spacing-lg;
 }
-.info-grid > div,
-.source-field-grid > div {
+.info-grid > div {
   min-width: 0;
 }
-.info-grid dt,
-.source-field-grid dt {
+.info-grid dt {
   margin-bottom: 6px;
   color: $color-text-secondary;
   font-size: $font-size-xs;
 }
-.info-grid dd,
-.source-field-grid dd {
+.info-grid dd {
   overflow-wrap: anywhere;
   margin: 0;
   color: $color-text-regular;
@@ -2181,22 +2426,6 @@ function errorMessage(reason: unknown, fallback: string) {
   font-size: $font-size-sm;
 }
 
-.source-field-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
-  border: 1px solid $color-border-base;
-  border-radius: $border-radius-base;
-  overflow: hidden;
-}
-.source-field-grid > div {
-  padding: 12px $spacing-md;
-  border-right: 1px solid $color-border-base;
-  border-bottom: 1px solid $color-border-base;
-}
-.source-field-grid > div:nth-child(even) {
-  border-right: 0;
-}
-
 @media (max-width: 720px) {
   .page-header {
     flex-direction: column;
@@ -2252,12 +2481,6 @@ function errorMessage(reason: unknown, fallback: string) {
   }
   .info-span-2 {
     grid-column: auto;
-  }
-  .source-field-grid {
-    grid-template-columns: 1fr;
-  }
-  .source-field-grid > div {
-    border-right: 0;
   }
 }
 </style>

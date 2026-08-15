@@ -57,6 +57,25 @@ export interface ErpProductView {
   images: ErpProductImageView[]
   skus: ErpSkuView[]
   customFields: Record<string, string>
+  priceItems: ErpProductPriceView[]
+  quantityItems: ErpProductQuantityView[]
+}
+
+export interface ErpProductPriceView {
+  priceType: string
+  unitLevel: string
+  amount: number
+  unitName: string | null
+  displayLabel: string
+  displayValue: string
+}
+
+export interface ErpProductQuantityView {
+  quantityType: string
+  amount: number
+  unitName: string | null
+  displayLabel: string
+  displayValue: string
 }
 
 export interface ErpProductImageView {
@@ -93,6 +112,7 @@ export interface ErpSkuView {
   purchasePrice: number | null
   middleOrderPrice: number | null
   bigOrderPrice: number | null
+  priceItems: ErpProductPriceView[]
 }
 
 export interface ErpCategoryView {

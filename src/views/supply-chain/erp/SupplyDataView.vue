@@ -19,14 +19,37 @@
 
       <div class="query-panel">
         <el-form class="query-bar" inline @submit.prevent="queryData">
-          <el-form-item label="关键词">
+          <el-form-item label="搜索条件">
             <el-input v-model="filters.keyword" clearable :placeholder="page.placeholder" @keyup.enter="queryData" />
           </el-form-item>
-          <el-form-item v-if="page.objectType !== 'INVENTORY'" label="状态">
-            <el-input v-model="filters.status" clearable placeholder="来源或内部状态" @keyup.enter="queryData" />
+          <el-form-item v-if="page.objectType !== 'INVENTORY' && page.objectType !== 'SUPPLIER'" :label="statusFilterLabel">
+            <el-input v-model="filters.status" clearable :placeholder="statusFilterPlaceholder" @keyup.enter="queryData" />
           </el-form-item>
-          <el-form-item v-else label="仓库编码">
-            <el-input v-model="filters.warehouseCode" clearable placeholder="全部仓库" @keyup.enter="queryData" />
+          <el-form-item v-else label="库存状态">
+            <el-select v-model="filters.status" clearable placeholder="全部库存状态" style="min-width: 180px">
+              <el-option label="有可用库存" value="AVAILABLE" />
+              <el-option label="无可用库存" value="NO_AVAILABLE" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="page.objectType === 'INVENTORY'" label="仓库">
+            <el-select
+              v-model="filters.warehouseCodes"
+              multiple
+              clearable
+              filterable
+              collapse-tags
+              collapse-tags-tooltip
+              :loading="warehouseLoading"
+              placeholder="全部仓库（可多选）"
+              style="min-width: 280px"
+            >
+              <el-option
+                v-for="warehouse in warehouseOptions"
+                :key="warehouse.warehouseCode"
+                :label="`${warehouse.name}（${warehouse.warehouseCode}）`"
+                :value="warehouse.warehouseCode"
+              />
+            </el-select>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="loading" @click="queryData">查询</el-button>
@@ -38,7 +61,7 @@
       <div class="result-heading">
         <div>
           <h2>{{ page.title }}列表</h2>
-          <p>共 {{ data.total }} 条数据，本页 {{ data.items.length }} 条；点击数据行可查看完整资料。</p>
+          <p>共 {{ data.total }} 条数据，本页 {{ data.items.length }} 条；列表字段按订货宝业务含义拆分，点击数据行可查看完整资料。</p>
         </div>
       </div>
 
@@ -61,38 +84,24 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column :label="listContextLabel" min-width="235">
+        <el-table-column
+          v-for="column in page.columns"
+          :key="column.key"
+          :label="column.label"
+          :width="column.width"
+          :align="column.format === 'money' ? 'right' : 'left'"
+          :header-align="column.format === 'money' ? 'right' : 'left'"
+        >
           <template #default="scope">
-            <div class="stacked-cell">
-              <span>{{ rowContext(scope.row).title }}</span>
-              <small>{{ rowContext(scope.row).meta }}</small>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column :label="listMetricLabel" min-width="165" :align="isAmountPage ? 'right' : 'left'" :header-align="isAmountPage ? 'right' : 'left'">
-          <template #default="scope">
-            <div :class="['metric-cell', { 'is-amount': isAmountPage }]">
-              <strong>{{ rowMetric(scope.row).value }}</strong>
-              <span>{{ rowMetric(scope.row).label }}</span>
-              <small>{{ rowMetric(scope.row).meta }}</small>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="135">
-          <template #default="scope">
-            <div class="status-cell">
-              <el-tag :type="statusTagType(rowStatus(scope.row).value)" effect="light" size="small">
-                {{ rowStatus(scope.row).value }}
+            <div v-if="column.format === 'status'" class="status-cell">
+              <el-tag :type="statusTagType(formatColumnValue(scope.row, column))" effect="light" size="small">
+                {{ formatColumnValue(scope.row, column) }}
               </el-tag>
-              <small>{{ rowStatus(scope.row).meta }}</small>
             </div>
+            <span v-else :class="column.format === 'time' ? 'sync-time' : 'status-text'">
+              {{ formatColumnValue(scope.row, column) }}
+            </span>
           </template>
-        </el-table-column>
-        <el-table-column :label="businessTimeLabel" width="165">
-          <template #default="scope"><span class="sync-time">{{ rowBusinessTime(scope.row) }}</span></template>
-        </el-table-column>
-        <el-table-column label="最后同步" width="165">
-          <template #default="scope"><span class="sync-time">{{ time(scope.row.syncedAt ?? scope.row.sourceUpdatedAt) }}</span></template>
         </el-table-column>
         <el-table-column label="操作" width="96" fixed="right" align="center">
           <template #default="scope">
@@ -131,34 +140,34 @@
         <template v-else-if="orderDetail && page.objectType === 'PURCHASE_ORDER'">
           <el-descriptions :column="3" border>
             <el-descriptions-item label="采购单号">{{ value(orderDetail.number) }}</el-descriptions-item>
-            <el-descriptions-item label="订货宝单据ID">{{ value(orderDetail.sourceId) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝采购单ID">{{ value(orderDetail.sourceId) }}</el-descriptions-item>
             <el-descriptions-item label="供应商编码">{{ value(orderDetail.supplierCode) }}</el-descriptions-item>
             <el-descriptions-item label="供应商名称">{{ value(orderDetail.supplierName) }}</el-descriptions-item>
             <el-descriptions-item label="仓库编码">{{ value(orderDetail.warehouseCode) }}</el-descriptions-item>
             <el-descriptions-item label="仓库名称">{{ value(orderDetail.warehouseName) }}</el-descriptions-item>
-            <el-descriptions-item label="来源状态">{{ value(orderDetail.sourceStatusName || orderDetail.sourceStatus) }}</el-descriptions-item>
-            <el-descriptions-item label="付款状态">{{ value(orderDetail.paymentStatusName || orderDetail.paymentStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="单据状态">{{ purchaseStatusLabel(orderDetail.sourceStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="付款状态">{{ purchasePaymentStatusLabel(orderDetail.paymentStatus) }}</el-descriptions-item>
             <el-descriptions-item label="经办人">{{ value(orderDetail.staffName) }}</el-descriptions-item>
             <el-descriptions-item label="采购金额">{{ money(orderDetail.totalAmount) }}</el-descriptions-item>
             <el-descriptions-item label="已付金额">{{ money(orderDetail.paidAmount) }}</el-descriptions-item>
             <el-descriptions-item label="商品总数量">{{ value(orderDetail.goodsCount) }}</el-descriptions-item>
-            <el-descriptions-item label="预计交货">{{ time(orderDetail.deliveryAt) }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ time(orderDetail.sourceCreatedAt) }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ time(orderDetail.sourceUpdatedAt) }}</el-descriptions-item>
-            <el-descriptions-item label="下载状态">{{ orderDetail.downloaded == null ? '-' : orderDetail.downloaded ? '已下载' : '未下载' }}</el-descriptions-item>
+            <el-descriptions-item label="预计交货时间">{{ time(orderDetail.deliveryAt) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝创建时间">{{ time(orderDetail.sourceCreatedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝更新时间">{{ time(orderDetail.sourceUpdatedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="ERP下载状态">{{ orderDetail.downloaded == null ? '-' : orderDetail.downloaded ? '已下载' : '未下载' }}</el-descriptions-item>
             <el-descriptions-item label="单据备注" :span="3">{{ value(orderDetail.remark) }}</el-descriptions-item>
             <el-descriptions-item label="内部沟通" :span="3">{{ value(orderDetail.internalCommunication) }}</el-descriptions-item>
           </el-descriptions>
-          <el-collapse class="source-fields">
-            <el-collapse-item title="订货宝原始单据字段" name="purchase-order-source">
-              <pre>{{ sourceJson(orderDetail.sourceFields) }}</pre>
-            </el-collapse-item>
-          </el-collapse>
-          <h3 class="detail-title">采购明细（{{ orderDetail.lines.length }}）</h3>
+          <div class="detail-title-row">
+            <h3 class="detail-title">采购明细（{{ orderDetail.lines.length }}）</h3>
+            <div class="detail-payment-note">
+              <el-tag :type="statusTagType(purchasePaymentStatusLabel(orderDetail.paymentStatus))" effect="light" size="small">
+                整单付款状态：{{ purchasePaymentStatusLabel(orderDetail.paymentStatus) }}
+              </el-tag>
+              <small>明细行未返回独立付款状态，以上为采购单整体付款状态</small>
+            </div>
+          </div>
           <el-table :data="orderDetail.lines" size="small" border>
-            <el-table-column type="expand" width="48">
-              <template #default="scope"><pre class="line-source-fields">{{ sourceJson(scope.row.sourceFields) }}</pre></template>
-            </el-table-column>
             <el-table-column prop="sourceGoodsId" label="订货宝商品ID" min-width="150" />
             <el-table-column prop="goodsCode" label="商品编码" min-width="140" />
             <el-table-column prop="goodsName" label="商品名称" min-width="190" show-overflow-tooltip />
@@ -178,38 +187,30 @@
         <template v-else-if="returnDetail && page.objectType === 'PURCHASE_RETURN'">
           <el-descriptions :column="3" border>
             <el-descriptions-item label="退货单号">{{ value(returnDetail.number) }}</el-descriptions-item>
-            <el-descriptions-item label="订货宝单据ID">{{ value(returnDetail.sourceId) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝退货单ID">{{ value(returnDetail.sourceId) }}</el-descriptions-item>
             <el-descriptions-item label="供应商编码">{{ value(returnDetail.supplierCode) }}</el-descriptions-item>
             <el-descriptions-item label="供应商名称">{{ value(returnDetail.supplierName) }}</el-descriptions-item>
             <el-descriptions-item label="仓库编码">{{ value(returnDetail.warehouseCode) }}</el-descriptions-item>
             <el-descriptions-item label="仓库名称">{{ value(returnDetail.warehouseName) }}</el-descriptions-item>
-            <el-descriptions-item label="来源状态">{{ value(returnDetail.sourceStatusName || returnDetail.sourceStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="退货状态">{{ purchaseReturnStatusLabel(returnDetail.sourceStatus) }}</el-descriptions-item>
             <el-descriptions-item label="经办人">{{ value(returnDetail.staffName) }}</el-descriptions-item>
             <el-descriptions-item label="联系人">{{ value(returnDetail.contactName) }}</el-descriptions-item>
             <el-descriptions-item label="联系电话">{{ value(returnDetail.contactPhone) }}</el-descriptions-item>
             <el-descriptions-item label="退货金额">{{ money(returnDetail.returnAmount) }}</el-descriptions-item>
             <el-descriptions-item label="折扣金额">{{ money(returnDetail.discountAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="来源明细数量">{{ value(returnDetail.detailCount) }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ time(returnDetail.sourceCreatedAt) }}</el-descriptions-item>
-            <el-descriptions-item label="发送时间">{{ time(returnDetail.sendAt) }}</el-descriptions-item>
-            <el-descriptions-item label="来源设备">{{ value(returnDetail.sourceDevice) }}</el-descriptions-item>
-            <el-descriptions-item label="下载状态">{{ returnDetail.downloaded == null ? '-' : returnDetail.downloaded ? '已下载' : '未下载' }}</el-descriptions-item>
+            <el-descriptions-item label="退货明细条数">{{ value(returnDetail.detailCount) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝创建时间">{{ time(returnDetail.sourceCreatedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="退货发出时间">{{ time(returnDetail.sendAt) }}</el-descriptions-item>
+            <el-descriptions-item label="下单设备">{{ formatSourceDevice(returnDetail.sourceDevice) }}</el-descriptions-item>
+            <el-descriptions-item label="ERP下载状态">{{ returnDetail.downloaded == null ? '-' : returnDetail.downloaded ? '已下载' : '未下载' }}</el-descriptions-item>
             <el-descriptions-item label="联系地址" :span="3">{{ value(returnDetail.contactAddress) }}</el-descriptions-item>
             <el-descriptions-item label="城市路径" :span="3">{{ value(returnDetail.cityNames.join(' / ')) }}</el-descriptions-item>
             <el-descriptions-item label="退货原因" :span="3">{{ value(returnDetail.reason) }}</el-descriptions-item>
             <el-descriptions-item label="单据备注" :span="3">{{ value(returnDetail.remark) }}</el-descriptions-item>
             <el-descriptions-item label="内部沟通" :span="3">{{ value(returnDetail.internalCommunication) }}</el-descriptions-item>
           </el-descriptions>
-          <el-collapse class="source-fields">
-            <el-collapse-item title="订货宝原始单据字段" name="purchase-return-source">
-              <pre>{{ sourceJson(returnDetail.sourceFields) }}</pre>
-            </el-collapse-item>
-          </el-collapse>
           <h3 class="detail-title">退货明细（{{ returnDetail.lines.length }}）</h3>
           <el-table :data="returnDetail.lines" size="small" border>
-            <el-table-column type="expand" width="48">
-              <template #default="scope"><pre class="line-source-fields">{{ sourceJson(scope.row.sourceFields) }}</pre></template>
-            </el-table-column>
             <el-table-column prop="sourceGoodsId" label="订货宝商品ID" min-width="150" />
             <el-table-column prop="goodsCode" label="商品编码" min-width="140" />
             <el-table-column prop="goodsName" label="商品名称" min-width="190" show-overflow-tooltip />
@@ -236,13 +237,13 @@
         <template v-else-if="warehousingDetail && page.objectType === 'WAREHOUSING_RECEIPT'">
           <el-descriptions :column="3" border>
             <el-descriptions-item label="入库单号">{{ value(warehousingDetail.number) }}</el-descriptions-item>
-            <el-descriptions-item label="订货宝单据ID">{{ value(warehousingDetail.sourceId) }}</el-descriptions-item>
-            <el-descriptions-item label="仓库来源ID">{{ value(warehousingDetail.warehouseSourceId) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝入库单ID">{{ value(warehousingDetail.sourceId) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝仓库ID">{{ value(warehousingDetail.warehouseSourceId) }}</el-descriptions-item>
             <el-descriptions-item label="仓库名称">{{ value(warehousingDetail.warehouseName) }}</el-descriptions-item>
-            <el-descriptions-item label="供应商来源ID">{{ value(warehousingDetail.supplierSourceId) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝供应商ID">{{ value(warehousingDetail.supplierSourceId) }}</el-descriptions-item>
             <el-descriptions-item label="供应商名称">{{ value(warehousingDetail.supplierName) }}</el-descriptions-item>
-            <el-descriptions-item label="入库类型">{{ value(warehousingDetail.typeName || warehousingDetail.typeId) }}</el-descriptions-item>
-            <el-descriptions-item label="来源状态">{{ value(warehousingDetail.sourceStatusName || warehousingDetail.sourceStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="入库类型">{{ formatInboundType(warehousingDetail.typeId) }}</el-descriptions-item>
+            <el-descriptions-item label="入库状态">{{ warehousingStatusLabel(warehousingDetail.sourceStatus) }}</el-descriptions-item>
             <el-descriptions-item label="经办人">{{ value(warehousingDetail.staffName) }}</el-descriptions-item>
             <el-descriptions-item label="协作方">{{ value(warehousingDetail.collaboratorName || warehousingDetail.collaboratorSourceId) }}</el-descriptions-item>
             <el-descriptions-item label="物流单号">{{ value(warehousingDetail.expressNumber) }}</el-descriptions-item>
@@ -250,23 +251,15 @@
             <el-descriptions-item label="入库金额">{{ money(warehousingDetail.totalAmount) }}</el-descriptions-item>
             <el-descriptions-item label="成本金额">{{ money(warehousingDetail.costAmount) }}</el-descriptions-item>
             <el-descriptions-item label="入库时间">{{ time(warehousingDetail.storageAt) }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ time(warehousingDetail.sourceCreatedAt) }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ time(warehousingDetail.sourceUpdatedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝创建时间">{{ time(warehousingDetail.sourceCreatedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝更新时间">{{ time(warehousingDetail.sourceUpdatedAt) }}</el-descriptions-item>
             <el-descriptions-item label="单据备注" :span="3">{{ value(warehousingDetail.remark) }}</el-descriptions-item>
             <el-descriptions-item label="关联采购单" :span="3">
               {{ value(warehousingDetail.purchaseLinks.map(item => item.purchaseOrderNo).filter(Boolean).join(' / ')) }}
             </el-descriptions-item>
           </el-descriptions>
-          <el-collapse class="source-fields">
-            <el-collapse-item title="订货宝原始单据字段" name="warehousing-source">
-              <pre>{{ sourceJson(warehousingDetail.sourceFields) }}</pre>
-            </el-collapse-item>
-          </el-collapse>
           <h3 class="detail-title">入库明细（{{ warehousingDetail.lines.length }}）</h3>
           <el-table :data="warehousingDetail.lines" size="small" border>
-            <el-table-column type="expand" width="48">
-              <template #default="scope"><pre class="line-source-fields">{{ sourceJson(scope.row.sourceFields) }}</pre></template>
-            </el-table-column>
             <el-table-column prop="sourceGoodsId" label="订货宝商品ID" min-width="150" />
             <el-table-column prop="goodsCode" label="商品编码" min-width="140" />
             <el-table-column prop="goodsName" label="商品名称" min-width="190" show-overflow-tooltip />
@@ -322,12 +315,15 @@ import {
   getErpInventoryBalances, getErpPurchaseOrder, getErpPurchaseOrders, getErpPurchaseReturn, getErpPurchaseReturns,
   getErpSuppliers, getErpWarehouses, getErpWarehousingReceipt, getErpWarehousingReceipts, syncErpData,
   type ErpPage, type ErpPurchaseOrderDetailView, type ErpPurchaseReturnDetailView, type ErpWarehousingReceiptDetailView,
-  type ErpSupplyObjectType, type ErpSupplyQuery,
+  type ErpSupplyObjectType, type ErpSupplyQuery, type ErpWarehouseView,
 } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { businessDictionaryLabel, loadBusinessDictionaries, sourceText } from '@/utils/business-dictionary'
+import { formatInboundType, formatSourceDevice } from '@/utils/dhb-order-status'
+import { createLatestRequestGuard } from '@/utils/latest-request'
 
 type Row = Record<string, unknown>
-interface Column { key: string; label: string; width: number; format?: 'money' | 'time' | 'status' }
+interface Column { key: string; label: string; width: number; format?: 'money' | 'time' | 'status' | 'number' }
 interface DisplayValue { title: string; code: string; meta: string }
 interface DetailField { label: string; value: string; wide?: boolean }
 interface Definition {
@@ -337,75 +333,81 @@ interface Definition {
 
 const definitions: Definition[] = [
   { routeKey: 'supply.erp.suppliers.profiles', objectType: 'SUPPLIER', group: '供应商', title: '供应商档案', syncLabel: '供应商',
-    description: '查询 ERP 供应商规范档案，地址、联系方式、税号和银行账号展示完整值。', placeholder: '供应商编码、名称或联系人', columns: [
-      { key: 'supplierCode', label: '供应商编码', width: 150 }, { key: 'name', label: '供应商名称', width: 200 },
-      { key: 'areaName', label: '地区', width: 130 }, { key: 'address', label: '地址', width: 240 },
-      { key: 'remark', label: '备注', width: 200 }, { key: 'contactName', label: '联系人', width: 120 },
-      { key: 'mobile', label: '手机', width: 140 }, { key: 'phone', label: '座机', width: 140 },
-      { key: 'email', label: '邮箱', width: 220 }, { key: 'accountName', label: '开户名称', width: 180 },
-      { key: 'bankName', label: '开户银行', width: 160 }, { key: 'bankAccount', label: '银行账号', width: 220 },
-      { key: 'invoiceTitle', label: '发票抬头', width: 180 }, { key: 'taxpayerNumber', label: '纳税人识别号', width: 200 },
-      { key: 'sourceUpdatedAt', label: '来源更新时间', width: 170, format: 'time' },
+    description: '对应订货宝供应商档案；编码、联系人、联系方式和地址分开查看。', placeholder: '输入供应商编码、名称或联系人', columns: [
+      { key: 'areaName', label: '所属地区', width: 140 }, { key: 'address', label: '供应商地址', width: 220 },
+      { key: 'contactName', label: '联系人', width: 120 }, { key: 'mobile', label: '手机号', width: 140 },
+      { key: 'phone', label: '座机号', width: 140 }, { key: 'email', label: '邮箱', width: 200 },
+      { key: 'sourceUpdatedAt', label: '订货宝更新时间', width: 170, format: 'time' },
+      { key: 'syncedAt', label: '最近同步时间', width: 170, format: 'time' },
     ] },
   { routeKey: 'supply.erp.procurement.orders', objectType: 'PURCHASE_ORDER', group: '采购管理', title: '采购订单', syncLabel: '采购订单',
-    description: '采购单由列表与逐单详情合并落库，明细数量来自 ERP 本地表。', placeholder: '采购单号、供应商或仓库', columns: [
-      { key: 'purchaseOrderNo', label: '采购单号', width: 170 }, { key: 'supplierName', label: '供应商', width: 180 },
-      { key: 'warehouseName', label: '仓库', width: 150 }, { key: 'staffName', label: '经办人', width: 120 }, { key: 'sourceStatusName', label: '来源状态', width: 120, format: 'status' },
-      { key: 'paymentStatusName', label: '付款状态', width: 110 }, { key: 'totalAmount', label: '采购金额', width: 120, format: 'money' },
-      { key: 'paidAmount', label: '已付金额', width: 120, format: 'money' }, { key: 'lineCount', label: '明细数', width: 90 },
-      { key: 'sourceCreatedAt', label: '创建时间', width: 170, format: 'time' }, { key: 'syncedAt', label: '最后同步', width: 170, format: 'time' },
+    description: '对应订货宝采购单；单据状态、付款状态、采购金额和采购日期分别展示。', placeholder: '输入采购单号、供应商或仓库名称', columns: [
+      { key: 'supplierName', label: '供应商名称', width: 180 }, { key: 'warehouseName', label: '收货仓库', width: 150 },
+      { key: 'staffName', label: '经办人', width: 120 }, { key: 'purchaseStatus', label: '单据状态', width: 130, format: 'status' },
+      { key: 'paymentStatus', label: '付款状态', width: 120, format: 'status' }, { key: 'totalAmount', label: '采购金额', width: 130, format: 'money' },
+      { key: 'paidAmount', label: '已付金额', width: 130, format: 'money' }, { key: 'goodsCount', label: '商品总数量', width: 110, format: 'number' },
+      { key: 'deliveryAt', label: '预计交货时间', width: 170, format: 'time' }, { key: 'sourceCreatedAt', label: '采购日期', width: 170, format: 'time' },
+      { key: 'syncedAt', label: '最近同步时间', width: 170, format: 'time' },
     ] },
   { routeKey: 'supply.erp.procurement.receipts', objectType: 'WAREHOUSING_RECEIPT', group: '采购管理', title: '到货与入库', syncLabel: '到货与入库',
-    description: '展示订货宝到货与入库数据；当前复用 ERP 入库单本地投影。', placeholder: '入库单号、仓库、供应商或类型', columns: [
-      { key: 'warehousingNo', label: '入库单号', width: 170 }, { key: 'warehouseName', label: '仓库', width: 160 },
-      { key: 'supplierName', label: '供应商', width: 170 }, { key: 'staffName', label: '经办人', width: 120 }, { key: 'collaboratorName', label: '协作方', width: 140 }, { key: 'typeName', label: '入库类型', width: 130 },
-      { key: 'sourceStatusName', label: '来源状态', width: 120, format: 'status' }, { key: 'totalAmount', label: '总金额', width: 120, format: 'money' },
-      { key: 'costAmount', label: '成本金额', width: 120, format: 'money' }, { key: 'freightAmount', label: '运费', width: 110 }, { key: 'expressNumber', label: '物流单号', width: 150 }, { key: 'lineCount', label: '明细数', width: 90 },
-      { key: 'storageAt', label: '入库时间', width: 170, format: 'time' }, { key: 'syncedAt', label: '最后同步', width: 170, format: 'time' },
+    description: '对应订货宝入库单；到货仓库、入库类型、入库状态、金额和物流信息分开查看。', placeholder: '输入入库单号、仓库、供应商或入库类型', columns: [
+      { key: 'warehouseName', label: '入库仓库', width: 160 }, { key: 'supplierName', label: '供应商名称', width: 170 },
+      { key: 'staffName', label: '经办人', width: 120 }, { key: 'collaboratorName', label: '协作方', width: 140 },
+      { key: 'inboundType', label: '入库类型', width: 130 }, { key: 'inboundStatus', label: '入库状态', width: 130, format: 'status' },
+      { key: 'totalAmount', label: '入库金额', width: 130, format: 'money' }, { key: 'costAmount', label: '成本金额', width: 130, format: 'money' },
+      { key: 'freightAmount', label: '运费', width: 110, format: 'money' }, { key: 'expressNumber', label: '物流单号', width: 160 },
+      { key: 'lineCount', label: '明细条数', width: 100, format: 'number' }, { key: 'storageAt', label: '入库时间', width: 170, format: 'time' },
+      { key: 'syncedAt', label: '最近同步时间', width: 170, format: 'time' },
     ] },
   { routeKey: 'supply.erp.procurement.returns', objectType: 'PURCHASE_RETURN', group: '采购管理', title: '采购退货', syncLabel: '采购退货',
-    description: '采购退货列表与详情统一落库，当前按原始联系信息展示。', placeholder: '退货单号、供应商或原因', columns: [
-      { key: 'purchaseReturnNo', label: '退货单号', width: 170 }, { key: 'supplierName', label: '供应商', width: 180 },
-      { key: 'warehouseName', label: '仓库', width: 150 }, { key: 'staffName', label: '经办人', width: 120 }, { key: 'sourceStatusName', label: '来源状态', width: 120, format: 'status' },
-      { key: 'returnAmount', label: '退货金额', width: 120, format: 'money' }, { key: 'discountAmount', label: '折扣金额', width: 120, format: 'money' },
-      { key: 'reason', label: '退货原因', width: 180 }, { key: 'lineCount', label: '明细数', width: 90 },
-      { key: 'sendAt', label: '发出时间', width: 170, format: 'time' }, { key: 'syncedAt', label: '最后同步', width: 170, format: 'time' },
+    description: '对应订货宝采购退货单；退货状态、供应商、金额、原因和发出时间分开展示。', placeholder: '输入退货单号、供应商或退货原因', columns: [
+      { key: 'supplierName', label: '供应商名称', width: 180 }, { key: 'warehouseName', label: '退货仓库', width: 150 },
+      { key: 'staffName', label: '经办人', width: 120 }, { key: 'returnStatus', label: '退货状态', width: 130, format: 'status' },
+      { key: 'returnAmount', label: '退货金额', width: 130, format: 'money' }, { key: 'discountAmount', label: '折扣金额', width: 130, format: 'money' },
+      { key: 'reason', label: '退货原因', width: 200 }, { key: 'detailCount', label: '明细条数', width: 100, format: 'number' },
+      { key: 'sendAt', label: '发出时间', width: 170, format: 'time' }, { key: 'syncedAt', label: '最近同步时间', width: 170, format: 'time' },
     ] },
-  { routeKey: 'supply.erp.warehouse.locations', objectType: 'WAREHOUSE', group: '仓库作业', title: '仓库与库位', syncLabel: '仓库',
-    description: '管理 ERP 仓库档案及订货宝来源状态。', placeholder: '仓库编码、名称或地址', columns: [
-      { key: 'warehouseCode', label: '仓库编码', width: 150 }, { key: 'name', label: '仓库名称', width: 180 },
-      { key: 'sourceStatus', label: '来源状态', width: 110, format: 'status' }, { key: 'defaultFlag', label: '默认仓', width: 90 },
-      { key: 'acreage', label: '面积', width: 100 }, { key: 'phone', label: '电话', width: 140 },
-      { key: 'address', label: '地址', width: 220 }, { key: 'remark', label: '备注', width: 220 },
-      { key: 'syncedAt', label: '最后同步', width: 170, format: 'time' },
+  { routeKey: 'supply.erp.inventory.warehouses', objectType: 'WAREHOUSE', group: '仓库管理', title: '仓库信息', syncLabel: '仓库信息',
+    description: '对应订货宝仓库档案；仓库状态、仓库类型、联系方式和地址分开查看。', placeholder: '输入仓库编码、名称或地址', columns: [
+      { key: 'warehouseStatus', label: '仓库状态', width: 130, format: 'status' }, { key: 'warehouseType', label: '仓库类型', width: 130 },
+      { key: 'acreage', label: '仓库面积', width: 110, format: 'number' }, { key: 'phone', label: '联系电话', width: 150 },
+      { key: 'address', label: '仓库地址', width: 240 }, { key: 'remark', label: '仓库备注', width: 220 },
+      { key: 'syncedAt', label: '最近同步时间', width: 170, format: 'time' },
     ] },
-  { routeKey: 'supply.erp.warehouse.inbound', objectType: 'WAREHOUSING_RECEIPT', group: '仓库作业', title: '入库作业', syncLabel: '入库作业',
-    description: '入库单由列表与详情合并落库，并保留采购单关联。', placeholder: '入库单号、仓库、供应商或类型', columns: [
-      { key: 'warehousingNo', label: '入库单号', width: 170 }, { key: 'warehouseName', label: '仓库', width: 160 },
-      { key: 'supplierName', label: '供应商', width: 170 }, { key: 'staffName', label: '经办人', width: 120 }, { key: 'collaboratorName', label: '协作方', width: 140 }, { key: 'typeName', label: '入库类型', width: 130 },
-      { key: 'sourceStatusName', label: '来源状态', width: 120, format: 'status' }, { key: 'totalAmount', label: '总金额', width: 120, format: 'money' },
-      { key: 'costAmount', label: '成本金额', width: 120, format: 'money' }, { key: 'freightAmount', label: '运费', width: 110, format: 'money' }, { key: 'expressNumber', label: '物流单号', width: 150 }, { key: 'lineCount', label: '明细数', width: 90 },
-      { key: 'storageAt', label: '入库时间', width: 170, format: 'time' }, { key: 'syncedAt', label: '最后同步', width: 170, format: 'time' },
+  { routeKey: 'supply.erp.inventory.inbound', objectType: 'WAREHOUSING_RECEIPT', group: '仓库管理', title: '入库单', syncLabel: '入库单',
+    description: '对应 ERP 入库单；入库状态、入库类型、仓库、金额和入库时间分开展示。', placeholder: '输入入库单号、仓库、供应商或入库类型', columns: [
+      { key: 'warehouseName', label: '入库仓库', width: 160 }, { key: 'supplierName', label: '供应商名称', width: 170 },
+      { key: 'staffName', label: '经办人', width: 120 }, { key: 'collaboratorName', label: '协作方', width: 140 },
+      { key: 'inboundType', label: '入库类型', width: 130 }, { key: 'inboundStatus', label: '入库状态', width: 130, format: 'status' },
+      { key: 'totalAmount', label: '入库金额', width: 130, format: 'money' }, { key: 'costAmount', label: '成本金额', width: 130, format: 'money' },
+      { key: 'freightAmount', label: '运费', width: 110, format: 'money' }, { key: 'expressNumber', label: '物流单号', width: 160 },
+      { key: 'lineCount', label: '明细条数', width: 100, format: 'number' }, { key: 'storageAt', label: '入库时间', width: 170, format: 'time' },
+      { key: 'syncedAt', label: '最近同步时间', width: 170, format: 'time' },
     ] },
-  { routeKey: 'supply.erp.inventory.overview', objectType: 'INVENTORY', group: '库存管理', title: '库存总览', syncLabel: '库存',
-    description: '按仓库、商品和规格组合展示 batchGetStock 的余额快照。', placeholder: '商品编码、名称或规格', columns: [
-      { key: 'warehouseCode', label: '仓库编码', width: 140 }, { key: 'warehouseName', label: '仓库', width: 160 },
-      { key: 'goodsCode', label: '商品编码', width: 150 }, { key: 'goodsName', label: '商品名称', width: 200 },
-      { key: 'optionSummary', label: '规格组合', width: 170 }, { key: 'realQuantity', label: '实际库存', width: 110 },
-      { key: 'availableQuantity', label: '可用库存', width: 110 }, { key: 'reservedQuantity', label: '预占', width: 90 },
-      { key: 'inTransitQuantity', label: '在途', width: 90 }, { key: 'syncedAt', label: '最后同步', width: 170, format: 'time' },
+  { routeKey: 'supply.erp.inventory.inventory', objectType: 'INVENTORY', group: '仓库管理', title: '库存', syncLabel: '库存',
+    description: '对应订货宝库存余额快照；支持按商品、规格和仓库查询实际、可用、预占及在途库存。', placeholder: '输入商品编码、商品名称或规格', columns: [
+      { key: 'warehouseName', label: '仓库名称', width: 160 }, { key: 'warehouseCode', label: '仓库编码', width: 140 },
+      { key: 'optionSummary', label: '商品规格', width: 180 }, { key: 'inventoryStatus', label: '库存状态', width: 130, format: 'status' },
+      { key: 'realQuantity', label: '实际库存', width: 110, format: 'number' }, { key: 'availableQuantity', label: '可用库存', width: 110, format: 'number' },
+      { key: 'reservedQuantity', label: '预占库存', width: 110, format: 'number' }, { key: 'inTransitQuantity', label: '在途库存', width: 110, format: 'number' },
+      { key: 'syncedAt', label: '最近同步时间', width: 170, format: 'time' },
     ] },
 ]
 
 const route = useRoute()
 const auth = useAuthStore()
+const listRequest = createLatestRequestGuard()
 const page = computed(() => definitions.find(item => item.routeKey === route.meta.routeKey) ?? definitions[0])
 const canSync = computed(() => auth.hasPermission('erp:supply:write'))
 const loading = ref(false)
 const syncing = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
-const filters = reactive({ keyword: '', status: '', warehouseCode: '' })
+const filters = reactive({ keyword: '', status: '', warehouseCodes: [] as string[] })
+const warehouseOptions = ref<ErpWarehouseView[]>([])
+const warehouseLoading = ref(false)
+const warehousesLoaded = ref(false)
+let warehouseLoadPromise: Promise<void> | null = null
 const data = ref<ErpPage<Row>>({ total: 0, begin: 0, step: 20, items: [] })
 const detailVisible = ref(false)
 const selectedRow = ref<Row | null>(null)
@@ -415,19 +417,22 @@ const orderDetail = ref<ErpPurchaseOrderDetailView | null>(null)
 const returnDetail = ref<ErpPurchaseReturnDetailView | null>(null)
 const warehousingDetail = ref<ErpWarehousingReceiptDetailView | null>(null)
 const isAmountPage = computed(() => ['PURCHASE_ORDER', 'PURCHASE_RETURN', 'WAREHOUSING_RECEIPT'].includes(page.value.objectType))
-const listIdentityLabel = computed(() => page.value.objectType === 'SUPPLIER' ? '供应商信息'
-  : page.value.objectType === 'WAREHOUSE' ? '仓库信息'
-    : page.value.objectType === 'INVENTORY' ? '商品信息' : '单据信息')
-const listContextLabel = computed(() => page.value.objectType === 'SUPPLIER' ? '地区与地址'
-  : page.value.objectType === 'WAREHOUSE' ? '地址与联系'
-    : page.value.objectType === 'INVENTORY' ? '仓库与规格' : '业务对象')
-const listMetricLabel = computed(() => page.value.objectType === 'SUPPLIER' ? '联系方式'
-  : page.value.objectType === 'WAREHOUSE' ? '仓库属性'
-    : page.value.objectType === 'INVENTORY' ? '库存余额' : '核心金额')
-const businessTimeLabel = computed(() => page.value.objectType === 'SUPPLIER' ? '来源更新时间'
-  : page.value.objectType === 'WAREHOUSE' ? '来源更新时间'
-    : page.value.objectType === 'INVENTORY' ? '快照时间'
-      : page.value.objectType === 'WAREHOUSING_RECEIPT' ? '入库时间' : '业务时间')
+const listIdentityLabel = computed(() => page.value.objectType === 'SUPPLIER' ? '供应商'
+  : page.value.objectType === 'WAREHOUSE' ? '仓库'
+    : page.value.objectType === 'INVENTORY' ? '商品与规格' : page.value.objectType === 'PURCHASE_ORDER' ? '采购订单' : page.value.objectType === 'PURCHASE_RETURN' ? '采购退货单' : '入库单')
+const statusFilterLabel = computed(() => {
+  if (page.value.objectType === 'PURCHASE_ORDER') return '单据状态'
+  if (page.value.objectType === 'PURCHASE_RETURN') return '退货状态'
+  if (page.value.objectType === 'WAREHOUSING_RECEIPT') return '入库状态'
+  if (page.value.objectType === 'WAREHOUSE') return '仓库状态'
+  return '状态'
+})
+const statusFilterPlaceholder = computed(() => `输入${statusFilterLabel.value}名称或编码`)
+// 保留页面实例上的业务时间语义，兼容现有页面测试和外部读取；实际列表列由 definitions.columns 明确配置。
+const businessTimeLabel = computed(() => page.value.objectType === 'WAREHOUSING_RECEIPT' ? '入库时间'
+  : page.value.objectType === 'PURCHASE_ORDER' ? '采购日期'
+    : page.value.objectType === 'PURCHASE_RETURN' ? '退货发出时间'
+      : page.value.objectType === 'INVENTORY' ? '库存快照时间' : '订货宝更新时间')
 const detailHero = computed(() => {
   const identity = rowIdentity(selectedRow.value ?? {})
   const status = rowStatus(selectedRow.value ?? {})
@@ -435,13 +440,20 @@ const detailHero = computed(() => {
 })
 const detailMetrics = computed(() => {
   const row = selectedRow.value ?? {}
-  const metric = rowMetric(row)
-  const context = rowContext(row)
+  const primary = page.value.objectType === 'SUPPLIER' ? value(row.supplierCode)
+    : page.value.objectType === 'WAREHOUSE' ? value(row.warehouseCode)
+      : page.value.objectType === 'INVENTORY' ? value(row.availableQuantity)
+        : page.value.objectType === 'PURCHASE_RETURN' ? money(row.returnAmount)
+          : money(row.totalAmount)
+  const secondary = page.value.objectType === 'SUPPLIER' ? value(row.name)
+    : page.value.objectType === 'WAREHOUSE' ? value(row.name)
+      : page.value.objectType === 'INVENTORY' ? value(row.warehouseName)
+        : value(row.supplierName)
   return [
-    { label: listMetricLabel.value, value: metric.value },
-    { label: listContextLabel.value, value: context.title },
+    { label: page.value.objectType === 'SUPPLIER' ? '供应商编码' : page.value.objectType === 'WAREHOUSE' ? '仓库编码' : page.value.objectType === 'INVENTORY' ? '可用库存' : page.value.objectType === 'PURCHASE_RETURN' ? '退货金额' : '采购金额', value: primary },
+    { label: page.value.objectType === 'SUPPLIER' ? '供应商名称' : page.value.objectType === 'WAREHOUSE' ? '仓库名称' : page.value.objectType === 'INVENTORY' ? '仓库名称' : '供应商名称', value: secondary },
     { label: '业务状态', value: rowStatus(row).value },
-    { label: '最后同步', value: time(row.syncedAt ?? row.sourceUpdatedAt) },
+    { label: '最近同步时间', value: time(row.syncedAt ?? row.sourceUpdatedAt) },
   ]
 })
 const localDetailFields = computed<DetailField[]>(() => {
@@ -456,47 +468,69 @@ const localDetailFields = computed<DetailField[]>(() => {
   ]
   if (page.value.objectType === 'WAREHOUSE') return [
     field('仓库编码', row.warehouseCode), field('仓库名称', row.name),
-    field('来源状态', row.sourceStatus), field('默认仓', value(row.defaultFlag)),
-    field('面积', row.acreage), field('联系电话', row.phone),
-    field('详细地址', row.address, true), field('备注', row.remark, true),
+    field('仓库状态', rowWarehouseStatus(row)), field('仓库类型', rowWarehouseType(row)),
+    field('仓库面积', row.acreage), field('联系电话', row.phone),
+    field('仓库地址', row.address, true), field('仓库备注', row.remark, true),
   ]
   if (page.value.objectType === 'INVENTORY') return [
     field('商品编码', row.goodsCode), field('商品名称', row.goodsName),
-    field('规格组合', row.optionSummary), field('仓库编码', row.warehouseCode),
+    field('商品规格', row.optionSummary), field('仓库编码', row.warehouseCode),
     field('仓库名称', row.warehouseName), field('实际库存', row.realQuantity),
     field('可用库存', row.availableQuantity), field('预占库存', row.reservedQuantity),
-    field('在途库存', row.inTransitQuantity), field('最后同步', time(row.syncedAt)),
+    field('在途库存', row.inTransitQuantity), field('最近同步时间', time(row.syncedAt)),
   ]
   return []
 })
 
-onMounted(load)
+onMounted(() => {
+  void loadBusinessDictionaries([
+    { moduleCode: 'ERP', code: 'DHB_PURCHASE_ORDER_STATUS' },
+    { moduleCode: 'ERP', code: 'DHB_PURCHASE_PAYMENT_STATUS' },
+    { moduleCode: 'ERP', code: 'DHB_PURCHASE_RETURN_STATUS' },
+    { moduleCode: 'ERP', code: 'DHB_WAREHOUSING_STATUS' },
+    { moduleCode: 'ERP', code: 'DHB_WAREHOUSING_TYPE' },
+    { moduleCode: 'ERP', code: 'DHB_WAREHOUSE_STATUS' },
+    { moduleCode: 'COMMON', code: 'DHB_UNIT' },
+  ])
+  void load()
+})
 watch(() => route.meta.routeKey, async () => { currentPage.value = 1; await reset() })
 
 async function load() {
+  const request = listRequest.begin()
+  const targetPage = page.value
   loading.value = true
+  if (targetPage.objectType === 'INVENTORY' && !warehousesLoaded.value) {
+    await loadWarehouses().catch(reason => ElMessage.warning(message(reason, '仓库列表加载失败，暂无法按仓库筛选')))
+    if (!listRequest.isCurrent(request)) return
+  }
   const params: ErpSupplyQuery = { begin: (currentPage.value - 1) * pageSize.value, step: pageSize.value,
     q: filters.keyword.trim() || undefined, status: filters.status.trim() || undefined,
-    warehouseCode: filters.warehouseCode.trim() || undefined }
+    warehouseCode: filters.warehouseCodes.length ? filters.warehouseCodes.join(',') : undefined }
   try {
-    const result = page.value.objectType === 'SUPPLIER' ? await getErpSuppliers(params)
-      : page.value.objectType === 'PURCHASE_ORDER' ? await getErpPurchaseOrders(params)
-        : page.value.objectType === 'PURCHASE_RETURN' ? await getErpPurchaseReturns(params)
-          : page.value.objectType === 'WAREHOUSING_RECEIPT' ? await getErpWarehousingReceipts(params)
-            : page.value.objectType === 'WAREHOUSE' ? await getErpWarehouses(params)
+    const result = targetPage.objectType === 'SUPPLIER' ? await getErpSuppliers(params)
+      : targetPage.objectType === 'PURCHASE_ORDER' ? await getErpPurchaseOrders(params)
+        : targetPage.objectType === 'PURCHASE_RETURN' ? await getErpPurchaseReturns(params)
+          : targetPage.objectType === 'WAREHOUSING_RECEIPT' ? await getErpWarehousingReceipts(params)
+            : targetPage.objectType === 'WAREHOUSE' ? await getErpWarehouses(params)
               : await getErpInventoryBalances(params)
+    if (!listRequest.isCurrent(request)) return
     data.value = result as ErpPage<Row>
   } catch (reason) {
+    if (!listRequest.isCurrent(request)) return
     data.value = { total: 0, begin: params.begin, step: params.step, items: [] }
-    ElMessage.error(message(reason, `${page.value.title}加载失败`))
-  } finally { loading.value = false }
+    ElMessage.error(message(reason, `${targetPage.title}加载失败`))
+  } finally {
+    if (listRequest.isCurrent(request)) loading.value = false
+  }
 }
 
 async function synchronize() {
   syncing.value = true
   try {
     const result = await syncErpData(page.value.objectType)
-    ElMessage.success(`${page.value.syncLabel}同步完成：获取${result.fetched}条，新增${result.created}条，变更${result.changed}条`)
+    const warning = result.unmapped > 0 ? `，字典未解析${result.unmapped}项` : ''
+    ElMessage.success(`${page.value.syncLabel}同步完成：获取${result.fetched}条，新增${result.created}条，变更${result.changed}条${warning}`)
     await load()
   } catch (reason) { ElMessage.error(message(reason, `${page.value.syncLabel}同步失败`)) }
   finally { syncing.value = false }
@@ -532,46 +566,111 @@ async function openDetail(row: Row) {
 }
 
 async function queryData() { currentPage.value = 1; await load() }
-async function reset() { filters.keyword = ''; filters.status = ''; filters.warehouseCode = ''; await queryData() }
+async function reset() { filters.keyword = ''; filters.status = ''; filters.warehouseCodes = []; await queryData() }
 async function changePage(value: number) { currentPage.value = value; await load() }
 async function changeSize(value: number) { pageSize.value = value; currentPage.value = 1; await load() }
+
+async function loadWarehouses() {
+  if (warehousesLoaded.value) return
+  if (warehouseLoadPromise) return warehouseLoadPromise
+  warehouseLoading.value = true
+  warehouseLoadPromise = (async () => {
+    const items: ErpWarehouseView[] = []
+    let begin = 0
+    let total = 0
+    do {
+      const result = await getErpWarehouses({ begin, step: 1000 })
+      items.push(...result.items)
+      total = result.total
+      if (result.items.length === 0) break
+      begin += result.items.length
+    } while (items.length < total)
+    const unique = new Map<string, ErpWarehouseView>()
+    items.forEach(item => { if (item.warehouseCode) unique.set(item.warehouseCode, item) })
+    warehouseOptions.value = [...unique.values()]
+      .sort((left, right) => left.warehouseCode.localeCompare(right.warehouseCode, 'zh-CN', { numeric: true }))
+    warehousesLoaded.value = true
+  })()
+  try { await warehouseLoadPromise }
+  finally {
+    warehouseLoading.value = false
+    warehouseLoadPromise = null
+  }
+}
 function rowIdentity(row: Row): DisplayValue {
-  if (page.value.objectType === 'SUPPLIER') return { title: value(row.name), code: `供应商 ${value(row.supplierCode)}`, meta: `联系人 ${value(row.contactName)}` }
-  if (page.value.objectType === 'WAREHOUSE') return { title: value(row.name), code: `仓库 ${value(row.warehouseCode)}`, meta: value(row.address) }
-  if (page.value.objectType === 'INVENTORY') return { title: value(row.goodsName), code: `商品 ${value(row.goodsCode)}`, meta: value(row.optionSummary) }
-  if (page.value.objectType === 'PURCHASE_ORDER') return { title: value(row.purchaseOrderNo), code: `来源 ${value(row.sourceId)}`, meta: `${value(row.lineCount)} 条明细` }
-  if (page.value.objectType === 'PURCHASE_RETURN') return { title: value(row.purchaseReturnNo), code: `来源 ${value(row.sourceId)}`, meta: `${value(row.lineCount)} 条明细` }
-  return { title: value(row.warehousingNo), code: `来源 ${value(row.sourceId)}`, meta: `${value(row.lineCount)} 条明细` }
+  if (page.value.objectType === 'SUPPLIER') return { title: value(row.name), code: `供应商编码 ${value(row.supplierCode)}`, meta: `订货宝供应商ID ${value(row.sourceSupplierId)}` }
+  if (page.value.objectType === 'WAREHOUSE') return { title: value(row.name), code: `仓库编码 ${value(row.warehouseCode)}`, meta: `订货宝仓库ID ${value(row.sourceWarehouseId)}` }
+  if (page.value.objectType === 'INVENTORY') return { title: value(row.goodsName), code: `商品编码 ${value(row.goodsCode)}`, meta: `规格 ${value(row.optionSummary)}` }
+  if (page.value.objectType === 'PURCHASE_ORDER') return { title: value(row.purchaseOrderNo), code: `订货宝采购单ID ${value(row.sourceId)}`, meta: `明细条数 ${value(row.lineCount)}` }
+  if (page.value.objectType === 'PURCHASE_RETURN') return { title: value(row.purchaseReturnNo), code: `订货宝退货单ID ${value(row.sourceId)}`, meta: `明细条数 ${value(row.lineCount)}` }
+  return { title: value(row.warehousingNo), code: `订货宝入库单ID ${value(row.sourceId)}`, meta: `明细条数 ${value(row.lineCount)}` }
 }
-function rowContext(row: Row) {
-  if (page.value.objectType === 'SUPPLIER') return { title: value(row.areaName), meta: value(row.address) }
-  if (page.value.objectType === 'WAREHOUSE') return { title: value(row.address), meta: `电话 ${value(row.phone)}` }
-  if (page.value.objectType === 'INVENTORY') return { title: value(row.warehouseName), meta: `仓库 ${value(row.warehouseCode)} · ${value(row.optionSummary)}` }
-  return { title: value(row.supplierName), meta: `${value(row.warehouseName)} · 经办人 ${value(row.staffName)}` }
+function rowPurchaseStatus(row: Row) {
+  return purchaseStatusLabel(String(row.sourceStatus ?? ''))
 }
-function rowMetric(row: Row) {
-  if (page.value.objectType === 'SUPPLIER') return { value: value(row.mobile || row.phone), label: '主要电话', meta: value(row.email) }
-  if (page.value.objectType === 'WAREHOUSE') return { value: row.defaultFlag ? '默认仓' : '普通仓', label: '仓库类型', meta: `面积 ${value(row.acreage)}` }
-  if (page.value.objectType === 'INVENTORY') return { value: value(row.availableQuantity), label: '可用库存', meta: `实存 ${value(row.realQuantity)} · 预占 ${value(row.reservedQuantity)}` }
-  if (page.value.objectType === 'PURCHASE_RETURN') return { value: money(row.returnAmount), label: '退货金额', meta: `折扣 ${money(row.discountAmount)}` }
-  return { value: money(row.totalAmount), label: page.value.objectType === 'PURCHASE_ORDER' ? '采购金额' : '入库金额', meta: page.value.objectType === 'PURCHASE_ORDER' ? `已付 ${money(row.paidAmount)}` : `成本 ${money(row.costAmount)}` }
+function rowPaymentStatus(row: Row) {
+  return purchasePaymentStatusLabel(String(row.paymentStatus ?? ''))
+}
+function rowInboundStatus(row: Row) {
+  return warehousingStatusLabel(String(row.sourceStatus ?? ''))
+}
+function rowInboundType(row: Row) {
+  return formatInboundType(String(row.typeId ?? ''))
+}
+function rowReturnStatus(row: Row) {
+  return purchaseReturnStatusLabel(String(row.sourceStatus ?? ''))
+}
+function rowWarehouseStatus(row: Row) {
+  return businessDictionaryLabel('ERP', 'DHB_WAREHOUSE_STATUS', String(row.sourceStatus ?? ''), '仓库状态')
+}
+function rowWarehouseType(row: Row) {
+  return row.defaultFlag ? '默认仓库' : '普通仓库'
+}
+function rowInventoryStatus(row: Row) {
+  return Number(row.availableQuantity ?? 0) > 0 ? '有可用库存' : '无可用库存'
+}
+function rowInventoryTransit(row: Row) {
+  return value(row.inTransitQuantity)
+}
+function rowSupplierStatus(row: Row) {
+  return sourceText(String(row.status ?? row.sourceStatus ?? ''))
 }
 function rowStatus(row: Row) {
   if (page.value.objectType === 'INVENTORY') {
-    const available = Number(row.availableQuantity ?? 0)
-    return { value: available > 0 ? '有库存' : '无可用库存', meta: `在途 ${value(row.inTransitQuantity)}` }
+    return { value: rowInventoryStatus(row), meta: `在途 ${rowInventoryTransit(row)}` }
   }
-  if (page.value.objectType === 'WAREHOUSE') return { value: value(row.sourceStatus), meta: row.defaultFlag ? '默认仓库' : '普通仓库' }
-  if (page.value.objectType === 'SUPPLIER') return { value: value(row.status ?? row.sourceStatus ?? '已同步'), meta: '供应商档案' }
-  return { value: value(row.sourceStatusName || row.sourceStatus), meta: page.value.objectType === 'PURCHASE_ORDER' ? `付款 ${value(row.paymentStatusName || row.paymentStatus)}` : value(row.typeName) }
+  if (page.value.objectType === 'WAREHOUSE') return { value: `仓库状态：${rowWarehouseStatus(row)}`, meta: rowWarehouseType(row) }
+  if (page.value.objectType === 'SUPPLIER') return { value: `供应商状态：${rowSupplierStatus(row)}`, meta: '供应商档案' }
+  if (page.value.objectType === 'PURCHASE_ORDER') return { value: `单据状态：${rowPurchaseStatus(row)}`, meta: `付款状态：${rowPaymentStatus(row)}` }
+  if (page.value.objectType === 'PURCHASE_RETURN') return { value: `退货状态：${rowReturnStatus(row)}`, meta: `退货类型：${sourceText(String(row.typeName ?? row.typeId ?? ''))}` }
+  return { value: `入库状态：${rowInboundStatus(row)}`, meta: `入库类型：${rowInboundType(row)}` }
 }
-function rowBusinessTime(row: Row) {
-  if (page.value.objectType === 'WAREHOUSING_RECEIPT') return time(row.storageAt)
-  if (page.value.objectType === 'PURCHASE_RETURN') return time(row.sendAt)
-  return time(row.sourceCreatedAt ?? row.sourceUpdatedAt ?? row.syncedAt)
+function columnRawValue(row: Row, column: Column): unknown {
+  if (column.key === 'purchaseStatus') return row.sourceStatusName || row.sourceStatus
+  if (column.key === 'paymentStatus') return row.paymentStatusName || row.paymentStatus
+  if (column.key === 'inboundStatus') return row.sourceStatusName || row.sourceStatus
+  if (column.key === 'inboundType') return formatInboundType(String(row.typeName || row.typeId || ''))
+  if (column.key === 'returnStatus') return row.sourceStatusName || row.sourceStatus
+  if (column.key === 'warehouseStatus') return row.sourceStatus
+  if (column.key === 'warehouseType') return rowWarehouseType(row)
+  if (column.key === 'inventoryStatus') return rowInventoryStatus(row)
+  return row[column.key]
+}
+function formatColumnValue(row: Row, column: Column): string {
+  if (column.key === 'purchaseStatus') return rowPurchaseStatus(row)
+  if (column.key === 'paymentStatus') return rowPaymentStatus(row)
+  if (column.key === 'inboundStatus') return rowInboundStatus(row)
+  if (column.key === 'returnStatus') return rowReturnStatus(row)
+  if (column.key === 'warehouseStatus') return rowWarehouseStatus(row)
+  const raw = columnRawValue(row, column)
+  if (column.format === 'money') return money(raw)
+  if (column.format === 'time') return time(raw)
+  if (column.format === 'number') return value(raw)
+  if (column.format === 'status') return sourceText(String(raw ?? ''))
+  return value(raw)
 }
 function statusTagType(status: string) {
-  if (['启用', '完成', '已完成', '有库存', '已同步', '正常'].some(item => status.includes(item))) return 'success'
+  if (['启用', '完成', '已完成', '有库存', '有可用库存', '已同步', '正常'].some(item => status.includes(item))) return 'success'
   if (['停用', '关闭', '取消', '无可用库存'].some(item => status.includes(item))) return 'info'
   return 'warning'
 }
@@ -579,8 +678,20 @@ function field(label: string, item: unknown, wide = false): DetailField { return
 function value(item: unknown) { if (typeof item === 'boolean') return item ? '是' : '否'; return item == null || item === '' ? '-' : String(item) }
 function money(item: unknown) { return typeof item === 'number' ? `¥${item.toFixed(2)}` : '-' }
 function time(item: unknown) { if (typeof item !== 'string' || !item) return '-'; const date = new Date(item); return Number.isNaN(date.getTime()) ? item : date.toLocaleString('zh-CN', { hour12: false }) }
-function sourceJson(item: Record<string, unknown> | null | undefined) { return JSON.stringify(item ?? {}, null, 2) }
 function message(reason: unknown, fallback: string) { return reason instanceof Error && reason.message ? reason.message : fallback }
+
+function purchaseStatusLabel(value: string | null | undefined) {
+  return businessDictionaryLabel('ERP', 'DHB_PURCHASE_ORDER_STATUS', value, '采购单状态')
+}
+function purchasePaymentStatusLabel(value: string | null | undefined) {
+  return businessDictionaryLabel('ERP', 'DHB_PURCHASE_PAYMENT_STATUS', value, '采购付款状态')
+}
+function purchaseReturnStatusLabel(value: string | null | undefined) {
+  return businessDictionaryLabel('ERP', 'DHB_PURCHASE_RETURN_STATUS', value, '采购退货状态')
+}
+function warehousingStatusLabel(value: string | null | undefined) {
+  return businessDictionaryLabel('ERP', 'DHB_WAREHOUSING_STATUS', value, '入库单状态')
+}
 </script>
 
 <style scoped lang="scss">
@@ -613,13 +724,16 @@ function message(reason: unknown, fallback: string) { return reason instanceof E
 .stacked-cell span, .stacked-cell small { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
 .stacked-cell span { color: $color-text-regular; }
 .stacked-cell small, .metric-cell span, .metric-cell small, .status-cell small { color: $color-text-secondary; font-size: $font-size-xs; }
+.status-text { color: $color-text-regular; font-size: $font-size-sm; line-height: 1.5; }
 .metric-cell strong { color: $color-text-primary; font-size: $font-size-md; font-variant-numeric: tabular-nums; }
 .metric-cell.is-amount { align-items: flex-end; }
 .sync-time { color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.5; }
+.detail-title-row { display: flex; align-items: center; justify-content: space-between; gap: $spacing-md; margin: 20px 0 12px; }
 .detail-title { margin: 20px 0 12px; font-size: 16px; }
+.detail-title-row .detail-title { margin: 0; }
+.detail-payment-note { display: flex; align-items: center; gap: 8px; }
+.detail-payment-note small { color: $color-text-secondary; font-size: $font-size-xs; }
 .detail-error { margin-bottom: 12px; }
-.source-fields { margin-top: 16px; }
-.source-fields pre, .line-source-fields { max-height: 360px; margin: 0; padding: 12px; overflow: auto; border-radius: 6px; background: $color-bg-base; color: $color-text-regular; font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-all; }
 .pagination { justify-content: flex-end; margin-top: 18px; }
 :deep(.business-detail-drawer) { background: $color-bg-page; }
 :deep(.business-detail-drawer .el-drawer__body) { padding: 0; }
@@ -645,7 +759,7 @@ function message(reason: unknown, fallback: string) { return reason instanceof E
 .info-grid dd { overflow-wrap: anywhere; margin: 0; color: $color-text-regular; line-height: 1.5; }
 .info-span-2 { grid-column: span 2; }
 @media (max-width: 720px) {
-  .page-header, .result-heading, .section-heading { align-items: flex-start; flex-direction: column; }
+  .page-header, .result-heading, .section-heading, .detail-title-row { align-items: flex-start; flex-direction: column; }
   .query-bar :deep(.el-form-item), .query-bar :deep(.el-input) { width: 100%; margin-right: 0; }
   :deep(.business-detail-drawer) { width: 100% !important; }
   .detail-hero { padding: $spacing-md; }

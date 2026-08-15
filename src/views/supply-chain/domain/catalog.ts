@@ -78,7 +78,6 @@ export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
   'supply.erp.master-data.menu',
   'supply.erp.suppliers.menu',
   'supply.erp.procurement.menu',
-  'supply.erp.warehouse.menu',
   'supply.erp.inventory.menu',
   'supply.erp.cost-settlement.menu',
   'supply.crm.customers.menu',
@@ -100,15 +99,11 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
       { key: 'requests', title: '采购申请' }, { key: 'orders', title: '采购订单' },
       { key: 'receipts', title: '到货与入库' }, { key: 'returns', title: '采购退货' },
     ] },
-    { key: 'warehouse', title: '仓库作业', pages: [
-      { key: 'locations', title: '仓库与库位' }, { key: 'inbound', title: '入库作业' },
-      { key: 'outbound', title: '出库作业' }, { key: 'transfers', title: '调拨作业' },
-      { key: 'stocktaking', title: '盘点作业' },
-    ] },
-    { key: 'inventory', title: '库存管理', pages: [
-      { key: 'overview', title: '库存总览' }, { key: 'availability', title: '可用/锁定/在途库存' },
-      { key: 'movements', title: '库存流水' }, { key: 'batches', title: '批次与效期' },
-      { key: 'alerts', title: '库存预警' },
+    { key: 'inventory', title: '仓库管理', pages: [
+      { key: 'dashboard', title: '库存看板' }, { key: 'inventory', title: '库存' },
+      { key: 'inbound', title: '入库单' }, { key: 'outbound', title: '出库单' },
+      { key: 'movements', title: '出入库流水' }, { key: 'transfers', title: '库存调拨' },
+      { key: 'stocktaking', title: '库存盘点' }, { key: 'warehouses', title: '仓库信息' },
     ] },
     { key: 'cost-settlement', title: '成本与采购结算', pages: [
       { key: 'purchase-prices', title: '采购价格' }, { key: 'receipt-costs', title: '入库成本' },
@@ -168,8 +163,12 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'order-after-sales', title: '订单和售后规则' },
     { key: 'fulfillment-allocation', title: '履约分配规则' },
     { key: 'city-service-scope', title: '城市服务范围' },
-    { key: 'numbering-dictionaries', title: '业务编号与领域字典' },
   ]),
+  {
+    domainKey: 'settings', domainTitle: '业务设置', groupTitle: null, title: '业务字典',
+    routeKey: 'supply.settings.numbering-dictionaries',
+    path: '/supply-chain/settings/numbering-dictionaries', owner: 'business-settings-service',
+  },
   ...directPages('integration', '外部集成与数据同步', 'integration-migration-service', [
     { key: 'sync-batches', title: '同步批次与游标' },
     { key: 'external-id-mappings', title: '外部 ID 映射' },

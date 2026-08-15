@@ -14,6 +14,7 @@ export interface DhbOrderQueryOptions {
   pageKey: DhbOrderPageKey
   begin: number
   step: number
+  keyword?: string
   orderStatus?: string
   startDate?: string
   endDate?: string
@@ -36,6 +37,8 @@ export function buildDhbOrderQuery(options: DhbOrderQueryOptions): DhbOrderQuery
     apiStatus: options.apiStatus || 'all',
     exceptionStatus: preset.exceptionStatus,
   }
+  const keyword = options.keyword?.trim()
+  if (keyword) query.keyword = keyword
   const orderStatus = isExceptionPage ? '' : options.orderStatus || preset.orderStatus
   if (orderStatus) query.order_status_val = orderStatus
   if (options.startDate) query.starttime = `${options.startDate} 00:00:00`

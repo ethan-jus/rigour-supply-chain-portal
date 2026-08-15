@@ -15,9 +15,9 @@ const erpSupplyDataRouteKeys = new Set([
   'supply.erp.procurement.orders',
   'supply.erp.procurement.receipts',
   'supply.erp.procurement.returns',
-  'supply.erp.warehouse.locations',
-  'supply.erp.warehouse.inbound',
-  'supply.erp.inventory.overview',
+  'supply.erp.inventory.inventory',
+  'supply.erp.inventory.inbound',
+  'supply.erp.inventory.warehouses',
 ])
 
 const crmMasterDataRouteKeys = new Set([
@@ -26,6 +26,10 @@ const crmMasterDataRouteKeys = new Set([
   'supply.crm.customers.levels-tags',
   'supply.crm.customers.areas',
   'supply.crm.assignments.external-staff',
+])
+
+const businessDictionaryRouteKeys = new Set([
+  'supply.settings.numbering-dictionaries',
 ])
 
 const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.map((page) => ({
@@ -37,13 +41,19 @@ const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.map((page) => (
       ? () => import('@/views/supply-chain/erp/SupplyDataView.vue')
       : crmMasterDataRouteKeys.has(page.routeKey)
         ? () => import('@/views/supply-chain/crm/CrmMasterDataView.vue')
-        : () => import('@/views/supply-chain/domain/CapabilityView.vue'),
+        : businessDictionaryRouteKeys.has(page.routeKey)
+          ? () => import('@/views/supply-chain/settings/BusinessDictionaryView.vue')
+          : () => import('@/views/supply-chain/domain/CapabilityView.vue'),
   meta: {
     title: page.title,
     requiresAuth: true,
     applicationCode: 'SUPPLY_CHAIN',
     routeKey: page.routeKey,
-    permission: crmMasterDataRouteKeys.has(page.routeKey) ? 'crm:customer:read' : undefined,
+    permission: crmMasterDataRouteKeys.has(page.routeKey)
+      ? 'crm:customer:read'
+      : businessDictionaryRouteKeys.has(page.routeKey)
+        ? 'business-settings:dict:read'
+        : undefined,
   },
 }))
 

@@ -52,4 +52,17 @@ describe('订单中心订货宝查询参数', () => {
       exceptionStatus: 'F',
     })
   })
+
+  it('保留并清理订单关键词，供订单中心匹配订单和收货信息', () => {
+    expect(buildDhbOrderQuery({
+      ...base,
+      pageKey: 'order-list',
+      keyword: '  ORD-1  ',
+    })).toMatchObject({ keyword: 'ORD-1' })
+    expect(buildDhbOrderQuery({
+      ...base,
+      pageKey: 'order-list',
+      keyword: '   ',
+    })).not.toHaveProperty('keyword')
+  })
 })

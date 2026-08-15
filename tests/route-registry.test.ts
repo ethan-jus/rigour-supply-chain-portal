@@ -113,10 +113,15 @@ describe('数据库导航注册表', () => {
       ...SUPPLY_DOMAIN_PAGES.map((item) => node(item.routeKey, item.path)),
     ]
 
-    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(12)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(81)
+    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(11)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(79)
+    expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
+      .not.toContain('supply.erp.warehouse.locations')
+    expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '仓库管理').map((item) => item.title))
+      .toEqual(['库存看板', '库存', '入库单', '出库单', '出入库流水', '库存调拨', '库存盘点', '仓库信息'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.crm.customers.customer-360')
-    expect(validateNavigation(navigation)).toHaveLength(93)
+    expect(validateNavigation(navigation)).toHaveLength(90)
   })
 })

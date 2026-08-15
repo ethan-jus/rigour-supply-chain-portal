@@ -14,6 +14,7 @@ export interface ErpSupplyQuery {
   step: number
   q?: string
   status?: string
+  /** 库存查询支持逗号分隔的多个仓库编码。 */
   warehouseCode?: string
 }
 

@@ -329,12 +329,12 @@ function formatBytes(value: number): string {
 }
 
 function visitTypeLabel(value: string): string {
-  return value === 'FIRST_VISIT' ? '首访' : value === 'REVISIT' ? '复访' : '拜访'
+  return value === 'FIRST_VISIT' ? '首访' : value === 'REVISIT' ? '复访' : value ? `未知拜访类型（${value}）` : '-'
 }
 
 function intentionLabel(value: string | null): string {
   const labels: Record<string, string> = { HIGH: '高', MEDIUM: '中', LOW: '低', NONE: '无意向' }
-  return value ? labels[value] || value : '未填写'
+  return value ? labels[value] || `未知意向等级（${value}）` : '未填写'
 }
 
 function contactOutcomeLabel(value: string | null): string {
@@ -342,7 +342,7 @@ function contactOutcomeLabel(value: string | null): string {
     CONTACTED: '已接触 KP', STORE_CLOSED: '门店未营业', KP_ABSENT: 'KP 不在',
     REFUSED: '拒绝接待', OTHER_NO_CONTACT: '其他未接触',
   }
-  return value ? labels[value] || value : '未填写接触结果'
+  return value ? labels[value] || `未知接触结果（${value}）` : '未填写接触结果'
 }
 
 function anomalyLabel(value: string): string {
@@ -353,7 +353,7 @@ function anomalyLabel(value: string): string {
     RECORDING_TOO_SHORT: '有效录音时长不足', AI_PENDING: 'AI 分析未完成',
     AI_REVIEW_REQUIRED: 'AI 建议人工复核', AI_LOW_CONFIDENCE: 'AI 置信度不足',
   }
-  return labels[value] || value
+  return labels[value] || `未知异常类型（${value}）`
 }
 
 function errorMessageOf(error: unknown): string {

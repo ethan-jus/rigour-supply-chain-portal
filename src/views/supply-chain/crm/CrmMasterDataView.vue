@@ -47,7 +47,7 @@
 
       <div class="query-panel">
         <el-form class="query-bar" inline @submit.prevent="query">
-          <el-form-item label="关键词">
+          <el-form-item label="搜索条件">
             <el-input
               v-model="filters.keyword"
               clearable
@@ -55,8 +55,8 @@
               @keyup.enter="query"
             />
           </el-form-item>
-          <el-form-item v-if="currentView.key === 'customers'" label="内部状态">
-            <el-select v-model="filters.status" clearable placeholder="全部" style="width: 130px">
+          <el-form-item v-if="currentView.key === 'customers'" label="CRM客户状态">
+            <el-select v-model="filters.status" clearable placeholder="全部客户状态" style="width: 150px">
               <el-option label="启用" value="ACTIVE" />
               <el-option label="停用" value="INACTIVE" />
             </el-select>
@@ -74,13 +74,13 @@
           <p>
             共 {{ pageData.total }} 条数据，本页 {{ pageData.items.length }} 条<span
               v-if="currentView.key === 'customers'"
-            >；点击客户行可查看完整资料和收货地址</span><span
+            >；列表字段按订货宝业务含义拆分，点击客户行可查看完整资料和收货地址</span><span
               v-else-if="currentView.key === 'addresses'"
             >；地址簿展示订货宝同步的全部客户收货地址</span>。
           </p>
         </div>
         <div v-if="currentView.key === 'customers'" class="page-status-summary">
-          <span><i class="status-dot is-active" />本页启用 {{ customerPageStats.active }}</span>
+          <span><i class="status-dot is-active" />本页 CRM 启用客户 {{ customerPageStats.active }}</span>
         </div>
       </div>
 
@@ -92,7 +92,7 @@
         row-key="id"
         @row-click="openCustomerDetail"
       >
-        <el-table-column label="客户信息" width="285" fixed="left">
+        <el-table-column label="客户名称" width="285" fixed="left">
           <template #default="scope">
             <div class="record-identity">
               <span class="record-avatar">{{ avatarText(scope.row.name) }}</span>
@@ -104,21 +104,17 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="类型与地区" min-width="210">
-          <template #default="scope">
-            <div class="stacked-cell">
-              <span>{{ value(scope.row.typeName) }}</span>
-              <small>{{ value(scope.row.areaName) }}</small>
-            </div>
-          </template>
+        <el-table-column label="客户类型" min-width="145">
+          <template #default="scope">{{ value(scope.row.typeName) }}</template>
         </el-table-column>
-        <el-table-column label="主要联系人" min-width="200">
-          <template #default="scope">
-            <div class="stacked-cell">
-              <span>{{ value(scope.row.contactName) }}</span>
-              <small>{{ value(scope.row.phone) }}</small>
-            </div>
-          </template>
+        <el-table-column label="归属地区" min-width="165">
+          <template #default="scope">{{ value(scope.row.areaName) }}</template>
+        </el-table-column>
+        <el-table-column label="联系人" min-width="145">
+          <template #default="scope">{{ value(scope.row.contactName) }}</template>
+        </el-table-column>
+        <el-table-column label="联系电话" min-width="150">
+          <template #default="scope">{{ value(scope.row.phone) }}</template>
         </el-table-column>
         <el-table-column label="主业务员" min-width="150">
           <template #default="scope">{{ value(scope.row.staffName) }}</template>
@@ -133,6 +129,17 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="CRM客户状态" width="135">
+          <template #default="scope">
+            <el-tag
+              :type="sourceStatusTag(scope.row.internalStatus)"
+              effect="light"
+              size="small"
+            >
+              {{ statusLabel(scope.row.internalStatus) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="订货宝客户状态" width="145">
           <template #default="scope">
             <div class="status-cell">
@@ -141,12 +148,12 @@
                 effect="light"
                 size="small"
               >
-                {{ sourceStatusLabel(scope.row.sourceStatus) }}
+                {{ sourceStatusLabel(scope.row.sourceStatus, 'DHB_CUSTOMER_STATUS', '客户状态') }}
               </el-tag>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="最后同步" width="165">
+        <el-table-column label="最近同步时间" width="165">
           <template #default="scope">
             <span class="sync-time">{{ formatTime(scope.row.syncedAt) }}</span>
           </template>
@@ -181,28 +188,32 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="收货信息" min-width="210">
-          <template #default="scope">
-            <div class="stacked-cell">
-              <span>{{ value(scope.row.consignee || scope.row.contact) }}</span>
-              <small>{{ value(scope.row.phone) }}</small>
-            </div>
-          </template>
+        <el-table-column label="收货人" min-width="145">
+          <template #default="scope">{{ value(scope.row.consignee || scope.row.contact) }}</template>
+        </el-table-column>
+        <el-table-column label="联系电话" min-width="150">
+          <template #default="scope">{{ value(scope.row.phone) }}</template>
         </el-table-column>
         <el-table-column label="收货地址" min-width="320">
           <template #default="scope">
             <span class="address-cell">{{ value(scope.row.fullAddress || joinAddress(scope.row)) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="地址属性" width="140">
+        <el-table-column label="默认收货地址" width="135">
           <template #default="scope">
-            <div class="status-cell">
-              <el-tag v-if="scope.row.defaultAddress" type="success" effect="plain" size="small">默认地址</el-tag>
-              <small>{{ statusLabel(scope.row.status) }}</small>
-            </div>
+            <el-tag :type="scope.row.defaultAddress ? 'success' : 'info'" effect="light" size="small">
+              {{ scope.row.defaultAddress ? '默认地址' : '普通地址' }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="最后同步" width="165">
+        <el-table-column label="收货地址状态" width="135">
+          <template #default="scope">
+            <el-tag :type="sourceStatusTag(scope.row.status)" effect="light" size="small">
+              {{ sourceText(scope.row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近同步时间" width="165">
           <template #default="scope">{{ formatTime(scope.row.syncedAt) }}</template>
         </el-table-column>
         <template #empty><el-empty description="暂无本地收货地址，可点击右上角同步全部收货地址" /></template>
@@ -215,38 +226,43 @@
         :data="staffRows"
         row-key="id"
       >
-        <el-table-column label="员工信息" width="270">
+        <el-table-column label="员工姓名" width="220">
           <template #default="scope">
             <div class="record-identity">
               <span class="record-avatar is-staff">{{ avatarText(scope.row.staffName) }}</span>
               <div class="record-identity-content">
                 <strong>{{ value(scope.row.staffName) }}</strong>
-                <span>员工 ID {{ value(scope.row.sourceStaffId) }}</span>
-                <small>{{ value(scope.row.accountName || scope.row.accountId) }}</small>
+                <span>订货宝员工ID {{ value(scope.row.sourceStaffId) }}</span>
               </div>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="组织与职务" min-width="220">
-          <template #default="scope">
-            <div class="stacked-cell">
-              <span>{{ value(scope.row.branchName) }}</span>
-              <small>{{ value(scope.row.title || scope.row.roleName) }}</small>
-            </div>
-          </template>
+        <el-table-column label="登录账号" min-width="180">
+          <template #default="scope">{{ value(scope.row.accountName || scope.row.accountId) }}</template>
         </el-table-column>
-        <el-table-column label="联系方式" min-width="220">
-          <template #default="scope">
-            <div class="stacked-cell">
-              <span>{{ value(scope.row.mobile || scope.row.accountMobile) }}</span>
-              <small>{{ value(scope.row.email) }}</small>
-            </div>
-          </template>
+        <el-table-column label="所属组织" min-width="170">
+          <template #default="scope">{{ value(scope.row.branchName) }}</template>
+        </el-table-column>
+        <el-table-column label="职务" min-width="150">
+          <template #default="scope">{{ value(scope.row.title || scope.row.roleName) }}</template>
+        </el-table-column>
+        <el-table-column label="手机号" min-width="150">
+          <template #default="scope">{{ value(scope.row.mobile || scope.row.accountMobile) }}</template>
+        </el-table-column>
+        <el-table-column label="邮箱" min-width="200">
+          <template #default="scope">{{ value(scope.row.email) }}</template>
         </el-table-column>
         <el-table-column label="员工类型" width="140">
-          <template #default="scope">{{ value(scope.row.staffType) }}</template>
+          <template #default="scope">{{ staffTypeLabel(scope.row.staffType) }}</template>
         </el-table-column>
-        <el-table-column label="最后同步" width="165">
+        <el-table-column label="员工状态" width="120">
+          <template #default="scope">
+            <el-tag :type="sourceStatusTag(scope.row.sourceStatus)" effect="light" size="small">
+              {{ sourceStatusLabel(scope.row.sourceStatus, 'DHB_STAFF_STATUS', '员工状态') }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近同步时间" width="165">
           <template #default="scope">{{ formatTime(scope.row.syncedAt) }}</template>
         </el-table-column>
         <template #empty><el-empty description="暂无本地员工数据，可手动同步后重试" /></template>
@@ -265,22 +281,22 @@
               <span class="record-avatar is-dictionary">{{ avatarText(province.name) }}</span>
               <span class="area-tree-parent-name">{{ province.name }}</span>
               <small>{{ areaChildrenLabel(province) }}</small>
-              <span v-if="!province.isVirtual" class="area-tree-code">编码 {{ value(province.code) }}</span>
+              <span v-if="!province.isVirtual" class="area-tree-code">地区编码 {{ value(province.code) }}</span>
               <el-tag v-if="!province.isVirtual" :type="province.status === 'ACTIVE' ? 'success' : 'info'" effect="light" size="small">
                 {{ statusLabel(province.status) }}
               </el-tag>
-              <span v-if="!province.isVirtual" class="area-tree-time">{{ formatTime(province.syncedAt) }}</span>
+              <span v-if="!province.isVirtual" class="area-tree-time">最近同步时间 {{ formatTime(province.syncedAt) }}</span>
             </button>
             <div v-else class="area-tree-parent is-leaf">
               <span class="area-tree-caret">·</span>
               <span class="record-avatar is-dictionary">{{ avatarText(province.name) }}</span>
               <span class="area-tree-parent-name">{{ province.name }}</span>
               <small>{{ areaLevelLabel(province.level) }}</small>
-              <span v-if="!province.isVirtual" class="area-tree-code">编码 {{ value(province.code) }}</span>
+              <span v-if="!province.isVirtual" class="area-tree-code">地区编码 {{ value(province.code) }}</span>
               <el-tag v-if="!province.isVirtual" :type="province.status === 'ACTIVE' ? 'success' : 'info'" effect="light" size="small">
                 {{ statusLabel(province.status) }}
               </el-tag>
-              <span v-if="!province.isVirtual" class="area-tree-time">{{ formatTime(province.syncedAt) }}</span>
+              <span v-if="!province.isVirtual" class="area-tree-time">最近同步时间 {{ formatTime(province.syncedAt) }}</span>
             </div>
 
             <div v-if="province.children.length && isAreaExpanded(province.key)" class="area-tree-children">
@@ -290,11 +306,11 @@
                   <strong>{{ area.name }}</strong>
                   <small>{{ areaLevelLabel(area.level) }}</small>
                 </div>
-                <span>编码 {{ value(area.code) }}</span>
+                <span>地区编码 {{ value(area.code) }}</span>
                 <el-tag :type="area.status === 'ACTIVE' ? 'success' : 'info'" effect="light">
                   {{ statusLabel(area.status) }}
                 </el-tag>
-                <span>{{ formatTime(area.syncedAt) }}</span>
+                <span>最近同步时间 {{ formatTime(area.syncedAt) }}</span>
               </div>
             </div>
           </section>
@@ -309,25 +325,25 @@
         :data="dictionaryRows"
         row-key="id"
       >
-        <el-table-column :label="currentView.title" min-width="280">
+        <el-table-column :label="dictionaryNameLabel" min-width="280">
           <template #default="scope">
             <div class="record-identity">
               <span class="record-avatar is-dictionary">{{ avatarText(scope.row.name) }}</span>
               <div class="record-identity-content">
                 <strong>{{ value(scope.row.name) }}</strong>
-                <span>编码 {{ value(scope.row.code) }}</span>
+                <span>{{ dictionaryCodeLabel }} {{ value(scope.row.code) }}</span>
               </div>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="140">
+        <el-table-column label="字典状态" width="140">
           <template #default="scope">
             <el-tag :type="scope.row.status === 'ACTIVE' ? 'success' : 'info'" effect="light">
               {{ statusLabel(scope.row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="最后同步" min-width="190">
+        <el-table-column label="最近同步时间" min-width="190">
           <template #default="scope">{{ formatTime(scope.row.syncedAt) }}</template>
         </el-table-column>
         <template #empty><el-empty :description="`暂无本地${currentView.title}数据，可手动同步后重试`" /></template>
@@ -360,7 +376,7 @@
             <div class="detail-title-block">
               <span>客户详情</span>
               <h2>{{ value(selectedCustomer?.name) }}</h2>
-              <p>客户编号 {{ value(selectedCustomer?.code) }} · 账号 {{ value(selectedCustomer?.account) }}</p>
+              <p>客户编号 {{ value(selectedCustomer?.code) }} · 登录账号 {{ value(selectedCustomer?.account) }}</p>
               <div v-if="selectedCustomer" class="detail-tags">
                 <el-tag
                   :type="selectedCustomer.internalStatus === 'ACTIVE' ? 'success' : 'info'"
@@ -379,27 +395,27 @@
             <div><span>经营地区</span><strong>{{ value(selectedCustomer.areaName) }}</strong></div>
             <div><span>主业务员</span><strong>{{ value(selectedCustomer.staffName) }}</strong></div>
             <div><span>辅业务员</span><strong>{{ assignmentNames(selectedCustomer.salesAssignments, 'SECONDARY') }}</strong></div>
-            <div><span>最后同步</span><strong class="metric-time">{{ formatTime(selectedCustomer.syncedAt) }}</strong></div>
+            <div><span>最近同步时间</span><strong class="metric-time">{{ formatTime(selectedCustomer.syncedAt) }}</strong></div>
           </div>
 
           <el-tabs v-model="detailTab" class="detail-tabs">
             <el-tab-pane label="客户概览" name="overview">
               <section class="detail-section">
-                <div class="section-heading"><h3>基础资料</h3><p>按订货宝 getDealersList 字段归一化展示</p></div>
+                <div class="section-heading"><h3>基础资料</h3><p>按订货宝客户档案字段归一化展示</p></div>
                 <dl class="info-grid">
                   <div><dt>客户名称</dt><dd>{{ value(selectedCustomer.name) }}</dd></div>
                   <div><dt>客户编号</dt><dd>{{ value(selectedCustomer.code) }}</dd></div>
                   <div><dt>登录账号</dt><dd>{{ value(selectedCustomer.account) }}</dd></div>
-                  <div><dt>订货宝客户ID</dt><dd>{{ value(selectedCustomer.source?.clientGuid) }}</dd></div>
+                  <div><dt>订货宝客户GUID</dt><dd>{{ value(selectedCustomer.source?.clientGuid) }}</dd></div>
                   <div><dt>客户类型</dt><dd>{{ value(selectedCustomer.typeName) }}</dd></div>
-                  <div><dt>客户类型ID</dt><dd>{{ value(selectedCustomer.source?.typeId) }}</dd></div>
+                  <div><dt>订货宝客户类型ID</dt><dd>{{ value(selectedCustomer.source?.typeId) }}</dd></div>
                   <div><dt>经营地区</dt><dd>{{ value(selectedCustomer.areaName) }}</dd></div>
-                  <div><dt>归属地区ID</dt><dd>{{ value(selectedCustomer.source?.areaId) }}</dd></div>
-                  <div><dt>归属地区GUID</dt><dd>{{ value(selectedCustomer.source?.areaGuid) }}</dd></div>
+                  <div><dt>订货宝地区ID</dt><dd>{{ value(selectedCustomer.source?.areaId) }}</dd></div>
+                  <div><dt>订货宝地区GUID</dt><dd>{{ value(selectedCustomer.source?.areaGuid) }}</dd></div>
                   <div><dt>城市</dt><dd>{{ value(selectedCustomer.city) }}</dd></div>
                   <div><dt>邀请人</dt><dd>{{ value(selectedCustomer.inviter) }}</dd></div>
-                  <div><dt>内部状态</dt><dd>{{ statusLabel(selectedCustomer.internalStatus) }}</dd></div>
-                  <div><dt>订货宝客户状态</dt><dd>{{ sourceStatusLabel(selectedCustomer.source?.statusCode || selectedCustomer.sourceStatus) }}</dd></div>
+                  <div><dt>CRM客户状态</dt><dd>{{ statusLabel(selectedCustomer.internalStatus) }}</dd></div>
+                  <div><dt>订货宝客户状态</dt><dd>{{ sourceStatusLabel(selectedCustomer.source?.statusCode || selectedCustomer.sourceStatus, 'DHB_CUSTOMER_STATUS', '客户状态') }}</dd></div>
                   <div><dt>结算方式</dt><dd>{{ settlementLabel(selectedCustomer.source?.clearingFormCode || selectedCustomer.settlementMode) }}</dd></div>
                   <div><dt>主业务员</dt><dd>{{ value(selectedCustomer.staffName) }}</dd></div>
                   <div><dt>辅业务员</dt><dd>{{ assignmentNames(selectedCustomer.salesAssignments, 'SECONDARY') }}</dd></div>
@@ -410,17 +426,17 @@
                 <div class="section-heading"><h3>主要联系方式</h3><p>订货宝客户档案当前返回的联系人资料</p></div>
                 <dl class="info-grid">
                   <div><dt>联系人</dt><dd>{{ value(selectedCustomer.contactName) }}</dd></div>
-                  <div><dt>电话</dt><dd>{{ value(selectedCustomer.phone) }}</dd></div>
+                  <div><dt>联系电话</dt><dd>{{ value(selectedCustomer.phone) }}</dd></div>
                   <div><dt>邮箱</dt><dd>{{ value(selectedCustomer.email) }}</dd></div>
-                  <div class="wide"><dt>地址</dt><dd>{{ value(selectedCustomer.address) }}</dd></div>
+                  <div class="wide"><dt>客户地址</dt><dd>{{ value(selectedCustomer.address) }}</dd></div>
                 </dl>
               </section>
               <section class="detail-section">
-                <div class="section-heading"><h3>来源时间</h3><p>来源业务时间与本地同步时间分开保存</p></div>
+                <div class="section-heading"><h3>订货宝来源时间</h3><p>订货宝业务时间与 CRM 同步时间分开保存</p></div>
                 <dl class="info-grid">
-                  <div><dt>来源创建时间</dt><dd>{{ formatTime(selectedCustomer.sourceCreatedAt) }}</dd></div>
-                  <div><dt>来源更新时间</dt><dd>{{ formatTime(selectedCustomer.sourceUpdatedAt) }}</dd></div>
-                  <div><dt>本地同步时间</dt><dd>{{ formatTime(selectedCustomer.syncedAt) }}</dd></div>
+                  <div><dt>订货宝创建时间</dt><dd>{{ formatTime(selectedCustomer.sourceCreatedAt) }}</dd></div>
+                  <div><dt>订货宝更新时间</dt><dd>{{ formatTime(selectedCustomer.sourceUpdatedAt) }}</dd></div>
+                  <div><dt>最近同步时间</dt><dd>{{ formatTime(selectedCustomer.syncedAt) }}</dd></div>
                 </dl>
               </section>
             </el-tab-pane>
@@ -436,7 +452,7 @@
                     <el-tag v-if="address.defaultAddress" type="success" effect="plain">默认地址</el-tag>
                   </header>
                   <p>{{ value(address.fullAddress || joinAddress(address)) }}</p>
-                  <small>更新时间 {{ formatTime(address.sourceUpdatedAt) }}</small>
+                  <small>订货宝更新时间 {{ formatTime(address.sourceUpdatedAt) }}</small>
                 </article>
               </div>
               <el-empty v-else description="当前客户没有已同步的收货地址" />
@@ -474,6 +490,8 @@ import {
   type CrmSyncResult,
 } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { businessDictionaryLabel, loadBusinessDictionaries, sourceText } from '@/utils/business-dictionary'
+import { createLatestRequestGuard } from '@/utils/latest-request'
 
 type CrmViewType = 'customers' | 'addresses' | 'customer-types' | 'customer-areas' | 'staff'
 type PageItem = CrmCustomerSummary | CrmShippingAddress | CrmDictionaryItem | CrmExternalStaff
@@ -489,20 +507,25 @@ interface ViewDefinition {
 }
 
 const views: ViewDefinition[] = [
-  { key: 'customers', routeKey: 'supply.crm.customers.profiles', objectType: 'CUSTOMER', syncLabel: '客户档案', title: '客户档案', description: '查看 CRM 本地客户规范数据、联系方式和收货地址。', placeholder: '搜索客户编号、名称或账号' },
-  { key: 'addresses', routeKey: 'supply.crm.customers.shipping-addresses', objectType: 'ADDRESS', syncLabel: '全部收货地址', title: '收货地址簿', description: '按客户维度查询订货宝同步到 CRM 的全部收货地址。', placeholder: '搜索客户、收货人、电话或地址' },
-  { key: 'customer-types', routeKey: 'supply.crm.customers.levels-tags', objectType: 'CUSTOMER_TYPE', syncLabel: '客户类型', title: '客户类型', description: '查看订货宝同步到 CRM 的客户类型字典。', placeholder: '搜索类型编码或名称' },
-  { key: 'customer-areas', routeKey: 'supply.crm.customers.areas', objectType: 'CUSTOMER_AREA', syncLabel: '归属地区', title: '归属地区', description: '按省市层级查看订货宝归属地区；无法确认父级的自定义地区单独归类。', placeholder: '搜索地区编码或名称' },
-  { key: 'staff', routeKey: 'supply.crm.assignments.external-staff', objectType: 'STAFF', syncLabel: '外部员工', title: '外部员工', description: '查看客户归属所引用的订货宝员工目录；正式员工主数据仍归 HR。', placeholder: '搜索员工名称、账号或联系方式' },
+  { key: 'customers', routeKey: 'supply.crm.customers.profiles', objectType: 'CUSTOMER', syncLabel: '客户档案', title: '客户档案', description: '对应订货宝客户档案；客户名称、类型、归属地区、联系人和客户状态分开查看。', placeholder: '输入客户编号、名称或登录账号' },
+  { key: 'addresses', routeKey: 'supply.crm.customers.shipping-addresses', objectType: 'ADDRESS', syncLabel: '全部收货地址', title: '收货地址簿', description: '对应订货宝客户收货地址；所属客户、收货人、联系电话、地址状态分开查看。', placeholder: '输入客户名称、收货人、联系电话或地址' },
+  { key: 'customer-types', routeKey: 'supply.crm.customers.levels-tags', objectType: 'CUSTOMER_TYPE', syncLabel: '客户类型', title: '客户类型', description: '对应订货宝客户类型字典；类型名称、类型编码和启用状态分开查看。', placeholder: '输入客户类型名称或编码' },
+  { key: 'customer-areas', routeKey: 'supply.crm.customers.areas', objectType: 'CUSTOMER_AREA', syncLabel: '归属地区', title: '归属地区', description: '对应订货宝客户归属地区；按省、市和自定义地区层级查看。', placeholder: '输入地区名称或编码' },
+  { key: 'staff', routeKey: 'supply.crm.assignments.external-staff', objectType: 'STAFF', syncLabel: '外部员工', title: '外部员工', description: '对应订货宝员工目录；姓名、登录账号、所属组织、职务、联系方式和员工状态分开查看。', placeholder: '输入员工姓名、登录账号或联系电话' },
 ]
 
 const route = useRoute()
 const auth = useAuthStore()
+const listRequest = createLatestRequestGuard()
 const canSync = computed(() => auth.hasPermission('crm:customer:write'))
 const currentView = computed(() => {
   const routeKey = typeof route.meta.routeKey === 'string' ? route.meta.routeKey : ''
   return views.find((item) => item.routeKey === routeKey) ?? views[0] as ViewDefinition
 })
+const dictionaryNameLabel = computed(() => currentView.value.key === 'customer-types' ? '客户类型名称'
+  : currentView.value.key === 'customer-areas' ? '地区名称' : '字典名称')
+const dictionaryCodeLabel = computed(() => currentView.value.key === 'customer-types' ? '客户类型编码'
+  : currentView.value.key === 'customer-areas' ? '地区编码' : '字典编码')
 const loading = ref(false)
 const syncing = ref(false)
 const currentPage = ref(1)
@@ -564,10 +587,12 @@ const dictionaryRows = computed(() => pageData.value.items as CrmDictionaryItem[
 const staffRows = computed(() => pageData.value.items as CrmExternalStaff[])
 const areaTree = computed(() => buildAreaTree(dictionaryRows.value))
 const customerPageStats = computed(() => ({
-  active: customerRows.value.filter((item) => isSourceActive(item.sourceStatus)).length,
+  active: customerRows.value.filter((item) => ['ACTIVE', 'ENABLED'].includes(item.internalStatus.toUpperCase())).length,
 }))
 
 async function load() {
+  const request = listRequest.begin()
+  const targetView = currentView.value
   loading.value = true
   const begin = (currentPage.value - 1) * pageSize.value
   const common = {
@@ -576,25 +601,29 @@ async function load() {
     q: filters.keyword.trim() || undefined,
   }
   try {
-    if (currentView.value.key === 'customers') {
-      pageData.value = await getCrmCustomers({
+    let nextPage: CrmPage<PageItem>
+    if (targetView.key === 'customers') {
+      nextPage = await getCrmCustomers({
         ...common,
         status: filters.status || undefined,
       }) as unknown as CrmPage<PageItem>
-    } else if (currentView.value.key === 'addresses') {
-      pageData.value = await getCrmShippingAddresses(common) as unknown as CrmPage<PageItem>
-    } else if (currentView.value.key === 'customer-types') {
-      pageData.value = await getCrmCustomerTypes(common) as unknown as CrmPage<PageItem>
-    } else if (currentView.value.key === 'customer-areas') {
-      pageData.value = await loadAllCustomerAreas(common.q)
+    } else if (targetView.key === 'addresses') {
+      nextPage = await getCrmShippingAddresses(common) as unknown as CrmPage<PageItem>
+    } else if (targetView.key === 'customer-types') {
+      nextPage = await getCrmCustomerTypes(common) as unknown as CrmPage<PageItem>
+    } else if (targetView.key === 'customer-areas') {
+      nextPage = await loadAllCustomerAreas(common.q)
     } else {
-      pageData.value = await getCrmExternalStaff(common) as unknown as CrmPage<PageItem>
+      nextPage = await getCrmExternalStaff(common) as unknown as CrmPage<PageItem>
     }
+    if (!listRequest.isCurrent(request)) return
+    pageData.value = nextPage
   } catch (reason) {
+    if (!listRequest.isCurrent(request)) return
     pageData.value = { total: 0, begin, step: pageSize.value, items: [] }
-    ElMessage.error(errorMessage(reason, `${currentView.value.title}加载失败`))
+    ElMessage.error(errorMessage(reason, `${targetView.title}加载失败`))
   } finally {
-    loading.value = false
+    if (listRequest.isCurrent(request)) loading.value = false
   }
 }
 
@@ -693,10 +722,12 @@ function syncResultSummary(result: CrmSyncResult) {
       changed: summary.changed + item.changed,
       repaired: summary.repaired + item.repaired,
       rejected: summary.rejected + item.rejected,
+      unmapped: summary.unmapped + item.unmapped,
     }),
-    { fetched: 0, created: 0, changed: 0, repaired: 0, rejected: 0 },
+    { fetched: 0, created: 0, changed: 0, repaired: 0, rejected: 0, unmapped: 0 },
   )
-  return `同步完成：${result.objects.length} 类，获取 ${totals.fetched} 条，新增 ${totals.created} 条，变更 ${totals.changed} 条，修复 ${totals.repaired} 条，拒绝 ${totals.rejected} 条`
+  const dictionaryWarning = totals.unmapped > 0 ? `，字典未解析 ${totals.unmapped} 项` : ''
+  return `同步完成：${result.objects.length} 类，获取 ${totals.fetched} 条，新增 ${totals.created} 条，变更 ${totals.changed} 条，修复 ${totals.repaired} 条，拒绝 ${totals.rejected} 条${dictionaryWarning}`
 }
 
 function avatarText(name: string | null | undefined) {
@@ -722,9 +753,14 @@ function assignmentIds(assignments: CrmCustomerSummary['salesAssignments'] | und
 }
 
 function statusLabel(status: string | null | undefined) {
-  if (status === 'ACTIVE') return '启用'
-  if (status === 'INACTIVE') return '停用'
-  return value(status)
+  const labels: Record<string, string> = {
+    ACTIVE: '启用', INACTIVE: '停用', ENABLED: '启用', DISABLED: '停用',
+    LOCKED: '锁定', SUSPENDED: '暂停', EXPIRED: '已过期', CLOSED: '已关闭',
+    PENDING: '待处理', RUNNING: '运行中', FAILED: '失败', COMPLETED: '已完成',
+  }
+  if (!status) return '-'
+  const normalized = status.toUpperCase()
+  return labels[normalized] || (/[^\u0000-\u007f]/.test(status) ? status : `未知状态（${status}）`)
 }
 
 function sourceStatusTag(status: string | null) {
@@ -740,26 +776,17 @@ function isSourceActive(status: string | null | undefined) {
   return ['T', 'ACTIVE', 'ENABLED', '正常', '启用'].includes(normalized ?? '')
 }
 
-function sourceStatusLabel(status: string | null | undefined) {
-  const labels: Record<string, string> = {
-    T: '正常',
-    F: '停用',
-    A: '待激活',
-    C: '待审核',
-  }
-  if (!status) return '-'
-  return labels[status.toUpperCase()] ?? '其他'
+function sourceStatusLabel(status: string | null | undefined,
+                           dictCode = 'DHB_CUSTOMER_STATUS', subject = '客户状态') {
+  return businessDictionaryLabel('CRM', dictCode, status, subject)
 }
 
 function settlementLabel(mode: string | null | undefined) {
-  const labels: Record<string, string> = {
-    PREPAID: '预付',
-    FORWARD: '现付',
-    POSTPAID: '后付',
-    CASH: '现付',
-  }
-  if (!mode) return '-'
-  return labels[mode.toUpperCase()] ?? '其他'
+  return businessDictionaryLabel('CRM', 'DHB_CUSTOMER_CLEARING_FORM', mode, '结算方式')
+}
+
+function staffTypeLabel(value: string | null | undefined) {
+  return businessDictionaryLabel('CRM', 'DHB_STAFF_TYPE', value, '员工类型')
 }
 
 function normalizeAreaName(name: string | null | undefined) {
@@ -980,7 +1007,16 @@ watch(() => route.meta.routeKey, async () => {
   await load()
 })
 
-onMounted(load)
+onMounted(() => {
+  void loadBusinessDictionaries([
+    { moduleCode: 'CRM', code: 'DHB_CUSTOMER_STATUS' },
+    { moduleCode: 'CRM', code: 'DHB_CUSTOMER_CLEARING_FORM' },
+    { moduleCode: 'CRM', code: 'DHB_STAFF_STATUS' },
+    { moduleCode: 'CRM', code: 'DHB_STAFF_TYPE' },
+    { moduleCode: 'CRM', code: 'INTERNAL_STATUS' },
+  ])
+  void load()
+})
 </script>
 
 <style scoped lang="scss">

@@ -58,7 +58,7 @@ function open(row?:UserRecord) { editingId.value=row?.id||''; Object.assign(form
 function clearPassword(){form.initialPassword='';confirmPassword.value=''}
 function roleNames(ids:string[]){return ids.map((id)=>roles.value.find((role)=>role.id===id)?.name||id).join('、')}
 function organizationNames(ids:string[]){return ids.map((id)=>organizations.value.find((org)=>org.id===id)?.name||id).join('、')}
-function statusLabel(status:string){return {ACTIVE:'启用',LOCKED:'锁定',DISABLED:'停用'}[status]||status}
+function statusLabel(status:string){return {ACTIVE:'启用',LOCKED:'锁定',DISABLED:'停用'}[status]||`未知状态（${status}）`}
 function validatePassword(password:string, confirmation:string){if(password.length<14||password.length>128)throw new Error('密码长度必须为14至128个字符');if(password!==confirmation)throw new Error('两次输入的密码不一致')}
 async function save(){try{if(!form.username.trim()||!form.displayName.trim())throw new Error('请完整填写用户名和姓名');if(!editingId.value)validatePassword(form.initialPassword,confirmPassword.value);saving.value=true;const payload={...form,initialPassword:editingId.value?null:form.initialPassword};if(editingId.value)await apiClient.put(`/management/tenant/users/${editingId.value}`,payload);else await apiClient.post('/management/tenant/users',payload);ElMessage.success('用户已保存');dialog.value=false;await load()}catch(error){ElMessage.error(error instanceof Error?error.message:'用户保存失败')}finally{saving.value=false}}
 function openPasswordReset(row:UserRecord){passwordTarget.value=row;clearResetPassword();passwordDialog.value=true}
