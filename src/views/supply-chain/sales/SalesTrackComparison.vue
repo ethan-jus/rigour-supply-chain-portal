@@ -1,5 +1,12 @@
 <template>
   <div class="track-comparison">
+    <el-result
+      v-if="!canViewTracks"
+      icon="warning"
+      title="无精确轨迹查看权限"
+      sub-title="当前账号需同时具备销售看板和敏感位置查看权限，请联系管理员授权。"
+    />
+    <template v-else>
     <div class="track-toolbar">
       <el-select v-model="salesProfileId" placeholder="选择销售" filterable class="sales-select">
         <el-option v-for="person in people" :key="person.salesProfileId" :label="person.salesNo" :value="person.salesProfileId" />
@@ -70,6 +77,7 @@
       :closable="false"
       show-icon
     />
+    </template>
   </div>
 </template>
 
@@ -77,6 +85,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { apiClient } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 
 interface Person { salesProfileId: string; salesNo: string }
 interface Dashboard { people: Person[] }
@@ -114,6 +123,11 @@ const errorMessage = ref('')
 const loading = ref(false)
 const mapContainer = ref<HTMLElement | null>(null)
 const amapConfigured = Boolean(import.meta.env.VITE_AMAP_JS_KEY?.trim())
+const auth = useAuthStore()
+const canViewTracks = computed(() =>
+  auth.hasPermission('sales:dashboard:read')
+  && auth.hasPermission('sales:location:sensitive:read'),
+)
 let map: MapInstance | null = null
 let amapPromise: Promise<AmapNamespace> | null = null
 
@@ -155,6 +169,7 @@ function errorOf(error: unknown): string {
 }
 
 async function loadPeople() {
+  if (!canViewTracks.value) return
   const monthStart = `${today.slice(0, 7)}-01`
   try {
     const dashboard = await apiClient.get('/sales/management/dashboard', { params: { from: monthStart, to: today } }) as Dashboard
@@ -166,7 +181,7 @@ async function loadPeople() {
 }
 
 async function fetchTrack(date: string): Promise<{ track: WorkDayTrack | null; error: string }> {
-  if (!date) return { track: null, error: '' }
+  if (!canViewTracks.value || !date) return { track: null, error: '' }
   try {
     const track = await apiClient.get(`/sales/management/profiles/${salesProfileId.value}/track`, { params: { date } }) as WorkDayTrack
     return { track, error: '' }
@@ -176,7 +191,7 @@ async function fetchTrack(date: string): Promise<{ track: WorkDayTrack | null; e
 }
 
 async function loadTracks() {
-  if (!salesProfileId.value || !dateA.value) return
+  if (!canViewTracks.value || !salesProfileId.value || !dateA.value) return
   loading.value = true
   errorMessage.value = ''
   destroyMap()
@@ -191,6 +206,7 @@ async function loadTracks() {
 }
 
 async function loadAmap(): Promise<AmapNamespace> {
+  if (!canViewTracks.value) throw new Error('无精确轨迹查看权限')
   if (window.AMap) return window.AMap as AmapNamespace
   if (amapPromise) return amapPromise
   const key = import.meta.env.VITE_AMAP_JS_KEY?.trim()
@@ -209,7 +225,7 @@ async function loadAmap(): Promise<AmapNamespace> {
 }
 
 async function renderMap() {
-  if (!amapConfigured || (!trackA.value && !trackB.value)) return
+  if (!canViewTracks.value || !amapConfigured || (!trackA.value && !trackB.value)) return
   await nextTick()
   if (!mapContainer.value) return
   try {
@@ -264,6 +280,7 @@ function destroyMap() {
 }
 
 onMounted(async () => {
+  if (!canViewTracks.value) return
   await loadPeople()
   if (salesProfileId.value) await loadTracks()
 })

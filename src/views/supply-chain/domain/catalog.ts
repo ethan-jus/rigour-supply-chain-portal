@@ -43,34 +43,29 @@ const directPages = (
 
 const erpProductCenterPages: SupplyDomainPage[] = [
   {
-    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '商品/SPU',
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品中心', title: '商品管理',
     routeKey: 'supply.erp.master-data.products',
     path: '/supply-chain/erp/master-data/products', owner: 'erp-core-service',
   },
   {
-    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: 'SKU',
-    routeKey: 'supply.erp.master-data.skus',
-    path: '/supply-chain/erp/master-data/skus', owner: 'erp-core-service',
-  },
-  {
-    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '分类',
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品中心', title: '商品分类',
     routeKey: 'supply.erp.master-data.attributes.categories',
     path: '/supply-chain/erp/master-data/attributes/categories', owner: 'erp-core-service',
   },
   {
-    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '品牌',
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品中心', title: '商品品牌',
     routeKey: 'supply.erp.master-data.attributes.brands',
     path: '/supply-chain/erp/master-data/attributes/brands', owner: 'erp-core-service',
   },
   {
-    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '规格与包装',
-    routeKey: 'supply.erp.master-data.attributes.specifications',
-    path: '/supply-chain/erp/master-data/attributes/specifications', owner: 'erp-core-service',
-  },
-  {
-    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品与主数据', title: '商品标签',
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品中心', title: '商品标签',
     routeKey: 'supply.erp.master-data.attributes.tags',
     path: '/supply-chain/erp/master-data/attributes/tags', owner: 'erp-core-service',
+  },
+  {
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品中心', title: '商品规格',
+    routeKey: 'supply.erp.master-data.attributes.specifications',
+    path: '/supply-chain/erp/master-data/attributes/specifications', owner: 'erp-core-service',
   },
 ]
 
@@ -83,9 +78,11 @@ export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
   'supply.crm.customers.menu',
   'supply.crm.assignments.menu',
   'supply.crm.credit-policy.menu',
+  'supply.order.menu',
   'supply.city.scope.menu',
   'supply.city.tasks.menu',
   'supply.city.configuration.menu',
+  'supply.integration.sync-control.menu',
 ]
 
 export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
@@ -98,8 +95,9 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'procurement', title: '采购管理', pages: [
       { key: 'requests', title: '采购申请' }, { key: 'orders', title: '采购订单' },
       { key: 'receipts', title: '到货与入库' }, { key: 'returns', title: '采购退货' },
+      { key: 'payments', title: '采购付款单' },
     ] },
-    { key: 'inventory', title: '仓库管理', pages: [
+    { key: 'inventory', title: '库存管理', pages: [
       { key: 'dashboard', title: '库存看板' }, { key: 'inventory', title: '库存' },
       { key: 'inbound', title: '入库单' }, { key: 'outbound', title: '出库单' },
       { key: 'movements', title: '出入库流水' }, { key: 'transfers', title: '库存调拨' },
@@ -118,13 +116,20 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     ] },
     { key: 'assignments', title: '客户归属', pages: [
       { key: 'sales', title: '销售归属' }, { key: 'city-teams', title: '城市与团队归属' },
-      { key: 'history', title: '归属变更记录' }, { key: 'external-staff', title: '外部员工' },
+      { key: 'history', title: '归属变更记录' },
     ] },
     { key: 'credit-policy', title: '信用与结算政策', pages: [
       { key: 'limits', title: '信用额度' }, { key: 'terms', title: '账期与结算周期' },
       { key: 'payment-methods', title: '付款方式' }, { key: 'invoicing', title: '开票资料' },
       { key: 'approvals', title: '政策审批记录' },
     ] },
+  ]),
+  ...directPages('order', 'Order', 'order-center-service', [
+    { key: 'sales-orders', title: '销售订单' },
+    { key: 'shipments', title: '发货单' },
+    { key: 'sales-payments', title: '销售回款' },
+    { key: 'fund-documents', title: '客户资金流水' },
+    { key: 'sales-refunds', title: '销售退款' },
   ]),
   ...groupPages('city', '城市运营', 'city-operations-service', [
     { key: 'scope', title: '城市与服务范围', pages: [
@@ -165,14 +170,15 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'city-service-scope', title: '城市服务范围' },
   ]),
   {
-    domainKey: 'settings', domainTitle: '业务设置', groupTitle: null, title: '业务字典',
+    domainKey: 'settings', domainTitle: '业务设置', groupTitle: null, title: '数据字典',
     routeKey: 'supply.settings.numbering-dictionaries',
     path: '/supply-chain/settings/numbering-dictionaries', owner: 'business-settings-service',
   },
-  ...directPages('integration', '外部集成与数据同步', 'integration-migration-service', [
-    { key: 'sync-batches', title: '同步批次与游标' },
-    { key: 'external-id-mappings', title: '外部 ID 映射' },
-  ]),
+  {
+    domainKey: 'integration', domainTitle: '外部同步', groupTitle: '同步控制', title: '订货宝同步中心',
+    routeKey: 'supply.integration.overview',
+    path: '/supply-chain/integration', owner: 'integration-migration-service',
+  },
 ]
 
 export const SUPPLY_DOMAIN_ROUTE_MAP: Record<string, string | null> = {

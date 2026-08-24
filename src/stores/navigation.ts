@@ -9,14 +9,24 @@ import { devInfo, devWarn } from '@/utils/dev-log'
 export const useNavigationStore = defineStore('navigation', () => {
   /** IAM迁移尚未刷新或浏览器保留旧菜单缓存时，保证已发布的菜单文案即时生效。 */
   const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
-    'supply.order.stock-up': '出库/发货',
-    'supply.order.shipments': '物流跟踪',
-    'supply.order.settlement.menu': '订单结算管理',
-    'supply.order.settlement.collections': '收付记录',
-    'supply.order.settlement.receipts': '收款单',
-    'supply.order.settlement.payments': '付款单',
-    'supply.order.settlement.reconciliation': '财务对账',
-    'supply.order.settlement.differences': '对账差异',
+    'supply.order.menu': '订单管理',
+    'supply.order.sales-orders': '销售订单',
+    'supply.erp.master-data.menu': '商品中心',
+    'supply.erp.master-data.products': '商品管理',
+    'supply.erp.master-data.attributes.categories': '商品分类',
+    'supply.erp.master-data.attributes.brands': '商品品牌',
+    'supply.erp.master-data.attributes.tags': '商品标签',
+    'supply.erp.inventory.menu': '库存管理',
+    'supply.crm.customers.profiles': '客户管理',
+    'supply.integration.menu': '外部同步',
+    'supply.integration.sync-control.menu': '订货宝同步',
+    'supply.integration.overview': '订货宝同步中心',
+    'supply.erp.master-data.attributes.specifications': '商品规格',
+    'supply.settings.numbering-dictionaries': '数据字典',
+    'supply.order.shipments': '发货单',
+    'supply.order.sales-payments': '销售回款',
+    'supply.order.fund-documents': '客户资金流水',
+    'supply.order.sales-refunds': '销售退款',
   }
   const navigationByApplication = ref<Record<string, NavigationNode[]>>({})
   const loadedApplications = ref<string[]>([])

@@ -1,5 +1,6 @@
 @use './variables' as *;
 @use './reset';
+@use './supply-chain';
 
 // Element Plus 主题覆盖
 :root {
@@ -35,6 +36,12 @@
     --el-table-header-bg-color: #{$color-bg-base};
     --el-table-row-hover-bg-color: #eff6ff;
     color: $color-text-regular;
+  }
+
+  .el-table .el-table__header-wrapper {
+    position: sticky;
+    top: 0;
+    z-index: calc(var(--el-table-index) + 4);
   }
 
   .el-table th.el-table__cell {

@@ -75,7 +75,13 @@
             <el-tag type="info" effect="plain">共 {{ dashboard.people.length }} 人</el-tag>
           </div>
         </template>
-        <el-table :data="dashboard.people" stripe empty-text="当前区间没有销售人员数据">
+        <el-table
+          class="supply-scroll-table"
+          height="100%"
+          :data="dashboard.people"
+          stripe
+          empty-text="当前区间没有销售人员数据"
+        >
           <el-table-column label="销售" min-width="150" fixed>
             <template #default="scope">
               <div class="sales-cell"><strong>{{ scope.row.salesNo }}</strong><span>{{ scope.row.working ? '工作中' : '非工作中' }}</span></div>
@@ -103,6 +109,7 @@
       </el-card>
 
       <el-alert
+        class="metric-definition-alert"
         title="指标口径"
         description="完成离店表示硬证据门禁已通过；确认有效只统计已经形成最终复核结论的拜访。首访/复访按该销售历史上是否更早拜访过同一门店区分。"
         type="info"
@@ -246,6 +253,6 @@ onMounted(() => { void load() })
 .sales-cell { display: flex; flex-direction: column; gap: 4px; }
 .sales-cell span { color: $color-text-secondary; font-size: $font-size-xs; }
 .rate-cell { min-width: 130px; }
-@media (max-width: 1200px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } .operations-grid { grid-template-columns: 1fr; } }
-@media (max-width: 760px) { .metric-grid { grid-template-columns: 1fr; } .fact-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 760px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } .operations-grid { grid-template-columns: 1fr; } .fact-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .metric-grid { grid-template-columns: 1fr; } }
 </style>

@@ -18,24 +18,31 @@
         <el-option label="已取消" value="CANCELLED" />
       </el-select>
       <el-button :loading="loading" @click="load">刷新</el-button>
-      <el-button type="primary" @click="openCreate">新增计划</el-button>
+      <el-button v-if="canManagePlans" type="primary" @click="openCreate">新增计划</el-button>
     </div>
 
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
 
     <el-card shadow="never">
-      <el-table v-loading="loading" :data="plans?.items || []" stripe empty-text="当前日期范围没有拜访计划">
-        <el-table-column prop="plannedDate" label="计划日期" width="120" sortable />
-        <el-table-column label="销售" width="130">
-          <template #default="scope"><strong>{{ scope.row.salesNo }}</strong></template>
-        </el-table-column>
-        <el-table-column label="客户门店" min-width="220">
+      <el-table
+        v-loading="loading"
+        class="supply-scroll-table"
+        height="100%"
+        :data="plans?.items || []"
+        stripe
+        empty-text="当前日期范围没有拜访计划"
+      >
+        <el-table-column label="客户门店" width="260" fixed="left">
           <template #default="scope">
             <div class="store-cell">
               <strong>{{ scope.row.storeName }}</strong>
               <span>{{ scope.row.customerName || '未关联客户' }} · {{ scope.row.storeAddress || '暂无地址' }}</span>
             </div>
           </template>
+        </el-table-column>
+        <el-table-column prop="plannedDate" label="计划日期" width="120" sortable />
+        <el-table-column label="销售" width="130">
+          <template #default="scope"><strong>{{ scope.row.salesNo }}</strong></template>
         </el-table-column>
         <el-table-column prop="objective" label="拜访目标" min-width="260" show-overflow-tooltip />
         <el-table-column label="状态" width="110">
@@ -49,7 +56,7 @@
             <span v-else>尚未开始</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column v-if="canManagePlans" label="操作" width="150" fixed="right">
           <template #default="scope">
             <template v-if="scope.row.status === 'PLANNED'">
               <el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button>
@@ -80,7 +87,7 @@
       show-icon
     />
 
-    <el-dialog v-model="dialogVisible" :title="editingPlanId ? '编辑拜访计划' : '新增拜访计划'" width="560px" destroy-on-close>
+    <el-dialog v-if="canManagePlans" v-model="dialogVisible" :title="editingPlanId ? '编辑拜访计划' : '新增拜访计划'" width="560px" destroy-on-close>
       <el-form label-position="top">
         <el-form-item label="销售" required>
           <el-select v-model="form.salesProfileId" filterable placeholder="选择销售" style="width: 100%" @change="onProfileChange">
@@ -118,9 +125,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiClient } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 
 interface VisitPlanProfileOption {
   salesProfileId: string
@@ -180,6 +188,8 @@ const errorMessage = ref('')
 const dialogVisible = ref(false)
 const editingPlanId = ref('')
 const form = reactive({ salesProfileId: '', plannedDate: today, storeId: '', objective: '', version: null as number | null })
+const auth = useAuthStore()
+const canManagePlans = computed(() => auth.hasPermission('sales:visit-plan:write'))
 let targetRequestSequence = 0
 
 function localDate(date: Date): string {
@@ -202,6 +212,7 @@ async function load() {
 }
 
 async function loadProfiles() {
+  if (!canManagePlans.value) return
   try {
     profiles.value = await apiClient.get('/sales/management/visit-plans/profiles') as VisitPlanProfileOption[]
   } catch (error) {
@@ -210,7 +221,7 @@ async function loadProfiles() {
 }
 
 async function searchTargets(query = '') {
-  if (!form.salesProfileId) return
+  if (!canManagePlans.value || !form.salesProfileId) return
   const profileId = form.salesProfileId
   const requestSequence = ++targetRequestSequence
   targetsLoading.value = true
@@ -235,6 +246,7 @@ async function searchTargets(query = '') {
 function reload() { page.value = 1; void load() }
 function changePage(value: number) { page.value = value; void load() }
 function onProfileChange() {
+  if (!canManagePlans.value) return
   targetRequestSequence += 1
   targetsLoading.value = false
   form.storeId = ''
@@ -243,6 +255,7 @@ function onProfileChange() {
 }
 
 function openCreate() {
+  if (!requireManagePermission()) return
   editingPlanId.value = ''
   Object.assign(form, { salesProfileId: '', plannedDate: today, storeId: '', objective: '', version: null })
   targets.value = []
@@ -250,6 +263,7 @@ function openCreate() {
 }
 
 function openEdit(plan: ManagementVisitPlan) {
+  if (!requireManagePermission()) return
   editingPlanId.value = plan.planId
   Object.assign(form, {
     salesProfileId: plan.salesProfileId,
@@ -264,6 +278,7 @@ function openEdit(plan: ManagementVisitPlan) {
 }
 
 async function save() {
+  if (!requireManagePermission()) return
   if (!form.salesProfileId || !form.plannedDate || !form.storeId || !form.objective.trim()) {
     ElMessage.warning('请完整填写销售、日期、门店和拜访目标')
     return
@@ -284,6 +299,7 @@ async function save() {
 }
 
 async function cancelPlan(plan: ManagementVisitPlan) {
+  if (!requireManagePermission()) return
   try {
     await ElMessageBox.confirm(`确认取消 ${plan.salesNo} 在 ${plan.plannedDate} 的“${plan.storeName}”拜访计划？`, '取消计划', { type: 'warning' })
     await apiClient.put(`/sales/management/visit-plans/${plan.planId}/cancel`, { version: plan.version })
@@ -317,7 +333,16 @@ function messageOf(error: unknown, fallback: string) {
   return fallback
 }
 
-onMounted(() => { void Promise.all([load(), loadProfiles()]) })
+function requireManagePermission(): boolean {
+  if (canManagePlans.value) return true
+  ElMessage.warning('当前账号无拜访计划维护权限')
+  return false
+}
+
+onMounted(() => {
+  void load()
+  if (canManagePlans.value) void loadProfiles()
+})
 </script>
 
 <style scoped lang="scss">

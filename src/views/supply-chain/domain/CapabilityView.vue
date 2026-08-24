@@ -1,5 +1,5 @@
 <template>
-  <el-card shadow="never" class="capability-page">
+  <el-card shadow="never" class="capability-page supply-page supply-page--static">
     <template #header>
       <div class="page-header">
         <div>

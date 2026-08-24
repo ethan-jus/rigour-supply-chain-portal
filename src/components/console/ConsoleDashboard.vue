@@ -3,51 +3,72 @@
     <div class="dashboard__heading">
       <div>
         <h1>{{ greeting }}，{{ authStore.user?.displayName || '当前用户' }}</h1>
-        <p>{{ todayText }} · 数据按当前账号权限展示</p>
+        <p>{{ todayText }} · 当前仅展示已接入且已授权的业务能力</p>
       </div>
-      <span class="data-status"><i />实时权限</span>
+      <span class="data-status" :class="{ 'data-status--pending': !isSupply }">
+        <i />{{ isSupply ? '新业务主流程' : '数据接口未接入' }}
+      </span>
     </div>
 
-    <div class="metrics">
-      <article v-for="metric in metrics" :key="metric.label" class="metric">
-        <span class="metric__label">{{ metric.label }}</span>
-        <strong class="metric__value">{{ metric.value }}</strong>
-        <span class="metric__hint">{{ metric.hint }}</span>
-        <svg class="metric__spark" viewBox="0 0 100 30" fill="none" aria-hidden="true">
-          <path :d="metric.path" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-        </svg>
-      </article>
-    </div>
-
-    <div class="dashboard__grid">
-      <article class="panel trend-panel">
-        <div class="panel__header"><div><h2>{{ isSupply ? '近30天订单趋势' : '运营活动趋势' }}</h2><p>业务数据接入后自动更新</p></div><button class="period">近30天⌄</button></div>
-        <div class="chart-empty">
-          <svg viewBox="0 0 680 240" preserveAspectRatio="none" fill="none" aria-hidden="true">
-            <path d="M0 40H680M0 100H680M0 160H680M0 220H680" stroke="#e2e8f0" stroke-dasharray="3 5" />
-            <path d="M0 220H680" stroke="#cbd5e1" />
-          </svg>
-          <span>暂无可展示的数据</span>
+    <template v-if="isSupply">
+      <article class="business-overview" aria-live="polite">
+        <div class="business-overview__main">
+          <span class="business-overview__eyebrow">供应链系统 · 当前落地范围</span>
+          <h2>主业务按我方流程展示，订货宝只作为后台同步来源</h2>
+          <p>
+            ERP、CRM、订单、数据字典只承载新业务主流程；订货宝同步规则沉到后台映射链路，
+            同步任务把数据写入我方新表，不再提供旧订货宝档案菜单。
+          </p>
+        </div>
+        <div class="business-overview__rule">
+          <span>当前原则</span>
+          <strong>业务菜单看新表，外部同步看来源，页面不展示未落地动作</strong>
         </div>
       </article>
 
-      <div class="dashboard__side">
-        <article class="panel todo-panel">
-          <div class="panel__header"><h2>待办事项</h2><a href="#">查看全部 →</a></div>
-          <div class="todo-empty"><span class="todo-empty__icon">✓</span><p>当前没有待处理事项</p><small>新的审批和任务会显示在这里</small></div>
-        </article>
-        <article class="panel quick-panel">
-          <div class="panel__header"><h2>快捷操作</h2></div>
-          <div class="quick-actions">
-            <button v-for="action in quickActions" :key="action" type="button"><span>{{ action.slice(0, 1) }}</span>{{ action }}</button>
+      <div class="business-progress">
+        <article v-for="item in businessProgress" :key="item.title" class="business-progress__card">
+          <div class="business-progress__header">
+            <span>{{ item.domain }}</span>
+            <strong>{{ item.title }}</strong>
           </div>
+          <p>{{ item.description }}</p>
+          <dl>
+            <div>
+              <dt>已接入</dt>
+              <dd>{{ item.done }}</dd>
+            </div>
+            <div>
+              <dt>下一步</dt>
+              <dd>{{ item.next }}</dd>
+            </div>
+          </dl>
         </article>
       </div>
-    </div>
+    </template>
 
-    <article class="panel activity-panel">
-      <div class="panel__header"><h2>最近动态</h2><span class="muted">暂无记录</span></div>
-      <div class="activity-empty">完成业务操作后，最近动态会显示在这里</div>
+    <article v-else class="integration-empty" aria-live="polite">
+      <div class="integration-empty__mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none">
+          <rect x="8" y="10" width="32" height="28" rx="7" />
+          <path d="M15 30l6-6 5 4 7-9" />
+          <path d="M15 17h8" />
+        </svg>
+      </div>
+      <div class="integration-empty__content">
+        <span class="integration-empty__eyebrow">{{ isSupply ? '供应链业务概览' : '平台运营概览' }}</span>
+        <h2>{{ isSupply ? '供应链首页数据接口尚未接入' : '平台首页数据接口尚未接入' }}</h2>
+        <p>
+          当前页面不生成模拟指标，也不推断待办或最近动态。后端提供真实统计、趋势和待办接口后，
+          这里再按当前账号权限展示可核对的数据。
+        </p>
+        <div class="integration-empty__scope">
+          <span>当前可用</span>
+          <strong>身份与页面权限</strong>
+          <span>等待接入</span>
+          <strong>统计、趋势、待办与动态</strong>
+        </div>
+      </div>
     </article>
   </section>
 </template>
@@ -62,55 +83,79 @@ const authStore = useAuthStore()
 const isSupply = computed(() => route.meta.applicationCode === 'SUPPLY_CHAIN')
 const greeting = computed(() => new Date().getHours() < 12 ? '早上好' : new Date().getHours() < 18 ? '下午好' : '晚上好')
 const todayText = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
-const metrics = computed(() => isSupply.value
-  ? [
-      { label: '今日订单金额', value: '—', hint: '等待订单服务接入', path: 'M0 22C12 22 12 12 24 16s12 5 24-2 12 9 24 3 13 3 28-9' },
-      { label: '本月业绩', value: '—', hint: '等待业绩数据接入', path: 'M0 20c10-8 18 4 28-3s16-8 26 1 18-2 25-8 13 5 21-3' },
-      { label: '活跃客户', value: '—', hint: '等待客户服务接入', path: 'M0 24c12-3 15-13 27-8s18 5 27-3 13 8 22 3 14-7 24-12' },
-      { label: '待办审批', value: '—', hint: '等待审批服务接入', path: 'M0 10c11 5 18-1 27 4s16 2 25 6 14-4 22-1 13 7 26 1' },
-    ]
-  : [
-      { label: '平台租户', value: '—', hint: '等待租户数据接入', path: 'M0 22c12-7 16-7 28-1s14-11 26-7 14 1 24-5 12 4 22-5' },
-      { label: '应用目录', value: '—', hint: '按权限实时计算', path: 'M0 18c12 0 16-10 28-5s16-2 26 3 16 2 24-6 13 4 22-2' },
-      { label: '授权用户', value: '—', hint: '等待用户数据接入', path: 'M0 24c12-2 16-11 26-7s17 6 26-2 14 4 24 0 14-10 24-12' },
-      { label: '待办审计', value: '—', hint: '暂无待处理事项', path: 'M0 8c12 6 18 1 28 7s15-2 25 1 16 6 24-2 14 2 23-5' },
-    ])
-const quickActions = computed(() => isSupply.value ? ['新建订单', '新增客户', '邀请成员', '数据报表'] : ['新建租户', '新增用户', '配置应用', '查看审计'])
+const businessProgress = [
+  {
+    domain: 'ERP',
+    title: '商品、采购、库存',
+    description: '围绕我方商品库、供应商、采购订单、入库单、出库单、库存调拨和仓库信息组织菜单。',
+    done: '商品管理、基础资料、供应商档案、采购订单、入库单、出库单、库存调拨、仓库信息',
+    next: '订货宝商品、采购、库存数据映射到我方 ERP 新表',
+  },
+  {
+    domain: 'CRM',
+    title: '客户管理',
+    description: '客户、商家、门店统一为客户管理，联系方式、归属销售、归属地区在客户内维护。',
+    done: '客户新增、编辑、删除、详情、联系方式、归属信息',
+    next: '订货宝客户资料映射到我方客户表',
+  },
+  {
+    domain: 'Order',
+    title: '销售订单',
+    description: '订单主流程走我方销售订单接口，后续订货宝订单只作为来源映射到销售订单表。',
+    done: '销售订单列表、保存、提交、编辑、详情、确认出库',
+    next: '订货宝订单重新同步到我方销售订单表',
+  },
+  {
+    domain: 'Dict',
+    title: '数据字典',
+    description: '字典主表与字典项统一支撑单位、类型、状态、支付方式等业务选项。',
+    done: 'DATA_DICTIONARY、DATA_DICTIONARY_ITEM 业务页面',
+    next: '补齐 ERP、CRM、Order 必需字典项和调用方 dictionaryCode',
+  },
+]
 </script>
 
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
 
-.dashboard { max-width: 1200px; margin: 0 auto; }
+.dashboard { width: 100%; max-width: 1200px; margin: 0 auto; }
 .dashboard__heading { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; }
 .dashboard__heading h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
 .dashboard__heading p { margin: 7px 0 0; color: $color-text-secondary; font-size: $font-size-sm; }
 .data-status { display: flex; gap: 7px; align-items: center; color: $color-success; font-size: $font-size-xs; }
 .data-status i { width: 7px; height: 7px; background: $color-success; border-radius: 50%; }
-.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: $spacing-md; margin-bottom: $spacing-md; }
-.metric { position: relative; min-height: 136px; padding: 20px; overflow: hidden; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-lg; }
-.metric__label { display: block; color: $color-text-secondary; font-size: $font-size-sm; }
-.metric__value { display: block; margin-top: 14px; color: $color-text-primary; font-size: 27px; font-weight: 600; letter-spacing: -.02em; }
-.metric__hint { display: block; margin-top: 9px; color: $color-text-placeholder; font-size: $font-size-xs; }
-.metric__spark { position: absolute; right: 16px; bottom: 17px; width: 78px; height: 28px; color: rgba(37,99,235,.65); }
-.dashboard__grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: $spacing-md; }
-.dashboard__side { display: grid; gap: $spacing-md; grid-template-rows: 1fr auto; }
-.panel { padding: 20px; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-lg; }
-.panel__header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
-.panel__header h2 { margin: 0; font-size: $font-size-md; font-weight: 600; }
-.panel__header p, .muted { margin: 6px 0 0; color: $color-text-placeholder; font-size: $font-size-xs; }
-.panel__header a { color: $color-primary; font-size: $font-size-xs; text-decoration: none; }
-.period { padding: 5px 9px; color: $color-text-secondary; background: #fff; border: 1px solid $color-border-base; border-radius: 6px; font: inherit; font-size: $font-size-xs; }
-.chart-empty { position: relative; display: grid; min-height: 248px; color: $color-text-placeholder; place-items: center; }
-.chart-empty svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.chart-empty span { position: relative; z-index: 1; padding: 8px 12px; background: rgba(255,255,255,.9); border-radius: 6px; font-size: $font-size-sm; }
-.todo-empty { display: grid; min-height: 138px; justify-items: center; align-content: center; color: $color-text-secondary; text-align: center; }
-.todo-empty__icon { display: grid; width: 32px; height: 32px; margin-bottom: 10px; color: $color-success; background: #ecfdf5; border-radius: 50%; font-size: 18px; place-items: center; }
-.todo-empty p { margin: 0; font-size: $font-size-sm; }.todo-empty small { margin-top: 5px; color: $color-text-placeholder; font-size: $font-size-xs; }
-.quick-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-.quick-actions button { display: flex; gap: 7px; align-items: center; height: 38px; padding: 0 10px; color: $color-text-regular; background: #fff; border: 1px solid $color-border-base; border-radius: 7px; font: inherit; font-size: $font-size-xs; cursor: pointer; }
-.quick-actions button:hover { color: $color-primary; border-color: rgba(37,99,235,.5); background: #eff6ff; }.quick-actions span { display: grid; width: 20px; height: 20px; color: $color-primary; background: #eff6ff; border-radius: 5px; font-size: 11px; place-items: center; }
-.activity-panel { margin-top: $spacing-md; }.activity-empty { display: grid; min-height: 55px; color: $color-text-placeholder; background: $color-bg-base; border-radius: 7px; font-size: $font-size-sm; place-items: center; }
-@media (max-width: 900px) { .metrics { grid-template-columns: repeat(2, 1fr); } .dashboard__grid { grid-template-columns: 1fr; } }
-@media (max-width: 520px) { .metrics { grid-template-columns: 1fr; } .dashboard__heading { align-items: flex-start; flex-direction: column; gap: 12px; } }
+.data-status--pending { color: #b45309; }
+.data-status--pending i { background: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, .12); }
+.business-overview { display: grid; margin-bottom: 18px; padding: 26px 28px; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; background: #fff; border: 1px solid #dbe5f2; border-radius: 18px; box-shadow: 0 14px 32px rgba(15, 23, 42, .05); }
+.business-overview__eyebrow { color: $color-primary; font-size: $font-size-xs; font-weight: 700; letter-spacing: .08em; }
+.business-overview h2 { margin: 8px 0 10px; color: $color-text-primary; font-size: 26px; line-height: 1.32; }
+.business-overview p { max-width: 760px; margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.85; }
+.business-overview__rule { display: grid; min-width: 280px; padding: 16px 18px; gap: 7px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; }
+.business-overview__rule span { color: #2563eb; font-size: $font-size-xs; font-weight: 700; }
+.business-overview__rule strong { color: $color-text-regular; font-size: $font-size-sm; line-height: 1.6; }
+.business-progress { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.business-progress__card { display: grid; padding: 20px; gap: 14px; background: #fff; border: 1px solid #dbe5f2; border-radius: 16px; box-shadow: 0 10px 24px rgba(15, 23, 42, .045); }
+.business-progress__header { display: flex; gap: 10px; align-items: center; }
+.business-progress__header span { display: inline-flex; min-width: 48px; height: 28px; align-items: center; justify-content: center; color: $color-primary; font-size: $font-size-xs; font-weight: 800; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; }
+.business-progress__header strong { color: $color-text-primary; font-size: 18px; }
+.business-progress__card p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.75; }
+.business-progress__card dl { display: grid; margin: 0; gap: 10px; }
+.business-progress__card dl > div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 10px; }
+.business-progress__card dt { color: $color-text-placeholder; font-size: $font-size-xs; }
+.business-progress__card dd { margin: 0; color: $color-text-regular; font-size: $font-size-sm; line-height: 1.65; }
+.integration-empty { position: relative; display: grid; min-height: 440px; padding: clamp(28px, 5vw, 64px); overflow: hidden; grid-template-columns: auto minmax(0, 640px); align-content: center; justify-content: center; gap: clamp(24px, 4vw, 48px); background: linear-gradient(145deg, #fff 0%, #f8fbff 55%, #eff6ff 100%); border: 1px solid #dbeafe; border-radius: 18px; box-shadow: 0 18px 45px rgba(15, 23, 42, .06); }
+.integration-empty::after { position: absolute; right: -90px; bottom: -110px; width: 260px; height: 260px; content: ''; background: radial-gradient(circle, rgba(37, 99, 235, .14), rgba(37, 99, 235, 0) 70%); }
+.integration-empty__mark { display: grid; width: 92px; height: 92px; color: $color-primary; background: rgba(255, 255, 255, .88); border: 1px solid #bfdbfe; border-radius: 26px; box-shadow: 0 16px 35px rgba(37, 99, 235, .14); place-items: center; }
+.integration-empty__mark svg { width: 52px; height: 52px; }
+.integration-empty__mark rect, .integration-empty__mark path { stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.integration-empty__content { position: relative; z-index: 1; }
+.integration-empty__eyebrow { color: $color-primary; font-size: $font-size-xs; font-weight: 700; letter-spacing: .1em; }
+.integration-empty__content h2 { margin: 9px 0 12px; color: $color-text-primary; font-size: clamp(24px, 3vw, 32px); line-height: 1.25; }
+.integration-empty__content p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.9; }
+.integration-empty__scope { display: grid; margin-top: 28px; padding: 16px 18px; grid-template-columns: auto 1fr; gap: 8px 16px; background: rgba(255, 255, 255, .78); border: 1px solid rgba(191, 219, 254, .78); border-radius: 12px; }
+.integration-empty__scope span { color: $color-text-placeholder; font-size: $font-size-xs; }
+.integration-empty__scope strong { color: $color-text-regular; font-size: $font-size-sm; font-weight: 600; }
+@media (max-width: 960px) { .business-overview { grid-template-columns: 1fr; } .business-progress { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .integration-empty { min-height: 380px; grid-template-columns: 1fr; justify-items: start; } }
+@media (max-width: 520px) { .dashboard__heading { align-items: flex-start; flex-direction: column; gap: 12px; } }
 </style>

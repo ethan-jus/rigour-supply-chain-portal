@@ -61,6 +61,21 @@ export interface UserRecord {
   securityVersion: number; version: number; roleIds: string[]
   organizationIds: string[]
 }
+export interface PositionRecord {
+  id: string; code: string; name: string; description: string | null
+  sortOrder: number; status: string; version: number
+}
+export interface StaffRecord {
+  id: string; staffCode: string; staffName: string; mobile: string | null; email: string | null
+  employmentStatus: string; primaryOrganizationId: string | null; primaryOrganizationName: string | null
+  primaryPositionId: string | null; primaryPositionName: string | null
+  userId: string | null; username: string | null; userDisplayName: string | null
+  recordOrigin: string; remark: string | null
+  sourceSystem: string | null; sourceStaffId: string | null; sourceStaffType: string | null
+  sourceAccountName: string | null; sourceTitle: string | null; sourceBranchName: string | null
+  sourceRole: string | null; sourceStatus: string | null; sourcePresence: string | null
+  lastSeenAt: string | null; version: number
+}
 export interface RoleRecord {
   id: string; code: string; name: string; type: string; status: string; version: number; resourceIds: string[]
 }

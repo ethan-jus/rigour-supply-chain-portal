@@ -1,172 +1,118 @@
 import { apiClient } from './client'
 
-/** 字典作用域：系统默认、业务模块默认或租户自定义。 */
-export type DictScopeType = 'SYSTEM' | 'MODULE' | 'TENANT'
-
-/** 字典及字典项使用的内部治理状态。 */
-export type DictStatus = 'ACTIVE' | 'DISABLED'
-
-/** 公共业务字典定义。 */
-export interface BizDict {
+/** 字典定义；前端只展示后端 DictView 返回的字段。 */
+export interface DictView {
   /** 字典主键。 */
   id: string
-  /** 字典编码。 */
-  code: string
-  /** 字典中文名称。 */
-  name: string
-  /** 字典作用域。 */
-  scopeType: DictScopeType
-  /** 服务端计算的作用域标识。 */
-  scopeId: string
-  /** COMMON、ERP、CRM、ORDER等业务模块编码。 */
-  moduleCode: string
-  /** 租户级字典所属租户。 */
-  tenantId: string | null
-  /** 租户字典复制来源。 */
-  baseDictId: string | null
-  /** 字典治理状态。 */
-  status: DictStatus
-  /** 展示顺序。 */
-  sortNo: number
-  /** 维护说明。 */
+  /** 字典编码，调用方按该编码直接读取。 */
+  dictionaryCode: string
+  /** 面向业务人员的字典名称。 */
+  dictionaryName: string
+  /** 字典类型；用于后端归类，业务页面不按该字段做主视觉分组。 */
+  dictionaryType: string | null
+  /** 字典说明。 */
   remark: string | null
   /** 乐观锁版本。 */
-  version: number
-  /** 整本字典内容版本；字典定义或任一条目变化时递增。 */
   revision: number
 }
 
-/** 公共业务字典项。 */
-export interface BizDictItem {
+/** 字典项；层级和父子关系由后端 View 明确返回。 */
+export interface DictItemView {
   /** 字典项主键。 */
   id: string
-  /** 所属字典主键。 */
-  dictId: string
-  /** 父字典项主键，根节点为空。 */
-  parentId: string | null
-  /** 服务端维护的树层级，根节点为1。 */
-  levelNo: number
-  /** 字典项业务编码。 */
-  code: string
-  /** 面向业务人员的显示名称。 */
-  name: string
-  /** 可选业务值。 */
-  value: string | null
-  /** 同级展示顺序。 */
-  sortNo: number
-  /** 字典项治理状态。 */
-  status: DictStatus
-  /** JSON格式的非核心展示扩展。 */
-  extraJson: string | null
-  /** 乐观锁版本。 */
-  version: number
-}
-
-/** 新增或修改字典的请求。 */
-export interface BizDictCommand {
-  /** 字典编码；新增后不可修改。 */
-  code: string
-  /** 面向业务人员的字典名称。 */
-  name: string
-  /** 字典作用域；新增后不可修改。 */
-  scopeType: DictScopeType
-  /** 字典所属业务模块；新增后不可修改。 */
-  moduleCode: string
-  /** 租户级字典的租户ID；租户身份由服务端校验。 */
-  tenantId: string | null
-  /** 租户字典的可选复制来源。 */
-  baseDictId: string | null
-  /** 字典治理状态。 */
-  status: DictStatus
-  /** 字典展示顺序，数值越小越靠前。 */
-  sortNo: number
-  /** 字典用途和维护说明。 */
+  /** 所属字典编码。 */
+  dictionaryCode: string
+  /** 字典项层级，根节点为 1。 */
+  dictionaryItemLevel: number
+  /** 父字典项编码，根节点为空。 */
+  parentDictionaryItemCode: string | null
+  /** 字典项编码。 */
+  dictionaryItemCode: string
+  /** 面向业务人员的字典项名称。 */
+  dictionaryItemName: string
+  /** 字典项说明。 */
   remark: string | null
-  /** 修改时的乐观锁版本；新增必须为0。 */
-  version: number
+  /** 展示顺序。 */
+  ordinal: number
+  /** 乐观锁版本。 */
+  revision: number
 }
 
-/** 新增或修改字典项的请求，层级由服务端计算。 */
-export interface BizDictItemCommand {
-  /** 所属字典主键；必须与请求路径一致。 */
-  dictId: string
-  /** 父字典项主键；根节点为空。 */
-  parentId: string | null
-  /** 字典项业务编码。 */
-  code: string
-  /** 面向业务人员的显示名称。 */
-  name: string
-  /** 可选业务值；不用于保存第三方原始报文。 */
-  value: string | null
-  /** 同级展示顺序，数值越小越靠前。 */
-  sortNo: number
-  /** 字典项治理状态。 */
-  status: DictStatus
-  /** 颜色、图标、精度等非核心展示扩展，必须是合法JSON。 */
-  extraJson: string | null
-  /** 修改时的乐观锁版本；新增必须为0。 */
-  version: number
+/** 新增或修改字典的请求；字段与后端 DictCommand 对齐。 */
+export interface DictCommand {
+  dictionaryCode: string
+  dictionaryName: string
+  dictionaryType: string | null
+  remark: string | null
+  revision: number
+}
+
+/** 新增或修改字典项的请求；字段与后端 DictItemCommand 对齐。 */
+export interface DictItemCommand {
+  dictionaryCode: string
+  parentDictionaryItemCode: string | null
+  dictionaryItemCode: string
+  dictionaryItemName: string
+  remark: string | null
+  ordinal: number
+  revision: number
 }
 
 /** 当前身份最终生效的整本字典。 */
-export interface EffectiveBizDict {
-  /** 按租户级、模块级、系统级优先级命中的字典。 */
-  dictionary: BizDict
-  /** 命中字典中全部启用的字典项。 */
-  items: BizDictItem[]
+export interface EffectiveDictView {
+  dictionary: DictView
+  items: DictItemView[]
 }
 
 const BASE_PATH = '/business-settings/dictionaries'
 
 /** 查询当前身份可见的字典。 */
 export function getBizDicts(params: {
-  moduleCode?: string
-  scopeType?: DictScopeType | ''
-  tenantId?: string
-  status?: DictStatus | ''
+  dictionaryType?: string
+  dictionaryCode?: string
 }) {
-  return apiClient.get<BizDict[]>(BASE_PATH, { params, stayOnUnauthorized: true })
+  return apiClient.get<DictView[]>(BASE_PATH, { params, stayOnUnauthorized: true })
 }
 
 /** 查询指定字典的全部条目。 */
-export function getBizDictItems(dictId: string) {
-  return apiClient.get<BizDictItem[]>(`${BASE_PATH}/${dictId}/items`, {
+export function getBizDictItems(dictId: string | number) {
+  return apiClient.get<DictItemView[]>(`${BASE_PATH}/${encodeURIComponent(String(dictId))}/items`, {
     stayOnUnauthorized: true,
   })
 }
 
-/** 由服务端按 TENANT、MODULE、SYSTEM 优先级解析当前生效字典。 */
-export function getEffectiveBizDict(moduleCode: string, code: string) {
-  return apiClient.get<EffectiveBizDict>(`${BASE_PATH}/effective`, {
-    params: { moduleCode, code },
+/** 由服务端按当前身份解析最终生效字典。 */
+export function getEffectiveBizDict(dictionaryCode: string) {
+  return apiClient.get<EffectiveDictView>(`${BASE_PATH}/effective`, {
+    params: { dictionaryCode },
     stayOnUnauthorized: true,
   })
 }
 
-/** 解析历史业务数据；返回启用和停用条目，避免旧记录失去显示名称。 */
-export function resolveBizDict(moduleCode: string, code: string) {
-  return apiClient.get<EffectiveBizDict>(`${BASE_PATH}/resolve`, {
-    params: { moduleCode, code },
+/** 解析历史业务数据；返回可用于历史记录显示的整本字典。 */
+export function resolveBizDict(dictionaryCode: string) {
+  return apiClient.get<EffectiveDictView>(`${BASE_PATH}/resolve`, {
+    params: { dictionaryCode },
     stayOnUnauthorized: true,
   })
 }
 
 /** 新增字典。 */
-export function createBizDict(command: BizDictCommand) {
-  return apiClient.post<BizDict>(BASE_PATH, command)
+export function createBizDict(command: DictCommand) {
+  return apiClient.post<DictView>(BASE_PATH, command)
 }
 
 /** 修改字典。 */
-export function updateBizDict(dictId: string, command: BizDictCommand) {
-  return apiClient.put<BizDict>(`${BASE_PATH}/${dictId}`, command)
+export function updateBizDict(dictId: string | number, command: DictCommand) {
+  return apiClient.put<DictView>(`${BASE_PATH}/${encodeURIComponent(String(dictId))}`, command)
 }
 
 /** 新增字典项。 */
-export function createBizDictItem(dictId: string, command: BizDictItemCommand) {
-  return apiClient.post<BizDictItem>(`${BASE_PATH}/${dictId}/items`, command)
+export function createBizDictItem(dictId: string | number, command: DictItemCommand) {
+  return apiClient.post<DictItemView>(`${BASE_PATH}/${encodeURIComponent(String(dictId))}/items`, command)
 }
 
 /** 修改字典项。 */
-export function updateBizDictItem(itemId: string, command: BizDictItemCommand) {
-  return apiClient.put<BizDictItem>(`${BASE_PATH}/items/${itemId}`, command)
+export function updateBizDictItem(itemId: string | number, command: DictItemCommand) {
+  return apiClient.put<DictItemView>(`${BASE_PATH}/items/${encodeURIComponent(String(itemId))}`, command)
 }

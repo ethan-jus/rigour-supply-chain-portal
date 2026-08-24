@@ -7,13 +7,9 @@ export interface DhbStatusOption {
 
 export const pendingOrderStatusValues = new Set(['pricing', 'pending', 'stock_up', 'stockup', 'shipped', 'received'])
 
-function unknownLabel(value: string | null): string {
-  return value ? `状态未配置（${value}）` : '-'
-}
-
 export function statusLabel(options: DhbStatusOption[], value: string | null): string {
   if (!value) return '-'
-  return options.find((item) => item.value === value)?.label || unknownLabel(value)
+  return options.find((item) => item.value === value)?.label || value
 }
 
 export function formatOrderStatus(value: string | null): string {

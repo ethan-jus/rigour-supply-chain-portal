@@ -14,8 +14,12 @@ const messages = vi.hoisted(() => ({
   error: vi.fn(),
   confirm: vi.fn(),
 }))
+const authPermissions = vi.hoisted(() => new Set<string>())
 
 vi.mock('@/api', () => ({ apiClient: api }))
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ hasPermission: (permission: string) => authPermissions.has(permission) }),
+}))
 vi.mock('element-plus', () => ({
   ElMessage: {
     success: messages.success,
@@ -60,6 +64,8 @@ const emptyStub = defineComponent({ template: '<span />' })
 describe('主管拜访计划页面', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    authPermissions.clear()
+    authPermissions.add('sales:visit-plan:write')
     api.get.mockImplementation((url: string) => {
       if (url.endsWith('/profiles')) {
         return Promise.resolve([{ salesProfileId: 'profile-1', employeeId: 'employee-1', salesNo: 'S001', cityOrgId: null }])
@@ -121,5 +127,51 @@ describe('主管拜访计划页面', () => {
       version: null,
     }))
     expect(messages.success).toHaveBeenCalledWith('计划已创建')
+  })
+
+  it('无维护权限时仅读取计划，不加载写入表单依赖或发出写请求', async () => {
+    authPermissions.clear()
+    const wrapper = mount(SalesVisitPlans, {
+      global: {
+        directives: { loading: () => {} },
+        stubs: {
+          ElAlert: passthrough,
+          ElButton: buttonStub,
+          ElCard: passthrough,
+          ElDatePicker: passthrough,
+          ElDialog: dialogStub,
+          ElForm: passthrough,
+          ElFormItem: passthrough,
+          ElInput: inputStub,
+          ElOption: optionStub,
+          ElPagination: passthrough,
+          ElSelect: selectStub,
+          ElTable: passthrough,
+          ElTableColumn: emptyStub,
+          ElTag: passthrough,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(api.get).toHaveBeenCalledWith('/sales/management/visit-plans', expect.any(Object))
+    expect(api.get).not.toHaveBeenCalledWith('/sales/management/visit-plans/profiles')
+    expect(wrapper.text()).not.toContain('新增计划')
+
+    const state = wrapper.vm as unknown as {
+      openCreate: () => void
+      save: () => Promise<void>
+      cancelPlan: (plan: Record<string, unknown>) => Promise<void>
+    }
+    state.openCreate()
+    await state.save()
+    await state.cancelPlan({
+      planId: 'plan-1', salesNo: 'S001', plannedDate: '2026-08-17', storeName: '测试门店', version: 1,
+    })
+
+    expect(api.post).not.toHaveBeenCalled()
+    expect(api.put).not.toHaveBeenCalled()
+    expect(messages.confirm).not.toHaveBeenCalled()
+    expect(messages.warning).toHaveBeenCalledWith('当前账号无拜访计划维护权限')
   })
 })

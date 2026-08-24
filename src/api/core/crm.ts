@@ -8,222 +8,120 @@ export interface CrmPage<T> {
   items: T[]
 }
 
-export interface CrmCustomerSummary {
+export interface InternalCrmCustomerSummary {
   id: string
-  code: string | null
-  name: string
-  internalStatus: string
-  account: string | null
-  typeName: string | null
-  areaName: string | null
-  contactName: string | null
-  phone: string | null
-  staffName: string | null
-  salesAssignments: CrmSalesAssignment[]
-  sourceUpdatedAt: string | null
-  syncedAt: string | null
-  sourcePresence: string
-  sourceStatus: string | null
-}
-
-export interface CrmAddress {
-  id: string
-  consignee: string | null
-  contact: string | null
-  phone: string | null
-  regionText: string | null
-  areaName: string | null
-  addressDetail: string | null
-  fullAddress: string | null
-  defaultAddress: boolean
-  sourceUpdatedAt: string | null
-  sourceFields: Record<string, unknown>
-}
-
-export interface CrmShippingAddress {
-  id: string
-  customerId: string
-  customerCode: string | null
+  customerCode: string
   customerName: string
-  sourceId: string | null
-  consignee: string | null
-  contact: string | null
-  phone: string | null
-  regionText: string | null
-  areaName: string | null
-  addressDetail: string | null
-  fullAddress: string | null
-  defaultAddress: boolean
-  status: string | null
-  sourceUpdatedAt: string | null
-  syncedAt: string | null
-  sourcePresence: string
-}
-
-export interface CrmCustomerDetail {
-  id: string
-  code: string | null
-  name: string
-  internalStatus: string
-  account: string | null
-  typeName: string | null
-  areaName: string | null
-  city: string | null
-  inviter: string | null
-  remark: string | null
   contactName: string | null
-  phone: string | null
-  email: string | null
+  contactPhone: string | null
+  customerTypeCode: string | null
+  regionCode: string | null
+  ownerSalesUserId: string | null
+  ownerSalesName: string | null
+  ownerStaffCode?: string | null
+  ownerStaffNameSnapshot?: string | null
+  settlementTypeCode: string | null
+  statusCode: string
+  revision: number
+  updatedTime: string
+}
+
+export interface InternalCrmCustomerDetail extends InternalCrmCustomerSummary {
   address: string | null
-  settlementMode: string | null
-  staffName: string | null
-  salesAssignments: CrmSalesAssignment[]
-  sourceStatus: string | null
-  sourceCreatedAt: string | null
-  sourceUpdatedAt: string | null
-  syncedAt: string | null
-  sourcePresence: string
-  shippingAddresses: CrmAddress[]
-  sourceFields: Record<string, unknown>
-  source: CrmCustomerSource
+  remark: string | null
+  createdBy: string | null
+  createdTime: string
+  updatedBy: string | null
 }
 
-export interface CrmCustomerSource {
-  clientGuid: string | null
-  typeId: string | null
-  areaId: string | null
-  areaGuid: string | null
-  statusCode: string | null
-  clearingFormCode: string | null
+export interface InternalCrmCustomerCommand {
+  customerName: string
+  contactName?: string | null
+  contactPhone?: string | null
+  customerTypeCode?: string | null
+  regionCode?: string | null
+  ownerSalesUserId?: string | null
+  ownerSalesName?: string | null
+  ownerStaffCode?: string | null
+  ownerStaffNameSnapshot?: string | null
+  settlementTypeCode?: string | null
+  address?: string | null
+  statusCode?: string | null
+  remark?: string | null
+  revision?: number | null
 }
 
-export interface CrmSalesAssignment {
-  assignmentType: 'PRIMARY' | 'SECONDARY' | 'SERVICE' | string
-  sourceStaffId: string | null
-  staffName: string | null
+export interface InternalCrmCustomerQuery {
+  begin: number
+  step: number
+  customerCode?: string
+  customerName?: string
+  contactPhone?: string
+  customerTypeCode?: string
+  regionCode?: string
+  ownerSalesUserId?: string
+  ownerStaffCode?: string
+  statusCode?: string
 }
 
-export interface CrmDictionaryItem {
+export interface CrmDictionaryView {
   id: string
-  code: string | null
+  code: string
   name: string
   status: string
   syncedAt: string | null
-  parentId?: string | null
-  parentCode?: string | null
-}
-
-export interface CrmExternalStaff {
-  id: string
-  sourceStaffId: string | null
-  accountId: string | null
-  accountName: string | null
-  staffType: string | null
-  staffName: string
-  title: string | null
-  branchName: string | null
-  accountMobile: string | null
-  mobile: string | null
-  email: string | null
-  roleName: string | null
-  sourceStatus: string | null
-  sourceUpdatedAt: string | null
-  syncedAt: string | null
-}
-
-export interface CrmCustomerQuery {
-  begin: number
-  step: number
-  q?: string
-  status?: string
-}
-
-export interface CrmDictionaryQuery {
-  begin: number
-  step: number
-  q?: string
-}
-
-export type CrmSyncObjectType =
-  | 'ALL'
-  | 'CUSTOMER_TYPE'
-  | 'CUSTOMER_AREA'
-  | 'STAFF'
-  | 'CUSTOMER'
-  | 'ADDRESS'
-
-export interface CrmSyncObjectResult {
-  runId: string
-  objectType: Exclude<CrmSyncObjectType, 'ALL'>
-  status: string
-  fetched: number
-  created: number
-  changed: number
-  repaired: number
-  duplicates: number
-  absent: number
-  rejected: number
-  unmapped: number
-  dictionaryRevisions: Record<string, number>
-  pages: number
-  finishedAt: string | null
-}
-
-export interface CrmSyncResult {
-  batchId: string
-  status: string
-  objects: CrmSyncObjectResult[]
+  parentId: string | null
+  parentCode: string | null
+  sourcePresence?: string | null
+  sourceAbsentAt?: string | null
 }
 
 const CRM_BASE_PATH = '/crm'
-const longRunningRequest = { timeout: 300000, stayOnUnauthorized: true }
 
-export function getCrmCustomers(params: CrmCustomerQuery) {
-  return apiClient.get<CrmPage<CrmCustomerSummary>>(`${CRM_BASE_PATH}/customers`, {
+export function getInternalCrmCustomers(params: InternalCrmCustomerQuery) {
+  return apiClient.get<CrmPage<InternalCrmCustomerSummary>>(`${CRM_BASE_PATH}/internal-customers`, {
     params,
     stayOnUnauthorized: true,
   })
 }
 
-export function getCrmCustomer(id: string) {
-  return apiClient.get<CrmCustomerDetail>(`${CRM_BASE_PATH}/customers/${id}`, {
+export function getInternalCrmCustomer(id: string | number) {
+  return apiClient.get<InternalCrmCustomerDetail>(`${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(id))}`, {
     stayOnUnauthorized: true,
   })
 }
 
-export function getCrmShippingAddresses(params: CrmDictionaryQuery) {
-  return apiClient.get<CrmPage<CrmShippingAddress>>(`${CRM_BASE_PATH}/shipping-addresses`, {
-    params,
+export function createInternalCrmCustomer(command: InternalCrmCustomerCommand) {
+  return apiClient.post<InternalCrmCustomerDetail>(`${CRM_BASE_PATH}/internal-customers`, command, {
     stayOnUnauthorized: true,
   })
 }
 
-export function getCrmCustomerTypes(params: CrmDictionaryQuery) {
-  return apiClient.get<CrmPage<CrmDictionaryItem>>(`${CRM_BASE_PATH}/customer-types`, {
-    params,
-    stayOnUnauthorized: true,
-  })
-}
-
-export function getCrmCustomerAreas(params: CrmDictionaryQuery) {
-  return apiClient.get<CrmPage<CrmDictionaryItem>>(`${CRM_BASE_PATH}/customer-areas`, {
-    params,
-    stayOnUnauthorized: true,
-  })
-}
-
-export function getCrmExternalStaff(params: CrmDictionaryQuery) {
-  return apiClient.get<CrmPage<CrmExternalStaff>>(`${CRM_BASE_PATH}/external-staff`, {
-    params,
-    stayOnUnauthorized: true,
-  })
-}
-
-/** Portal 只提交同步范围和分页上限，不接触连接器、Token 或订货宝账号。 */
-export function syncCrmData(objectType: CrmSyncObjectType = 'ALL', maxPages = 100) {
-  return apiClient.post<CrmSyncResult>(
-    `${CRM_BASE_PATH}/sync`,
-    { objectType, maxPages },
-    longRunningRequest,
+export function updateInternalCrmCustomer(id: string | number, command: InternalCrmCustomerCommand) {
+  return apiClient.put<InternalCrmCustomerDetail>(
+    `${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(id))}`,
+    command,
+    { stayOnUnauthorized: true },
   )
+}
+
+export function deleteInternalCrmCustomer(id: string | number, revision: number) {
+  return apiClient.delete<void>(`${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(id))}`, {
+    params: { revision },
+    stayOnUnauthorized: true,
+  })
+}
+
+export function getCrmCustomerTypes(params: { begin?: number; step?: number; q?: string } = {}) {
+  return apiClient.get<CrmPage<CrmDictionaryView>>(`${CRM_BASE_PATH}/customer-types`, {
+    params: { begin: 0, step: 200, ...params },
+    stayOnUnauthorized: true,
+  })
+}
+
+export function getCrmCustomerAreas(params: { begin?: number; step?: number; q?: string } = {}) {
+  return apiClient.get<CrmPage<CrmDictionaryView>>(`${CRM_BASE_PATH}/customer-areas`, {
+    params: { begin: 0, step: 200, ...params },
+    stayOnUnauthorized: true,
+  })
 }

@@ -16,6 +16,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   IAM_TENANT_MISMATCH: '租户信息不匹配',
   VALIDATION_ERROR: '请求参数校验失败',
   RATE_LIMITED: '请求过于频繁，请稍后重试',
+  SERVICE_UNAVAILABLE: '服务暂不可用，请稍后重试',
   INTERNAL_ERROR: '服务器内部错误',
 }
 

@@ -1,8 +1,8 @@
 import { reactive } from 'vue'
 import {
   resolveBizDict,
-  type BizDictItem,
-  type EffectiveBizDict,
+  type DictItemView,
+  type EffectiveDictView,
 } from '@/api/core/business-settings'
 
 /** 业务页面需要解析的服务端字典。 */
@@ -20,14 +20,14 @@ interface DictionarySnapshot {
   loading: boolean
   loaded: boolean
   failed: boolean
-  items: BizDictItem[]
+  items: DictItemView[]
 }
 
 const snapshots = reactive<Record<string, DictionarySnapshot>>({})
 const requests = new Map<string, Promise<void>>()
 
-function normalizedKey(moduleCode: string, code: string) {
-  return `${moduleCode.trim().toUpperCase()}.${code.trim().toUpperCase()}`
+function normalizedKey(_moduleCode: string, code: string) {
+  return code.trim().toUpperCase()
 }
 
 function snapshot(moduleCode: string, code: string): DictionarySnapshot {
@@ -35,17 +35,17 @@ function snapshot(moduleCode: string, code: string): DictionarySnapshot {
   return snapshots[key] ??= { loading: false, loaded: false, failed: false, items: [] }
 }
 
-function applySnapshot(target: DictionarySnapshot, result: EffectiveBizDict) {
+function applySnapshot(target: DictionarySnapshot, result: EffectiveDictView) {
   target.items = [...result.items]
-    .filter((item) => item.value !== null && item.value.trim() !== '')
-    .sort((left, right) => left.sortNo - right.sortNo || left.code.localeCompare(right.code))
+    .filter((item) => item.dictionaryItemCode.trim() !== '')
+    .sort((left, right) => left.ordinal - right.ordinal || left.dictionaryItemCode.localeCompare(right.dictionaryItemCode))
   target.loaded = true
   target.failed = false
 }
 
 /**
  * 批量预载业务页面需要的字典。单本字典失败不会阻断业务数据查询，
- * 页面会明确展示“字典未配置”，不会回退到前端猜测映射。
+ * 页面展示遵循“后端字典优先、源值兜底”。
  */
 export async function loadBusinessDictionaries(refs: BusinessDictionaryRef[]): Promise<void> {
   const unique = new Map(refs.map((item) => [normalizedKey(item.moduleCode, item.code), item]))
@@ -54,7 +54,7 @@ export async function loadBusinessDictionaries(refs: BusinessDictionaryRef[]): P
     if (current.loaded || requests.has(key)) return requests.get(key)
     current.loading = true
     current.failed = false
-    const request = resolveBizDict(item.moduleCode, item.code)
+    const request = resolveBizDict(item.code)
       .then((result) => applySnapshot(current, result))
       .catch(() => {
         current.items = []
@@ -70,11 +70,11 @@ export async function loadBusinessDictionaries(refs: BusinessDictionaryRef[]): P
   }))
 }
 
-function findItem(items: BizDictItem[], rawValue: string) {
-  const exact = items.find((item) => item.value === rawValue)
+function findItem(items: DictItemView[], rawValue: string) {
+  const exact = items.find((item) => item.dictionaryItemCode === rawValue)
   if (exact) return exact
   const normalized = rawValue.toUpperCase()
-  const matches = items.filter((item) => item.value?.toUpperCase() === normalized)
+  const matches = items.filter((item) => item.dictionaryItemCode.toUpperCase() === normalized)
   return matches.length === 1 ? matches[0] : undefined
 }
 
@@ -90,16 +90,15 @@ export function businessDictionaryLabel(
   if (!rawValue) return '-'
   const current = snapshot(moduleCode, code)
   const item = findItem(current.items, rawValue)
-  if (item) return item.name
-  if (current.loading) return `字典加载中（${rawValue}）`
-  return `${subject}未配置（${rawValue}）`
+  if (item) return item.dictionaryItemName
+  void subject
+  return rawValue
 }
 
 /** 返回启用字典项，供筛选器与业务表格共用同一份服务端配置。 */
 export function businessDictionaryOptions(moduleCode: string, code: string): BusinessDictionaryOption[] {
   return snapshot(moduleCode, code).items
-    .filter((item) => item.status === 'ACTIVE' && item.value !== null)
-    .map((item) => ({ label: item.name, value: item.value as string }))
+    .map((item) => ({ label: item.dictionaryItemName, value: item.dictionaryItemCode }))
 }
 
 /** 非枚举业务文本只做空值处理，不翻译、不猜测。 */
@@ -118,17 +117,28 @@ export function clearBusinessDictionariesForTest() {
 export function seedBusinessDictionaryForTest(
   moduleCode: string,
   code: string,
-  items: Array<Pick<BizDictItem, 'code' | 'name' | 'value' | 'status' | 'sortNo'>>,
+  items: Array<{
+    code?: string
+    name?: string
+    value?: string | null
+    status?: string
+    sortNo?: number
+    dictionaryItemCode?: string
+    dictionaryItemName?: string
+    ordinal?: number
+  }>,
 ) {
   const current = snapshot(moduleCode, code)
   current.items = items.map((item, index) => ({
     id: `test-${index}`,
-    dictId: 'test-dict',
-    parentId: null,
-    levelNo: 1,
-    extraJson: null,
-    version: 0,
-    ...item,
+    dictionaryCode: code,
+    dictionaryItemLevel: 1,
+    parentDictionaryItemCode: null,
+    dictionaryItemCode: item.dictionaryItemCode || item.value || item.code || '',
+    dictionaryItemName: item.dictionaryItemName || item.name || item.value || item.code || '',
+    remark: null,
+    ordinal: item.ordinal ?? item.sortNo ?? index,
+    revision: 0,
   }))
   current.loaded = true
   current.loading = false

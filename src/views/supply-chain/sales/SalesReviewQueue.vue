@@ -1,5 +1,12 @@
 <template>
   <div class="review-page">
+    <el-result
+      v-if="!canReview"
+      icon="warning"
+      title="无拜访复核权限"
+      sub-title="当前账号不能查看待复核队列或提交复核结论，请联系管理员授权。"
+    />
+    <template v-else>
     <div class="review-toolbar">
       <div>
         <strong>待复核拜访</strong>
@@ -21,7 +28,14 @@
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
 
     <el-card shadow="never">
-      <el-table v-loading="loading" :data="queue?.items || []" stripe empty-text="当前区间没有待复核拜访">
+      <el-table
+        v-loading="loading"
+        class="supply-scroll-table"
+        height="100%"
+        :data="queue?.items || []"
+        stripe
+        empty-text="当前区间没有待复核拜访"
+      >
         <el-table-column label="门店 / 销售" min-width="210" fixed>
           <template #default="scope">
             <div class="primary-cell">
@@ -120,7 +134,7 @@
         </div>
         <p>{{ selectedVisit.resultNote || '未填写拜访结果说明' }}</p>
       </div>
-      <section class="evidence-review">
+      <section v-if="canViewEvidence" class="evidence-review">
         <div class="evidence-review__heading">
           <strong>现场门头照</strong>
           <span v-if="evidence">已核验 {{ evidence.verifiedStorefrontPhotoCount }} / {{ evidence.requiredStorefrontPhotoCount }} 张</span>
@@ -140,7 +154,15 @@
         <el-empty v-else description="本次拜访没有门头照" :image-size="64" />
         <small>照片只在具备敏感证据权限后加载，每次查看都会记录审计；是否真正包含门头仍需主管判断。</small>
       </section>
-      <section class="recording-review">
+      <el-alert
+        v-else
+        title="无现场照片查看权限"
+        description="未请求或加载任何门头照证据。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <section v-if="canPlayRecordings" class="recording-review">
         <div class="recording-review__heading">
           <strong>现场录音证据</strong>
           <span v-if="recordings">{{ recordings.clipCount }} 段 · {{ formatSeconds(Math.round(recordings.uploadedTotalDurationMs / 1000)) }}</span>
@@ -157,6 +179,14 @@
         <el-empty v-else description="本次拜访没有录音片段" :image-size="64" />
         <small>播放录音需要敏感数据权限，每次读取都会记录审计日志。</small>
       </section>
+      <el-alert
+        v-else
+        title="无现场录音播放权限"
+        description="未请求录音清单或加载任何录音内容。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
       <el-form label-position="top">
         <el-form-item label="复核结论" required>
           <el-radio-group v-model="reviewForm.decision" @change="reviewForm.reasonCode = ''">
@@ -190,6 +220,7 @@
         <el-button type="primary" :loading="saving" @click="saveReview">确认提交</el-button>
       </template>
     </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -198,6 +229,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import { apiClient } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 
 interface VisitReviewQueueItem {
   visitId: string
@@ -287,6 +319,10 @@ const recordingsError = ref('')
 const loadingClipId = ref('')
 const clipUrls = ref<Record<string, string>>({})
 const reviewForm = reactive({ decision: 'EFFECTIVE', reasonCode: '', reviewNote: '' })
+const auth = useAuthStore()
+const canReview = computed(() => auth.hasPermission('sales:visit:review'))
+const canViewEvidence = computed(() => auth.hasPermission('sales:evidence:sensitive:read'))
+const canPlayRecordings = computed(() => auth.hasPermission('sales:recording:sensitive:play'))
 
 const reasonOptions = computed(() => reviewForm.decision === 'EFFECTIVE'
   ? [
@@ -362,7 +398,7 @@ function errorMessageOf(error: unknown): string {
 }
 
 async function load() {
-  if (!dateRange.value?.[0] || !dateRange.value?.[1]) return
+  if (!canReview.value || !dateRange.value?.[0] || !dateRange.value?.[1]) return
   loading.value = true
   errorMessage.value = ''
   try {
@@ -389,6 +425,7 @@ function changePage(value: number) {
 }
 
 function openReview(item: VisitReviewQueueItem) {
+  if (!canReview.value) return
   revokeClipUrls()
   revokePhotoUrls()
   selectedVisit.value = item
@@ -398,11 +435,12 @@ function openReview(item: VisitReviewQueueItem) {
   recordingsError.value = ''
   Object.assign(reviewForm, { decision: 'EFFECTIVE', reasonCode: '', reviewNote: '' })
   reviewDialog.value = true
-  void loadEvidence(item.visitId)
-  void loadRecordings(item.visitId)
+  if (canViewEvidence.value) void loadEvidence(item.visitId)
+  if (canPlayRecordings.value) void loadRecordings(item.visitId)
 }
 
 async function loadEvidence(visitId: string) {
+  if (!canReview.value || !canViewEvidence.value) return
   evidenceLoading.value = true
   evidenceError.value = ''
   try {
@@ -415,7 +453,7 @@ async function loadEvidence(visitId: string) {
 }
 
 async function loadPhoto(photo: ManagementPhotoEvidence) {
-  if (!selectedVisit.value) return
+  if (!canReview.value || !canViewEvidence.value || !selectedVisit.value) return
   loadingPhotoId.value = photo.evidenceId
   try {
     const body = await apiClient.get(
@@ -431,6 +469,7 @@ async function loadPhoto(photo: ManagementPhotoEvidence) {
 }
 
 async function loadRecordings(visitId: string) {
+  if (!canReview.value || !canPlayRecordings.value) return
   recordingsLoading.value = true
   recordingsError.value = ''
   try {
@@ -443,7 +482,7 @@ async function loadRecordings(visitId: string) {
 }
 
 async function loadClip(clip: ManagementRecordingClip) {
-  if (!selectedVisit.value) return
+  if (!canReview.value || !canPlayRecordings.value || !selectedVisit.value) return
   loadingClipId.value = clip.clipId
   try {
     const body = await apiClient.get(
@@ -469,6 +508,7 @@ function revokePhotoUrls() {
 }
 
 async function saveReview() {
+  if (!canReview.value) return
   if (!selectedVisit.value || !reviewForm.reasonCode) {
     ElMessage.warning('请选择复核原因')
     return
@@ -490,7 +530,7 @@ async function saveReview() {
   }
 }
 
-onMounted(() => { void load() })
+onMounted(() => { if (canReview.value) void load() })
 onBeforeUnmount(() => { revokeClipUrls(); revokePhotoUrls() })
 watch(reviewDialog, (visible) => { if (!visible) { revokeClipUrls(); revokePhotoUrls() } })
 </script>

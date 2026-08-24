@@ -1,363 +1,529 @@
 <template>
-  <div class="dhb-page">
-    <template v-if="pageKey === 'overview'">
-      <el-row :gutter="16">
-        <el-col v-for="card in overviewCards" :key="card.label" :xs="12" :md="6">
-          <el-card class="summary-card"><div class="summary-value">{{ card.value }}</div><div class="summary-label">{{ card.label }}</div></el-card>
-        </el-col>
-      </el-row>
-      <el-card class="section-card">
-        <template #header><strong>使用说明</strong></template>
-        <el-steps :active="4" align-center>
-          <el-step title="连接配置" description="登记订货宝连接与Secret引用" />
-          <el-step title="同步任务" description="定义订单拉取任务和对象类型" />
-          <el-step title="订单镜像" description="检查已同步订单与原始回执" />
-          <el-step title="BI数据准备" description="输出给BI看板的数据视图" />
-        </el-steps>
-        <div class="empty-hint">左侧菜单进入各模块；真实订货宝凭据与外部联调由后续开发负责，页面不使用运行时Mock。</div>
-      </el-card>
-    </template>
+  <div class="dhb-sync-center supply-page supply-page--integration">
+    <section class="sync-heading">
+      <div>
+        <span class="eyebrow">外部同步 · 订货宝</span>
+        <h1>订货宝同步中心</h1>
+        <p>订货宝只作为后台来源接入，数据经过映射、幂等和对账后写入我方业务表；ERP、CRM、Order 主流程不承载同步运维动作。</p>
+      </div>
+      <el-tag type="info" effect="plain">运维视图</el-tag>
+    </section>
 
-    <template v-else-if="pageKey === 'connections'">
-      <el-card>
-        <template #header><div class="header"><strong>连接配置</strong><el-button type="primary" @click="openConnector()">新增连接</el-button></div></template>
-        <el-table v-loading="loading" :data="connectors" row-key="id">
-          <el-table-column prop="code" label="连接编码" min-width="150" />
-          <el-table-column prop="name" label="名称" min-width="150" />
-          <el-table-column prop="baseUrl" label="Base URL" min-width="240" />
-          <el-table-column prop="authSecretRef" label="Secret引用" min-width="220" />
-          <el-table-column label="状态" width="90"><template #default="scope">{{ statusLabel(scope.row.status) }}</template></el-table-column>
-          <el-table-column label="操作" min-width="180"><template #default="scope"><el-button link type="primary" :loading="testingConnectorId === scope.row.id" @click="testConnector(scope.row.id)">测试连接</el-button><el-button link type="primary" @click="openConnector(scope.row)">编辑</el-button></template></el-table-column>
-        </el-table>
-      </el-card>
-      <el-dialog v-model="connectorDialog" :title="editingConnectorId ? '编辑连接' : '新增连接'" width="580px">
-        <el-form label-width="110px">
-          <el-form-item label="连接编码" required><el-input v-model="connectorForm.code" :disabled="!!editingConnectorId" /></el-form-item>
-          <el-form-item label="名称" required><el-input v-model="connectorForm.name" /></el-form-item>
-          <el-form-item label="Base URL"><el-input v-model="connectorForm.baseUrl" placeholder="https://..." /></el-form-item>
-          <el-form-item label="Secret引用"><el-input v-model="connectorForm.authSecretRef" placeholder="例如 env://RIGOUR_DHB_DEV，禁止粘贴明文Secret" /></el-form-item>
-          <el-form-item label="状态"><el-select v-model="connectorForm.status"><el-option label="启用" value="ACTIVE"/><el-option label="停用" value="DISABLED"/></el-select></el-form-item>
-        </el-form>
-        <template #footer><el-button v-if="editingConnectorId" :loading="testingConnectorId === editingConnectorId" @click="testConnector(editingConnectorId)">测试连接</el-button><el-button @click="connectorDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveConnector">保存</el-button></template>
-      </el-dialog>
-    </template>
+    <el-alert
+      class="boundary-alert"
+      type="info"
+      :closable="false"
+      show-icon
+      title="主业务页面参考成熟后台的筛选、列表、详情和处理节奏，但只围绕我方业务流程组织；同步规则集中在本页。"
+    />
 
-    <template v-else-if="pageKey === 'sync-tasks'">
-      <el-card>
-        <template #header><div class="header"><strong>同步任务</strong><el-button type="primary" @click="openTask()">新增扩展任务</el-button></div></template>
-        <el-alert class="task-hint" type="info" :closable="false" show-icon title="每个订货宝连接器的订单域和商品主数据同步目标由系统自动创建；业务同步分别由 Order Center 和 ERP 编排。" />
-        <el-table v-loading="loading" :data="tasks" row-key="id">
-          <el-table-column prop="code" label="任务编码" min-width="160" />
-          <el-table-column label="连接"><template #default="scope">{{ connectorName(scope.row.connectorId) }}</template></el-table-column>
-          <el-table-column label="对象类型" min-width="170"><template #default="scope">{{ objectTypeLabel(scope.row.objectType) }}</template></el-table-column>
-          <el-table-column label="状态" width="100"><template #default="scope">{{ statusLabel(scope.row.status) }}</template></el-table-column>
-          <el-table-column prop="nextRunAt" label="下次运行" min-width="180" />
-          <el-table-column label="操作" width="170"><template #default="scope"><el-button link type="primary" @click="openTask(scope.row)">编辑</el-button><el-button v-if="scope.row.objectType === 'ORDER'" link type="success" :loading="runningTaskId === scope.row.id" :disabled="scope.row.status === 'RUNNING' || scope.row.status === 'PAUSED'" @click="runTask(scope.row)">立即同步</el-button></template></el-table-column>
-        </el-table>
-      </el-card>
-      <el-dialog v-model="taskDialog" :title="editingTaskId ? '编辑任务' : '新增任务'" width="560px">
-        <el-form label-width="100px">
-          <el-form-item label="连接" required><el-select v-model="taskForm.connectorId" style="width:100%"><el-option v-for="item in connectors" :key="item.id" :label="item.name" :value="item.id" /></el-select></el-form-item>
-          <el-form-item label="任务编码" required><el-input v-model="taskForm.code" :disabled="!!editingTaskId" /></el-form-item>
-          <el-form-item label="对象类型" required><el-select v-model="taskForm.objectType" style="width:100%"><el-option v-for="item in syncObjectTypes" :key="item.value" :disabled="!editingTaskId && ['ORDER', 'PRODUCT_MASTER_DATA'].includes(item.value)" :label="item.label" :value="item.value"><span>{{ item.label }}</span><span class="option-code">{{ item.value }}</span></el-option></el-select></el-form-item>
-          <el-alert type="info" :closable="false" show-icon title="一期只读同步：订单详情使用不自动签收、不自动审核参数；不会回写下载状态。" />
-          <el-form-item label="状态"><el-select v-model="taskForm.status"><el-option v-for="item in taskStatuses" :key="item" :label="statusLabel(item)" :value="item" /></el-select></el-form-item>
-        </el-form>
-        <template #footer><el-button @click="taskDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveTask">保存</el-button></template>
-      </el-dialog>
-    </template>
+    <section class="sync-operation">
+      <div class="operation-copy">
+        <span>统一入口</span>
+        <h2>按依赖顺序同步 ERP、CRM、Order 和字典</h2>
+        <p>前端只提供统一手动同步；单模块同步只作为排障修复能力保留在后端，不放成业务员的默认操作。</p>
+        <el-alert
+          v-if="syncBusyMessage"
+          class="sync-busy-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          :title="syncBusyMessage"
+        />
+      </div>
+      <div class="operation-actions">
+        <el-input-number
+          v-model="maxPages"
+          :min="1"
+          :max="500"
+          :step="10"
+          controls-position="right"
+          aria-label="最大页数"
+        />
+        <el-button type="primary" :loading="syncing" @click="runUnifiedSync">统一同步</el-button>
+      </div>
+    </section>
 
-    <template v-else-if="pageKey === 'order-mirror'">
-      <el-card>
-        <template #header><div class="header"><strong>订单镜像</strong><span class="muted">只读镜像，订单事实仍以订货宝原始回执与Order中心为准。</span></div></template>
-        <el-table v-loading="loading" :data="mirrors" row-key="id">
-          <el-table-column prop="sourceOrderId" label="来源订单ID" min-width="220" />
-          <el-table-column prop="orderNo" label="订单号" min-width="160" />
-          <el-table-column label="来源状态" min-width="120"><template #default="scope">{{ statusLabel(scope.row.sourceStatus) }}</template></el-table-column>
-          <el-table-column prop="amount" label="金额" width="120" />
-          <el-table-column prop="orderTime" label="下单时间" min-width="180" />
-          <el-table-column label="镜像状态" width="100"><template #default="scope">{{ statusLabel(scope.row.mirrorStatus) }}</template></el-table-column>
-        </el-table>
-      </el-card>
-    </template>
+    <section v-if="latestResult" class="sync-result">
+      <div class="result-summary">
+        <div>
+          <span>最近批次</span>
+          <strong>{{ latestResult.batchId }}</strong>
+        </div>
+        <div>
+          <span>执行状态</span>
+          <el-tag :type="statusTag(latestResult.status)" effect="light">{{ statusLabel(latestResult.status) }}</el-tag>
+        </div>
+        <div>
+          <span>耗时</span>
+          <strong>{{ latestResult.elapsedSeconds.toFixed(1) }} 秒</strong>
+        </div>
+      </div>
+      <el-table :data="latestSteps" border class="result-table" max-height="360">
+        <el-table-column prop="domain" label="模块" width="90" fixed />
+        <el-table-column prop="objectType" label="同步对象" min-width="170" />
+        <el-table-column label="状态" width="110">
+          <template #default="scope">
+            <el-tag :type="statusTag(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="fetched" label="来源数" width="110" align="right" />
+        <el-table-column prop="changed" label="写入/变更" width="120" align="right" />
+        <el-table-column prop="unmapped" label="未映射" width="110" align="right" />
+        <el-table-column prop="message" label="说明" min-width="180" show-overflow-tooltip />
+      </el-table>
+    </section>
 
-    <template v-else-if="pageKey === 'sync-logs'">
-      <el-card>
-        <template #header><strong>同步日志与死信</strong></template>
-        <el-table v-loading="loading" :data="logs" row-key="id">
-          <el-table-column prop="occurredAt" label="时间" min-width="180" />
-          <el-table-column prop="taskId" label="任务ID" min-width="220" />
-          <el-table-column label="级别" width="90"><template #default="scope">{{ levelLabel(scope.row.level) }}</template></el-table-column>
-          <el-table-column prop="message" label="消息" min-width="300" />
-          <el-table-column prop="errorCode" label="错误码" min-width="140" />
-        </el-table>
-      </el-card>
-    </template>
+    <section class="sync-layout">
+      <main class="sync-main">
+        <el-tabs v-model="activeSection" class="sync-tabs">
+          <el-tab-pane
+            v-for="section in sections"
+            :key="section.key"
+            :label="section.title"
+            :name="section.key"
+          >
+            <div class="section-panel">
+              <div class="section-summary">
+                <span>{{ section.domain }}</span>
+                <h2>{{ section.title }}</h2>
+                <p>{{ section.description }}</p>
+              </div>
+              <div class="rule-list">
+                <article v-for="item in section.rules" :key="item.title" class="rule-item">
+                  <strong>{{ item.title }}</strong>
+                  <p>{{ item.description }}</p>
+                </article>
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </main>
 
-    <template v-else-if="pageKey === 'field-mappings'">
-      <el-card>
-        <template #header><div class="header"><strong>字段映射</strong><el-button type="primary" :disabled="!selectedConnectorId" @click="openMapping()">新增映射</el-button></div></template>
-        <el-select v-model="selectedConnectorId" placeholder="选择连接" style="width:280px;margin-bottom:16px" @change="loadMappings"><el-option v-for="item in connectors" :key="item.id" :label="item.name" :value="item.id" /></el-select>
-        <el-table v-loading="loading" :data="mappings" row-key="id">
-          <el-table-column prop="sourceField" label="来源字段" min-width="180" />
-          <el-table-column prop="targetField" label="目标字段" min-width="180" />
-          <el-table-column label="转换方式" width="120"><template #default="scope">{{ transformTypeLabel(scope.row.transformType) }}</template></el-table-column>
-          <el-table-column label="启用" width="80"><template #default="scope">{{ scope.row.enabled ? '是' : '否' }}</template></el-table-column>
-          <el-table-column label="操作" width="100"><template #default="scope"><el-button link type="primary" @click="openMapping(scope.row)">编辑</el-button></template></el-table-column>
-        </el-table>
-      </el-card>
-      <el-dialog v-model="mappingDialog" :title="editingMappingId ? '编辑映射' : '新增映射'" width="540px">
-        <el-form label-width="100px">
-          <el-form-item label="来源字段" required><el-input v-model="mappingForm.sourceField" :disabled="!!editingMappingId" /></el-form-item>
-          <el-form-item label="目标字段" required><el-input v-model="mappingForm.targetField" /></el-form-item>
-          <el-form-item label="转换方式"><el-select v-model="mappingForm.transformType"><el-option v-for="item in transformTypes" :key="item" :label="transformTypeLabel(item)" :value="item" /></el-select></el-form-item>
-          <el-form-item label="启用"><el-switch v-model="mappingForm.enabled" /></el-form-item>
-        </el-form>
-        <template #footer><el-button @click="mappingDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveMapping">保存</el-button></template>
-      </el-dialog>
-    </template>
-
-    <template v-else>
-      <el-card>
-        <template #header><strong>{{ pageTitle }}</strong></template>
-        <el-empty :description="`${pageTitle}页面框架已就绪，等待业务开发在此接入真实数据。`" />
-        <el-alert v-if="pageKey === 'bi-prep'" type="info" :closable="false" show-icon title="BI准备输出建议：订单镜像、原始回执、同步任务与日志；分析副本由BI服务持有，Integration不跨Schema写分析表。" />
-        <el-alert v-if="pageKey === 'data-quality'" type="info" :closable="false" show-icon title="质量规则建议：订单号非空、金额大于0、来源状态枚举合法、时间有效、重复来源ID幂等。" />
-      </el-card>
-    </template>
+      <aside class="sync-boundary">
+        <h2>落库边界</h2>
+        <dl>
+          <div v-for="item in boundaryRules" :key="item.label">
+            <dt>{{ item.label }}</dt>
+            <dd>{{ item.value }}</dd>
+          </div>
+        </dl>
+      </aside>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { apiClient } from '@/api'
-import { createLatestRequestGuard } from '@/utils/latest-request'
+import { syncDhbOrchestration, type DhbSyncOrchestrationResult, type DhbSyncOrchestrationStatus } from '@/api'
 
-interface Connector { id: string; code: string; name: string; baseUrl: string | null; authSecretRef: string | null; status: string; version: number }
-interface DhbConnectionTestResult { success: boolean; code: string; message: string; tokenExpiresAt: string | null }
-interface SyncTask { id: string; connectorId: string; code: string; objectType: string; status: string; nextRunAt: string | null; version: number }
-interface OrderMirror { id: string; sourceOrderId: string; orderNo: string; sourceStatus: string | null; amount: number; orderTime: string | null; mirrorStatus: string; version: number }
-interface SyncLog { id: string; taskId: string; level: string; message: string; errorCode: string | null; occurredAt: string }
-interface FieldMapping { id: string; connectorId: string; sourceField: string; targetField: string; transformType: string; enabled: boolean; version: number }
-interface SyncRunResult { runId: string; objectType: string; status: 'SUCCEEDED'; fetched: number; changed: number; completedObjects: string[] }
+interface SyncRule {
+  title: string
+  description: string
+}
 
-const route = useRoute()
-const pageKey = computed(() => String(route.meta.pageKey || 'overview'))
-const pageRequest = createLatestRequestGuard()
-const pageTitle = computed(() => String(route.meta.title || '订货宝数据同步'))
-const loading = ref(false)
-const saving = ref(false)
-const runningTaskId = ref('')
-const testingConnectorId = ref('')
-const connectors = ref<Connector[]>([])
-const tasks = ref<SyncTask[]>([])
-const mirrors = ref<OrderMirror[]>([])
-const logs = ref<SyncLog[]>([])
-const mappings = ref<FieldMapping[]>([])
-const selectedConnectorId = ref('')
-const overviewCards = ref([{ label: '连接', value: '-' }, { label: '同步任务', value: '-' }, { label: '订单镜像', value: '-' }, { label: '日志', value: '-' }])
-const taskStatuses = ['IDLE', 'RUNNING', 'PAUSED', 'FAILED', 'COMPLETED']
-const syncObjectTypes = [
-  { value: 'ORDER_DOMAIN', label: '全部订单域' }, { value: 'ORDER', label: '订单域（系统默认）' },
-  { value: 'PRODUCT_MASTER_DATA', label: '商品主数据（系统默认）' },
-  { value: 'SHIPMENT', label: '发货单' }, { value: 'RETURN', label: '退货单' },
-  { value: 'RECEIPT', label: '收款单' }, { value: 'PAYMENT', label: '付款单' },
+interface SyncSection {
+  key: string
+  title: string
+  domain: string
+  description: string
+  rules: SyncRule[]
+}
+
+const activeSection = ref('overview')
+const maxPages = ref(100)
+const syncing = ref(false)
+const syncBusyMessage = ref('')
+const latestResult = ref<DhbSyncOrchestrationResult | null>(null)
+
+const sections: SyncSection[] = [
+  {
+    key: 'overview',
+    title: '同步概览',
+    domain: '接入状态',
+    description: '只看订货宝接入链路是否健康，不把这些指标散到 ERP、CRM、Order 业务页。',
+    rules: [
+      { title: '对象覆盖', description: '商品、客户、销售订单、库存和采购对象分别记录来源覆盖情况。' },
+      { title: '最近运行', description: '展示最近一次全量、增量或修复任务的状态、耗时和结果摘要。' },
+      { title: '写入目标', description: '有效数据最终落到我方新业务表，旧订货宝档案不再作为业务入口。' },
+    ],
+  },
+  {
+    key: 'mapping',
+    title: '映射规则',
+    domain: '字段与枚举',
+    description: '订货宝字段、状态、字典和外部 ID 在后台映射到我方业务模型。',
+    rules: [
+      { title: '外部 ID 绑定', description: '用来源对象、来源 ID 和租户维度建立绑定，保证重复同步幂等。' },
+      { title: '字段映射', description: '字段、枚举、状态统一映射到我方字段，不在业务页面暴露订货宝内部字段。' },
+      { title: '冲突策略', description: '保护人工维护字段，同步只更新来源负责的字段集合。' },
+    ],
+  },
+  {
+    key: 'runs',
+    title: '运行记录',
+    domain: '批次审计',
+    description: '按同步批次记录拉取、跳过、写入、失败和修复结果，支撑后续对账。',
+    rules: [
+      { title: 'payload hash 跳过', description: '来源 payload hash 未变化时直接跳过，避免重复写入业务表。' },
+      { title: '模式区分', description: '全量、增量、修复任务分开记录，方便判断本次同步目的。' },
+      { title: '结果证据', description: '保存来源数量、Raw 数量、目标表数量和失败数量，便于复盘。' },
+    ],
+  },
+  {
+    key: 'exceptions',
+    title: '异常处理',
+    domain: '失败闭环',
+    description: '只处理同步链路异常，不在主业务流程里暴露第三方失败细节。',
+    rules: [
+      { title: '可重试失败', description: '网络、限流、临时服务错误进入重试队列。' },
+      { title: '需人工确认', description: '字段缺失、字典未映射、外部 ID 冲突进入待处理池。' },
+      { title: '修复入口', description: '修复任务以来源对象和失败原因重新执行，不要求业务人员进入旧档案页。' },
+    ],
+  },
+  {
+    key: 'assets',
+    title: '图片附件',
+    domain: 'COS 处理',
+    rules: [
+      { title: '对象已存在跳过', description: 'COS 中已有相同对象时不重复上传，直接复用已有 URL。' },
+      { title: '稳定对象键', description: '对象路径由租户、来源对象和内容摘要生成，避免同一图片反复落不同地址。' },
+      { title: '失败可修复', description: '上传失败记录在同步异常中，修复后再回填我方商品图片 URL。' },
+    ],
+  },
+  {
+    key: 'reconciliation',
+    title: '对账校验',
+    domain: '完整性',
+    description: '同步完成后核对来源、Raw、绑定关系和目标业务表，缺失数据走修复任务。',
+    rules: [
+      { title: '数量对齐', description: '来源总数、Raw 落库数、目标业务表写入数分别记录。' },
+      { title: '缺失识别', description: '发现来源存在但目标表缺失时生成修复建议。' },
+      { title: '重复识别', description: '发现外部 ID 绑定重复或目标业务编码冲突时进入异常处理。' },
+    ],
+  },
 ]
-const transformTypes = ['DIRECT', 'CONSTANT', 'EXPRESSION', 'DICTIONARY']
-const connectorDialog = ref(false)
-const taskDialog = ref(false)
-const mappingDialog = ref(false)
-const editingConnectorId = ref('')
-const editingTaskId = ref('')
-const editingMappingId = ref('')
-const connectorForm = reactive({ code: '', name: '', baseUrl: '', authSecretRef: '', status: 'ACTIVE', version: 0 })
-const taskForm = reactive({ connectorId: '', code: '', objectType: 'SHIPMENT', status: 'IDLE', nextRunAt: null as string | null, version: 0 })
-const mappingForm = reactive({ connectorId: '', sourceField: '', targetField: '', transformType: 'DIRECT', enabled: true, version: 0 })
 
-const base = '/integration/dhb'
+const activeSectionDetail = computed(() =>
+  sections.find((section) => section.key === activeSection.value) || sections[0],
+)
 
-async function loadOverview() {
-  const [connectorResult, taskResult, mirrorResult, logResult] = await Promise.allSettled([
-    apiClient.get(`${base}/connectors`), apiClient.get(`${base}/sync-tasks`),
-    apiClient.get(`${base}/orders/mirrors?limit=1`), apiClient.get(`${base}/sync-logs?limit=1`),
-  ])
-  const values = [connectorResult, taskResult, mirrorResult, logResult].map((result) =>
-    result.status === 'fulfilled' ? (result.value as unknown[]).length : '—')
-  return overviewCards.value.map((card, index) => ({ ...card, value: String(values[index]) }))
-}
+const boundaryRules = [
+  { label: '来源系统', value: '订货宝 API 与回执数据' },
+  { label: '同步落点', value: 'Raw、外部 ID 绑定、运行审计、我方业务表' },
+  { label: '业务入口', value: 'ERP、CRM、Order 只展示我方业务表结果' },
+  { label: '页面动作', value: '默认只提供统一同步；单对象修复放在运维排障链路中逐步补齐' },
+]
 
-async function loadPage() {
-  const request = pageRequest.begin()
-  const targetPageKey = pageKey.value
-  loading.value = true
+const latestSteps = computed(() =>
+  latestResult.value?.tenants.flatMap((tenant) => tenant.steps) || [],
+)
+
+async function runUnifiedSync() {
+  syncing.value = true
+  syncBusyMessage.value = ''
   try {
-    if (targetPageKey === 'overview') {
-      const cards = await loadOverview()
-      if (!pageRequest.isCurrent(request)) return
-      overviewCards.value = cards
-    } else if (targetPageKey === 'connections' || ['sync-tasks', 'field-mappings'].includes(targetPageKey)) {
-      const result = (await apiClient.get(`${base}/connectors`)) as Connector[]
-      if (!pageRequest.isCurrent(request)) return
-      connectors.value = result
-    }
-    if (targetPageKey === 'sync-tasks') {
-      const result = (await apiClient.get(`${base}/sync-tasks`)) as SyncTask[]
-      if (!pageRequest.isCurrent(request)) return
-      tasks.value = result
-    }
-    if (targetPageKey === 'order-mirror') {
-      const result = (await apiClient.get(`${base}/orders/mirrors?limit=100`)) as OrderMirror[]
-      if (!pageRequest.isCurrent(request)) return
-      mirrors.value = result
-    }
-    if (targetPageKey === 'sync-logs') {
-      const result = (await apiClient.get(`${base}/sync-logs?limit=200`)) as SyncLog[]
-      if (!pageRequest.isCurrent(request)) return
-      logs.value = result
-    }
-  } catch (reason) {
-    if (!pageRequest.isCurrent(request)) return
-    ElMessage.error(errorMessage(reason, '数据加载失败'))
-  } finally {
-    if (pageRequest.isCurrent(request)) loading.value = false
-  }
-}
-
-async function loadConnectors() {
-  connectors.value = (await apiClient.get(`${base}/connectors`)) as Connector[]
-}
-
-async function loadMappings() {
-  if (!selectedConnectorId.value) return
-  loading.value = true
-  try { mappings.value = (await apiClient.get(`${base}/connectors/${selectedConnectorId.value}/field-mappings`)) as FieldMapping[] }
-  finally { loading.value = false }
-}
-
-function connectorName(id: string) { return connectors.value.find((item) => item.id === id)?.name || id }
-function objectTypeLabel(value: string) {
-  return syncObjectTypes.find((item) => item.value === value)?.label || (/[^\u0000-\u007f]/.test(value) ? value : `未知对象类型（${value}）`)
-}
-function statusLabel(value: string | null | undefined) {
-  if (!value) return '-'
-  const labels: Record<string, string> = {
-    ACTIVE: '启用', DISABLED: '停用', INACTIVE: '停用', IDLE: '待运行', RUNNING: '运行中',
-    PAUSED: '已暂停', FAILED: '失败', COMPLETED: '已完成', SUCCEEDED: '成功', SUCCESS: '成功',
-    T: '正常', F: '停用', PRESENT: '已存在', ABSENT: '已缺失', SYNCED: '已同步',
-  }
-  if (/[^\u0000-\u007f]/.test(value)) return value
-  return labels[value.toUpperCase()] || `未知状态（${value}）`
-}
-function levelLabel(value: string | null | undefined) {
-  if (!value) return '-'
-  const labels: Record<string, string> = { INFO: '信息', WARN: '警告', WARNING: '警告', ERROR: '错误', DEBUG: '调试' }
-  if (/[^\u0000-\u007f]/.test(value)) return value
-  return labels[value.toUpperCase()] || `未知级别（${value}）`
-}
-function transformTypeLabel(value: string | null | undefined) {
-  if (!value) return '-'
-  const labels: Record<string, string> = { DIRECT: '直接映射', CONSTANT: '固定值', EXPRESSION: '表达式', DICTIONARY: '数据字典' }
-  if (/[^\u0000-\u007f]/.test(value)) return value
-  return labels[value.toUpperCase()] || `未知转换方式（${value}）`
-}
-
-function openConnector(row?: Connector) {
-  editingConnectorId.value = row?.id || ''
-  Object.assign(connectorForm, row || { code: '', name: '', baseUrl: '', authSecretRef: '', status: 'ACTIVE', version: 0 })
-  connectorDialog.value = true
-}
-
-async function saveConnector() {
-  saving.value = true
-  try {
-    if (editingConnectorId.value) await apiClient.put(`${base}/connectors/${editingConnectorId.value}`, connectorForm)
-    else await apiClient.post(`${base}/connectors`, connectorForm)
-    ElMessage.success('连接已保存'); connectorDialog.value = false; await loadConnectors()
-  } catch (reason) { ElMessage.error(errorMessage(reason, '连接保存失败')) } finally { saving.value = false }
-}
-
-async function testConnector(connectorId: string) {
-  testingConnectorId.value = connectorId
-  try {
-    const result = await apiClient.post(`${base}/connectors/${connectorId}/test`) as DhbConnectionTestResult
-    if (result.success) {
-      const expires = result.tokenExpiresAt ? `，Token有效至 ${result.tokenExpiresAt}` : ''
-      ElMessage.success(`连接测试成功${expires}`)
+    const result = await syncDhbOrchestration({ maxPages: maxPages.value })
+    latestResult.value = result
+    if (result.status === 'SUCCEEDED') {
+      ElMessage.success('订货宝统一同步已完成')
     } else {
-      ElMessage.error(`连接测试失败：${result.message || result.code}`)
+      ElMessage.warning('订货宝统一同步未全部成功，请查看结果明细')
     }
   } catch (reason) {
-    ElMessage.error(errorMessage(reason, '连接测试失败'))
+    if (isSyncBusyError(reason)) {
+      syncBusyMessage.value = '后台已有订货宝同步任务正在执行，本次未重复发起；请稍后刷新页面或再次点击统一同步查看结果。'
+      ElMessage.warning(syncBusyMessage.value)
+      return
+    }
+    ElMessage.error(errorMessage(reason, '订货宝统一同步失败'))
   } finally {
-    testingConnectorId.value = ''
+    syncing.value = false
   }
 }
 
-function openTask(row?: SyncTask) {
-  editingTaskId.value = row?.id || ''
-  Object.assign(taskForm, row || { connectorId: connectors.value[0]?.id || '', code: '', objectType: 'SHIPMENT', status: 'IDLE', nextRunAt: null, version: 0 })
-  taskDialog.value = true
+function isSyncBusyError(reason: unknown): boolean {
+  if (!reason || typeof reason !== 'object') return false
+  const candidate = reason as { code?: unknown; response?: { status?: unknown } }
+  return candidate.code === 'SERVICE_UNAVAILABLE' || candidate.response?.status === 503
 }
 
-async function saveTask() {
-  saving.value = true
-  try {
-    if (editingTaskId.value) await apiClient.put(`${base}/sync-tasks/${editingTaskId.value}`, taskForm)
-    else await apiClient.post(`${base}/sync-tasks`, taskForm)
-    ElMessage.success('任务已保存'); taskDialog.value = false; tasks.value = (await apiClient.get(`${base}/sync-tasks`)) as SyncTask[]
-  } catch (reason) { ElMessage.error(errorMessage(reason, '任务保存失败')) } finally { saving.value = false }
+function statusLabel(status: DhbSyncOrchestrationStatus | string) {
+  const labels: Record<string, string> = {
+    PENDING: '待执行',
+    RUNNING: '执行中',
+    SUCCEEDED: '成功',
+    FAILED: '失败',
+    SKIPPED: '已跳过',
+  }
+  return labels[status] || status || '-'
 }
 
-/** 立即同步只调用Order Center；Order Center再编排Integration并完成本地业务落库。 */
-async function runTask(task: SyncTask) {
-  runningTaskId.value = task.id
-  try {
-    const result = await apiClient.post<SyncRunResult>(
-      `/orders/dhb/sync/${task.connectorId}`,
-      { includeDetails: true, maxPages: 100 },
-      { timeout: 300000 },
-    )
-    ElMessage.success(`同步完成：获取${result.fetched}条，新增或变化${result.changed}条`)
-    tasks.value = (await apiClient.get(`${base}/sync-tasks`)) as SyncTask[]
-  } catch (reason) { ElMessage.error(errorMessage(reason, '同步任务执行失败')) }
-  finally { runningTaskId.value = '' }
-}
-
-function openMapping(row?: FieldMapping) {
-  if (!selectedConnectorId.value && !row) return
-  editingMappingId.value = row?.id || ''
-  Object.assign(mappingForm, row || { connectorId: selectedConnectorId.value, sourceField: '', targetField: '', transformType: 'DIRECT', enabled: true, version: 0 })
-  mappingDialog.value = true
-}
-
-async function saveMapping() {
-  saving.value = true
-  try {
-    if (editingMappingId.value) await apiClient.put(`${base}/field-mappings/${editingMappingId.value}`, mappingForm)
-    else await apiClient.post(`${base}/field-mappings`, mappingForm)
-    ElMessage.success('映射已保存'); mappingDialog.value = false; await loadMappings()
-  } catch (reason) { ElMessage.error(errorMessage(reason, '映射保存失败')) } finally { saving.value = false }
+function statusTag(status: DhbSyncOrchestrationStatus | string): 'success' | 'info' | 'warning' | 'danger' {
+  if (status === 'SUCCEEDED') return 'success'
+  if (status === 'FAILED') return 'danger'
+  if (status === 'RUNNING') return 'warning'
+  return 'info'
 }
 
 function errorMessage(reason: unknown, fallback: string): string {
-  if (reason && typeof reason === 'object' && 'message' in reason && typeof reason.message === 'string') return reason.message
+  if (reason && typeof reason === 'object' && 'message' in reason) {
+    const message = (reason as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  if (reason instanceof Error && reason.message) return reason.message
   return fallback
 }
 
-watch(pageKey, () => { void loadPage() })
-onMounted(() => { void loadPage() })
+defineExpose({ activeSectionDetail, sections, boundaryRules, latestSteps, runUnifiedSync })
 </script>
 
-<style scoped>
-.header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-.muted { color: #8a97a8; font-size: 12px; font-weight: 400; }
-.summary-card { margin-bottom: 16px; }
-.summary-value { font-size: 30px; font-weight: 700; }
-.summary-label { margin-top: 6px; color: #8a97a8; font-size: 13px; }
-.section-card { margin-top: 4px; }
-.task-hint { margin-bottom: 12px; }
-.empty-hint { margin-top: 24px; color: #8a97a8; text-align: center; font-size: 13px; }
-.option-code { float: right; margin-left: 20px; color: #98a2b3; font-size: 12px; }
+<style scoped lang="scss">
+@use '@/assets/styles/variables' as *;
+
+.dhb-sync-center {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sync-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: var(--supply-surface);
+}
+
+.sync-heading h1 {
+  margin: 6px 0;
+  color: var(--supply-text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 30px;
+}
+
+.sync-heading p {
+  max-width: 900px;
+  margin: 0;
+  color: var(--supply-text-muted);
+  font-size: $font-size-sm;
+  line-height: 1.55;
+}
+
+.boundary-alert {
+  flex: 0 0 auto;
+}
+
+.sync-operation,
+.sync-result {
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: var(--supply-surface);
+}
+
+.sync-operation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+}
+
+.sync-busy-alert {
+  margin-top: 14px;
+}
+
+.operation-copy {
+  min-width: 0;
+}
+
+.operation-copy span,
+.result-summary span {
+  color: var(--supply-primary);
+  font-size: $font-size-xs;
+  font-weight: 700;
+}
+
+.operation-copy h2 {
+  margin: 6px 0;
+  color: var(--supply-text);
+  font-size: $font-size-lg;
+  font-weight: 700;
+}
+
+.operation-copy p {
+  margin: 0;
+  color: var(--supply-text-muted);
+  font-size: $font-size-sm;
+  line-height: 1.55;
+}
+
+.operation-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.sync-result {
+  padding: 14px 16px 16px;
+}
+
+.result-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 150px;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.result-summary div {
+  min-width: 0;
+}
+
+.result-summary strong {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--supply-text);
+  font-size: $font-size-sm;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-table {
+  width: 100%;
+}
+
+.sync-layout {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+}
+
+.sync-main,
+.sync-boundary {
+  min-width: 0;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: var(--supply-surface);
+}
+
+.sync-main {
+  padding: 14px 16px 18px;
+}
+
+.section-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 18px;
+  padding-top: 10px;
+}
+
+.section-summary {
+  padding: 14px;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: var(--supply-surface-subtle);
+}
+
+.section-summary span {
+  color: var(--supply-primary);
+  font-size: $font-size-xs;
+  font-weight: 700;
+}
+
+.section-summary h2,
+.sync-boundary h2 {
+  margin: 8px 0;
+  color: var(--supply-text);
+  font-size: $font-size-lg;
+  font-weight: 700;
+}
+
+.section-summary p,
+.rule-item p,
+.sync-boundary dd {
+  margin: 0;
+  color: var(--supply-text-muted);
+  font-size: $font-size-sm;
+  line-height: 1.55;
+}
+
+.rule-list {
+  display: grid;
+  gap: 10px;
+}
+
+.rule-item {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: #fff;
+}
+
+.rule-item strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--supply-text);
+  font-size: $font-size-sm;
+}
+
+.sync-boundary {
+  padding: 16px;
+}
+
+.sync-boundary dl {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.sync-boundary div {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--supply-border);
+}
+
+.sync-boundary div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.sync-boundary dt {
+  margin-bottom: 5px;
+  color: var(--supply-text);
+  font-size: $font-size-xs;
+  font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .sync-layout,
+  .section-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .sync-heading,
+  .sync-operation {
+    flex-direction: column;
+  }
+
+  .operation-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .result-summary {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

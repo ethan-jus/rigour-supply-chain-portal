@@ -1,6 +1,6 @@
 <template>
-  <CrmMasterDataView />
+  <CrmCustomerManagementView />
 </template>
 <script setup lang="ts">
-import CrmMasterDataView from './CrmMasterDataView.vue'
+import CrmCustomerManagementView from './CrmCustomerManagementView.vue'
 </script>

@@ -1,5 +1,5 @@
 <template>
-  <section class="sales-page">
+  <section class="sales-page supply-page supply-page--sales">
     <header class="page-header">
       <div>
         <p class="eyebrow">销售管理 · {{ definition.group }}</p>

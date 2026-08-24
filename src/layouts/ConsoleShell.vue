@@ -1,5 +1,8 @@
 <template>
-  <div class="console">
+  <div
+    class="console"
+    :class="{ 'console--supply-chain': applicationCode === 'SUPPLY_CHAIN' }"
+  >
     <aside class="sidebar">
       <router-link class="sidebar__brand" to="/apps">
         <img src="@/assets/brand/ruigai-logo.png" alt="瑞盖优选">
@@ -26,11 +29,33 @@
 
     <section class="console__main">
       <header class="topbar">
-        <nav class="breadcrumb" aria-label="面包屑">
-          <span>{{ title }}</span>
-          <i aria-hidden="true">/</i>
-          <strong>{{ currentPageName }}</strong>
-        </nav>
+        <div ref="tabStrip" class="workspace-tabs" role="tablist" aria-label="已打开页面">
+          <div
+            v-for="tab in workspaceTabs"
+            :key="tab.id"
+            class="workspace-tab"
+            :class="{ 'is-active': activeTabId === tab.id }"
+            role="tab"
+            :aria-selected="activeTabId === tab.id"
+            :aria-current="activeTabId === tab.id ? 'page' : undefined"
+            :title="tab.title"
+            tabindex="0"
+            @click="activateWorkspaceTab(tab)"
+            @keydown.enter.prevent="activateWorkspaceTab(tab)"
+            @keydown.space.prevent="activateWorkspaceTab(tab)"
+          >
+            <span class="workspace-tab__title">{{ tab.title }}</span>
+            <button
+              v-if="canCloseWorkspaceTab(tab)"
+              class="workspace-tab__close"
+              type="button"
+              :aria-label="`关闭${tab.title}`"
+              @click.stop="closeWorkspaceTab(tab)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
         <div class="topbar__right">
           <span class="tenant-pill">{{ tenantLabel }}</span>
           <div class="account">
@@ -40,7 +65,14 @@
           </div>
         </div>
       </header>
-      <main class="console__content"><router-view :key="route.path" /></main>
+      <main ref="contentViewport" class="console__content">
+        <ConsoleTabPane
+          v-for="tab in workspaceTabs"
+          :key="tab.id"
+          :active="activeTabId === tab.id"
+          :route="tab.route"
+        />
+      </main>
     </section>
   </div>
 </template>
@@ -53,15 +85,35 @@
  * 菜单数据由 navigationStore 按应用编码从 IAM 实时加载，
  * 菜单树由递归导航组件渲染，支持业务分组、二级菜单和三级页面。
  */
-import { computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, nextTick, onMounted, shallowReactive, shallowRef, ref, watch } from 'vue'
+import {
+  onBeforeRouteUpdate,
+  useRoute,
+  useRouter,
+  type RouteLocationNormalizedLoaded,
+} from 'vue-router'
 import { useAuthStore, useNavigationStore } from '@/stores'
 import type { NavigationNode } from '@/types/management'
 import ConsoleNavTree from '@/components/console/ConsoleNavTree.vue'
+import ConsoleTabPane from '@/components/console/ConsoleTabPane.vue'
+
+interface WorkspaceTab {
+  id: string
+  applicationCode: string
+  path: string
+  fullPath: string
+  title: string
+  route: RouteLocationNormalizedLoaded
+  scrollTop: number
+}
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const navigationStore = useNavigationStore()
+const workspaceTabs = shallowRef<WorkspaceTab[]>([])
+const tabStrip = ref<HTMLElement | null>(null)
+const contentViewport = ref<HTMLElement | null>(null)
 
 const applicationCode = computed(() => String(route.meta.applicationCode || ''))
 const title = computed(() => ({
@@ -89,9 +141,124 @@ function findCurrentPageName(nodes: NavigationNode[]): string | undefined {
   return undefined
 }
 
+const activeTabId = computed(() => workspaceTabId(applicationCode.value, route.path))
+
+function workspaceTabId(appCode: string, path: string) {
+  return `${appCode}:${path}`
+}
+
+function applicationHomePath(appCode: string) {
+  return {
+    PLATFORM_ADMIN: '/platform-admin',
+    SYSTEM_ADMIN: '/system-admin',
+    SUPPLY_CHAIN: '/supply-chain',
+  }[appCode]
+}
+
+function cloneRoute(source: RouteLocationNormalizedLoaded): RouteLocationNormalizedLoaded {
+  return {
+    fullPath: source.fullPath,
+    path: source.path,
+    query: { ...source.query },
+    hash: source.hash,
+    name: source.name,
+    params: { ...source.params },
+    matched: [...source.matched],
+    redirectedFrom: source.redirectedFrom,
+    meta: { ...source.meta },
+  }
+}
+
+function upsertWorkspaceTab(currentRoute: RouteLocationNormalizedLoaded, pageTitle: string) {
+  const appCode = String(currentRoute.meta.applicationCode || '')
+  if (!currentRoute.path || !appCode) return
+
+  if (workspaceTabs.value.some((tab) => tab.applicationCode !== appCode)) {
+    workspaceTabs.value = []
+  }
+
+  const id = workspaceTabId(appCode, currentRoute.path)
+  const existing = workspaceTabs.value.find((tab) => tab.id === id)
+  if (existing) {
+    Object.assign(existing.route, cloneRoute(currentRoute))
+    workspaceTabs.value = workspaceTabs.value.map((tab) => tab.id === id
+      ? { ...tab, fullPath: currentRoute.fullPath, title: pageTitle }
+      : tab)
+  } else {
+    workspaceTabs.value = [...workspaceTabs.value, {
+      id,
+      applicationCode: appCode,
+      path: currentRoute.path,
+      fullPath: currentRoute.fullPath,
+      title: pageTitle,
+      route: shallowReactive(cloneRoute(currentRoute)) as RouteLocationNormalizedLoaded,
+      scrollTop: 0,
+    }]
+  }
+  void nextTick(() => {
+    scrollActiveTabIntoView()
+    restoreActivePageScroll()
+  })
+}
+
+async function activateWorkspaceTab(tab: WorkspaceTab) {
+  if (route.fullPath !== tab.fullPath) await router.push(tab.fullPath)
+}
+
+async function closeWorkspaceTab(tab: WorkspaceTab) {
+  const index = workspaceTabs.value.findIndex((item) => item.id === tab.id)
+  if (index < 0) return
+
+  if (activeTabId.value === tab.id) {
+    const adjacentTab = workspaceTabs.value[index + 1] ?? workspaceTabs.value[index - 1]
+    const fallbackPath = applicationHomePath(tab.applicationCode)
+    if (adjacentTab) {
+      await router.push(adjacentTab.fullPath)
+    } else if (fallbackPath && fallbackPath !== tab.path) {
+      await router.push(fallbackPath)
+    } else {
+      return
+    }
+  }
+  workspaceTabs.value = workspaceTabs.value.filter((item) => item.id !== tab.id)
+}
+
+function canCloseWorkspaceTab(tab: WorkspaceTab) {
+  return workspaceTabs.value.length > 1
+    || applicationHomePath(tab.applicationCode) !== tab.path
+}
+
+function scrollActiveTabIntoView() {
+  const activeTab = tabStrip.value?.querySelector<HTMLElement>('.workspace-tab.is-active')
+  activeTab?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+}
+
+function savePageScroll(path: string, appCode: string) {
+  const id = workspaceTabId(appCode, path)
+  const scrollTop = contentViewport.value?.scrollTop ?? 0
+  workspaceTabs.value = workspaceTabs.value.map((tab) => tab.id === id
+    ? { ...tab, scrollTop }
+    : tab)
+}
+
+function restoreActivePageScroll() {
+  const activeTab = workspaceTabs.value.find((tab) => tab.id === activeTabId.value)
+  if (activeTab && contentViewport.value) contentViewport.value.scrollTop = activeTab.scrollTop
+}
+
 function logout(): void {
   authStore.logout()
 }
+
+watch(
+  () => [route.fullPath, currentPageName.value] as const,
+  ([, pageTitle]) => upsertWorkspaceTab(route, pageTitle),
+  { immediate: true },
+)
+
+onBeforeRouteUpdate((_to, from) => {
+  savePageScroll(from.path, String(from.meta.applicationCode || ''))
+})
 
 onMounted(() => {
   if (applicationCode.value && !navigationStore.isLoaded(applicationCode.value)) {
@@ -189,35 +356,119 @@ onMounted(() => {
 
 .topbar {
   display: flex;
+  gap: $spacing-md;
   justify-content: space-between;
   align-items: center;
   height: $topbar-height;
-  padding: 0 28px;
+  padding: 0 20px;
   background: $color-bg-white;
   border-bottom: 1px solid $color-border-base;
 
   &__right {
     display: flex;
+    flex: 0 0 auto;
     gap: $spacing-md;
     align-items: center;
   }
 }
 
-.breadcrumb {
+.workspace-tabs {
   display: flex;
-  gap: 8px;
+  min-width: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  gap: 6px;
   align-items: center;
-  font-size: $font-size-sm;
-  color: $color-text-secondary;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 
-  i {
-    font-style: normal;
-    color: $color-text-placeholder;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.workspace-tab {
+  position: relative;
+  display: flex;
+  min-width: 104px;
+  max-width: 220px;
+  height: 38px;
+  flex: 0 0 auto;
+  gap: 7px;
+  align-items: center;
+  padding: 0 11px 0 13px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: $color-text-secondary;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  transition:
+    color $transition-fast,
+    border-color $transition-fast,
+    background-color $transition-fast;
+
+  &:hover {
+    color: $color-text-primary;
+    background: $color-bg-muted;
   }
 
-  strong {
+  &:focus-visible {
+    border-color: rgba($color-primary, 0.42);
+    box-shadow: 0 0 0 2px rgba($color-primary, 0.12);
+  }
+
+  &.is-active {
+    border-color: rgba($color-primary, 0.16);
+    color: $color-primary-dark;
+    background: rgba($color-primary, 0.07);
+    font-weight: 600;
+
+    &::after {
+      position: absolute;
+      right: 12px;
+      bottom: -1px;
+      left: 12px;
+      height: 2px;
+      border-radius: 999px 999px 0 0;
+      background: $color-primary;
+      content: '';
+    }
+  }
+}
+
+.workspace-tab__title {
+  overflow: hidden;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: $font-size-sm;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab__close {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: $color-text-placeholder;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  place-items: center;
+
+  &:hover,
+  &:focus-visible {
     color: $color-text-primary;
-    font-weight: 500;
+    background: rgba(148, 163, 184, 0.2);
+    outline: none;
   }
 }
 
