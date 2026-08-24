@@ -12,9 +12,11 @@ const VERIFIER_KEY = 'rigour_oidc_code_verifier'
 const REDIRECT_KEY = 'rigour_oidc_return_path'
 const NONCE_KEY = 'rigour_oidc_nonce'
 const LOGOUT_PENDING_KEY = 'rigour_oidc_logout_pending'
+const ACCESS_TOKEN_EXPIRY_SAFETY_WINDOW_MS = 5_000
 
 let accessToken: string | null = null
 let idToken: string | null = null
+let accessTokenExpiresAt: number | null = null
 
 export interface OidcLoginOptions {
   /** 要求IAM重新显示登录表单，避免退出后复用旧浏览器会话。 */
@@ -139,12 +141,15 @@ export async function completeOidcCallback(): Promise<string | null> {
     })
     if (!response.ok) throw new Error(`OIDC Token 交换失败：${response.status}`)
     const tokens = (await response.json()) as OidcTokenResponse
-    if (!tokens.access_token || !tokens.id_token || tokens.token_type.toLowerCase() !== 'bearer') {
+    if (!tokens.access_token || !tokens.id_token || typeof tokens.token_type !== 'string'
+      || tokens.token_type.toLowerCase() !== 'bearer'
+      || !Number.isFinite(tokens.expires_in) || tokens.expires_in <= 0) {
       throw new Error('OIDC Token 响应不完整')
     }
     await validateIdToken(tokens.id_token, issuer, clientId, expectedNonce)
     accessToken = tokens.access_token
     idToken = tokens.id_token
+    accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000
     devInfo('OIDC回调完成，Token已保存在当前页面内存')
     return safeReturnPath(sessionStorage.getItem(REDIRECT_KEY))
   } catch (error) {
@@ -244,12 +249,18 @@ function decodeBase64Url(value: string): Uint8Array {
 }
 
 export function getAccessToken(): string | null {
+  if (accessToken && accessTokenExpiresAt !== null
+    && Date.now() >= accessTokenExpiresAt - ACCESS_TOKEN_EXPIRY_SAFETY_WINDOW_MS) {
+    devInfo('OIDC Access Token已到或接近到期，等待复用IAM会话重新授权')
+    clearOidcTokens()
+  }
   return accessToken
 }
 
 export function clearOidcTokens(): void {
   accessToken = null
   idToken = null
+  accessTokenExpiresAt = null
 }
 
 /** 标记一次跨域OIDC退出，防止退出回到Portal后立即静默重新登录。 */

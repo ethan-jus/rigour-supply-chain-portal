@@ -7,10 +7,24 @@ interface ApiFailure {
   response?: { status?: number }
 }
 
-function isApiFailure(error: unknown, status: number, code: string): boolean {
-  if (!error || typeof error !== 'object') return false
-  const failure = error as ApiFailure
-  return failure.code === code || failure.response?.status === status
+const SESSION_INVALID_CODES = new Set(['IAM_TOKEN_INVALID', 'IAM_UNAUTHORIZED', 'IAM_INVALID_TOKEN'])
+
+function apiFailure(error: unknown): ApiFailure | null {
+  if (!error || typeof error !== 'object') return null
+  return error as ApiFailure
+}
+
+function isSessionInvalidFailure(error: unknown): boolean {
+  const failure = apiFailure(error)
+  if (!failure) return false
+  if (failure.code) return SESSION_INVALID_CODES.has(failure.code)
+  return failure.response?.status === 401
+}
+
+function isForbiddenFailure(error: unknown): boolean {
+  const failure = apiFailure(error)
+  if (!failure) return false
+  return failure.code === 'IAM_FORBIDDEN' || failure.response?.status === 403
 }
 
 /**
@@ -33,11 +47,13 @@ function isApiFailure(error: unknown, status: number, code: string): boolean {
  * - 菜单初始化由 authStore.fetchUser() 自动触发
  *
  * 风险：
- * - fetchUser 明确返回401时清除会话并跳转登录；服务异常进入503页面，避免误清会话或静默回到门户首页
+ * - fetchUser明确返回Token失效marker时清除会话；服务异常进入503页面，避免误清会话或静默回门户首页
  */
 export function setupPermissionGuard(router: Router): void {
   router.beforeEach(async (to, _from, next) => {
     const authStore = useAuthStore()
+    const wasAuthenticated = authStore.isAuthenticated
+    authStore.synchronizeTokenState()
 
     const title = (to.meta?.title as string) || '瑞盖优选供应链运营门户'
     document.title = `${title} - 瑞盖优选`
@@ -51,22 +67,29 @@ export function setupPermissionGuard(router: Router): void {
     // 未登录 → 登录页
     if (!authStore.isAuthenticated) {
       devInfo('路由守卫发现未登录身份，跳转登录页', { path: to.fullPath })
-      next({ path: '/login', query: { redirect: to.fullPath } })
+      authStore.clearLocalSession()
+      next({
+        path: '/login',
+        query: {
+          redirect: to.fullPath,
+          ...(wasAuthenticated ? { reason: 'session_expired' } : {}),
+        },
+      })
       return
     }
 
     // 已登录但未加载用户信息 → 恢复会话（包含菜单初始化）
     if (!authStore.user) {
       try {
-        await authStore.fetchUser()
+        await authStore.fetchUser({ deferSessionRecovery: true })
         // fetchUser 成功后 permissionStore.accessibleRoutes 已填充
       } catch (error) {
-        // 只有IAM明确返回401才说明本地Token失效；服务500、超时或网络断开
+        // 只有IAM明确Token失效marker才说明本地Token失效；服务500、超时或网络断开
         // 不应清除内存Token并把用户误导到登录页。
-        if (isApiFailure(error, 401, 'IAM_UNAUTHORIZED')) {
+        if (isSessionInvalidFailure(error)) {
           devWarn('用户会话已失效，清理会话并跳转登录页', { path: to.fullPath })
           authStore.clearLocalSession()
-          next({ path: '/login', query: { redirect: to.fullPath } })
+          next({ path: '/login', query: { redirect: to.fullPath, reason: 'session_expired' } })
         } else {
           devWarn('恢复用户会话遇到服务异常，跳转503页面', { path: to.fullPath })
           next({ path: '/service-unavailable', query: { redirect: to.fullPath } })
@@ -76,30 +99,47 @@ export function setupPermissionGuard(router: Router): void {
     }
 
     const applicationCode = to.meta?.applicationCode as string | undefined
-    if (applicationCode) {
+    const requiredApplicationCode = to.meta?.requiredApplicationCode as string | undefined
+    const entitlementApplicationCode = applicationCode || requiredApplicationCode
+    if (entitlementApplicationCode) {
       const applicationStore = useApplicationStore()
       try {
-        if (!applicationStore.loaded) await applicationStore.fetchApplications()
+        if (!applicationStore.loaded) {
+          await applicationStore.fetchApplications({ deferSessionRecovery: true })
+        }
       } catch (error) {
-        if (isApiFailure(error, 401, 'IAM_UNAUTHORIZED')) {
+        if (isSessionInvalidFailure(error)) {
           devWarn('加载应用目录时身份已失效，跳转登录页', { path: to.fullPath })
           authStore.clearLocalSession()
-          next({ path: '/login', query: { redirect: to.fullPath } })
+          next({ path: '/login', query: { redirect: to.fullPath, reason: 'session_expired' } })
           return
         }
         devWarn('加载应用目录遇到服务异常，进入503页面', { path: to.fullPath })
         next({ path: '/service-unavailable', query: { redirect: to.fullPath, reason: 'applications-unavailable' } })
         return
       }
-      if (!applicationStore.applications.some((application) => application.code === applicationCode)) {
+      if (!applicationStore.applications.some(
+        (application) => application.code === entitlementApplicationCode,
+      )) {
         next({ path: '/403' })
         return
       }
+    }
+
+    if (applicationCode) {
       const navigationStore = useNavigationStore()
       try {
-        if (!navigationStore.isLoaded(applicationCode)) await navigationStore.fetchNavigation(applicationCode)
+        if (!navigationStore.isLoaded(applicationCode)) {
+          await navigationStore.fetchNavigation(applicationCode, { deferSessionRecovery: true })
+        }
       } catch (error) {
-        if (isApiFailure(error, 403, 'IAM_FORBIDDEN')) {
+        if (isSessionInvalidFailure(error)) {
+          devWarn('加载应用菜单时身份已失效，跳转登录页', { applicationCode, path: to.fullPath })
+          authStore.clearLocalSession()
+          next({ path: '/login', query: { redirect: to.fullPath, reason: 'session_expired' } })
+          return
+        }
+        if (isForbiddenFailure(error)) {
           devWarn('加载应用菜单被拒绝，跳转403页面', { applicationCode, path: to.fullPath })
           next({ path: '/403' })
           return
@@ -122,7 +162,7 @@ export function setupPermissionGuard(router: Router): void {
       return
     }
 
-    devInfo('路由权限校验通过', { path: to.fullPath, applicationCode })
+    devInfo('路由权限校验通过', { path: to.fullPath, applicationCode, requiredApplicationCode })
     next()
   })
 }

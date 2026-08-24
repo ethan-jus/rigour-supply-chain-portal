@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AxiosError, type AxiosRequestConfig, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import {
+  AxiosError,
+  type AxiosRequestConfig,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 import { apiClient, registerUnauthorizedSessionHandler } from '@/api'
 
 function adapter(data: unknown) {
@@ -8,41 +13,46 @@ function adapter(data: unknown) {
   } as AxiosResponse)
 }
 
-function unauthorizedAdapter() {
+function okApiResponseAdapter(data: unknown) {
+  return adapter({
+    code: 'OK', message: 'success', data,
+    requestId: 'request-ok', timestamp: '2026-08-17T00:00:00Z',
+  })
+}
+
+function unauthorizedAdapter(options: {
+  marker?: string
+  bodyCode?: string
+  path?: string
+  status?: number
+} = {}) {
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
+    const status = options.status || 401
+    const data = options.bodyCode
+      ? {
+          code: options.bodyCode, message: '请求未授权', data: null,
+          requestId: 'request-401', timestamp: '2026-08-17T00:00:00Z',
+        }
+      : {
+          timestamp: '2026-08-17T00:00:00Z', status,
+          error: 'Unauthorized', path: options.path || config.url,
+        }
     const response = {
-      data: {
-        code: 'IAM_UNAUTHORIZED', message: '登录状态已失效', data: null,
-        requestId: 'request-401', timestamp: '2026-08-03T00:00:00Z',
-      },
-      status: 401,
+      data,
+      status,
       statusText: 'Unauthorized',
-      headers: {},
+      headers: options.marker ? { 'x-rigour-auth-failure': options.marker } : {},
       config,
     } as AxiosResponse
     throw new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', config, undefined, response)
   }
 }
 
-function gatewayUnauthorizedAdapter() {
-  return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
-    const response = {
-      data: {
-        timestamp: '2026-08-03T00:00:00Z', status: 401,
-        error: 'Unauthorized', path: '/api/v1/orders/dhb',
-      },
-      status: 401,
-      statusText: 'Unauthorized',
-      headers: {},
-      config,
-    } as AxiosResponse
-    throw new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', config, undefined, response)
-  }
-}
-
+const originalDefaultAdapter = apiClient.defaults.adapter
 let unregisterUnauthorizedHandler: (() => void) | undefined
 
 afterEach(() => {
+  apiClient.defaults.adapter = originalDefaultAdapter
   unregisterUnauthorizedHandler?.()
   unregisterUnauthorizedHandler = undefined
   window.location.hash = ''
@@ -60,40 +70,142 @@ describe('API响应解包', () => {
 
   it('仅解包结构完整的统一ApiResponse', async () => {
     const response = await apiClient.get('/wrapped', {
-      adapter: adapter({
-        code: 'OK', message: 'success', data: { id: 'tenant-1' },
-        requestId: 'request-1', timestamp: '2026-07-31T00:00:00Z',
-      }),
+      adapter: okApiResponseAdapter({ id: 'tenant-1' }),
     })
     expect(response).toEqual({ id: 'tenant-1' })
   })
+})
 
-  it('401时调用统一会话清理器并进入登录页', async () => {
-    const clearSession = vi.fn()
-    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(clearSession)
+describe('API 401分类与会话恢复', () => {
+  it('IAM_TOKEN_INVALID即使请求声明stayOnUnauthorized也必须恢复会话', async () => {
+    const recoverSession = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recoverSession)
 
-    await expect(apiClient.get('/expired-session', {
-      adapter: unauthorizedAdapter(),
-    })).rejects.toMatchObject({ response: { status: 401 } })
-
-    expect(clearSession).toHaveBeenCalledOnce()
-    expect(window.location.hash).toBe('#/login')
-  })
-
-  it('订货宝接口401时保留当前页面并返回业务错误', async () => {
-    const clearSession = vi.fn()
-    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(clearSession)
-    window.location.hash = '#/supply-chain/order/orders'
-
-    await expect(apiClient.get('/orders/dhb', {
+    await expect(apiClient.get('/orders/sales', {
       stayOnUnauthorized: true,
-      adapter: gatewayUnauthorizedAdapter(),
+      adapter: unauthorizedAdapter({ marker: 'IAM_TOKEN_INVALID' }),
     })).rejects.toMatchObject({
-      code: 'UNAUTHORIZED',
+      code: 'IAM_TOKEN_INVALID',
       response: { status: 401 },
     })
 
-    expect(clearSession).not.toHaveBeenCalled()
-    expect(window.location.hash).toBe('#/supply-chain/order/orders')
+    expect(recoverSession).toHaveBeenCalledOnce()
+  })
+
+  it('兼容旧IAM_UNAUTHORIZED JSON code并恢复会话', async () => {
+    const recoverSession = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recoverSession)
+
+    await expect(apiClient.get('/expired-session', {
+      adapter: unauthorizedAdapter({ bodyCode: 'IAM_UNAUTHORIZED' }),
+    })).rejects.toMatchObject({ code: 'IAM_TOKEN_INVALID' })
+
+    expect(recoverSession).toHaveBeenCalledOnce()
+  })
+
+  it('兼容旧IAM_INVALID_TOKEN JSON code并恢复会话', async () => {
+    const recoverSession = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recoverSession)
+
+    await expect(apiClient.get('/expired-session', {
+      adapter: unauthorizedAdapter({ bodyCode: 'IAM_INVALID_TOKEN' }),
+    })).rejects.toMatchObject({ code: 'IAM_TOKEN_INVALID' })
+
+    expect(recoverSession).toHaveBeenCalledOnce()
+  })
+
+  it('TRUSTED_CONTEXT_INVALID保留当前页且不误判Token失效', async () => {
+    const recoverSession = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recoverSession)
+    window.location.hash = '#/supply-chain/order/sales-orders?tab=pending'
+
+    await expect(apiClient.get('/orders/sales', {
+      adapter: unauthorizedAdapter({ marker: 'TRUSTED_CONTEXT_INVALID' }),
+    })).rejects.toMatchObject({
+      code: 'TRUSTED_CONTEXT_INVALID',
+      response: { status: 401 },
+    })
+
+    expect(recoverSession).not.toHaveBeenCalled()
+    expect(window.location.hash).toBe('#/supply-chain/order/sales-orders?tab=pending')
+  })
+
+  it.each([
+    ['IAM_FORBIDDEN', 403],
+    ['IAM_SESSION_CHECK_UNAVAILABLE', 503],
+  ])('%s响应头marker保留结构化错误且不清理会话', async (marker, status) => {
+    const recoverSession = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recoverSession)
+
+    await expect(apiClient.get('/portal/navigation/SUPPLY_CHAIN', {
+      adapter: unauthorizedAdapter({ marker, status }),
+    })).rejects.toMatchObject({ code: marker, response: { status } })
+
+    expect(recoverSession).not.toHaveBeenCalled()
+  })
+
+  it('裸业务401并发时single-flight复核/me，会话有效则保留页面', async () => {
+    const recoverSession = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recoverSession)
+    let releaseProbe: (() => void) | undefined
+    const probeGate = new Promise<void>((resolve) => { releaseProbe = resolve })
+    const probeAdapter = vi.fn(async (config: AxiosRequestConfig) => {
+      await probeGate
+      return okApiResponseAdapter({ id: 'u-1' })(config)
+    })
+    apiClient.defaults.adapter = probeAdapter
+
+    const first = apiClient.get('/business/one', { adapter: unauthorizedAdapter() })
+    const second = apiClient.get('/business/two', { adapter: unauthorizedAdapter() })
+    await vi.waitFor(() => expect(probeAdapter).toHaveBeenCalledOnce())
+    releaseProbe?.()
+
+    const results = await Promise.allSettled([first, second])
+    expect(results).toEqual([
+      expect.objectContaining({
+        status: 'rejected',
+        reason: expect.objectContaining({ code: 'BUSINESS_UNAUTHORIZED' }),
+      }),
+      expect.objectContaining({
+        status: 'rejected',
+        reason: expect.objectContaining({ code: 'BUSINESS_UNAUTHORIZED' }),
+      }),
+    ])
+    expect(recoverSession).not.toHaveBeenCalled()
+  })
+
+  it('/me明确返回TRUSTED_CONTEXT_INVALID时裸业务401仍保留当前页', async () => {
+    const recoverSession = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recoverSession)
+    apiClient.defaults.adapter = unauthorizedAdapter({ marker: 'TRUSTED_CONTEXT_INVALID' })
+
+    await expect(apiClient.get('/business/orders', {
+      adapter: unauthorizedAdapter(),
+    })).rejects.toMatchObject({ code: 'BUSINESS_UNAUTHORIZED' })
+
+    expect(recoverSession).not.toHaveBeenCalled()
+  })
+
+  it('/me裸401时视为Token失效并且只恢复一次', async () => {
+    const recoverSession = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recoverSession)
+    apiClient.defaults.adapter = unauthorizedAdapter()
+
+    const results = await Promise.allSettled([
+      apiClient.get('/business/one', { adapter: unauthorizedAdapter() }),
+      apiClient.get('/business/two', { adapter: unauthorizedAdapter() }),
+    ])
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        status: 'rejected',
+        reason: expect.objectContaining({ code: 'IAM_TOKEN_INVALID' }),
+      }),
+      expect.objectContaining({
+        status: 'rejected',
+        reason: expect.objectContaining({ code: 'IAM_TOKEN_INVALID' }),
+      }),
+    ])
+    expect(recoverSession).toHaveBeenCalledOnce()
   })
 })

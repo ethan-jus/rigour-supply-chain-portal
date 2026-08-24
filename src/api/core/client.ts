@@ -7,16 +7,35 @@ import { getErrorMessage } from './error'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
-    /** 当前业务请求失败时保留页面，不触发全局会话跳转。 */
+    /** 无明确Token失效marker的业务401保留页面。 */
     stayOnUnauthorized?: boolean
+    /** 由路由守卫根据to.fullPath处理会话失效，API层只返回结构化错误。 */
+    deferSessionRecovery?: boolean
+    /** 仅供会话复核请求使用，防止/me 401递归触发恢复。 */
+    skipSessionRecovery?: boolean
   }
 }
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
-type UnauthorizedSessionHandler = () => void
+export interface UnauthorizedSessionContext {
+  code: string
+  requestId: string
+  requestUrl: string
+}
+
+type UnauthorizedSessionHandler = (context: UnauthorizedSessionContext) => void | Promise<void>
 
 let unauthorizedSessionHandler: UnauthorizedSessionHandler | null = null
+let unauthorizedSessionNotification: Promise<void> | null = null
+let currentSessionProbe: Promise<boolean> | null = null
+
+const SESSION_INVALID_MARKERS = new Set([
+  'IAM_TOKEN_INVALID',
+  'IAM_UNAUTHORIZED',
+  'IAM_INVALID_TOKEN',
+])
+const AUTH_FAILURE_HEADER = 'x-rigour-auth-failure'
 
 /**
  * 注册全局401会话失效处理器。
@@ -26,8 +45,14 @@ let unauthorizedSessionHandler: UnauthorizedSessionHandler | null = null
  */
 export function registerUnauthorizedSessionHandler(handler: UnauthorizedSessionHandler): () => void {
   unauthorizedSessionHandler = handler
+  unauthorizedSessionNotification = null
+  currentSessionProbe = null
   return () => {
-    if (unauthorizedSessionHandler === handler) unauthorizedSessionHandler = null
+    if (unauthorizedSessionHandler === handler) {
+      unauthorizedSessionHandler = null
+      unauthorizedSessionNotification = null
+      currentSessionProbe = null
+    }
   }
 }
 
@@ -40,6 +65,87 @@ function isApiResponse(value: unknown): value is ApiResponse {
     && typeof candidate.timestamp === 'string'
     && 'data' in candidate
 }
+
+interface UnauthorizedFailure {
+  code: string
+  message: string
+  requestId: string
+  timestamp: string
+  response?: AxiosResponse
+}
+
+function responseMarker(error: AxiosError<ApiResponse>): string | undefined {
+  const headers = error.response?.headers
+  const headerValue = typeof headers?.get === 'function'
+    ? headers.get(AUTH_FAILURE_HEADER)
+    : headers?.[AUTH_FAILURE_HEADER]
+  if (typeof headerValue === 'string' && headerValue.trim()) return headerValue.trim()
+  const bodyCode = error.response?.data?.code
+  return typeof bodyCode === 'string' && bodyCode.trim() ? bodyCode.trim() : undefined
+}
+
+function isIamSessionEndpoint(value: string | undefined): boolean {
+  if (!value) return false
+  try {
+    const path = new URL(value, window.location.origin).pathname.replace(/^\/api\/v1(?=\/|$)/, '')
+    return path === '/me' || path === '/portal/apps' || path.startsWith('/portal/navigation/')
+  } catch {
+    return false
+  }
+}
+
+function unauthorizedFailure(
+  error: AxiosError<ApiResponse>, marker?: string, codeOverride?: string,
+): UnauthorizedFailure {
+  const requestId = error.config?.headers?.['X-Request-Id']
+  const body = error.response?.data
+  const code = codeOverride || marker || 'BUSINESS_UNAUTHORIZED'
+  return {
+    code,
+    message: body?.message
+      ? getErrorMessage(code, body.message)
+      : '当前业务接口暂时无法访问，请稍后重试；如持续出现，请提供请求 ID 排查',
+    requestId: requestId ? String(requestId) : '',
+    timestamp: body?.timestamp || new Date().toISOString(),
+    response: error.response,
+  }
+}
+
+function isSessionInvalidFailure(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const failure = error as { code?: string; response?: { status?: number } }
+  if (typeof failure.code === 'string' && failure.code) {
+    return SESSION_INVALID_MARKERS.has(failure.code)
+  }
+  return failure.response?.status === 401
+}
+
+async function notifySessionInvalid(context: UnauthorizedSessionContext): Promise<void> {
+  if (!unauthorizedSessionNotification) {
+    unauthorizedSessionNotification = (async () => {
+      try {
+        if (unauthorizedSessionHandler) await unauthorizedSessionHandler(context)
+        else removeToken()
+      } catch (error) {
+        devWarn('会话失效恢复处理失败，仅清理内存Token', {
+          message: error instanceof Error ? error.message : error,
+        })
+        removeToken()
+      }
+    })()
+  }
+  await unauthorizedSessionNotification
+}
+
+async function probeCurrentSession(): Promise<boolean> {
+  if (!currentSessionProbe) {
+    currentSessionProbe = apiClient.get('/me', { skipSessionRecovery: true })
+      .then(() => true)
+      .catch((error: unknown) => !isSessionInvalidFailure(error))
+      .finally(() => { currentSessionProbe = null })
+  }
+  return currentSessionProbe
+}
 /**
  * 创建 Axios 实例
  *
@@ -48,8 +154,8 @@ function isApiResponse(value: unknown): value is ApiResponse {
  * - 不接受浏览器注入租户身份头；Gateway只从已验签JWT重建可信上下文
  * - 注入 X-Request-Id（每次请求生成唯一追踪 ID）
  * - 统一解包 ApiResponse，提取 data 或 reject 非 OK 响应
- * - 认证请求的401自动清除token并跳转登录
- * - 业务请求可通过 stayOnUnauthorized 保留当前页面，由业务页面自行提示和重试
+ * - 仅稳定IAM Token失效marker触发集中会话恢复
+ * - trusted-context和业务401保留当前页面，无marker时single-flight复核/me
  *
  * 边界：不包含业务判定逻辑；错误码映射在 error.ts 维护。
  * Access Token仅在当前页面内存中保存；刷新页面后通过IAM会话重新授权。
@@ -97,42 +203,63 @@ function createClient(): AxiosInstance {
       }
       return body.data
     },
-    (error: AxiosError<ApiResponse>) => {
+    async (error: AxiosError<ApiResponse>) => {
       const requestId = error.config?.headers?.['X-Request-Id']
+      const marker = responseMarker(error)
       devWarn('接口请求失败', {
         requestId,
         status: error.response?.status,
-        code: error.response?.data?.code,
+        code: marker,
         url: error.config?.url,
       })
-      if (error.response?.status === 401 && !error.config?.stayOnUnauthorized) {
-        devWarn('IAM返回401，清理本地会话并回到登录页', { requestId })
-        if (unauthorizedSessionHandler) {
-          unauthorizedSessionHandler()
-        } else {
-          // 应用尚未完成启动时仍要删除内存Token，不能保留已失效凭证。
-          removeToken()
+
+      if (error.response?.status === 401) {
+        if (error.config?.skipSessionRecovery) {
+          // /me兼容复核的裸401没有显式marker，仍需视为会话失效；
+          // 若已有TRUSTED_CONTEXT_INVALID等marker，则必须优先尊重服务端分类。
+          return Promise.reject(unauthorizedFailure(
+            error,
+            marker,
+            marker ? undefined : 'IAM_TOKEN_INVALID',
+          ))
         }
-        window.location.hash = '/login'
-        return Promise.reject(error)
+
+        let sessionInvalid = marker ? SESSION_INVALID_MARKERS.has(marker) : false
+        if (!sessionInvalid && error.config?.stayOnUnauthorized) {
+          return Promise.reject(unauthorizedFailure(error, marker))
+        }
+        if (!marker && isIamSessionEndpoint(error.config?.url)) {
+          sessionInvalid = true
+        } else if (!marker) {
+          sessionInvalid = !(await probeCurrentSession())
+        }
+
+        const failure = unauthorizedFailure(
+          error,
+          marker,
+          sessionInvalid ? 'IAM_TOKEN_INVALID' : undefined,
+        )
+        if (sessionInvalid && !error.config?.deferSessionRecovery) {
+          devWarn('IAM Access Token已失效，触发集中会话恢复', { requestId, url: error.config?.url })
+          await notifySessionInvalid({
+            code: failure.code,
+            requestId: failure.requestId,
+            requestUrl: error.config?.url || '',
+          })
+        }
+        return Promise.reject(failure)
       }
 
       const errorBody = error.response?.data
-      if (error.response?.status === 401 && error.config?.stayOnUnauthorized) {
-        return Promise.reject({
-          code: errorBody?.code || 'UNAUTHORIZED',
-          message: errorBody?.code
-            ? getErrorMessage(errorBody.code, errorBody.message)
-            : '订单接口暂时无法访问，请检查订单服务配置后重试',
-          requestId: requestId ? String(requestId) : '',
-          timestamp: errorBody?.timestamp || new Date().toISOString(),
-          response: error.response,
-        })
-      }
-
       if (errorBody?.code) {
         const message = getErrorMessage(errorBody.code, errorBody.message)
         return Promise.reject({ ...errorBody, message })
+      }
+
+      // 后端稳定协议允许marker仅由响应头携带；保留Axios response
+      // 供路由守卫区分IAM_FORBIDDEN与身份服务暂时不可用。
+      if (marker) {
+        return Promise.reject(unauthorizedFailure(error, marker))
       }
 
       return Promise.reject({

@@ -79,7 +79,8 @@ export function validateNavigation(nodes: NavigationNode[]): NavigationNode[] {
       && node.routeKey.startsWith('tenant.menu.group.')
       && node.routePath === null
     if (!tenantGroup && (!(node.routeKey in ROUTES) || ROUTES[node.routeKey] !== node.routePath)) {
-      throw new Error(`IAM返回未注册或路径不一致的routeKey: ${node.routeKey}`)
+      const expectedPath = node.routeKey in ROUTES ? ROUTES[node.routeKey] : '未注册'
+      throw new Error(`IAM返回未注册或路径不一致的routeKey: ${node.routeKey}; routePath=${node.routePath}; expected=${expectedPath}`)
     }
     return { ...node, children: validateNavigation(node.children) }
   })

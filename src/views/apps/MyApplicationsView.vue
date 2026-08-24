@@ -83,17 +83,6 @@ async function reload() {
     await authStore.fetchUser()
     navigationStore.reset()
     await applicationStore.fetchApplications()
-    const navigationResults = await Promise.allSettled(applicationStore.applications
-      .filter((application) => application.launchMode === 'INTERNAL_ROUTE')
-      .map((application) => navigationStore.fetchNavigation(application.code)))
-    const failedApplications = navigationResults
-      .map((result, index) => result.status === 'rejected'
-        ? applicationStore.applications.filter((application) => application.launchMode === 'INTERNAL_ROUTE')[index]?.code
-        : null)
-      .filter((code): code is string => Boolean(code))
-    if (failedApplications.length > 0) {
-      devWarn('部分应用菜单加载失败，保留其他应用入口', { applications: failedApplications })
-    }
   } catch (error) {
     devWarn('统一门户数据加载未完成，页面保留稳定错误态', {
       message: error instanceof Error ? error.message : error,
