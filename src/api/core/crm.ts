@@ -76,6 +76,27 @@ export interface CrmDictionaryView {
   sourceAbsentAt?: string | null
 }
 
+export interface ShippingAddressSummaryView {
+  id: string
+  customerId: string
+  customerCode: string | null
+  customerName: string
+  sourceId: string | null
+  consignee: string | null
+  contact: string | null
+  phone: string | null
+  regionText: string | null
+  areaName: string | null
+  addressDetail: string | null
+  fullAddress: string | null
+  defaultAddress: boolean
+  status: string
+  sourceUpdatedAt: string | null
+  syncedAt: string | null
+  sourcePresence: string | null
+  sourceAbsentAt: string | null
+}
+
 const CRM_BASE_PATH = '/crm'
 
 export function getInternalCrmCustomers(params: InternalCrmCustomerQuery) {
@@ -122,6 +143,13 @@ export function getCrmCustomerTypes(params: { begin?: number; step?: number; q?:
 export function getCrmCustomerAreas(params: { begin?: number; step?: number; q?: string } = {}) {
   return apiClient.get<CrmPage<CrmDictionaryView>>(`${CRM_BASE_PATH}/customer-areas`, {
     params: { begin: 0, step: 200, ...params },
+    stayOnUnauthorized: true,
+  })
+}
+
+export function getCrmShippingAddresses(params: { begin?: number; step?: number; q?: string } = {}) {
+  return apiClient.get<CrmPage<ShippingAddressSummaryView>>(`${CRM_BASE_PATH}/shipping-addresses`, {
+    params: { begin: 0, step: 20, ...params },
     stayOnUnauthorized: true,
   })
 }

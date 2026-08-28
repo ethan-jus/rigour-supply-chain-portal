@@ -44,16 +44,9 @@
           :default-expand-all="isAreaPage"
         >
           <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
-          <el-table-column prop="code" :label="`${pageConfig.shortTitle}编码`" min-width="180" show-overflow-tooltip />
           <el-table-column prop="name" :label="`${pageConfig.shortTitle}名称`" min-width="220" show-overflow-tooltip>
             <template #default="scope">
-              <div class="record-identity">
-                <span class="record-avatar">{{ pageConfig.avatar }}</span>
-                <div class="record-identity-content">
-                  <strong>{{ scope.row.name }}</strong>
-                  <small>{{ scope.row.code }}</small>
-                </div>
-              </div>
+              <span class="record-name">{{ scope.row.name || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column v-if="isAreaPage" label="上级地区" min-width="180" show-overflow-tooltip>
@@ -119,13 +112,11 @@ const pageConfig = computed(() => isAreaPage.value
   ? {
       title: '归属地区',
       shortTitle: '地区',
-      avatar: '区',
       description: '查看客户归属地区，作为客户档案和销售订单的地区编码来源。',
     }
   : {
       title: '客户类型',
       shortTitle: '类型',
-      avatar: '类',
       description: '查看客户类型，作为客户档案分类、筛选和同步映射的业务主数据。',
     })
 
@@ -192,7 +183,7 @@ function tableRowIndex(index: number) {
 function parentAreaLabel(row: CrmDictionaryView) {
   if (!row.parentCode) return '-'
   const parent = pageData.value.items.find((item) => item.code === row.parentCode)
-  return parent ? `${parent.name}（${parent.code}）` : row.parentCode
+  return parent ? parent.name : '-'
 }
 
 function openCustomers(row: CrmDictionaryView) {

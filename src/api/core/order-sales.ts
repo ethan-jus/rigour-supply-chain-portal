@@ -12,6 +12,7 @@ export interface SalesOrderQuery {
   step: number
   orderNo?: string
   sourceOrderNo?: string
+  sourceStatusCode?: string
   customerName?: string
   contactPhone?: string
   regionCode?: string
@@ -41,6 +42,12 @@ export interface SalesOrderLineCommand {
 
 export interface SalesOrderCommand {
   customerId: string | number
+  sourceSystemCode?: string | null
+  sourceOrderNo?: string | null
+  sourceStatusCode?: string | null
+  sourceCreatorId?: string | null
+  sourceCreatorStaffCode?: string | null
+  sourceCreatorName?: string | null
   customerCodeSnapshot?: string | null
   customerNameSnapshot: string
   contactNameSnapshot?: string | null
@@ -66,6 +73,10 @@ export interface SalesOrderSummary {
   orderNo: string
   sourceSystemCode: string | null
   sourceOrderNo: string | null
+  sourceStatusCode: string | null
+  sourceCreatorId: string | null
+  sourceCreatorStaffCode: string | null
+  sourceCreatorName: string | null
   customerId: string
   customerNameSnapshot: string
   contactPhoneSnapshot: string | null
@@ -75,6 +86,9 @@ export interface SalesOrderSummary {
   ownerStaffCode: string | null
   ownerStaffNameSnapshot: string | null
   orderDate: string
+  paymentTime: string | null
+  shipmentTime: string | null
+  shipmentStatusCode: string | null
   orderStatusCode: string
   paymentStatusCode: string
   outboundStatusCode: string
@@ -148,6 +162,9 @@ export interface SalesShipmentQuery {
 export interface SalesShipmentSummary {
   id: string
   shipmentNo: string
+  connectorId: string | null
+  sourceSystemCode: string | null
+  sourceDocumentNo: string | null
   salesOrderId: string | null
   salesOrderNoSnapshot: string | null
   customerId: string | null
@@ -206,6 +223,9 @@ export interface SalesPaymentQuery {
 export interface SalesPaymentSummary {
   id: string
   paymentNo: string
+  connectorId: string | null
+  sourceSystemCode: string | null
+  sourceDocumentNo: string | null
   orderId: string
   salesOrderNoSnapshot: string | null
   customerId: string | null
@@ -270,9 +290,13 @@ export interface SalesRefundDetail extends SalesRefundSummary {
 export interface FundDocumentQuery {
   begin: number
   step: number
+  keyword?: string
   directionCode?: string
   documentNo?: string
+  sourceDocumentNo?: string
   salesOrderNo?: string
+  sourceOrderNo?: string
+  paymentSerialNo?: string
   counterpartyName?: string
   handlerStaffCode?: string
   settlementMethodCode?: string
@@ -285,6 +309,8 @@ export interface FundDocumentQuery {
 export interface FundDocumentSummary {
   id: string
   documentNo: string
+  connectorId: string | null
+  sourceSystemCode: string | null
   directionCode: string
   relatedOrderId: string | null
   salesOrderNoSnapshot: string | null
@@ -301,12 +327,28 @@ export interface FundDocumentSummary {
   businessTypeCode: string | null
   documentStatusCode: string
   amount: number
+  sourceDocumentNo: string | null
+  sourceOrderNo: string | null
+  paymentSerialNo: string | null
+  bankAccountName: string | null
+  bankName: string | null
+  bankAccountNo: string | null
+  submittedAt: string | null
+  confirmedAt: string | null
+  sourceAttachmentKeys: string[]
   revision: number
   updatedTime: string
 }
 
+export interface FundDocumentAttachment {
+  objectKey: string
+  fileName: string | null
+  url: string | null
+}
+
 export interface FundDocumentDetail extends FundDocumentSummary {
   voucherKeys: string[]
+  attachments: FundDocumentAttachment[]
   remark: string | null
   createdBy: string | null
   createdTime: string

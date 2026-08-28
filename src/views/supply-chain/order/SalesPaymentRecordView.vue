@@ -27,6 +27,17 @@
             <el-option v-for="item in paymentMethodOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="回款时间">
+          <el-date-picker
+            v-model="filters.paymentTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="截止日期"
+            style="width: 260px"
+          />
+        </el-form-item>
         <el-form-item class="filter-actions">
           <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
           <el-button @click="resetFilters">重置</el-button>
@@ -60,13 +71,7 @@
           </el-table-column>
           <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip>
             <template #default="scope">
-              <div class="record-identity">
-                <span class="record-avatar">款</span>
-                <div class="record-identity-content">
-                  <strong>{{ scope.row.customerNameSnapshot || '-' }}</strong>
-                  <small>{{ scope.row.customerCodeSnapshot || '-' }}</small>
-                </div>
-              </div>
+              <span class="record-name">{{ scope.row.customerNameSnapshot || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="paidAmount" label="回款金额" width="140" align="right">
@@ -86,7 +91,7 @@
           <el-table-column label="操作" width="150" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
+              <el-button v-if="!isExternalSource(scope.row)" link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无销售回款" /></template>
@@ -139,7 +144,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   deleteSalesPayment,
@@ -156,6 +162,7 @@ import {
 } from '@/utils/business-dictionary'
 
 const paymentMethodOptions = computed(() => businessDictionaryOptions('ORDER', 'PAYMENT_METHOD'))
+const route = useRoute()
 
 const loading = ref(false)
 const detailVisible = ref(false)
@@ -170,10 +177,18 @@ const filters = reactive({
   customerName: '',
   collectorStaffCode: '',
   paymentMethodCode: '',
+  paymentTimeRange: [] as string[],
 })
 
 onMounted(() => {
   void loadBusinessDictionaries([{ moduleCode: 'ORDER', code: 'PAYMENT_METHOD' }])
+  applyRouteQuery()
+  void loadRows()
+})
+
+watch(() => route.query, () => {
+  if (!applyRouteQuery()) return
+  currentPage.value = 1
   void loadRows()
 })
 
@@ -188,6 +203,8 @@ async function loadRows() {
       customerName: empty(filters.customerName),
       collectorStaffCode: empty(filters.collectorStaffCode),
       paymentMethodCode: empty(filters.paymentMethodCode),
+      paymentTimeFrom: startOfDay(filters.paymentTimeRange[0]),
+      paymentTimeTo: endOfDay(filters.paymentTimeRange[1]),
     })
   } catch (reason) {
     ElMessage.error(errorMessage(reason, '销售回款列表加载失败'))
@@ -202,8 +219,38 @@ function resetFilters() {
   filters.customerName = ''
   filters.collectorStaffCode = ''
   filters.paymentMethodCode = ''
+  filters.paymentTimeRange = []
   currentPage.value = 1
   void loadRows()
+}
+
+function applyRouteQuery() {
+  let changed = false
+  changed = setFilterValue('collectorStaffCode', routeText(route.query.collectorStaffCode)) || changed
+  const from = routeDate(route.query.paymentTimeFrom)
+  const to = routeDate(route.query.paymentTimeTo)
+  const nextRange = from || to ? [from, to].filter(Boolean) : []
+  if (filters.paymentTimeRange.join('|') !== nextRange.join('|')) {
+    filters.paymentTimeRange = nextRange
+    changed = true
+  }
+  return changed
+}
+
+function setFilterValue(key: 'paymentNo' | 'salesOrderNo' | 'customerName' | 'collectorStaffCode' | 'paymentMethodCode', value: string) {
+  if (filters[key] === value) return false
+  filters[key] = value
+  return true
+}
+
+function routeText(value: unknown) {
+  const normalized = Array.isArray(value) ? value[0] : value
+  return typeof normalized === 'string' ? normalized.trim() : ''
+}
+
+function routeDate(value: unknown) {
+  const text = routeText(value)
+  return text ? text.slice(0, 10) : ''
 }
 
 function handleSizeChange() {
@@ -226,6 +273,10 @@ async function openDetail(row: SalesPaymentSummary) {
 }
 
 async function deleteRow(row: SalesPaymentSummary) {
+  if (isExternalSource(row)) {
+    ElMessage.warning('外部来源销售回款仅支持查看')
+    return
+  }
   try {
     await ElMessageBox.confirm(`确认删除回款记录「${row.paymentNo}」？删除后会重新汇总销售订单收款状态。`, '删除回款记录', {
       confirmButtonText: '删除',
@@ -238,6 +289,10 @@ async function deleteRow(row: SalesPaymentSummary) {
   } catch (reason) {
     if (reason !== 'cancel') ElMessage.error(errorMessage(reason, '删除失败'))
   }
+}
+
+function isExternalSource(row: Pick<SalesPaymentSummary, 'sourceSystemCode'>) {
+  return Boolean(row.sourceSystemCode && row.sourceSystemCode.trim())
 }
 
 function paymentMethodLabel(value: string | null | undefined) {
@@ -256,6 +311,14 @@ function formatTime(value: string | null | undefined): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function startOfDay(value: string | undefined) {
+  return value ? new Date(`${value}T00:00:00+08:00`).toISOString() : undefined
+}
+
+function endOfDay(value: string | undefined) {
+  return value ? new Date(`${value}T23:59:59+08:00`).toISOString() : undefined
 }
 
 function empty(value: string): string | undefined {
@@ -321,43 +384,6 @@ function errorMessage(reason: unknown, fallback: string): string {
   display: flex;
   justify-content: flex-end;
   padding-top: 12px;
-}
-
-.record-identity {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.record-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: #f0f6ff;
-  color: #2563eb;
-  font-weight: 700;
-}
-
-.record-identity-content {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  line-height: 1.35;
-}
-
-.record-identity-content strong,
-.record-identity-content small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.record-identity-content small {
-  color: #64748b;
 }
 
 .detail-shell {

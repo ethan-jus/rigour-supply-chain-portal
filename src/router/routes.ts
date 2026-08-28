@@ -33,6 +33,10 @@ const crmCustomerManagementRouteKeys = new Set([
   'supply.crm.customers.profiles',
 ])
 
+const crmShippingAddressRouteKeys = new Set([
+  'supply.crm.customers.shipping-addresses',
+])
+
 const crmCustomerDictionaryRouteKeys = new Set([
   'supply.crm.customers.levels-tags',
   'supply.crm.customers.areas',
@@ -50,7 +54,7 @@ const procurementPaymentPlaceholderRouteKeys = new Set([
   'supply.erp.procurement.payments',
 ])
 
-const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.map((page) => ({
+const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.filter((page) => page.domainKey !== 'bi').map((page) => ({
   path: page.path.replace('/supply-chain/', ''),
   name: `SupplyDomain${page.routeKey.split('.').map((part) => part.replace(/(^|-)([a-z])/g, (_, __, letter) => letter.toUpperCase())).join('')}`,
   component: erpProductManagementRouteKeys.has(page.routeKey)
@@ -65,15 +69,17 @@ const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.map((page) => (
             ? () => import('@/views/supply-chain/erp/ErpDocumentManagementView.vue')
             : crmCustomerManagementRouteKeys.has(page.routeKey)
               ? () => import('@/views/supply-chain/crm/CrmCustomerManagementView.vue')
-              : crmCustomerDictionaryRouteKeys.has(page.routeKey)
-                ? () => import('@/views/supply-chain/crm/CrmCustomerDictionaryView.vue')
-                : businessDictionaryRouteKeys.has(page.routeKey)
-                    ? () => import('@/views/supply-chain/settings/BusinessDictionaryView.vue')
-                    : integrationSyncCenterRouteKeys.has(page.routeKey)
-                      ? () => import('@/views/supply-chain/dhb/DhbPage.vue')
-                      : procurementPaymentPlaceholderRouteKeys.has(page.routeKey)
-                        ? () => import('@/views/supply-chain/erp/PurchasePaymentPlaceholderView.vue')
-                        : () => import('@/views/supply-chain/domain/CapabilityView.vue'),
+              : crmShippingAddressRouteKeys.has(page.routeKey)
+                ? () => import('@/views/supply-chain/crm/CrmShippingAddressView.vue')
+                : crmCustomerDictionaryRouteKeys.has(page.routeKey)
+                  ? () => import('@/views/supply-chain/crm/CrmCustomerDictionaryView.vue')
+                  : businessDictionaryRouteKeys.has(page.routeKey)
+                      ? () => import('@/views/supply-chain/settings/BusinessDictionaryView.vue')
+                      : integrationSyncCenterRouteKeys.has(page.routeKey)
+                        ? () => import('@/views/supply-chain/dhb/DhbPage.vue')
+                        : procurementPaymentPlaceholderRouteKeys.has(page.routeKey)
+                          ? () => import('@/views/supply-chain/erp/PurchasePaymentPlaceholderView.vue')
+                          : () => import('@/views/supply-chain/domain/CapabilityView.vue'),
   meta: {
     title: page.title,
     requiresAuth: true,
@@ -231,7 +237,13 @@ export const constantRoutes: RouteRecordRaw[] = [
       { path: 'erp', name: 'SupplyErp', component: () => import('@/views/supply-chain/erp/IndexView.vue'), meta: { title: 'ERP', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
       { path: 'hr', name: 'SupplyHr', component: () => import('@/views/supply-chain/hr/IndexView.vue'), meta: { title: '人事与绩效', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
       { path: 'channel', name: 'SupplyChannel', component: () => import('@/views/supply-chain/channel/IndexView.vue'), meta: { title: '渠道代理', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
-      { path: 'bi', name: 'SupplyBi', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: 'BI 数据看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
+      { path: 'bi', name: 'SupplyBi', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '供应链经营总览', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.index', dashboardSection: 'overview', permission: 'analytics:dashboard:read' } },
+      { path: 'bi/sales-collection', name: 'SupplyBiSalesCollection', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '销售与回款看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.sales-collection', dashboardSection: 'sales-collection', permission: 'analytics:dashboard:read' } },
+      { path: 'bi/product-sales', name: 'SupplyBiProductSales', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '商品销售统计', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.product-sales', dashboardSection: 'product-sales', permission: 'analytics:dashboard:read' } },
+      { path: 'bi/gross-profit', name: 'SupplyBiGrossProfit', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '销售毛利分析', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.gross-profit', dashboardSection: 'gross-profit', permission: 'analytics:dashboard:read' } },
+      { path: 'bi/payment-risk', name: 'SupplyBiPaymentRisk', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '回款风险看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.payment-risk', dashboardSection: 'payment-risk', permission: 'analytics:dashboard:read' } },
+      { path: 'bi/city-cost', name: 'SupplyBiCityCost', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '城市成本看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.city-cost', dashboardSection: 'city-cost', permission: 'analytics:dashboard:read' } },
+      { path: 'bi/inventory-risk', name: 'SupplyBiInventoryRisk', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '库存风险看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.inventory-risk', dashboardSection: 'inventory-risk', permission: 'analytics:dashboard:read' } },
       { path: 'settings', name: 'SupplySettings', component: () => import('@/views/supply-chain/settings/IndexView.vue'), meta: { title: '业务设置', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
       ...supplyDomainRoutes,
     ],

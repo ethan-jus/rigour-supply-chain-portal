@@ -51,13 +51,7 @@
           </el-table-column>
           <el-table-column label="商品名称" min-width="240" show-overflow-tooltip>
             <template #default="scope">
-              <div class="record-identity">
-                <span class="record-avatar">存</span>
-                <div class="record-identity-content">
-                  <strong>{{ scope.row.productName || '-' }}</strong>
-                  <small>{{ scope.row.variantCode || scope.row.specificationSnapshot || '默认规格' }}</small>
-                </div>
-              </div>
+              <span class="record-name">{{ scope.row.productName || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column label="规格编码" width="150" show-overflow-tooltip>
@@ -106,7 +100,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   getErpStockBalances,
@@ -119,6 +114,7 @@ import {
 } from '@/utils/business-dictionary'
 
 const loading = ref(false)
+const route = useRoute()
 const currentPage = ref(1)
 const pageSize = ref(20)
 const pageData = ref<ErpInternalPage<ErpStockBalanceView>>({ total: 0, begin: 0, step: 20, items: [] })
@@ -135,6 +131,13 @@ const hasFilter = computed(() =>
 
 onMounted(() => {
   void loadBusinessDictionaries([{ moduleCode: 'COMMON', code: 'PRODUCT_UNIT' }])
+  applyRouteQuery()
+  void loadRows()
+})
+
+watch(() => route.query, () => {
+  if (!applyRouteQuery()) return
+  currentPage.value = 1
   void loadRows()
 })
 
@@ -161,6 +164,25 @@ function resetFilters() {
   filters.warehouseName = ''
   currentPage.value = 1
   void loadRows()
+}
+
+function applyRouteQuery() {
+  let changed = false
+  changed = setFilterValue('productCode', routeText(route.query.productCode)) || changed
+  changed = setFilterValue('productName', routeText(route.query.productName)) || changed
+  changed = setFilterValue('warehouseName', routeText(route.query.warehouseName)) || changed
+  return changed
+}
+
+function setFilterValue(key: keyof typeof filters, value: string) {
+  if (filters[key] === value) return false
+  filters[key] = value
+  return true
+}
+
+function routeText(value: unknown) {
+  const normalized = Array.isArray(value) ? value[0] : value
+  return typeof normalized === 'string' ? normalized.trim() : ''
 }
 
 function handleSizeChange() {

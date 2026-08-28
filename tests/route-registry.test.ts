@@ -171,7 +171,7 @@ describe('数据库导航注册表', () => {
     ]
 
     expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(13)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(82)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(79)
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
@@ -186,6 +186,14 @@ describe('数据库导航注册表', () => {
       .not.toContain('supply.integration.sync-batches')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.integration.external-id-mappings')
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
+      .not.toContain('supply.bi.sync-quality')
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
+      .not.toContain('supply.bi.metrics')
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
+      .not.toContain('supply.bi.dashboards')
+    expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.domainKey === 'bi').map((item) => item.title))
+      .toEqual(['销售与回款看板', '商品销售统计', '销售毛利分析', '回款风险看板', '城市成本看板', '库存风险看板'])
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '同步控制').map((item) => item.title))
       .toEqual(['订货宝同步中心'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
@@ -196,10 +204,29 @@ describe('数据库导航注册表', () => {
       .toEqual(['库存看板', '库存', '入库单', '出库单', '出入库流水', '库存调拨', '库存盘点', '仓库信息'])
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '采购管理').map((item) => item.title))
       .toEqual(['采购申请', '采购订单', '到货与入库', '采购退货', '采购付款单'])
+    expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '客户管理').map((item) => item.title))
+      .toEqual(['客户档案', '客户地址', '门店档案', '客户类型', '归属地区'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.crm.customers.customer-360')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.crm.assignments.external-staff')
-    expect(validateNavigation(navigation)).toHaveLength(95)
+    expect(validateNavigation(navigation)).toHaveLength(92)
+  })
+
+  it('接受已实现的供应链 BI 子看板路由', () => {
+    expect(validateNavigation([
+      menuNode('supply.bi.menu'),
+      node('supply.bi.index', '/supply-chain/bi'),
+      node('supply.bi.sales-collection', '/supply-chain/bi/sales-collection'),
+      node('supply.bi.product-sales', '/supply-chain/bi/product-sales'),
+      node('supply.bi.gross-profit', '/supply-chain/bi/gross-profit'),
+      node('supply.bi.payment-risk', '/supply-chain/bi/payment-risk'),
+      node('supply.bi.city-cost', '/supply-chain/bi/city-cost'),
+      node('supply.bi.inventory-risk', '/supply-chain/bi/inventory-risk'),
+    ])).toHaveLength(8)
+
+    expect(() => validateNavigation([
+      node('supply.bi.sync-quality', '/supply-chain/bi/sync-quality'),
+    ])).toThrow('未注册或路径不一致')
   })
 })

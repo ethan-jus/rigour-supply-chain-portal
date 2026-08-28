@@ -35,7 +35,7 @@
     </div>
 
     <el-card class="filter-card" shadow="never">
-      <el-form :model="filters" inline @submit.prevent="loadCustomers">
+      <el-form :model="filters" inline @submit.prevent="submitSearch">
         <el-form-item label="客户编号">
           <el-input v-model="filters.customerCode" clearable placeholder="系统生成的客户编号" style="width: 180px" />
         </el-form-item>
@@ -81,7 +81,7 @@
           </el-select>
         </el-form-item>
         <el-form-item class="filter-actions">
-          <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
+          <el-button type="primary" :loading="loading" @click="submitSearch">查询</el-button>
           <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
@@ -112,13 +112,7 @@
           </el-table-column>
           <el-table-column prop="customerName" label="客户名称" min-width="240" show-overflow-tooltip>
             <template #default="scope">
-              <div class="record-identity">
-                <span class="record-avatar">客</span>
-                <div class="record-identity-content">
-                  <strong>{{ scope.row.customerName }}</strong>
-                  <small>{{ scope.row.customerCode || '编号由后端生成' }}</small>
-                </div>
-              </div>
+              <span class="record-name">{{ scope.row.customerName || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="contactName" label="联系人" min-width="140" show-overflow-tooltip>
@@ -432,16 +426,37 @@ function resetFilters() {
   void loadCustomers()
 }
 
+function submitSearch() {
+  currentPage.value = 1
+  void loadCustomers()
+}
+
 function applyRouteFilters() {
+  const customerCode = queryText(route.query.customerCode)
+  const customerName = queryText(route.query.customerName)
   const customerTypeCode = queryText(route.query.customerTypeCode)
   const regionCode = queryText(route.query.regionCode)
+  const ownerStaffCode = queryText(route.query.ownerStaffCode)
   let changed = false
+  if (customerCode && filters.customerCode !== customerCode) {
+    filters.customerCode = customerCode
+    changed = true
+  }
+  if (customerName && filters.customerName !== customerName) {
+    filters.customerName = customerName
+    changed = true
+  }
   if (customerTypeCode && filters.customerTypeCode !== customerTypeCode) {
     filters.customerTypeCode = customerTypeCode
     changed = true
   }
   if (regionCode && filters.regionCode !== regionCode) {
     filters.regionCode = regionCode
+    changed = true
+  }
+  if (ownerStaffCode && filters.ownerStaffCode !== ownerStaffCode) {
+    filters.ownerStaffCode = ownerStaffCode
+    ensureStaffOption(ownerStaffCode, ownerStaffCode)
     changed = true
   }
   return changed

@@ -65,13 +65,7 @@
           </el-table-column>
           <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip>
             <template #default="scope">
-              <div class="record-identity">
-                <span class="record-avatar">退</span>
-                <div class="record-identity-content">
-                  <strong>{{ scope.row.customerNameSnapshot || '-' }}</strong>
-                  <small>{{ scope.row.customerCodeSnapshot || '-' }}</small>
-                </div>
-              </div>
+              <span class="record-name">{{ scope.row.customerNameSnapshot || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="refundAmount" label="退款金额" width="140" align="right">
@@ -341,43 +335,6 @@ function errorMessage(reason: unknown, fallback: string): string {
   display: flex;
   justify-content: flex-end;
   padding-top: 12px;
-}
-
-.record-identity {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.record-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: #fff1f2;
-  color: #e11d48;
-  font-weight: 700;
-}
-
-.record-identity-content {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  line-height: 1.35;
-}
-
-.record-identity-content strong,
-.record-identity-content small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.record-identity-content small {
-  color: #64748b;
 }
 
 .detail-shell {

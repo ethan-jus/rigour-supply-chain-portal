@@ -298,26 +298,53 @@
             </el-table>
           </el-tab-pane>
           <el-tab-pane label="商品图片">
-            <el-table class="supply-scroll-table detail-table" :data="detail.images" max-height="320" size="small">
-              <el-table-column label="图片" width="96">
-                <template #default="scope">
-                  <el-image
-                    v-if="scope.row.imageUrl"
-                    class="product-thumb"
-                    :src="scope.row.imageUrl"
-                    fit="cover"
-                    preview-teleported
-                    :preview-src-list="[scope.row.imageUrl]"
-                  />
-                  <span v-else>-</span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="imageKey" label="图片标识" min-width="360" show-overflow-tooltip />
-              <el-table-column label="图片类型" width="120">
-                <template #default="scope">{{ imageTypeLabel(scope.row.imageTypeCode) }}</template>
-              </el-table-column>
-              <el-table-column prop="ordinal" label="排序" width="90" />
-            </el-table>
+            <div v-if="detail.images.length" class="product-image-gallery">
+              <div class="product-image-gallery__stage">
+                <el-image
+                  v-if="mainDetailImage?.imageUrl"
+                  class="product-image-gallery__primary"
+                  :src="mainDetailImage.imageUrl"
+                  fit="cover"
+                  preview-teleported
+                  :preview-src-list="detailPreviewUrls"
+                  :initial-index="detailPreviewIndex(mainDetailImage.imageUrl)"
+                />
+                <div v-else class="product-image-gallery__primary product-image-gallery__primary--empty">
+                  暂无图片
+                </div>
+                <div v-if="mainDetailImage" class="product-image-gallery__meta">
+                  <el-tag size="small" effect="dark" :type="imageTagType(mainDetailImage.imageTypeCode)">
+                    {{ imageTypeLabel(mainDetailImage.imageTypeCode) }}
+                  </el-tag>
+                  <span>#{{ mainDetailImage.ordinal ?? 0 }}</span>
+                </div>
+              </div>
+              <div class="product-image-gallery__grid">
+                <div
+                  v-for="image in detail.images"
+                  :key="image.imageKey || `${image.imageTypeCode}-${image.ordinal}`"
+                  class="product-image-tile"
+                >
+                  <div class="product-image-tile__media">
+                    <el-image
+                      v-if="image.imageUrl"
+                      class="product-image-tile__image"
+                      :src="image.imageUrl"
+                      fit="cover"
+                      preview-teleported
+                      :preview-src-list="detailPreviewUrls"
+                      :initial-index="detailPreviewIndex(image.imageUrl)"
+                    />
+                    <span v-else class="product-image-tile__empty">暂无图片</span>
+                  </div>
+                  <el-tag class="product-image-tile__type" size="small" :type="imageTagType(image.imageTypeCode)">
+                    {{ imageTypeLabel(image.imageTypeCode) }}
+                  </el-tag>
+                  <span class="product-image-tile__ordinal">#{{ image.ordinal ?? 0 }}</span>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无商品图片" :image-size="64" />
           </el-tab-pane>
         </el-tabs>
       </div>
@@ -344,24 +371,15 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="商品分类">
-              <el-select
+              <ProductCategorySelect
                 v-model="form.categoryId"
-                filterable
-                remote
-                clearable
-                reserve-keyword
-                placeholder="搜索分类"
-                :remote-method="searchCategories"
+                :categories="categoryOptions"
+                :empty-value="null"
                 :loading="categoryLoading"
+                placeholder="搜索分类"
                 style="width: 100%"
-              >
-                <el-option
-                  v-for="item in categoryOptions"
-                  :key="item.id"
-                  :label="item.categoryName"
-                  :value="item.id"
-                />
-              </el-select>
+                @visible-change="handleCategoryVisibleChange"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -608,7 +626,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createErpManagedProduct,
@@ -628,7 +647,6 @@ import {
 import {
   getErpInventoryWarehouses,
   getErpProductBrands,
-  getErpProductCategories,
   getErpProductTags,
   type ErpInternalWarehouseView,
   type ErpProductBrandView,
@@ -640,6 +658,8 @@ import {
   businessDictionaryOptions,
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
+import ProductCategorySelect from '@/components/supply/ProductCategorySelect.vue'
+import { loadAllErpProductCategories } from '@/utils/product-categories'
 
 interface ProductFilters {
   productCode: string
@@ -694,6 +714,7 @@ const saleTypeOptions = computed(() => businessDictionaryOptions('ERP', 'PRODUCT
 const unitOptions = computed(() => businessDictionaryOptions('COMMON', 'PRODUCT_UNIT'))
 
 const loading = ref(false)
+const route = useRoute()
 const saving = ref(false)
 const detailVisible = ref(false)
 const editorVisible = ref(false)
@@ -723,12 +744,14 @@ const categoryLoading = ref(false)
 const brandLoading = ref(false)
 const warehouseLoading = ref(false)
 
-const mainDetailImageUrl = computed(() => {
+const mainDetailImage = computed<ErpManagedProductImage | null>(() => {
   const images = detail.value?.images ?? []
-  return images.find((item) => item.imageTypeCode === 'MAIN')?.imageUrl
-    ?? images.find((item) => item.imageUrl)?.imageUrl
+  return images.find((item) => item.imageTypeCode === 'MAIN')
+    ?? images.find((item) => item.imageUrl)
+    ?? images[0]
     ?? null
 })
+const mainDetailImageUrl = computed(() => mainDetailImage.value?.imageUrl ?? null)
 const detailPreviewUrls = computed(() => (
   (detail.value?.images ?? [])
     .map((image) => image.imageUrl)
@@ -747,6 +770,13 @@ onMounted(() => {
     { moduleCode: 'ERP', code: 'PRODUCT_SHELF_STATUS' },
   ])
   void loadReferenceOptions()
+  applyRouteQuery()
+  void loadRows()
+})
+
+watch(() => route.query, () => {
+  if (!applyRouteQuery()) return
+  currentPage.value = 1
   void loadRows()
 })
 
@@ -778,16 +808,18 @@ async function loadReferenceOptions() {
   ])
 }
 
-async function searchCategories(query: string) {
+async function searchCategories(_query = '') {
   categoryLoading.value = true
   try {
-    categoryOptions.value = (await getErpProductCategories({
-      begin: 0,
-      step: 50,
-      categoryName: empty(query),
-    })).items
+    categoryOptions.value = await loadAllErpProductCategories()
   } finally {
     categoryLoading.value = false
+  }
+}
+
+function handleCategoryVisibleChange(visible: boolean) {
+  if (visible && !categoryOptions.value.length && !categoryLoading.value) {
+    void searchCategories()
   }
 }
 
@@ -829,6 +861,26 @@ async function resetFilters() {
   filters.submitStatusCode = ''
   currentPage.value = 1
   await loadRows()
+}
+
+function applyRouteQuery() {
+  let changed = false
+  changed = setFilterValue('productCode', routeText(route.query.productCode)) || changed
+  changed = setFilterValue('productName', routeText(route.query.productName)) || changed
+  changed = setFilterValue('shelfStatusCode', routeText(route.query.shelfStatusCode)) || changed
+  changed = setFilterValue('submitStatusCode', routeText(route.query.submitStatusCode)) || changed
+  return changed
+}
+
+function setFilterValue(key: keyof ProductFilters, value: string) {
+  if (filters[key] === value) return false
+  filters[key] = value
+  return true
+}
+
+function routeText(value: unknown) {
+  const normalized = Array.isArray(value) ? value[0] : value
+  return typeof normalized === 'string' ? normalized.trim() : ''
 }
 
 async function handleSizeChange() {
@@ -1112,6 +1164,18 @@ function imageTypeLabel(value: string | null | undefined) {
   return value || '-'
 }
 
+function imageTagType(value: string | null | undefined) {
+  if (value === 'MAIN') return 'success'
+  if (value === 'DETAIL') return 'info'
+  return 'primary'
+}
+
+function detailPreviewIndex(url: string | null | undefined) {
+  if (!url) return 0
+  const index = detailPreviewUrls.value.indexOf(url)
+  return index >= 0 ? index : 0
+}
+
 function empty(value: string | null | undefined) {
   const normalized = value?.trim()
   return normalized || undefined
@@ -1199,6 +1263,104 @@ function errorMessage(reason: unknown, fallback: string) {
   justify-content: center;
   color: $color-text-placeholder;
   font-size: 10px;
+}
+
+.product-image-gallery {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  gap: $spacing-lg;
+  align-items: start;
+}
+
+.product-image-gallery__stage {
+  position: relative;
+  width: 100%;
+}
+
+.product-image-gallery__primary {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid $color-border-base;
+  border-radius: $border-radius-base;
+  background: $color-bg-muted;
+}
+
+.product-image-gallery__primary--empty,
+.product-image-tile__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $color-text-placeholder;
+}
+
+.product-image-gallery__meta {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: $border-radius-base;
+  background: rgb(15 23 42 / 72%);
+  color: #fff;
+  font-size: $font-size-xs;
+  font-variant-numeric: tabular-nums;
+}
+
+.product-image-gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 132px));
+  gap: 12px;
+}
+
+.product-image-tile {
+  position: relative;
+  min-width: 0;
+}
+
+.product-image-tile__media {
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid $color-border-base;
+  border-radius: $border-radius-base;
+  background: $color-bg-muted;
+}
+
+.product-image-tile__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.product-image-tile__type {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+.product-image-tile__ordinal {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  min-width: 28px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgb(15 23 42 / 72%);
+  color: #fff;
+  font-size: $font-size-xs;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.product-image-tile__empty {
+  width: 100%;
+  height: 100%;
+  font-size: $font-size-xs;
 }
 
 .product-identity-content {
@@ -1384,5 +1546,19 @@ function errorMessage(reason: unknown, fallback: string) {
 .variant-actions {
   display: flex;
   align-items: center;
+}
+
+@media (max-width: 720px) {
+  .product-image-gallery {
+    grid-template-columns: 1fr;
+  }
+
+  .product-image-gallery__stage {
+    max-width: 260px;
+  }
+
+  .product-image-gallery__grid {
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  }
 }
 </style>

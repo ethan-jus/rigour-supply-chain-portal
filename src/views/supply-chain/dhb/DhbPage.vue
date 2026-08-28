@@ -35,13 +35,156 @@
         <el-input-number
           v-model="maxPages"
           :min="1"
-          :max="500"
+          :max="100"
           :step="10"
           controls-position="right"
           aria-label="最大页数"
         />
-        <el-button type="primary" :loading="syncing" @click="runUnifiedSync">统一同步</el-button>
+        <el-button type="primary" :loading="syncing && runningStage === 'full'" @click="runUnifiedSync">
+          统一同步
+        </el-button>
       </div>
+    </section>
+
+    <section class="stage-sync">
+      <div class="stage-sync__heading">
+        <span>分段执行</span>
+        <strong>重同步验收按依赖顺序逐段推进</strong>
+      </div>
+      <div class="stage-sync__actions">
+        <el-button
+          v-for="stage in syncStages"
+          :key="stage.key"
+          :loading="syncing && runningStage === stage.key"
+          :disabled="syncing && runningStage !== stage.key"
+          @click="runStageSync(stage)"
+        >
+          {{ stage.label }}
+        </el-button>
+      </div>
+    </section>
+
+    <section class="issue-workbench">
+      <div class="issue-workbench__heading">
+        <div>
+          <span>待处理闭环</span>
+          <h2>OPEN 异常按统一规则处理</h2>
+          <p>后端负责归因和动作分类；页面只展示可处理入口，不按错误码自行猜业务含义。</p>
+        </div>
+        <el-button :icon="Refresh" :loading="issueLoading" @click="loadIssueWorkbench">
+          刷新
+        </el-button>
+      </div>
+
+      <div class="issue-metrics">
+        <div>
+          <span>分组</span>
+          <strong>{{ issueGroups.length }}</strong>
+        </div>
+        <div>
+          <span>来源对象</span>
+          <strong>{{ issueSummary.uniqueSources }}</strong>
+        </div>
+        <div>
+          <span>需裁决</span>
+          <strong>{{ issueSummary.manualSources }}</strong>
+        </div>
+        <div>
+          <span>可重放</span>
+          <strong>{{ issueSummary.replaySources }}</strong>
+        </div>
+      </div>
+
+      <div v-if="issueGroups.length" class="issue-group-list" aria-label="待处理问题分组">
+        <button
+          type="button"
+          :class="['issue-group', { 'issue-group--active': activeIssueGroupKey === ALL_ISSUE_GROUPS }]"
+          @click="activeIssueGroupKey = ALL_ISSUE_GROUPS"
+        >
+          <span>全部</span>
+          <strong>{{ issueSummary.uniqueSources }}</strong>
+        </button>
+        <button
+          v-for="group in issueGroups"
+          :key="issueGroupKey(group)"
+          type="button"
+          :class="['issue-group', { 'issue-group--active': activeIssueGroupKey === issueGroupKey(group) }]"
+          @click="activeIssueGroupKey = issueGroupKey(group)"
+        >
+          <span>{{ group.title }}</span>
+          <strong>{{ group.uniqueSourceCount }}</strong>
+          <small>{{ actionLabel(group.actionType) }}</small>
+        </button>
+      </div>
+
+      <el-empty
+        v-if="!issueLoading && !visibleIssueItems.length"
+        description="当前没有待处理的订货宝同步异常"
+      />
+      <el-table
+        v-else
+        v-loading="issueLoading"
+        :data="visibleIssueItems"
+        border
+        class="issue-table"
+        max-height="420"
+      >
+        <el-table-column prop="sourceObjectType" label="来源对象" width="140" />
+        <el-table-column prop="sourceId" label="来源单号" min-width="160" show-overflow-tooltip />
+        <el-table-column label="处理类型" width="140">
+          <template #default="scope">
+            <el-tag effect="plain">{{ actionLabel(scope.row.actionType) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="errorCode" label="错误码" min-width="220" show-overflow-tooltip />
+        <el-table-column label="候选入库单" min-width="220">
+          <template #default="scope">
+            <div v-if="scope.row.candidateSourceIds.length" class="candidate-list">
+              <el-tag
+                v-for="candidate in scope.row.candidateSourceIds"
+                :key="candidate"
+                effect="light"
+              >
+                {{ candidate }}
+              </el-tag>
+            </div>
+            <span v-else class="muted-text">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="handlingAdvice" label="建议处理" min-width="260" show-overflow-tooltip />
+        <el-table-column label="更新时间" width="170">
+          <template #default="scope">
+            {{ formatTime(scope.row.updatedAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="180">
+          <template #default="scope">
+            <div class="issue-actions">
+              <el-button
+                v-if="scope.row.manualResolutionRequired"
+                size="small"
+                type="primary"
+                :icon="Check"
+                @click="openResolution(scope.row)"
+              >
+                裁决
+              </el-button>
+              <el-button
+                v-if="scope.row.replaySupported"
+                size="small"
+                :icon="Refresh"
+                :loading="replayingSourceId === scope.row.sourceId"
+                @click="replayIssue(scope.row)"
+              >
+                重放
+              </el-button>
+              <span v-if="!scope.row.manualResolutionRequired && !scope.row.replaySupported" class="issue-action-hint">
+                按建议处理
+              </span>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
     </section>
 
     <section v-if="latestResult" class="sync-result">
@@ -56,7 +199,7 @@
         </div>
         <div>
           <span>耗时</span>
-          <strong>{{ latestResult.elapsedSeconds.toFixed(1) }} 秒</strong>
+          <strong>{{ syncDurationLabel }}</strong>
         </div>
       </div>
       <el-table :data="latestSteps" border class="result-table" max-height="360">
@@ -110,13 +253,86 @@
         </dl>
       </aside>
     </section>
+
+    <el-dialog
+      v-model="resolutionDialogVisible"
+      title="调拨入库人工裁决"
+      width="680px"
+      append-to-body
+    >
+      <div v-if="selectedIssue" class="resolution-dialog">
+        <dl class="resolution-summary">
+          <div>
+            <dt>来源出库单</dt>
+            <dd>{{ selectedIssue.sourceId }}</dd>
+          </div>
+          <div>
+            <dt>错误码</dt>
+            <dd>{{ selectedIssue.errorCode || '-' }}</dd>
+          </div>
+        </dl>
+
+        <label class="resolution-label" for="dhb-resolution-receipt">选择正确入库单</label>
+        <el-select
+          id="dhb-resolution-receipt"
+          v-model="selectedReceiptId"
+          filterable
+          class="resolution-select"
+          placeholder="选择订货宝入库单"
+        >
+          <el-option
+            v-for="candidate in selectedIssue.candidateSourceIds"
+            :key="candidate"
+            :label="candidate"
+            :value="candidate"
+          />
+        </el-select>
+
+        <div v-if="candidateReceiptRows.length" class="candidate-detail-list">
+          <div v-for="receipt in candidateReceiptRows" :key="receipt.sourceId || receipt.number">
+            <strong>{{ receipt.number || receipt.sourceId }}</strong>
+            <span>{{ receipt.warehouseName || '-' }} · {{ formatTime(receipt.storageAt) }}</span>
+          </div>
+        </div>
+
+        <label class="resolution-label" for="dhb-resolution-reason">裁决原因</label>
+        <el-input
+          id="dhb-resolution-reason"
+          v-model="resolutionReason"
+          type="textarea"
+          :rows="3"
+          placeholder="例如：核对调拨明细、仓库和入库时间后确认"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="resolutionDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="resolutionSubmitting" @click="submitManualResolution">
+          保存裁决并重放
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { syncDhbOrchestration, type DhbSyncOrchestrationResult, type DhbSyncOrchestrationStatus } from '@/api'
+import { Check, Refresh } from '@element-plus/icons-vue'
+import {
+  createDhbManualResolution,
+  getDhbOpenIssues,
+  getDhbSyncTasks,
+  queryDhbWarehousingReceipts,
+  replayDhbOrderObject,
+  syncDhbOrchestration,
+  type DhbSyncOpenIssueGroup,
+  type DhbSyncOpenIssueItem,
+  type DhbSyncOrchestrationCommand,
+  type DhbSyncOrchestrationResult,
+  type DhbSyncOrchestrationStatus,
+  type DhbSyncTask,
+  type DhbWarehousingReceipt,
+} from '@/api'
 
 interface SyncRule {
   title: string
@@ -131,11 +347,36 @@ interface SyncSection {
   rules: SyncRule[]
 }
 
+interface SyncStage {
+  key: string
+  label: string
+  command: Omit<DhbSyncOrchestrationCommand, 'maxPages'>
+}
+
 const activeSection = ref('overview')
 const maxPages = ref(100)
 const syncing = ref(false)
+const runningStage = ref('')
 const syncBusyMessage = ref('')
 const latestResult = ref<DhbSyncOrchestrationResult | null>(null)
+const issueLoading = ref(false)
+const issueGroups = ref<DhbSyncOpenIssueGroup[]>([])
+const syncTasks = ref<DhbSyncTask[]>([])
+const activeIssueGroupKey = ref('__all__')
+const resolutionDialogVisible = ref(false)
+const resolutionSubmitting = ref(false)
+const replayingSourceId = ref('')
+const selectedIssue = ref<IssueItemWithAction | null>(null)
+const selectedReceiptId = ref('')
+const resolutionReason = ref('')
+const receiptDetails = ref<Record<string, DhbWarehousingReceipt>>({})
+
+const ALL_ISSUE_GROUPS = '__all__'
+
+type IssueItemWithAction = DhbSyncOpenIssueItem & {
+  groupTitle: string
+  actionType: string
+}
 
 const sections: SyncSection[] = [
   {
@@ -216,18 +457,128 @@ const boundaryRules = [
   { label: '页面动作', value: '默认只提供统一同步；单对象修复放在运维排障链路中逐步补齐' },
 ]
 
+const syncStages: SyncStage[] = [
+  {
+    key: 'dictionary-iam',
+    label: '1 字典/IAM',
+    command: {
+      includeDictionary: true,
+      includeIam: true,
+      includeErp: false,
+      includeCrm: false,
+      includeOrder: false,
+    },
+  },
+  {
+    key: 'erp-product',
+    label: '2 ERP商品',
+    command: {
+      includeDictionary: false,
+      includeIam: false,
+      includeErp: true,
+      includeErpProduct: true,
+      includeErpSupply: false,
+      includeCrm: false,
+      includeOrder: false,
+    },
+  },
+  {
+    key: 'crm',
+    label: '3 CRM客户',
+    command: {
+      includeDictionary: false,
+      includeIam: false,
+      includeErp: false,
+      includeCrm: true,
+      includeOrder: false,
+    },
+  },
+  {
+    key: 'erp-supply',
+    label: '4 ERP供应链',
+    command: {
+      includeDictionary: false,
+      includeIam: false,
+      includeErp: true,
+      includeErpProduct: false,
+      includeErpSupply: true,
+      includeCrm: false,
+      includeOrder: false,
+    },
+  },
+  {
+    key: 'order',
+    label: '5 Order订单',
+    command: {
+      includeDictionary: false,
+      includeIam: false,
+      includeErp: false,
+      includeCrm: false,
+      includeOrder: true,
+    },
+  },
+]
+
 const latestSteps = computed(() =>
   latestResult.value?.tenants.flatMap((tenant) => tenant.steps) || [],
 )
 
+const visibleIssueItems = computed<IssueItemWithAction[]>(() => {
+  const selectedKey = activeIssueGroupKey.value
+  return issueGroups.value
+    .filter((group) => selectedKey === ALL_ISSUE_GROUPS || issueGroupKey(group) === selectedKey)
+    .flatMap((group) =>
+      group.items.map((item) => ({
+        ...item,
+        groupTitle: group.title,
+        actionType: group.actionType,
+      })),
+    )
+})
+
+const issueSummary = computed(() => {
+  const items = issueGroups.value.flatMap((group) => group.items)
+  return {
+    uniqueSources: issueGroups.value.reduce((sum, group) => sum + group.uniqueSourceCount, 0),
+    manualSources: items.filter((item) => item.manualResolutionRequired).length,
+    replaySources: items.filter((item) => item.replaySupported).length,
+  }
+})
+
+const candidateReceiptRows = computed(() => {
+  const issue = selectedIssue.value
+  if (!issue) return []
+  return issue.candidateSourceIds
+    .map((sourceId) => receiptDetails.value[sourceId])
+    .filter((receipt): receipt is DhbWarehousingReceipt => Boolean(receipt))
+})
+
+const syncDurationLabel = computed(() => {
+  const result = latestResult.value
+  if (!result?.startedAt || !result.finishedAt) return '-'
+  const startedAt = new Date(result.startedAt).getTime()
+  const finishedAt = new Date(result.finishedAt).getTime()
+  if (Number.isNaN(startedAt) || Number.isNaN(finishedAt) || finishedAt < startedAt) return '-'
+  return `${((finishedAt - startedAt) / 1000).toFixed(1)} 秒`
+})
+
 async function runUnifiedSync() {
+  await runSync('full', { maxPages: maxPages.value }, '订货宝统一同步已完成')
+}
+
+async function runStageSync(stage: SyncStage) {
+  await runSync(stage.key, { ...stage.command, maxPages: maxPages.value }, `${stage.label}同步已完成`)
+}
+
+async function runSync(stageKey: string, command: DhbSyncOrchestrationCommand, successMessage: string) {
   syncing.value = true
+  runningStage.value = stageKey
   syncBusyMessage.value = ''
   try {
-    const result = await syncDhbOrchestration({ maxPages: maxPages.value })
+    const result = await syncDhbOrchestration(command)
     latestResult.value = result
     if (result.status === 'SUCCEEDED') {
-      ElMessage.success('订货宝统一同步已完成')
+      ElMessage.success(successMessage)
     } else {
       ElMessage.warning('订货宝统一同步未全部成功，请查看结果明细')
     }
@@ -240,7 +591,145 @@ async function runUnifiedSync() {
     ElMessage.error(errorMessage(reason, '订货宝统一同步失败'))
   } finally {
     syncing.value = false
+    runningStage.value = ''
   }
+}
+
+async function loadIssueWorkbench() {
+  issueLoading.value = true
+  try {
+    const [groups, tasks] = await Promise.all([getDhbOpenIssues(500), getDhbSyncTasks()])
+    issueGroups.value = groups
+    syncTasks.value = tasks
+    if (activeIssueGroupKey.value !== ALL_ISSUE_GROUPS
+      && !groups.some((group) => issueGroupKey(group) === activeIssueGroupKey.value)) {
+      activeIssueGroupKey.value = ALL_ISSUE_GROUPS
+    }
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason, '订货宝待处理闭环加载失败'))
+  } finally {
+    issueLoading.value = false
+  }
+}
+
+function openResolution(issue: IssueItemWithAction) {
+  selectedIssue.value = issue
+  selectedReceiptId.value = issue.candidateSourceIds[0] || ''
+  resolutionReason.value = ''
+  resolutionDialogVisible.value = true
+  void loadCandidateReceipts(issue)
+}
+
+async function loadCandidateReceipts(issue: IssueItemWithAction) {
+  if (!issue.connectorId || !issue.candidateSourceIds.length) return
+  try {
+    const page = await queryDhbWarehousingReceipts(issue.connectorId, 0, 200)
+    const candidates = new Set(issue.candidateSourceIds)
+    const nextDetails: Record<string, DhbWarehousingReceipt> = {}
+    for (const receipt of page.items || []) {
+      const keys = [receipt.sourceId, receipt.number].filter((value): value is string => Boolean(value))
+      for (const key of keys) {
+        if (candidates.has(key)) nextDetails[key] = receipt
+      }
+    }
+    receiptDetails.value = { ...receiptDetails.value, ...nextDetails }
+  } catch (reason) {
+    ElMessage.warning(errorMessage(reason, '候选入库单详情加载失败，可继续按候选单号裁决'))
+  }
+}
+
+async function submitManualResolution() {
+  const issue = selectedIssue.value
+  if (!issue) return
+  if (!issue.connectorId) {
+    ElMessage.warning('当前异常缺少连接器ID，不能保存裁决')
+    return
+  }
+  if (!selectedReceiptId.value) {
+    ElMessage.warning('请先选择正确的订货宝入库单')
+    return
+  }
+  resolutionSubmitting.value = true
+  try {
+    await createDhbManualResolution({
+      connectorId: issue.connectorId,
+      resolutionType: 'TRANSFER_INBOUND_RECEIPT',
+      sourceObjectType: issue.sourceObjectType,
+      sourceId: issue.sourceId,
+      selectedSourceObjectType: issue.candidateSourceObjectType || 'WAREHOUSING_RECEIPT',
+      selectedSourceId: selectedReceiptId.value,
+      evidence: {
+        candidateSourceIds: issue.candidateSourceIds,
+        errorCode: issue.errorCode,
+        runId: issue.runId,
+      },
+      reason: resolutionReason.value.trim() || '人工确认调拨出库与入库关系',
+    })
+    resolutionDialogVisible.value = false
+    ElMessage.success('人工裁决已保存')
+    await replayIssue(issue)
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason, '人工裁决保存失败'))
+  } finally {
+    resolutionSubmitting.value = false
+  }
+}
+
+async function replayIssue(issue: IssueItemWithAction) {
+  const task = orderSyncTask(issue)
+  if (!task) {
+    ElMessage.warning('未找到启用的订货宝 Order 同步任务，不能单对象重放')
+    return
+  }
+  replayingSourceId.value = issue.sourceId
+  try {
+    const result = await replayDhbOrderObject(task.id, {
+      sourceObjectType: issue.sourceObjectType,
+      sourceId: issue.sourceId,
+    })
+    if (result.status === 'SUCCEEDED') {
+      ElMessage.success('单对象重放已完成')
+    } else {
+      ElMessage.warning(result.errorMessage || '单对象重放未完全成功，请查看同步日志')
+    }
+    await loadIssueWorkbench()
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason, '单对象重放失败'))
+  } finally {
+    replayingSourceId.value = ''
+  }
+}
+
+function orderSyncTask(issue: DhbSyncOpenIssueItem): DhbSyncTask | null {
+  return syncTasks.value.find((task) =>
+    task.objectType === 'ORDER'
+    && task.status !== 'PAUSED'
+    && (!issue.connectorId || task.connectorId === issue.connectorId),
+  ) || null
+}
+
+function issueGroupKey(group: DhbSyncOpenIssueGroup) {
+  return [group.category, group.sourceObjectType, group.errorCode || ''].join('|')
+}
+
+function actionLabel(actionType: string) {
+  const labels: Record<string, string> = {
+    MANUAL_RESOLUTION: '人工裁决',
+    REPLAY_AFTER_CODE_FIX: '直接重放',
+    FIX_MAPPING: '补映射',
+    FIX_SOURCE_TIME: '补来源时间',
+    REPLAY_AFTER_MAPPING: '映射后重放',
+    CODE_REPAIR: '修代码/源字段',
+    INVESTIGATE: '排查',
+  }
+  return labels[actionType] || actionType || '-'
+}
+
+function formatTime(value: string | null | undefined) {
+  if (!value) return '-'
+  const timestamp = new Date(value)
+  if (Number.isNaN(timestamp.getTime())) return '-'
+  return timestamp.toLocaleString('zh-CN', { hour12: false })
 }
 
 function isSyncBusyError(reason: unknown): boolean {
@@ -254,6 +743,8 @@ function statusLabel(status: DhbSyncOrchestrationStatus | string) {
     PENDING: '待执行',
     RUNNING: '执行中',
     SUCCEEDED: '成功',
+    SUCCEEDED_WITH_WARNINGS: '有警告',
+    PARTIAL: '部分成功',
     FAILED: '失败',
     SKIPPED: '已跳过',
   }
@@ -263,6 +754,7 @@ function statusLabel(status: DhbSyncOrchestrationStatus | string) {
 function statusTag(status: DhbSyncOrchestrationStatus | string): 'success' | 'info' | 'warning' | 'danger' {
   if (status === 'SUCCEEDED') return 'success'
   if (status === 'FAILED') return 'danger'
+  if (status === 'PARTIAL' || status === 'SUCCEEDED_WITH_WARNINGS') return 'warning'
   if (status === 'RUNNING') return 'warning'
   return 'info'
 }
@@ -276,7 +768,26 @@ function errorMessage(reason: unknown, fallback: string): string {
   return fallback
 }
 
-defineExpose({ activeSectionDetail, sections, boundaryRules, latestSteps, runUnifiedSync })
+onMounted(() => {
+  void loadIssueWorkbench()
+})
+
+defineExpose({
+  activeSectionDetail,
+  sections,
+  boundaryRules,
+  latestSteps,
+  syncStages,
+  issueGroups,
+  visibleIssueItems,
+  issueSummary,
+  runUnifiedSync,
+  runStageSync,
+  loadIssueWorkbench,
+  openResolution,
+  submitManualResolution,
+  replayIssue,
+})
 </script>
 
 <style scoped lang="scss">
@@ -321,7 +832,8 @@ defineExpose({ activeSectionDetail, sections, boundaryRules, latestSteps, runUni
 }
 
 .sync-operation,
-.sync-result {
+.sync-result,
+.issue-workbench {
   border: 1px solid var(--supply-border);
   border-radius: var(--supply-radius);
   background: var(--supply-surface);
@@ -333,6 +845,218 @@ defineExpose({ activeSectionDetail, sections, boundaryRules, latestSteps, runUni
   justify-content: space-between;
   gap: 18px;
   padding: 16px 18px;
+}
+
+.stage-sync {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: var(--supply-surface);
+}
+
+.stage-sync__heading {
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.stage-sync__heading span {
+  color: var(--supply-primary);
+  font-size: $font-size-xs;
+  font-weight: 700;
+}
+
+.stage-sync__heading strong {
+  color: var(--supply-text);
+  font-size: $font-size-sm;
+}
+
+.stage-sync__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.issue-workbench {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.issue-workbench__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.issue-workbench__heading span {
+  color: var(--supply-primary);
+  font-size: $font-size-xs;
+  font-weight: 700;
+}
+
+.issue-workbench__heading h2 {
+  margin: 6px 0;
+  color: var(--supply-text);
+  font-size: $font-size-lg;
+  font-weight: 700;
+}
+
+.issue-workbench__heading p {
+  margin: 0;
+  color: var(--supply-text-muted);
+  font-size: $font-size-sm;
+  line-height: 1.55;
+}
+
+.issue-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.issue-metrics div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: var(--supply-surface-subtle);
+}
+
+.issue-metrics span,
+.issue-group small {
+  display: block;
+  color: var(--supply-text-muted);
+  font-size: $font-size-xs;
+}
+
+.issue-metrics strong,
+.issue-group strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--supply-text);
+  font-size: $font-size-lg;
+  line-height: 1.2;
+}
+
+.issue-group-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.issue-group {
+  display: grid;
+  min-width: 150px;
+  max-width: 220px;
+  gap: 4px;
+  padding: 9px 11px;
+  cursor: pointer;
+  text-align: left;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: #fff;
+}
+
+.issue-group--active {
+  border-color: var(--supply-primary);
+  background: var(--supply-surface-subtle);
+}
+
+.issue-group span {
+  overflow: hidden;
+  color: var(--supply-text);
+  font-size: $font-size-sm;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issue-table {
+  width: 100%;
+}
+
+.candidate-list,
+.issue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.issue-action-hint,
+.muted-text {
+  color: var(--supply-text-muted);
+  font-size: $font-size-xs;
+}
+
+.resolution-dialog {
+  display: grid;
+  gap: 14px;
+}
+
+.resolution-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.resolution-summary div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: var(--supply-surface-subtle);
+}
+
+.resolution-summary dt,
+.resolution-label {
+  color: var(--supply-text);
+  font-size: $font-size-xs;
+  font-weight: 700;
+}
+
+.resolution-summary dd {
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: var(--supply-text);
+  font-size: $font-size-sm;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resolution-select {
+  width: 100%;
+}
+
+.candidate-detail-list {
+  display: grid;
+  gap: 8px;
+}
+
+.candidate-detail-list div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+}
+
+.candidate-detail-list span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--supply-text-muted);
+  font-size: $font-size-xs;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sync-busy-alert {
@@ -513,17 +1237,31 @@ defineExpose({ activeSectionDetail, sections, boundaryRules, latestSteps, runUni
 
 @media (max-width: 720px) {
   .sync-heading,
-  .sync-operation {
+  .sync-operation,
+  .stage-sync,
+  .issue-workbench__heading {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .operation-actions {
+  .operation-actions,
+  .stage-sync__actions {
     width: 100%;
     justify-content: flex-start;
   }
 
   .result-summary {
     grid-template-columns: 1fr;
+  }
+
+  .issue-metrics,
+  .resolution-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .issue-group {
+    max-width: none;
+    flex: 1 1 150px;
   }
 }
 </style>

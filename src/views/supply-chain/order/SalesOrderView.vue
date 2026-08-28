@@ -42,11 +42,36 @@
         <el-form-item label="来源单号">
           <el-input v-model="filters.sourceOrderNo" clearable placeholder="订货宝订单号" style="width: 180px" />
         </el-form-item>
+        <el-form-item label="订货宝状态">
+          <el-select v-model="filters.sourceStatusCode" clearable placeholder="全部来源状态" style="width: 150px">
+            <el-option v-for="item in sourceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="客户名称">
           <el-input v-model="filters.customerName" clearable placeholder="客户/门店名称" style="width: 200px" />
         </el-form-item>
         <el-form-item label="联系电话">
           <el-input v-model="filters.contactPhone" clearable placeholder="联系人电话" style="width: 160px" />
+        </el-form-item>
+        <el-form-item label="归属地区">
+          <el-select v-model="filters.regionCode" clearable filterable placeholder="全部地区" style="width: 150px">
+            <el-option v-for="item in regionOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="归属销售">
+          <el-select
+            v-model="filters.ownerStaffCode"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            placeholder="搜索销售"
+            :remote-method="searchSalesStaff"
+            :loading="staffLoading"
+            style="width: 160px"
+          >
+            <el-option v-for="item in staffOptions" :key="item.staffCode" :label="item.staffName" :value="item.staffCode" />
+          </el-select>
         </el-form-item>
         <el-form-item label="订单状态">
           <el-select v-model="filters.orderStatusCode" clearable placeholder="全部订单状态" style="width: 150px">
@@ -104,8 +129,33 @@
           <el-table-column prop="sourceOrderNo" label="订货宝单号" width="180" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.sourceOrderNo || '-' }}</template>
           </el-table-column>
+          <el-table-column label="制单人" width="140" show-overflow-tooltip>
+            <template #default="scope">{{ sourceCreatorLabel(scope.row) }}</template>
+          </el-table-column>
+          <el-table-column label="订货宝状态" width="130">
+            <template #default="scope">
+              <el-tag v-if="scope.row.sourceStatusCode" effect="light">
+                {{ dhbOrderStatusLabel(scope.row.sourceStatusCode) }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
           <el-table-column label="下单时间" width="170">
             <template #default="scope">{{ formatTime(scope.row.orderDate) }}</template>
+          </el-table-column>
+          <el-table-column label="付款时间" width="170">
+            <template #default="scope">{{ formatTime(scope.row.paymentTime) }}</template>
+          </el-table-column>
+          <el-table-column label="发货时间" width="170">
+            <template #default="scope">{{ formatTime(scope.row.shipmentTime) }}</template>
+          </el-table-column>
+          <el-table-column label="发货状态" width="120">
+            <template #default="scope">
+              <el-tag v-if="scope.row.shipmentStatusCode" :type="shipmentStatusTag(scope.row.shipmentStatusCode)" effect="light">
+                {{ salesShipmentStatusLabel(scope.row.shipmentStatusCode) }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
           </el-table-column>
           <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip />
           <el-table-column prop="contactPhoneSnapshot" label="联系电话" min-width="150" show-overflow-tooltip>
@@ -121,12 +171,12 @@
           </el-table-column>
           <el-table-column label="订单状态" width="120">
             <template #default="scope">
-              <el-tag :type="orderStatusTag(scope.row.orderStatusCode)" effect="light">{{ statusLabel(orderStatusOptions, scope.row.orderStatusCode) }}</el-tag>
+              <el-tag :type="orderStatusTag(scope.row.orderStatusCode)" effect="light">{{ salesOrderStatusLabel(scope.row.orderStatusCode) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="收款状态" width="120">
             <template #default="scope">
-              <el-tag :type="paymentStatusTag(scope.row.paymentStatusCode)" effect="light">{{ statusLabel(paymentStatusOptions, scope.row.paymentStatusCode) }}</el-tag>
+              <el-tag :type="paymentStatusTag(scope.row.paymentStatusCode)" effect="light">{{ statusLabel(paymentStatusOptions, scope.row.paymentStatusCode, paymentStatusFallbackLabels) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="出库状态" width="120">
@@ -152,9 +202,9 @@
           <el-table-column label="操作" width="220" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button v-if="scope.row.orderStatusCode === 'DRAFT'" link type="primary" @click.stop="submitExisting(scope.row)">提交</el-button>
+              <el-button v-if="canSubmit(scope.row)" link type="primary" @click.stop="submitExisting(scope.row)">提交</el-button>
               <el-button v-if="canStockOut(scope.row)" link type="primary" @click.stop="openStockOut(scope.row)">出库</el-button>
-              <el-button v-if="scope.row.orderStatusCode === 'DRAFT'" link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
+              <el-button v-if="canEdit(scope.row)" link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无销售订单" /></template>
@@ -181,9 +231,13 @@
             <h2>{{ detail.orderNo }}</h2>
             <p>{{ detail.customerNameSnapshot }} · {{ formatTime(detail.orderDate) }}</p>
             <div class="detail-tags">
-              <el-tag :type="orderStatusTag(detail.orderStatusCode)" effect="light">{{ statusLabel(orderStatusOptions, detail.orderStatusCode) }}</el-tag>
-              <el-tag :type="paymentStatusTag(detail.paymentStatusCode)" effect="light">{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode) }}</el-tag>
+              <el-tag :type="orderStatusTag(detail.orderStatusCode)" effect="light">{{ salesOrderStatusLabel(detail.orderStatusCode) }}</el-tag>
+              <el-tag v-if="detail.sourceStatusCode" effect="light">{{ dhbOrderStatusLabel(detail.sourceStatusCode) }}</el-tag>
+              <el-tag :type="paymentStatusTag(detail.paymentStatusCode)" effect="light">{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode, paymentStatusFallbackLabels) }}</el-tag>
               <el-tag :type="outboundStatusTag(detail.outboundStatusCode)" effect="light">{{ statusLabel(outboundStatusOptions, detail.outboundStatusCode) }}</el-tag>
+              <el-tag v-if="detail.shipmentStatusCode" :type="shipmentStatusTag(detail.shipmentStatusCode)" effect="light">
+                {{ salesShipmentStatusLabel(detail.shipmentStatusCode) }}
+              </el-tag>
             </div>
           </div>
           <el-button circle plain aria-label="关闭销售订单详情" @click="detailVisible = false">×</el-button>
@@ -208,13 +262,18 @@
             </el-descriptions-item>
             <el-descriptions-item label="订单类型">{{ orderTypeLabel(detail.orderTypeCode) }}</el-descriptions-item>
             <el-descriptions-item label="付款方式">{{ paymentMethodLabel(detail.paymentMethodCode) }}</el-descriptions-item>
-            <el-descriptions-item label="收款状态">{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode) }}</el-descriptions-item>
+            <el-descriptions-item label="收款状态">{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode, paymentStatusFallbackLabels) }}</el-descriptions-item>
             <el-descriptions-item label="来源系统">{{ sourceSystemLabel(detail.sourceSystemCode) }}</el-descriptions-item>
             <el-descriptions-item label="来源单号">{{ detail.sourceOrderNo || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="订货宝状态">{{ dhbOrderStatusLabel(detail.sourceStatusCode) }}</el-descriptions-item>
+            <el-descriptions-item label="制单人">{{ sourceCreatorLabel(detail) }}</el-descriptions-item>
+            <el-descriptions-item label="付款时间">{{ formatTime(detail.paymentTime) }}</el-descriptions-item>
+            <el-descriptions-item label="发货时间">{{ formatTime(detail.shipmentTime) }}</el-descriptions-item>
+            <el-descriptions-item label="发货状态">{{ salesShipmentStatusLabel(detail.shipmentStatusCode) }}</el-descriptions-item>
             <el-descriptions-item label="折扣比例">{{ percent(detail.discountRate) }}</el-descriptions-item>
-            <el-descriptions-item label="创建人">{{ detail.createdBy || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="创建人">{{ auditActorLabel(detail.createdBy) }}</el-descriptions-item>
             <el-descriptions-item label="创建时间">{{ formatTime(detail.createdTime) }}</el-descriptions-item>
-            <el-descriptions-item label="更新人">{{ detail.updatedBy || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="更新人">{{ auditActorLabel(detail.updatedBy) }}</el-descriptions-item>
             <el-descriptions-item label="更新时间">{{ formatTime(detail.updatedTime) }}</el-descriptions-item>
             <el-descriptions-item label="备注" :span="3">{{ detail.remark || '-' }}</el-descriptions-item>
           </el-descriptions>
@@ -394,7 +453,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { apiClient } from '@/api'
 import {
@@ -428,12 +488,49 @@ import {
   businessDictionaryOptions,
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
+import { formatOrderStatus as formatDhbOrderStatus } from '@/utils/dhb-order-status'
+import { auditActorLabel } from '@/utils/audit-actor'
 import type { StaffRecord } from '@/types/management'
 
 const orderStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_ORDER_STATUS'))
+const sourceStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'DHB_ORDER_STATUS'))
 const outboundStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'OUTBOUND_STATUS'))
+const shipmentStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_SHIPMENT_STATUS'))
 const paymentStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'PAYMENT_STATUS'))
 const paymentMethodOptions = computed(() => businessDictionaryOptions('ORDER', 'PAYMENT_METHOD'))
+const regionOptions = computed(() => businessDictionaryOptions('COMMON', 'REGION'))
+const salesOrderStatusFallbackLabels: Record<string, string> = {
+  DRAFT: '草稿',
+  SUBMITTED: '已提交',
+  CANCELLED: '已取消',
+}
+const dhbOrderStatusFallbackLabels: Record<string, string> = {
+  pricing: '待核价',
+  pending: '待审核',
+  stock_up: '待出库',
+  stockup: '待出库',
+  shipped: '待发货',
+  received: '待收货',
+  finished: '已完成',
+  forcedone: '强制完成',
+  cancelled: '已取消',
+  canceled: '已取消',
+  '部分出库': '部分出库',
+  '已收货': '已收货',
+}
+const salesShipmentStatusFallbackLabels: Record<string, string> = {
+  CREATED: '待发货',
+  SHIPPED: '已发货',
+  SIGNED: '已收货',
+  CANCELLED: '已取消',
+}
+const paymentStatusFallbackLabels: Record<string, string> = {
+  UNPAID: '未收款',
+  PARTIAL_PAID: '部分收款',
+  PAID: '已收款',
+  CANCELLED: '已取消',
+}
+const route = useRoute()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -451,8 +548,11 @@ const pageData = ref<OrderPage<SalesOrderSummary>>({ total: 0, begin: 0, step: 2
 const filters = reactive({
   orderNo: '',
   sourceOrderNo: '',
+  sourceStatusCode: '',
   customerName: '',
   contactPhone: '',
+  regionCode: '',
+  ownerStaffCode: '',
   orderStatusCode: '',
   paymentStatusCode: '',
   outboundStatusCode: '',
@@ -518,12 +618,21 @@ onMounted(() => {
     { moduleCode: 'COMMON', code: 'REGION' },
     { moduleCode: 'COMMON', code: 'PRODUCT_UNIT' },
     { moduleCode: 'ORDER', code: 'SALES_ORDER_STATUS' },
+    { moduleCode: 'ORDER', code: 'DHB_ORDER_STATUS' },
     { moduleCode: 'ORDER', code: 'PAYMENT_STATUS' },
     { moduleCode: 'ORDER', code: 'OUTBOUND_STATUS' },
+    { moduleCode: 'ORDER', code: 'SALES_SHIPMENT_STATUS' },
     { moduleCode: 'ORDER', code: 'SALES_ORDER_TYPE' },
     { moduleCode: 'ORDER', code: 'PAYMENT_METHOD' },
   ])
+  applyRouteQuery()
   void Promise.all([loadOrders(), searchCustomers(''), searchSalesStaff(''), searchProducts(''), searchWarehouses('')])
+})
+
+watch(() => route.query, () => {
+  if (!applyRouteQuery()) return
+  currentPage.value = 1
+  void loadOrders()
 })
 
 async function loadOrders() {
@@ -534,8 +643,11 @@ async function loadOrders() {
       step: pageSize.value,
       orderNo: empty(filters.orderNo),
       sourceOrderNo: empty(filters.sourceOrderNo),
+      sourceStatusCode: empty(filters.sourceStatusCode),
       customerName: empty(filters.customerName),
       contactPhone: empty(filters.contactPhone),
+      regionCode: empty(filters.regionCode),
+      ownerStaffCode: empty(filters.ownerStaffCode),
       orderStatusCode: empty(filters.orderStatusCode),
       paymentStatusCode: empty(filters.paymentStatusCode),
       outboundStatusCode: empty(filters.outboundStatusCode),
@@ -552,8 +664,11 @@ async function loadOrders() {
 function resetFilters() {
   filters.orderNo = ''
   filters.sourceOrderNo = ''
+  filters.sourceStatusCode = ''
   filters.customerName = ''
   filters.contactPhone = ''
+  filters.regionCode = ''
+  filters.ownerStaffCode = ''
   filters.orderStatusCode = ''
   filters.paymentStatusCode = ''
   filters.outboundStatusCode = ''
@@ -561,6 +676,35 @@ function resetFilters() {
   filters.orderDateTo = ''
   currentPage.value = 1
   void loadOrders()
+}
+
+function applyRouteQuery() {
+  let changed = false
+  changed = setFilterValue('orderDateFrom', routeDate(route.query.orderDateFrom)) || changed
+  changed = setFilterValue('orderDateTo', routeDate(route.query.orderDateTo)) || changed
+  changed = setFilterValue('regionCode', routeText(route.query.regionCode)) || changed
+  changed = setFilterValue('ownerStaffCode', routeText(route.query.ownerStaffCode)) || changed
+  changed = setFilterValue('sourceStatusCode', routeText(route.query.sourceStatusCode)) || changed
+  changed = setFilterValue('paymentStatusCode', routeText(route.query.paymentStatusCode)) || changed
+  const ownerStaffCode = routeText(route.query.ownerStaffCode)
+  if (ownerStaffCode) ensureStaffOption(ownerStaffCode, routeText(route.query.ownerStaffName) || ownerStaffCode)
+  return changed
+}
+
+function setFilterValue(key: keyof typeof filters, value: string) {
+  if (filters[key] === value) return false
+  filters[key] = value
+  return true
+}
+
+function routeText(value: unknown) {
+  const normalized = Array.isArray(value) ? value[0] : value
+  return typeof normalized === 'string' ? normalized.trim() : ''
+}
+
+function routeDate(value: unknown) {
+  const text = routeText(value)
+  return text ? text.slice(0, 10) : ''
 }
 
 function handleSizeChange() {
@@ -657,7 +801,22 @@ async function submitExisting(row: SalesOrderSummary) {
   }
 }
 
+function isExternalSource(row: Pick<SalesOrderSummary, 'sourceSystemCode'>) {
+  return Boolean(row.sourceSystemCode && row.sourceSystemCode.trim())
+}
+
+function canSubmit(row: SalesOrderSummary) {
+  if (isExternalSource(row)) return false
+  return row.orderStatusCode === 'DRAFT'
+}
+
+function canEdit(row: SalesOrderSummary) {
+  if (isExternalSource(row)) return false
+  return row.orderStatusCode === 'DRAFT'
+}
+
 function canStockOut(row: SalesOrderSummary) {
+  if (isExternalSource(row)) return false
   return row.orderStatusCode === 'SUBMITTED' && row.outboundStatusCode === 'PENDING'
 }
 
@@ -922,8 +1081,33 @@ function resetForm() {
   form.lines = []
 }
 
-function statusLabel(options: Array<{ label: string; value: string }>, value: string | null | undefined) {
-  return options.find((item) => item.value === value)?.label || value || '-'
+function statusLabel(
+  options: Array<{ label: string; value: string }>,
+  value: string | null | undefined,
+  fallback: Record<string, string> = {},
+) {
+  const rawValue = value?.trim()
+  if (!rawValue) return '-'
+  return options.find((item) => item.value === rawValue)?.label || fallback[rawValue] || rawValue
+}
+
+function salesOrderStatusLabel(value: string | null | undefined) {
+  return statusLabel(orderStatusOptions.value, value, salesOrderStatusFallbackLabels)
+}
+
+function dhbOrderStatusLabel(value: string | null | undefined) {
+  const rawValue = value?.trim()
+  if (!rawValue) return '-'
+  const label = formatDhbOrderStatus(rawValue)
+  return label === rawValue
+    ? dhbOrderStatusFallbackLabels[rawValue] || dhbOrderStatusFallbackLabels[rawValue.toLowerCase()] || rawValue
+    : label
+}
+
+function salesShipmentStatusLabel(value: string | null | undefined) {
+  const rawValue = value?.trim()
+  if (!rawValue) return '-'
+  return salesShipmentStatusFallbackLabels[rawValue] || statusLabel(shipmentStatusOptions.value, rawValue)
 }
 
 function paymentMethodLabel(value: string | null | undefined) {
@@ -933,6 +1117,10 @@ function paymentMethodLabel(value: string | null | undefined) {
 function sourceSystemLabel(value: string | null | undefined) {
   if (value === 'DINGHUOBAO' || value === 'DHB') return '订货宝'
   return value || '-'
+}
+
+function sourceCreatorLabel(value: Pick<SalesOrderSummary, 'sourceCreatorName' | 'sourceCreatorStaffCode' | 'sourceCreatorId'>) {
+  return value.sourceCreatorName || value.sourceCreatorStaffCode || value.sourceCreatorId || '-'
 }
 
 function orderTypeLabel(value: string | null | undefined) {
@@ -959,10 +1147,17 @@ function outboundStatusTag(value: string) {
   return 'info'
 }
 
+function shipmentStatusTag(value: string) {
+  if (value === 'SIGNED') return 'success'
+  if (value === 'SHIPPED') return 'warning'
+  if (value === 'CANCELLED') return 'info'
+  return 'primary'
+}
+
 function paymentStatusTag(value: string) {
   if (value === 'PAID') return 'success'
   if (value === 'PARTIAL_PAID') return 'warning'
-  if (value === 'REFUNDED') return 'info'
+  if (value === 'CANCELLED' || value === 'REFUNDED') return 'info'
   return 'danger'
 }
 

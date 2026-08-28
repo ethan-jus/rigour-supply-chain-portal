@@ -17,7 +17,11 @@ export const useNavigationStore = defineStore('navigation', () => {
     'supply.erp.master-data.attributes.brands': '商品品牌',
     'supply.erp.master-data.attributes.tags': '商品标签',
     'supply.erp.inventory.menu': '库存管理',
+    'supply.crm.customers.menu': '客户管理',
     'supply.crm.customers.profiles': '客户管理',
+    'supply.crm.customers.shipping-addresses': '客户地址',
+    'supply.crm.customers.levels-tags': '客户类型',
+    'supply.crm.customers.areas': '归属地区',
     'supply.integration.menu': '外部同步',
     'supply.integration.sync-control.menu': '订货宝同步',
     'supply.integration.overview': '订货宝同步中心',
@@ -27,6 +31,14 @@ export const useNavigationStore = defineStore('navigation', () => {
     'supply.order.sales-payments': '销售回款',
     'supply.order.fund-documents': '客户资金流水',
     'supply.order.sales-refunds': '销售退款',
+    'supply.bi.menu': '数据看板',
+    'supply.bi.index': '供应链经营总览',
+    'supply.bi.sales-collection': '销售与回款看板',
+    'supply.bi.product-sales': '商品销售统计',
+    'supply.bi.gross-profit': '销售毛利分析',
+    'supply.bi.payment-risk': '回款风险看板',
+    'supply.bi.city-cost': '城市成本看板',
+    'supply.bi.inventory-risk': '库存风险看板',
   }
   const navigationByApplication = ref<Record<string, NavigationNode[]>>({})
   const loadedApplications = ref<string[]>([])
