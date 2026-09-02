@@ -3,12 +3,13 @@
 </template>
 
 <script setup lang="ts">
-import { BarChart, LineChart, PieChart } from 'echarts/charts'
+import { BarChart, FunnelChart, HeatmapChart, LineChart, PieChart } from 'echarts/charts'
 import {
   DataZoomComponent,
   GridComponent,
   LegendComponent,
   TooltipComponent,
+  VisualMapComponent,
 } from 'echarts/components'
 import { init, use, type ECharts, type EChartsCoreOption } from 'echarts/core'
 import { LegacyGridContainLabel } from 'echarts/features'
@@ -17,12 +18,15 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 
 use([
   BarChart,
+  FunnelChart,
+  HeatmapChart,
   LineChart,
   PieChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
   DataZoomComponent,
+  VisualMapComponent,
   LegacyGridContainLabel,
   CanvasRenderer,
 ])

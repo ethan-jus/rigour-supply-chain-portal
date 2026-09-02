@@ -309,6 +309,14 @@
           </div>
           <el-icon><Histogram /></el-icon>
         </div>
+        <EchartsChart
+          v-if="cityTargetOverviewRows.length"
+          class="bi-chart bi-chart--target-heatmap"
+          :option="cityTargetHeatmapOption"
+          :height="cityTargetHeatmapHeight"
+          :loading="loading"
+          @chart-click="handleCityTargetHeatmapClick"
+        />
         <div v-if="cityTargetOverviewRows.length" class="target-completion-list">
           <button
             v-for="row in cityTargetOverviewRows"
@@ -392,7 +400,7 @@
           />
           <EchartsChart
             class="bi-chart bi-chart--activity-cost"
-            :option="activityCostPieOption"
+            :option="activityFunnelChartOption"
             :height="260"
           />
         </div>
@@ -678,6 +686,14 @@
             </button>
           </template>
         </div>
+        <EchartsChart
+          v-if="showInventoryFlowChart"
+          class="bi-chart bi-chart--inventory-flow"
+          :option="inventoryFlowChartOption"
+          :height="inventoryFlowChartHeight"
+          :loading="loading"
+          @chart-click="handleInventoryFlowChartClick"
+        />
         <div v-if="showInventoryOperationBoard" class="inventory-operation-board">
           <button
             v-for="row in inventoryOperationBoardRows"
@@ -898,6 +914,34 @@
           </div>
           <el-icon><DataAnalysis /></el-icon>
         </div>
+        <div v-if="salesRanking.length" class="ranking-visual-grid">
+          <div class="ranking-visual">
+            <div class="subsection-head">
+              <strong>交易额 Top 10</strong>
+              <small>横向条形图，点击销售联动筛选</small>
+            </div>
+            <EchartsChart
+              class="bi-chart bi-chart--ranking"
+              :option="salesAmountRankingChartOption"
+              :height="salesRankingChartHeight"
+              :loading="loading"
+              @chart-click="handleSalesAmountRankingChartClick"
+            />
+          </div>
+          <div class="ranking-visual">
+            <div class="subsection-head">
+              <strong>回款额 Top 10</strong>
+              <small>同一口径下按订单累计已收排行</small>
+            </div>
+            <EchartsChart
+              class="bi-chart bi-chart--ranking"
+              :option="salesPaidRankingChartOption"
+              :height="salesRankingChartHeight"
+              :loading="loading"
+              @chart-click="handleSalesPaidRankingChartClick"
+            />
+          </div>
+        </div>
         <div v-if="salesRanking.length" class="dual-ranking-layout">
           <div class="ranking-block">
             <div class="subsection-head">
@@ -1028,6 +1072,34 @@
           <div>
             <span>风险金额占比</span>
             <strong>{{ formatPercent(paymentRiskAmountRateMetric?.value) }}</strong>
+          </div>
+        </div>
+        <div v-if="!isOverviewSection && hasPaymentRiskRankingData" class="risk-visual-grid">
+          <div class="risk-visual">
+            <div class="subsection-head">
+              <strong>城市待回款排行</strong>
+              <small>条越长，跟进金额越大；颜色按回款率分级</small>
+            </div>
+            <EchartsChart
+              class="bi-chart bi-chart--risk-ranking"
+              :option="paymentRiskCityChartOption"
+              :height="paymentRiskChartHeight"
+              :loading="loading"
+              @chart-click="handlePaymentRiskCityChartClick"
+            />
+          </div>
+          <div class="risk-visual">
+            <div class="subsection-head">
+              <strong>销售待回款排行</strong>
+              <small>点击销售后查看对应订单跟进范围</small>
+            </div>
+            <EchartsChart
+              class="bi-chart bi-chart--risk-ranking"
+              :option="paymentRiskSalesChartOption"
+              :height="paymentRiskChartHeight"
+              :loading="loading"
+              @chart-click="handlePaymentRiskSalesChartClick"
+            />
           </div>
         </div>
         <div v-if="!isOverviewSection" class="payment-risk-layout">
@@ -1379,7 +1451,28 @@ interface PieTooltipParam {
 
 interface ProductSalesTooltipParam {
   name?: string
+  value?: number | string
   data?: ProductSalesChartData
+}
+
+interface RankingChartData extends SupplyDashboardRankingItem {
+  value?: number
+}
+
+interface TargetHeatmapChartData {
+  value: [number, number, number]
+  dimensionCode: string
+  dimensionName: string
+  metricCode: string
+  metricName: string
+  targetValue: number
+  actualValue: number
+  achievementRate: number
+}
+
+interface InventoryFlowChartData extends SupplyDashboardInventoryItemSummary {
+  value: number
+  flowType: 'procurement' | 'shipped' | 'remaining' | 'inactive'
 }
 
 const filters = reactive<DashboardFilters>({
@@ -1838,7 +1931,9 @@ const showProductSalesChart = computed(() =>
   && displayedProductSales.value.length > 0,
 )
 const showProductSharePieChart = computed(() =>
-  false,
+  !isOverviewSection.value
+  && (isProductSalesVisualSection.value || (isGrossProfitSection.value && grossProfitCostCovered.value))
+  && displayedProductSales.value.length > 1,
 )
 const showGrossProfitCoverageWarning = computed(() =>
   isGrossProfitSection.value && displayedProductSales.value.length > 0 && !grossProfitCostCovered.value,
@@ -1880,12 +1975,26 @@ const salesRankingPreview = computed<SalesRankingDisplayRow[]>(() =>
 const salesPaidRankingPreview = computed<SalesRankingDisplayRow[]>(() =>
   attachSalesTargetMetric(salesPaidRanking.value.slice(0, rankingPreviewLimit.value), 'PAID_AMOUNT'),
 )
+const salesRankingChartRows = computed(() => salesRanking.value.slice(0, 10))
+const salesPaidRankingChartRows = computed(() => salesPaidRanking.value.slice(0, 10))
+const salesRankingChartHeight = computed(() =>
+  Math.max(240, Math.min(420, 112 + Math.max(salesRankingChartRows.value.length, salesPaidRankingChartRows.value.length) * 30)),
+)
+const salesAmountRankingChartOption = computed<EChartsCoreOption>(() =>
+  buildRankingAmountChartOption(salesRankingChartRows.value, 'salesAmount', '交易额', chartTheme.primary),
+)
+const salesPaidRankingChartOption = computed<EChartsCoreOption>(() =>
+  buildRankingAmountChartOption(salesPaidRankingChartRows.value, 'paidAmount', '回款额', chartTheme.success),
+)
 const citySalesCityCount = computed(() => citySalesRanking.value.length)
 const citySalesTotal = computed(() => citySalesRanking.value.reduce((total, item) => total + Number(item.salesAmount || 0), 0))
 const cityPaidTotal = computed(() => citySalesRanking.value.reduce((total, item) => total + Number(item.paidAmount || 0), 0))
 const cityOverallPaidRate = computed(() => citySalesTotal.value ? cityPaidTotal.value / citySalesTotal.value * 100 : 0)
 const cityTargetOverviewRows = computed<CityTargetOverviewRow[]>(() =>
   groupTargetCompletionRows(overview.value?.cityTargetCompletions || []),
+)
+const cityTargetHeatmapHeight = computed(() =>
+  Math.max(260, Math.min(520, 150 + cityTargetOverviewRows.value.length * 24)),
 )
 const paymentRiskCityRanking = computed<SupplyDashboardRankingItem[]>(() =>
   (overview.value?.paymentRiskCityRanking || []).map((item) => ({
@@ -1901,6 +2010,18 @@ const paymentRiskPreviewLimit = computed(() => {
 })
 const paymentRiskCityPreview = computed(() => paymentRiskCityRanking.value.slice(0, paymentRiskPreviewLimit.value))
 const paymentRiskSalesPreview = computed(() => paymentRiskSalesRanking.value.slice(0, paymentRiskPreviewLimit.value))
+const hasPaymentRiskRankingData = computed(() =>
+  Boolean(paymentRiskCityRanking.value.length || paymentRiskSalesRanking.value.length),
+)
+const paymentRiskChartHeight = computed(() =>
+  Math.max(240, Math.min(420, 112 + Math.max(paymentRiskCityPreview.value.length, paymentRiskSalesPreview.value.length) * 30)),
+)
+const paymentRiskCityChartOption = computed<EChartsCoreOption>(() =>
+  buildPaymentRiskChartOption(paymentRiskCityPreview.value, '城市待回款'),
+)
+const paymentRiskSalesChartOption = computed<EChartsCoreOption>(() =>
+  buildPaymentRiskChartOption(paymentRiskSalesPreview.value, '销售待回款'),
+)
 const sourceSystemBreakdown = computed<SupplyDashboardRankingItem[]>(() =>
   (overview.value?.sourceSystemBreakdown || []).map((item) => ({
     ...item,
@@ -1990,6 +2111,12 @@ const showInventoryOperationBoard = computed(() =>
   isProductInventorySection.value
   && ['procurement', 'inventory'].includes(productInventoryView.value)
   && showInventoryOperationData.value,
+)
+const showInventoryFlowChart = computed(() =>
+  showInventoryOperationBoard.value && inventoryOperationBoardRows.value.length > 1,
+)
+const inventoryFlowChartHeight = computed(() =>
+  Math.max(260, Math.min(460, 132 + inventoryOperationBoardRows.value.length * 28)),
 )
 const showInventoryOperationEmpty = computed(() =>
   !showInventoryOperationSummary.value
@@ -2132,19 +2259,23 @@ const salesCollectionChartOption = computed<EChartsCoreOption>(() =>
   ),
 )
 const sourceSystemPieOption = computed<EChartsCoreOption>(() => buildSourceSystemPieOption(sourceSystemBreakdown.value))
+const cityTargetHeatmapOption = computed<EChartsCoreOption>(() => buildCityTargetHeatmapOption(cityTargetOverviewRows.value))
 const productSalesChartOption = computed<EChartsCoreOption>(() =>
   buildProductSalesChartOption(analysisProductSales.value, productBreakdown.value, isGrossProfitSection.value),
 )
 const productSharePieOption = computed<EChartsCoreOption>(() =>
-  buildProductSharePieOption(analysisProductSales.value, productBreakdown.value),
+  buildProductSharePieOption(analysisProductSales.value, productBreakdown.value, isGrossProfitSection.value),
 )
 const inventoryRiskChartOption = computed<EChartsCoreOption>(() => buildInventoryRiskChartOption(riskRows.value))
+const inventoryFlowChartOption = computed<EChartsCoreOption>(() =>
+  buildInventoryFlowChartOption(inventoryOperationBoardRows.value, productInventoryView.value),
+)
 const inventoryCoverageChartOption = computed<EChartsCoreOption>(() =>
   buildInventoryCoverageChartOption(inventoryCoverageChartRows.value),
 )
 const cityCostChartOption = computed<EChartsCoreOption>(() => buildCityCostChartOption(cityCostTrendRows.value))
 const activityTrendChartOption = computed<EChartsCoreOption>(() => buildActivityTrendChartOption())
-const activityCostPieOption = computed<EChartsCoreOption>(() => buildActivityCostPieOption())
+const activityFunnelChartOption = computed<EChartsCoreOption>(() => buildActivityFunnelChartOption())
 const productSaleableCount = computed(() => overview.value?.productSalesRanking?.length || 0)
 const productSoldCount = computed(() => (overview.value?.productSalesRanking || []).filter(hasProductSales).length)
 const productUnsoldCount = computed(() => Math.max(productSaleableCount.value - productSoldCount.value, 0))
@@ -3125,6 +3256,42 @@ function handleProductSalesChartClick(params: unknown) {
   openProductSales(item)
 }
 
+function handleSalesAmountRankingChartClick(params: unknown) {
+  openRankingChartItem(params, salesRanking.value, selectSalesRankingItem)
+}
+
+function handleSalesPaidRankingChartClick(params: unknown) {
+  openRankingChartItem(params, salesPaidRanking.value, selectSalesRankingItem)
+}
+
+function handlePaymentRiskCityChartClick(params: unknown) {
+  openRankingChartItem(params, paymentRiskCityRanking.value, selectCityRankingItem)
+}
+
+function handlePaymentRiskSalesChartClick(params: unknown) {
+  openRankingChartItem(params, paymentRiskSalesRanking.value, selectSalesRankingItem)
+}
+
+function handleCityTargetHeatmapClick(params: unknown) {
+  const data = chartParams(params).data as TargetHeatmapChartData | undefined
+  if (data?.dimensionCode) selectTargetCity(data.dimensionCode)
+}
+
+function handleInventoryFlowChartClick(params: unknown) {
+  const data = chartParams(params).data as InventoryFlowChartData | undefined
+  if (data) selectInventoryCategory(data)
+}
+
+function openRankingChartItem(
+  params: unknown,
+  rows: SupplyDashboardRankingItem[],
+  action: (item: SupplyDashboardRankingItem) => void,
+) {
+  const data = chartParams(params).data as RankingChartData | undefined
+  const item = rows.find((row) => row.dimensionCode === data?.dimensionCode)
+  if (item) action(item)
+}
+
 function chartParams(params: unknown): ChartClickParams {
   if (!params || typeof params !== 'object') return {}
   return params as ChartClickParams
@@ -3338,6 +3505,318 @@ function rankingIndexClass(index: number) {
   return ''
 }
 
+function paymentRiskColorByRate(value?: number | null) {
+  const level = paymentRiskLevelCodeByRate(value)
+  if (level === 'healthy') return chartTheme.success
+  if (level === 'warning') return chartTheme.warning
+  if (level === 'danger') return chartTheme.danger
+  return chartTheme.muted
+}
+
+function buildRankingAmountChartOption(
+  items: SupplyDashboardRankingItem[],
+  field: RankingAmountField,
+  valueName: string,
+  color: string,
+): EChartsCoreOption {
+  const rows = items.slice(0, 10).reverse()
+  return {
+    color: [color],
+    tooltip: {
+      ...dashboardTooltipStyle(),
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params: ProductSalesTooltipParam | ProductSalesTooltipParam[]) => {
+        const first = Array.isArray(params) ? params[0] : params
+        const data = first?.data as RankingChartData | undefined
+        if (!data) return first?.name || valueName
+        return [
+          data.dimensionName || first?.name || '销售',
+          `城市：${salesRankingRegionLabel(data)}`,
+          `交易额：${formatMoneyWan(data.salesAmount)}`,
+          `回款额：${formatMoneyWan(data.paidAmount)}`,
+          `待回款：${formatMoneyWan(data.unpaidAmount)}`,
+          `订单数：${formatNumber(data.orderCount)}`,
+          `客户数：${formatNumber(data.customerCount)}`,
+          `回款率：${formatPercent(data.rate)}`,
+        ].join('<br/>')
+      },
+    },
+    grid: { top: 16, right: 72, bottom: 20, left: 8, containLabel: true },
+    xAxis: {
+      type: 'value',
+      axisLabel: { formatter: moneyAxisLabel, color: chartTheme.text },
+      splitLine: { lineStyle: { color: chartTheme.splitLine, type: 'dashed' } },
+    },
+    yAxis: {
+      type: 'category',
+      data: rows.map((item) => item.dimensionName || item.dimensionCode),
+      axisLabel: { color: chartTheme.text, width: 110, overflow: 'truncate' },
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+    },
+    series: [
+      {
+        name: valueName,
+        type: 'bar',
+        barMaxWidth: 18,
+        label: {
+          show: true,
+          position: 'right',
+          color: chartTheme.label,
+          fontWeight: 700,
+          formatter: (params: { value?: number | string }) => formatMoneyWan(Number(params.value || 0)),
+        },
+        data: rows.map((item) => ({
+          ...item,
+          value: Number(item[field] || 0),
+        })),
+        itemStyle: { borderRadius: [0, 5, 5, 0] },
+      },
+    ],
+  }
+}
+
+function buildPaymentRiskChartOption(
+  items: SupplyDashboardRankingItem[],
+  valueName: string,
+): EChartsCoreOption {
+  const rows = items.slice(0, 10).reverse()
+  return {
+    tooltip: {
+      ...dashboardTooltipStyle(),
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params: ProductSalesTooltipParam | ProductSalesTooltipParam[]) => {
+        const first = Array.isArray(params) ? params[0] : params
+        const data = first?.data as RankingChartData | undefined
+        if (!data) return first?.name || valueName
+        return [
+          data.dimensionName || first?.name || '风险对象',
+          `待回款：${formatMoneyWan(data.unpaidAmount)}`,
+          `风险等级：${paymentRiskItemLevelLabel(data.rate)}`,
+          `交易额：${formatMoneyWan(data.salesAmount)}`,
+          `已回款：${formatMoneyWan(data.paidAmount)}`,
+          `回款率：${formatPercent(data.rate)}`,
+          `客户数：${formatNumber(data.customerCount)}`,
+          `订单数：${formatNumber(data.orderCount)}`,
+        ].join('<br/>')
+      },
+    },
+    grid: { top: 16, right: 72, bottom: 20, left: 8, containLabel: true },
+    xAxis: {
+      type: 'value',
+      axisLabel: { formatter: moneyAxisLabel, color: chartTheme.text },
+      splitLine: { lineStyle: { color: chartTheme.splitLine, type: 'dashed' } },
+    },
+    yAxis: {
+      type: 'category',
+      data: rows.map((item) => item.dimensionName || item.dimensionCode),
+      axisLabel: { color: chartTheme.text, width: 118, overflow: 'truncate' },
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+    },
+    series: [
+      {
+        name: valueName,
+        type: 'bar',
+        barMaxWidth: 18,
+        label: {
+          show: true,
+          position: 'right',
+          color: chartTheme.label,
+          fontWeight: 700,
+          formatter: (params: { value?: number | string }) => formatMoneyWan(Number(params.value || 0)),
+        },
+        data: rows.map((item) => ({
+          ...item,
+          value: Number(item.unpaidAmount || 0),
+          itemStyle: { color: paymentRiskColorByRate(item.rate), borderRadius: [0, 5, 5, 0] },
+        })),
+      },
+    ],
+  }
+}
+
+function buildCityTargetHeatmapOption(rows: CityTargetOverviewRow[]): EChartsCoreOption {
+  const metrics = targetMetricDefinitions
+  const data: TargetHeatmapChartData[] = rows.flatMap((row, cityIndex) =>
+    metrics.map((metric, metricIndex) => {
+      const snapshot = row.metrics[metric.code]
+      const achievementRate = Number(snapshot?.achievementRate || 0)
+      return {
+        value: [metricIndex, cityIndex, achievementRate],
+        dimensionCode: row.dimensionCode,
+        dimensionName: row.dimensionName,
+        metricCode: metric.code,
+        metricName: metric.name,
+        targetValue: Number(snapshot?.targetValue || 0),
+        actualValue: Number(snapshot?.actualValue || 0),
+        achievementRate,
+      }
+    }),
+  )
+  return {
+    tooltip: {
+      ...dashboardTooltipStyle(),
+      formatter: (params: { data?: TargetHeatmapChartData }) => {
+        const dataItem = params.data
+        if (!dataItem) return '目标完成度'
+        const definition = targetMetricDefinitions.find((item) => item.code === dataItem.metricCode)
+        const unit = definition?.unit || 'COUNT'
+        return [
+          `${dataItem.dimensionName} · ${dataItem.metricName}`,
+          `目标：${unit === 'CNY' ? formatMoneyWan(dataItem.targetValue) : formatNumber(dataItem.targetValue)}`,
+          `实际：${unit === 'CNY' ? formatMoneyWan(dataItem.actualValue) : formatNumber(dataItem.actualValue)}`,
+          `完成率：${formatPercent(dataItem.achievementRate)}`,
+        ].join('<br/>')
+      },
+    },
+    grid: { top: 18, right: 24, bottom: 36, left: 74, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: metrics.map((item) => item.name),
+      axisLabel: { color: chartTheme.text },
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+    },
+    yAxis: {
+      type: 'category',
+      data: rows.map((item) => item.dimensionName),
+      axisLabel: { color: chartTheme.text, width: 92, overflow: 'truncate' },
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+    },
+    visualMap: {
+      show: false,
+      min: 0,
+      max: 100,
+      dimension: 2,
+      inRange: { color: ['#fee2e2', '#fed7aa', '#dcfce7'] },
+    },
+    series: [
+      {
+        name: '目标完成率',
+        type: 'heatmap',
+        data,
+        label: {
+          show: true,
+          color: chartTheme.label,
+          fontWeight: 700,
+          formatter: (params: { data?: TargetHeatmapChartData }) => formatPercent(params.data?.achievementRate || 0),
+        },
+        itemStyle: {
+          borderWidth: 2,
+          borderColor: '#fff',
+          borderRadius: 4,
+        },
+        emphasis: {
+          itemStyle: { shadowBlur: 8, shadowColor: 'rgba(15, 23, 42, 0.18)' },
+        },
+      },
+    ],
+  }
+}
+
+function buildInventoryFlowChartOption(
+  items: SupplyDashboardInventoryItemSummary[],
+  view: ProductInventoryView,
+): EChartsCoreOption {
+  const rows = items.slice(0, 12).reverse()
+  const procurementMode = view === 'procurement'
+  const series = procurementMode
+    ? [
+        {
+          name: '已发货',
+          flowType: 'shipped' as const,
+          color: chartTheme.success,
+          valueOf: (item: SupplyDashboardInventoryItemSummary) => Number(item.shippedQuantity || 0),
+        },
+        {
+          name: '待发货',
+          flowType: 'procurement' as const,
+          color: chartTheme.warning,
+          valueOf: (item: SupplyDashboardInventoryItemSummary) => inventoryPendingShipment(item),
+        },
+      ]
+    : [
+        {
+          name: '当前留存',
+          flowType: 'remaining' as const,
+          color: chartTheme.success,
+          valueOf: (item: SupplyDashboardInventoryItemSummary) => Number(item.remainingQuantity || 0),
+        },
+        {
+          name: '历史留存',
+          flowType: 'inactive' as const,
+          color: chartTheme.warning,
+          valueOf: (item: SupplyDashboardInventoryItemSummary) => Number(item.inactiveRemainingQuantity || 0),
+        },
+      ]
+  return {
+    color: series.map((item) => item.color),
+    tooltip: {
+      ...dashboardTooltipStyle(),
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params: Array<{ data?: InventoryFlowChartData }>) => {
+        const data = params[0]?.data
+        if (!data) return '库存/采购'
+        return [
+          data.categoryName || data.categoryCode,
+          `采购量：${formatNumber(data.procurementQuantity)}`,
+          `已发货：${formatNumber(data.shippedQuantity)}`,
+          `待发货：${formatNumber(inventoryPendingShipment(data))}`,
+          `当前留存：${formatNumber(data.remainingQuantity)}`,
+          `历史留存：${formatNumber(data.inactiveRemainingQuantity)}`,
+          `涉及单位：${inventoryUnitScope(data)}`,
+        ].join('<br/>')
+      },
+    },
+    legend: {
+      top: 0,
+      right: 0,
+      itemWidth: 12,
+      itemHeight: 8,
+      textStyle: { color: chartTheme.text },
+    },
+    grid: { top: 42, right: 42, bottom: 18, left: 8, containLabel: true },
+    xAxis: {
+      type: 'value',
+      axisLabel: { color: chartTheme.text },
+      splitLine: { lineStyle: { color: chartTheme.splitLine, type: 'dashed' } },
+    },
+    yAxis: {
+      type: 'category',
+      data: rows.map((item) => item.categoryName || item.categoryCode),
+      axisLabel: { color: chartTheme.text, width: 124, overflow: 'truncate' },
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+    },
+    series: series.map((item) => ({
+      name: item.name,
+      type: 'bar',
+      stack: procurementMode ? 'procurement' : 'inventory',
+      barMaxWidth: 18,
+      label: {
+        show: true,
+        color: chartTheme.label,
+        fontWeight: 700,
+        formatter: (params: { value?: number | string }) => {
+          const value = Number(params.value || 0)
+          return value > 0 ? formatNumber(value) : ''
+        },
+      },
+      data: rows.map((row) => ({
+        ...row,
+        value: item.valueOf(row),
+        flowType: item.flowType,
+        itemStyle: { borderRadius: [0, 5, 5, 0] },
+      })),
+    })),
+  }
+}
+
 function buildSalesCollectionChartOption(
   salesTrend: SupplyDashboardTrendPoint[],
   collectionTrend: SupplyDashboardTrendPoint[],
@@ -3452,54 +3931,108 @@ function buildSourceSystemPieOption(items: SupplyDashboardRankingItem[]): EChart
   }
 }
 
+function productContributionValue(item: SupplyDashboardProductSalesItem, grossProfitMode: boolean) {
+  if (!grossProfitMode) return Number(item.salesAmount || 0)
+  if (!hasCostCoverage(item.costCoverageRate)) return 0
+  return Number(item.estimatedGrossProfit || 0)
+}
+
 function buildProductSharePieOption(
   items: SupplyDashboardProductSalesItem[],
   breakdown: ProductBreakdown,
+  grossProfitMode: boolean,
 ): EChartsCoreOption {
-  const rows = items.slice(0, 8)
-  const dimensionLabel = breakdown === 'BRAND' ? '品牌' : '分类'
+  const rows = items.slice(0, 10)
+  const dimensionLabel = breakdown === 'CATEGORY' ? '分类' : breakdown === 'BRAND' ? '品牌' : '商品'
+  const valueName = grossProfitMode ? '估算毛利' : '订货金额'
+  const total = rows.reduce((sum, item) => sum + productContributionValue(item, grossProfitMode), 0)
+  let cumulative = 0
+  const cumulativeRates = rows.map((item) => {
+    cumulative += productContributionValue(item, grossProfitMode)
+    return total ? cumulative / total * 100 : 0
+  })
   return {
-    color: chartPalette,
+    color: [grossProfitMode ? chartTheme.profit : chartTheme.primary, chartTheme.warning],
     tooltip: {
       ...dashboardTooltipStyle(),
-      trigger: 'item',
-      formatter: (params: PieTooltipParam) => {
-        const data = params.data || {}
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params: ProductSalesTooltipParam | ProductSalesTooltipParam[]) => {
+        const first = Array.isArray(params) ? params[0] : params
+        const second = Array.isArray(params) ? params[1] : undefined
+        const data = first?.data || {}
         return [
-          params.name || dimensionLabel,
+          first?.name || dimensionLabel,
           `订货金额：${formatMoneyWan(data.salesAmount)}`,
-          `占比：${formatNumber(params.percent)}%`,
           `订货数量：${formatNumber(data.salesQuantity)}`,
           `下单数：${formatNumber(data.orderCount)}`,
           `客户数：${formatNumber(data.customerCount)}`,
+          grossProfitMode ? `估算毛利：${formatGrossProfitMoneyWan(data.estimatedGrossProfit, data.costCoverageRate)}` : '',
+          `累计贡献：${formatPercent(Number(second?.value || 0))}`,
         ].join('<br/>')
       },
     },
     legend: {
-      bottom: 0,
-      left: 'center',
+      top: 0,
+      right: 0,
       itemWidth: 12,
       itemHeight: 8,
       textStyle: { color: chartTheme.text },
     },
+    grid: { top: 42, right: 44, bottom: 58, left: 54, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: rows.map((item) => item.dimensionName || item.dimensionCode),
+      axisLabel: { color: chartTheme.text, interval: 0, rotate: 28, width: 86, overflow: 'truncate' },
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+    },
+    yAxis: [
+      {
+        type: 'value',
+        axisLabel: { formatter: moneyAxisLabel, color: chartTheme.text },
+        splitLine: { lineStyle: { color: chartTheme.splitLine, type: 'dashed' } },
+      },
+      {
+        type: 'value',
+        min: 0,
+        max: 100,
+        axisLabel: { formatter: (value: number | string) => `${formatNumber(Number(value || 0))}%`, color: chartTheme.text },
+        splitLine: { show: false },
+      },
+    ],
     series: [
       {
-        name: `${dimensionLabel}占比`,
-        type: 'pie',
-        radius: ['44%', '70%'],
-        center: ['36%', '50%'],
-        avoidLabelOverlap: true,
-        label: { show: false },
-        labelLine: { show: false },
+        name: valueName,
+        type: 'bar',
+        barMaxWidth: 20,
+        itemStyle: { borderRadius: [4, 4, 0, 0] },
         data: rows.map((item, sourceIndex) => ({
           name: item.dimensionName || item.dimensionCode,
-          value: Number(item.salesAmount || 0),
+          value: productContributionValue(item, grossProfitMode),
           sourceIndex,
           salesAmount: Number(item.salesAmount || 0),
           salesQuantity: Number(item.salesQuantity || 0),
+          estimatedGrossProfit: Number(item.estimatedGrossProfit || 0),
+          costCoverageRate: Number(item.costCoverageRate || 0),
           orderCount: item.orderCount,
           customerCount: item.customerCount,
         })),
+      },
+      {
+        name: '累计贡献',
+        type: 'line',
+        yAxisIndex: 1,
+        smooth: true,
+        symbolSize: 6,
+        lineStyle: { width: 3 },
+        label: {
+          show: true,
+          color: chartTheme.label,
+          fontWeight: 700,
+          formatter: (params: { value?: number | string }) => formatPercent(Number(params.value || 0)),
+        },
+        data: cumulativeRates,
       },
     ],
   }
@@ -3839,39 +4372,43 @@ function buildActivityTrendChartOption(): EChartsCoreOption {
   }
 }
 
-function buildActivityCostPieOption(): EChartsCoreOption {
+function buildActivityFunnelChartOption(): EChartsCoreOption {
   const rows = [
-    { name: '活动物料', value: 8000 },
-    { name: '样品/赠品', value: 5000 },
-    { name: '人员费用', value: 4000 },
-    { name: '品控/物流损耗', value: 2000 },
-    { name: '其他', value: 1000 },
+    { name: '覆盖客户', value: 320 },
+    { name: '有效触达', value: 238 },
+    { name: '产生订单', value: 96 },
+    { name: '完成回款', value: 61 },
   ]
   return {
-    color: chartPalette,
+    color: [chartTheme.primary, chartTheme.success, chartTheme.warning, chartTheme.profit],
     tooltip: {
       ...dashboardTooltipStyle(),
       trigger: 'item',
       formatter: (params: PieTooltipParam) => [
-        params.name || '成本项',
-        `金额：${formatMoney(params.value)}`,
-        `占比：${formatNumber(params.percent)}%`,
+        params.name || '活动漏斗',
+        `数量：${formatNumber(params.value)}`,
+        '样例数据，不进入真实经营汇总',
       ].join('<br/>'),
-    },
-    legend: {
-      bottom: 0,
-      left: 'center',
-      itemWidth: 12,
-      itemHeight: 8,
-      textStyle: { color: chartTheme.text },
     },
     series: [
       {
-        name: '成本构成',
-        type: 'pie',
-        radius: ['42%', '70%'],
-        center: ['50%', '43%'],
-        label: { formatter: '{b}\n{d}%', color: chartTheme.label },
+        name: '活动转化漏斗',
+        type: 'funnel',
+        top: 10,
+        left: '8%',
+        width: '84%',
+        minSize: '34%',
+        maxSize: '100%',
+        sort: 'descending',
+        gap: 4,
+        label: {
+          show: true,
+          position: 'inside',
+          color: '#fff',
+          fontWeight: 800,
+          formatter: '{b} {c}',
+        },
+        itemStyle: { borderColor: '#fff', borderWidth: 2 },
         data: rows,
       },
     ],
@@ -4721,6 +5258,18 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
+.bi-chart--target-heatmap,
+.bi-chart--inventory-flow,
+.bi-chart--ranking,
+.bi-chart--risk-ranking {
+  height: 300px;
+}
+
+.bi-chart--target-heatmap,
+.bi-chart--inventory-flow {
+  margin-bottom: 12px;
+}
+
 .product-sales-bars {
   min-width: 0;
 }
@@ -5440,7 +5989,7 @@ onMounted(() => {
 }
 
 .product-chart-grid--with-pie {
-  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
 }
 
 .product-sales-panel .supply-scroll-table {
@@ -5956,6 +6505,23 @@ onMounted(() => {
   background: #cbd5e1;
 }
 
+.ranking-visual-grid,
+.risk-visual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ranking-visual,
+.risk-visual {
+  min-width: 0;
+  padding: 10px 12px 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
 .dual-ranking-layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6372,6 +6938,8 @@ onMounted(() => {
 .target-completion-row,
 .activity-card,
 .inventory-operation-row,
+.ranking-visual,
+.risk-visual,
 .ranking-block,
 .risk-ranking-block,
 .overview-city-row,
@@ -6548,6 +7116,8 @@ onMounted(() => {
   .dashboard-grid,
   .product-sales-layout,
   .product-chart-grid--with-pie,
+  .ranking-visual-grid,
+  .risk-visual-grid,
   .dual-ranking-layout,
   .payment-risk-layout,
   .target-completion-row,
