@@ -146,7 +146,10 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     ] },
   ]),
   ...directPages('bi', '数据看板', 'analytics-bi-service', [
-    { key: 'sales-collection', title: '销售与回款看板' },
+    { key: 'sales', title: '销售看板' },
+    { key: 'city-operating', title: '城市经营看板' },
+    { key: 'activity', title: '活动看板' },
+    { key: 'product-inventory', title: '商品/库存看板' },
     { key: 'product-sales', title: '商品销售统计' },
     { key: 'gross-profit', title: '销售毛利分析' },
     { key: 'payment-risk', title: '回款风险看板' },

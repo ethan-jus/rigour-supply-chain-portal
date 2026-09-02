@@ -31,6 +31,8 @@ export interface SupplyDashboardRankingItem {
   rankType: string
   dimensionCode: string
   dimensionName: string
+  regionCode: string | null
+  regionName: string | null
   salesAmount: number
   paidAmount: number
   unpaidAmount: number
@@ -68,6 +70,43 @@ export interface SupplyDashboardProductSalesItem {
   costCoverageRate: number
   orderCount: number
   customerCount: number
+}
+
+export interface SupplyDashboardTargetCompletionItem {
+  dimensionType: string
+  dimensionCode: string
+  dimensionName: string
+  metricCode: string
+  metricName: string
+  targetValue: number
+  actualValue: number
+  achievementRate: number
+}
+
+export interface SupplyDashboardInventoryItemSummary {
+  categoryCode: string
+  categoryName: string
+  unitCode: string
+  procurementQuantity: number
+  shippedQuantity: number
+  remainingQuantity: number
+  inactiveRemainingQuantity: number
+}
+
+export interface SupplyDashboardInventoryReplenishmentItem {
+  categoryCode: string
+  categoryName: string
+  productCode: string
+  productName: string
+  unitCode: string
+  salesQuantity: number
+  dailySalesQuantity: number
+  availableQuantity: number
+  inTransitQuantity: number
+  coverageDays: number
+  suggestedProcurementQuantity: number
+  riskLevel: string
+  inventoryStatus: string
 }
 
 export interface SupplyDashboardRiskItem {
@@ -125,6 +164,10 @@ export interface SupplyDashboardOverview {
   brandSalesRanking: SupplyDashboardProductSalesItem[]
   paymentRiskCityRanking: SupplyDashboardRankingItem[]
   paymentRiskSalesRanking: SupplyDashboardRankingItem[]
+  cityTargetCompletions: SupplyDashboardTargetCompletionItem[]
+  salesTargetCompletions: SupplyDashboardTargetCompletionItem[]
+  inventoryItemSummary: SupplyDashboardInventoryItemSummary[]
+  inventoryReplenishment: SupplyDashboardInventoryReplenishmentItem[]
   cityCostRanking: SupplyDashboardCityCostItem[]
   risks: SupplyDashboardRiskItem[]
   freshness: SupplyDashboardDataFreshness[]

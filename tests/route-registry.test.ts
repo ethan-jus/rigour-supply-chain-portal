@@ -171,7 +171,7 @@ describe('数据库导航注册表', () => {
     ]
 
     expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(13)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(79)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(82)
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
@@ -193,7 +193,7 @@ describe('数据库导航注册表', () => {
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.bi.dashboards')
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.domainKey === 'bi').map((item) => item.title))
-      .toEqual(['销售与回款看板', '商品销售统计', '销售毛利分析', '回款风险看板', '城市成本看板', '库存风险看板'])
+      .toEqual(['销售看板', '城市经营看板', '活动看板', '商品/库存看板', '商品销售统计', '销售毛利分析', '回款风险看板', '城市成本看板', '库存风险看板'])
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '同步控制').map((item) => item.title))
       .toEqual(['订货宝同步中心'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
@@ -210,20 +210,24 @@ describe('数据库导航注册表', () => {
       .not.toContain('supply.crm.customers.customer-360')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.crm.assignments.external-staff')
-    expect(validateNavigation(navigation)).toHaveLength(92)
+    expect(validateNavigation(navigation)).toHaveLength(95)
   })
 
   it('接受已实现的供应链 BI 子看板路由', () => {
     expect(validateNavigation([
       menuNode('supply.bi.menu'),
       node('supply.bi.index', '/supply-chain/bi'),
+      node('supply.bi.sales', '/supply-chain/bi/sales'),
+      node('supply.bi.city-operating', '/supply-chain/bi/city-operating'),
+      node('supply.bi.activity', '/supply-chain/bi/activity'),
+      node('supply.bi.product-inventory', '/supply-chain/bi/product-inventory'),
       node('supply.bi.sales-collection', '/supply-chain/bi/sales-collection'),
       node('supply.bi.product-sales', '/supply-chain/bi/product-sales'),
       node('supply.bi.gross-profit', '/supply-chain/bi/gross-profit'),
       node('supply.bi.payment-risk', '/supply-chain/bi/payment-risk'),
       node('supply.bi.city-cost', '/supply-chain/bi/city-cost'),
       node('supply.bi.inventory-risk', '/supply-chain/bi/inventory-risk'),
-    ])).toHaveLength(8)
+    ])).toHaveLength(12)
 
     expect(() => validateNavigation([
       node('supply.bi.sync-quality', '/supply-chain/bi/sync-quality'),

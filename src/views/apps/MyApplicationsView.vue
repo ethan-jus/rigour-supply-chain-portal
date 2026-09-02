@@ -33,7 +33,7 @@
       <template #extra><el-button type="primary" @click="reload">重新加载</el-button></template>
     </el-result>
     <el-empty v-else-if="applicationStore.loaded && applicationStore.applications.length === 0" description="当前账号暂无已授权应用">
-      <p class="empty-hint">请联系租户管理员检查套餐、角色和应用资源授权。</p>
+      <p class="empty-hint">{{ emptyHint }}</p>
     </el-empty>
     <el-empty v-else-if="filteredApplications.length === 0" description="没有匹配的应用" />
     <div v-else class="application-grid">
@@ -68,8 +68,17 @@ const filteredApplications = computed(() => {
   return applicationStore.applications.filter((application) =>
     application.name.toLowerCase().includes(value) || application.code.toLowerCase().includes(value))
 })
+const emptyHint = computed(() => {
+  const currentUser = authStore.user
+  if (currentUser?.principalScope === 'TENANT'
+    && currentUser.roles.includes('TENANT_SUPER_ADMIN')
+    && currentUser.permissions.length === 0) {
+    return '当前角色已识别，但没有生效权限。请检查租户套餐订阅、套餐资源和角色资源授权。'
+  }
+  return '请联系租户管理员检查套餐、角色和应用资源授权。'
+})
 
-onMounted(() => { if (!applicationStore.loaded) void reload() })
+onMounted(() => { void reload() })
 watch(() => route.query.launchError, (launchError) => {
   if (launchError === 'navigation-unavailable') ElMessage.error('应用菜单加载失败，请稍后重试')
   if (launchError === 'applications-unavailable') ElMessage.error('应用目录加载失败，请稍后重试')
@@ -81,6 +90,7 @@ watch(() => route.query.launchError, (launchError) => {
 async function reload() {
   try {
     await authStore.fetchUser()
+    applicationStore.reset()
     navigationStore.reset()
     await applicationStore.fetchApplications()
     const navigationResults = await Promise.allSettled(applicationStore.applications

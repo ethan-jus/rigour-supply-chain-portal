@@ -79,7 +79,9 @@ export function setupPermissionGuard(router: Router): void {
     if (applicationCode) {
       const applicationStore = useApplicationStore()
       try {
-        if (!applicationStore.loaded) await applicationStore.fetchApplications()
+        if (!applicationStore.loaded || applicationStore.applications.length === 0) {
+          await applicationStore.fetchApplications()
+        }
       } catch (error) {
         if (isApiFailure(error, 401, 'IAM_UNAUTHORIZED')) {
           devWarn('加载应用目录时身份已失效，跳转登录页', { path: to.fullPath })

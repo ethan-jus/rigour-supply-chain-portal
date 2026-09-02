@@ -56,6 +56,7 @@ describe('路由守卫：无权限跳转 403', () => {
     const applicationStore = useApplicationStore()
     applicationStore.applications = []
     applicationStore.loaded = true
+    applicationStore.fetchApplications = vi.fn().mockResolvedValue(undefined)
 
     const router = createTestRouter()
     router.push('/system-admin/users')
@@ -133,10 +134,41 @@ describe('路由守卫：应用许可', () => {
     const applicationStore = useApplicationStore()
     applicationStore.applications = []
     applicationStore.loaded = true
+    applicationStore.fetchApplications = vi.fn().mockResolvedValue(undefined)
     const router = createTestRouter()
     router.push('/platform-admin')
     await router.isReady()
     expect(router.currentRoute.value.path).toBe('/403')
+  })
+
+  it('应用目录曾加载为空时会重新请求IAM应用授权', async () => {
+    authenticatedPlatformUser()
+    const applicationStore = useApplicationStore()
+    applicationStore.applications = []
+    applicationStore.loaded = true
+    applicationStore.fetchApplications = vi.fn().mockImplementation(async () => {
+      applicationStore.applications = [{
+        id: 'app-1', code: 'PLATFORM_ADMIN', name: '平台管理中心', iconKey: null,
+        launchMode: 'INTERNAL_ROUTE', targetUri: '/platform-admin', sortOrder: 10,
+      }]
+      applicationStore.loaded = true
+    })
+    const navigationStore = useNavigationStore()
+    navigationStore.fetchNavigation = vi.fn().mockImplementation(async (applicationCode: string) => {
+      navigationStore.navigationByApplication[applicationCode] = [{
+        id: 'nav-1', parentId: null, code: 'PLATFORM_ADMIN.PAGE.DASHBOARD', type: 'PAGE',
+        displayName: '平台管理首页', permissionCode: null, routeKey: 'platform.dashboard',
+        routePath: '/platform-admin', iconKey: null, sortOrder: 10, visible: true, keepAlive: false, children: [],
+      }]
+      navigationStore.loadedApplications.push(applicationCode)
+    })
+
+    const router = createTestRouter()
+    router.push('/platform-admin')
+    await router.isReady()
+
+    expect(applicationStore.fetchApplications).toHaveBeenCalledOnce()
+    expect(router.currentRoute.value.name).toBe('PlatformAdminDashboard')
   })
 
   it('菜单接口异常时进入服务不可用页而不是静默回到应用门户', async () => {
