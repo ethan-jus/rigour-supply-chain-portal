@@ -42,12 +42,24 @@ const crmCustomerDictionaryRouteKeys = new Set([
   'supply.crm.customers.areas',
 ])
 
+const hrEmployeeRouteKeys = new Set([
+  'supply.hr.employees',
+])
+
+const hrPositionRouteKeys = new Set([
+  'supply.hr.positions',
+])
+
 const businessDictionaryRouteKeys = new Set([
   'supply.settings.numbering-dictionaries',
 ])
 
 const integrationSyncCenterRouteKeys = new Set([
   'supply.integration.overview',
+])
+
+const feishuImportRouteKeys = new Set([
+  'supply.integration.feishu-import',
 ])
 
 const procurementPaymentPlaceholderRouteKeys = new Set([
@@ -73,13 +85,19 @@ const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.filter((page) =
                 ? () => import('@/views/supply-chain/crm/CrmShippingAddressView.vue')
                 : crmCustomerDictionaryRouteKeys.has(page.routeKey)
                   ? () => import('@/views/supply-chain/crm/CrmCustomerDictionaryView.vue')
-                  : businessDictionaryRouteKeys.has(page.routeKey)
-                      ? () => import('@/views/supply-chain/settings/BusinessDictionaryView.vue')
-                      : integrationSyncCenterRouteKeys.has(page.routeKey)
-                        ? () => import('@/views/supply-chain/dhb/DhbPage.vue')
-                        : procurementPaymentPlaceholderRouteKeys.has(page.routeKey)
-                          ? () => import('@/views/supply-chain/erp/PurchasePaymentPlaceholderView.vue')
-                          : () => import('@/views/supply-chain/domain/CapabilityView.vue'),
+                  : hrEmployeeRouteKeys.has(page.routeKey)
+                    ? () => import('@/views/supply-chain/hr/HrEmployeeManagementView.vue')
+                    : hrPositionRouteKeys.has(page.routeKey)
+                      ? () => import('@/views/supply-chain/hr/HrPositionManagementView.vue')
+                      : businessDictionaryRouteKeys.has(page.routeKey)
+                        ? () => import('@/views/supply-chain/settings/BusinessDictionaryView.vue')
+                        : feishuImportRouteKeys.has(page.routeKey)
+                          ? () => import('@/views/supply-chain/feishu/FeishuImportPage.vue')
+                          : integrationSyncCenterRouteKeys.has(page.routeKey)
+                            ? () => import('@/views/supply-chain/dhb/DhbPage.vue')
+                            : procurementPaymentPlaceholderRouteKeys.has(page.routeKey)
+                              ? () => import('@/views/supply-chain/erp/PurchasePaymentPlaceholderView.vue')
+                              : () => import('@/views/supply-chain/domain/CapabilityView.vue'),
   meta: {
     title: page.title,
     requiresAuth: true,
@@ -87,9 +105,13 @@ const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.filter((page) =
     routeKey: page.routeKey,
     permission: page.domainKey === 'crm'
       ? 'crm:customer:read'
-      : businessDictionaryRouteKeys.has(page.routeKey)
-        ? 'business-settings:dict:read'
-        : undefined,
+      : hrEmployeeRouteKeys.has(page.routeKey)
+        ? 'hr:employee:read'
+        : hrPositionRouteKeys.has(page.routeKey)
+          ? 'hr:position:read'
+          : businessDictionaryRouteKeys.has(page.routeKey)
+            ? 'business-settings:dict:read'
+            : undefined,
   },
 }))
 
@@ -240,6 +262,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       { path: 'bi', name: 'SupplyBi', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '供应链经营总览', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.index', dashboardSection: 'overview', permission: 'analytics:dashboard:read' } },
       { path: 'bi/sales', name: 'SupplyBiSales', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '销售看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.sales', dashboardSection: 'sales', permission: 'analytics:dashboard:read' } },
       { path: 'bi/city-operating', name: 'SupplyBiCityOperating', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '城市经营看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.city-operating', dashboardSection: 'city-operating', permission: 'analytics:dashboard:read' } },
+      { path: 'bi/customer', name: 'SupplyBiCustomer', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '客户看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.customer', dashboardSection: 'customer', permission: 'analytics:dashboard:read' } },
       { path: 'bi/activity', name: 'SupplyBiActivity', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '活动看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.activity', dashboardSection: 'activity', permission: 'analytics:dashboard:read' } },
       { path: 'bi/product-inventory', name: 'SupplyBiProductInventory', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '商品/库存看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.product-inventory', dashboardSection: 'product-inventory', permission: 'analytics:dashboard:read' } },
       { path: 'bi/sales-collection', name: 'SupplyBiSalesCollection', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '销售与回款看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.sales-collection', dashboardSection: 'sales-collection', permission: 'analytics:dashboard:read' } },

@@ -19,9 +19,9 @@
 
     <section class="sync-operation">
       <div class="operation-copy">
-        <span>统一入口</span>
-        <h2>按依赖顺序同步 ERP、CRM、Order 和字典</h2>
-        <p>前端只提供统一手动同步；单模块同步只作为排障修复能力保留在后端，不放成业务员的默认操作。</p>
+        <span>手动入口</span>
+        <h2>选择同步范围后执行订货宝同步</h2>
+        <p>默认全链路；需要只同步商品时选择 ERP商品，采购订单、仓库和库存流转不会被触发。</p>
         <el-alert
           v-if="syncBusyMessage"
           class="sync-busy-alert"
@@ -32,6 +32,18 @@
         />
       </div>
       <div class="operation-actions">
+        <el-date-picker
+          v-model="syncWindow"
+          type="datetimerange"
+          unlink-panels
+          clearable
+          format="YYYY-MM-DD HH:mm:ss"
+          value-format="YYYY-MM-DDTHH:mm:ss"
+          start-placeholder="开始时间"
+          end-placeholder="结束时间"
+          range-separator="至"
+          class="operation-window"
+        />
         <el-input-number
           v-model="maxPages"
           :min="1"
@@ -41,26 +53,34 @@
           aria-label="最大页数"
         />
         <el-button type="primary" :loading="syncing && runningStage === 'full'" @click="runUnifiedSync">
-          统一同步
+          同步{{ selectedSyncMode.label }}
         </el-button>
       </div>
     </section>
 
-    <section class="stage-sync">
-      <div class="stage-sync__heading">
-        <span>分段执行</span>
-        <strong>重同步验收按依赖顺序逐段推进</strong>
+    <section class="sync-scope">
+      <div class="sync-scope__heading">
+        <div>
+          <span>同步范围</span>
+          <strong>当前：{{ selectedSyncMode.label }}</strong>
+          <p>{{ selectedSyncMode.description }}</p>
+        </div>
+        <div class="sync-scope__steps">
+          <span v-for="step in selectedSyncMode.steps" :key="step">{{ step }}</span>
+        </div>
       </div>
-      <div class="stage-sync__actions">
-        <el-button
-          v-for="stage in syncStages"
-          :key="stage.key"
-          :loading="syncing && runningStage === stage.key"
-          :disabled="syncing && runningStage !== stage.key"
-          @click="runStageSync(stage)"
+      <div class="sync-scope__options" role="group" aria-label="订货宝同步范围">
+        <button
+          v-for="mode in syncModes"
+          :key="mode.key"
+          type="button"
+          :class="['sync-scope-option', { 'sync-scope-option--active': selectedSyncModeKey === mode.key }]"
+          :disabled="syncing"
+          @click="selectSyncMode(mode.key)"
         >
-          {{ stage.label }}
-        </el-button>
+          <strong>{{ mode.label }}</strong>
+          <span>{{ mode.summary }}</span>
+        </button>
       </div>
     </section>
 
@@ -350,13 +370,18 @@ interface SyncSection {
 interface SyncStage {
   key: string
   label: string
+  description: string
+  summary: string
+  steps: string[]
   command: Omit<DhbSyncOrchestrationCommand, 'maxPages'>
 }
 
 const activeSection = ref('overview')
 const maxPages = ref(100)
+const syncWindow = ref<[string, string] | []>([])
 const syncing = ref(false)
 const runningStage = ref('')
+const selectedSyncModeKey = ref('all')
 const syncBusyMessage = ref('')
 const latestResult = ref<DhbSyncOrchestrationResult | null>(null)
 const issueLoading = ref(false)
@@ -454,24 +479,32 @@ const boundaryRules = [
   { label: '来源系统', value: '订货宝 API 与回执数据' },
   { label: '同步落点', value: 'Raw、外部 ID 绑定、运行审计、我方业务表' },
   { label: '业务入口', value: 'ERP、CRM、Order 只展示我方业务表结果' },
-  { label: '页面动作', value: '默认只提供统一同步；单对象修复放在运维排障链路中逐步补齐' },
+  { label: '页面动作', value: '手动同步可指定范围；单对象修复放在运维排障链路中逐步补齐' },
 ]
 
 const syncStages: SyncStage[] = [
   {
-    key: 'dictionary-iam',
-    label: '1 字典/IAM',
+    key: 'all',
+    label: '全链路',
+    description: '按依赖顺序同步字典/IAM、ERP、CRM 和 Order，适合完整重同步验收。',
+    summary: 'ERP + CRM + Order',
+    steps: ['字典/IAM', 'ERP商品', 'CRM客户', 'ERP供应链', 'Order订单'],
     command: {
       includeDictionary: true,
       includeIam: true,
-      includeErp: false,
-      includeCrm: false,
-      includeOrder: false,
+      includeErp: true,
+      includeErpProduct: true,
+      includeErpSupply: true,
+      includeCrm: true,
+      includeOrder: true,
     },
   },
   {
-    key: 'erp-product',
-    label: '2 ERP商品',
+    key: 'erp',
+    label: 'ERP商品',
+    description: '只同步 ERP 商品主数据，不触发采购订单、仓库和其他供应链数据。',
+    summary: '商品主数据',
+    steps: ['ERP商品'],
     command: {
       includeDictionary: false,
       includeIam: false,
@@ -483,8 +516,25 @@ const syncStages: SyncStage[] = [
     },
   },
   {
+    key: 'dictionary-iam',
+    label: '字典/IAM',
+    description: '只同步业务字典和人员来源映射，作为后续客户、商品和订单同步的前置数据。',
+    summary: '前置主数据',
+    steps: ['字典', 'IAM'],
+    command: {
+      includeDictionary: true,
+      includeIam: true,
+      includeErp: false,
+      includeCrm: false,
+      includeOrder: false,
+    },
+  },
+  {
     key: 'crm',
-    label: '3 CRM客户',
+    label: 'CRM客户',
+    description: '只同步 CRM 客户主数据，不触发 ERP、Order 同步。',
+    summary: '客户主数据',
+    steps: ['CRM客户'],
     command: {
       includeDictionary: false,
       includeIam: false,
@@ -495,7 +545,10 @@ const syncStages: SyncStage[] = [
   },
   {
     key: 'erp-supply',
-    label: '4 ERP供应链',
+    label: 'ERP供应链',
+    description: '只同步 ERP 供应链数据，适合采购、入库、出库和调拨链路单独修复。',
+    summary: '采购/库存流转',
+    steps: ['ERP供应链'],
     command: {
       includeDictionary: false,
       includeIam: false,
@@ -508,7 +561,10 @@ const syncStages: SyncStage[] = [
   },
   {
     key: 'order',
-    label: '5 Order订单',
+    label: 'Order订单',
+    description: '只同步 Order 订单域数据，不触发 ERP 和 CRM。',
+    summary: '订单/履约/回款',
+    steps: ['Order订单'],
     command: {
       includeDictionary: false,
       includeIam: false,
@@ -518,6 +574,12 @@ const syncStages: SyncStage[] = [
     },
   },
 ]
+
+const syncModes = syncStages
+
+const selectedSyncMode = computed(() =>
+  syncModes.find((mode) => mode.key === selectedSyncModeKey.value) || syncModes[0],
+)
 
 const latestSteps = computed(() =>
   latestResult.value?.tenants.flatMap((tenant) => tenant.steps) || [],
@@ -563,11 +625,24 @@ const syncDurationLabel = computed(() => {
 })
 
 async function runUnifiedSync() {
-  await runSync('full', { maxPages: maxPages.value }, '订货宝统一同步已完成')
+  const mode = selectedSyncMode.value
+  await runSync(
+    'full',
+    { ...mode.command, ...selectedWindowCommand(), maxPages: maxPages.value },
+    `${mode.label}同步已完成`,
+  )
 }
 
 async function runStageSync(stage: SyncStage) {
-  await runSync(stage.key, { ...stage.command, maxPages: maxPages.value }, `${stage.label}同步已完成`)
+  await runSync(
+    stage.key,
+    { ...stage.command, ...selectedWindowCommand(), maxPages: maxPages.value },
+    `${stage.label}同步已完成`,
+  )
+}
+
+function selectSyncMode(key: string) {
+  selectedSyncModeKey.value = key
 }
 
 async function runSync(stageKey: string, command: DhbSyncOrchestrationCommand, successMessage: string) {
@@ -577,8 +652,10 @@ async function runSync(stageKey: string, command: DhbSyncOrchestrationCommand, s
   try {
     const result = await syncDhbOrchestration(command)
     latestResult.value = result
-    if (result.status === 'SUCCEEDED') {
+    if (result.status === 'SUCCEEDED' && latestSteps.value.length > 0) {
       ElMessage.success(successMessage)
+    } else if (result.status === 'SKIPPED' || latestSteps.value.length === 0) {
+      ElMessage.warning('本次没有执行同步步骤，请检查订货宝连接器或同步任务配置')
     } else {
       ElMessage.warning('订货宝统一同步未全部成功，请查看结果明细')
     }
@@ -732,6 +809,22 @@ function formatTime(value: string | null | undefined) {
   return timestamp.toLocaleString('zh-CN', { hour12: false })
 }
 
+function selectedWindowCommand(): Pick<DhbSyncOrchestrationCommand, 'from' | 'to'> {
+  if (!Array.isArray(syncWindow.value) || syncWindow.value.length !== 2) return {}
+  const [from, to] = syncWindow.value
+  if (!from || !to) return {}
+  return {
+    from: localDateTimeToIso(from),
+    to: localDateTimeToIso(to),
+  }
+}
+
+function localDateTimeToIso(value: string) {
+  const timestamp = new Date(value)
+  if (Number.isNaN(timestamp.getTime())) return value
+  return timestamp.toISOString()
+}
+
 function isSyncBusyError(reason: unknown): boolean {
   if (!reason || typeof reason !== 'object') return false
   const candidate = reason as { code?: unknown; response?: { status?: unknown } }
@@ -778,9 +871,14 @@ defineExpose({
   boundaryRules,
   latestSteps,
   syncStages,
+  syncModes,
+  selectedSyncMode,
+  selectedSyncModeKey,
   issueGroups,
   visibleIssueItems,
   issueSummary,
+  selectSyncMode,
+  syncWindow,
   runUnifiedSync,
   runStageSync,
   loadIssueWorkbench,
@@ -847,39 +945,113 @@ defineExpose({
   padding: 16px 18px;
 }
 
-.stage-sync {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 16px;
+.sync-scope {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
   border: 1px solid var(--supply-border);
   border-radius: var(--supply-radius);
   background: var(--supply-surface);
 }
 
-.stage-sync__heading {
-  display: grid;
+.sync-scope__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 4px;
-  min-width: 180px;
 }
 
-.stage-sync__heading span {
+.sync-scope__heading span,
+.sync-scope__heading strong {
+  display: block;
+}
+
+.sync-scope__heading span {
   color: var(--supply-primary);
   font-size: $font-size-xs;
   font-weight: 700;
 }
 
-.stage-sync__heading strong {
+.sync-scope__heading strong {
+  margin-top: 4px;
   color: var(--supply-text);
-  font-size: $font-size-sm;
+  font-size: $font-size-lg;
 }
 
-.stage-sync__actions {
+.sync-scope__heading p {
+  margin: 4px 0 0;
+  color: var(--supply-text-muted);
+  font-size: $font-size-sm;
+  line-height: 1.55;
+}
+
+.sync-scope__steps {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 6px;
+  max-width: 520px;
+}
+
+.sync-scope__steps span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--supply-border);
+  border-radius: 999px;
+  color: var(--supply-text);
+  background: var(--supply-surface-subtle);
+}
+
+.sync-scope__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
+}
+
+.sync-scope-option {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 10px 11px;
+  cursor: pointer;
+  text-align: left;
+  border: 1px solid var(--supply-border);
+  border-radius: var(--supply-radius);
+  background: var(--supply-surface-subtle);
+}
+
+.sync-scope-option:hover:not(:disabled) {
+  border-color: var(--supply-primary);
+}
+
+.sync-scope-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.sync-scope-option--active {
+  border-color: var(--supply-primary);
+  background: color-mix(in srgb, var(--supply-primary) 8%, #fff);
+  box-shadow: inset 4px 0 0 var(--supply-primary);
+}
+
+.sync-scope-option strong {
+  overflow: hidden;
+  color: var(--supply-text);
+  font-size: $font-size-sm;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-scope-option span {
+  overflow: hidden;
+  color: var(--supply-text-muted);
+  font-size: $font-size-xs;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .issue-workbench {
@@ -1092,7 +1264,13 @@ defineExpose({
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
+}
+
+.operation-window {
+  width: min(100%, 390px);
 }
 
 .sync-result {
@@ -1233,21 +1411,29 @@ defineExpose({
   .section-panel {
     grid-template-columns: 1fr;
   }
+
+  .sync-scope__options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
   .sync-heading,
   .sync-operation,
-  .stage-sync,
+  .sync-scope__heading,
   .issue-workbench__heading {
     flex-direction: column;
     align-items: stretch;
   }
 
   .operation-actions,
-  .stage-sync__actions {
+  .sync-scope__steps {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .sync-scope__options {
+    grid-template-columns: 1fr;
   }
 
   .result-summary {

@@ -14,7 +14,10 @@
           <el-input v-model="filters.paymentNo" clearable placeholder="回款单号" style="width: 170px" />
         </el-form-item>
         <el-form-item label="销售订单号">
-          <el-input v-model="filters.salesOrderNo" clearable placeholder="销售订单号" style="width: 170px" />
+          <el-input v-model="filters.salesOrderNo" clearable placeholder="系统订单号" style="width: 170px" />
+        </el-form-item>
+        <el-form-item label="来源单号">
+          <el-input v-model="filters.sourceDocumentNo" clearable placeholder="飞书/DD单号" style="width: 170px" />
         </el-form-item>
         <el-form-item label="客户名称">
           <el-input v-model="filters.customerName" clearable placeholder="客户名称" style="width: 200px" />
@@ -66,6 +69,17 @@
           <el-table-column prop="paymentNo" label="回款单号" width="170" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.paymentNo || '-' }}</template>
           </el-table-column>
+          <el-table-column prop="sourceSystemCode" label="来源" width="110">
+            <template #default="scope">
+              <el-tag v-if="scope.row.sourceSystemCode" effect="plain">
+                {{ sourceSystemLabel(scope.row.sourceSystemCode) }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sourceDocumentNo" label="来源单号" width="170" show-overflow-tooltip>
+            <template #default="scope">{{ scope.row.sourceDocumentNo || '-' }}</template>
+          </el-table-column>
           <el-table-column prop="salesOrderNoSnapshot" label="销售订单号" width="170" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.salesOrderNoSnapshot || '-' }}</template>
           </el-table-column>
@@ -110,32 +124,59 @@
       </div>
     </el-card>
 
-    <el-drawer v-model="detailVisible" class="sales-payment-detail-drawer" size="min(760px, 94vw)" :with-header="false">
+    <el-drawer v-model="detailVisible" class="sales-payment-detail-drawer" size="min(860px, 94vw)" :with-header="false">
       <div v-if="detail" class="detail-shell">
         <header class="detail-hero">
-          <div>
+          <div class="detail-hero-main">
             <span>回款详情</span>
             <h2>{{ detail.paymentNo }}</h2>
             <p>{{ detail.salesOrderNoSnapshot || '-' }} · ¥{{ formatAmount(detail.paidAmount) }}</p>
           </div>
           <el-button circle plain aria-label="关闭回款详情" @click="detailVisible = false">×</el-button>
         </header>
-        <div class="detail-content">
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="回款单号">{{ detail.paymentNo }}</el-descriptions-item>
-            <el-descriptions-item label="销售订单号">{{ detail.salesOrderNoSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户名称">{{ detail.customerNameSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户编码">{{ detail.customerCodeSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="回款金额">¥{{ formatAmount(detail.paidAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="付款方式">{{ paymentMethodLabel(detail.paymentMethodCode) }}</el-descriptions-item>
-            <el-descriptions-item label="回款人员">
-              {{ detail.collectorNameSnapshot || detail.collectorStaffCode || '-' }}
-            </el-descriptions-item>
-            <el-descriptions-item label="员工编码">{{ detail.collectorStaffCode || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="回款时间">{{ formatTime(detail.paymentTime) }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ formatTime(detail.updatedTime) }}</el-descriptions-item>
-            <el-descriptions-item label="备注" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
-          </el-descriptions>
+        <div class="detail-content payment-detail-content">
+          <div class="detail-summary payment-detail-summary">
+            <div><span>回款金额</span><strong>¥{{ formatAmount(detail.paidAmount) }}</strong></div>
+            <div><span>回款时间</span><strong>{{ formatTime(detail.paymentTime) }}</strong></div>
+            <div><span>付款方式</span><strong>{{ paymentMethodLabel(detail.paymentMethodCode) }}</strong></div>
+            <div><span>回款人员</span><strong>{{ detail.collectorNameSnapshot || detail.collectorStaffCode || '-' }}</strong></div>
+          </div>
+
+          <section class="detail-panel">
+            <div class="detail-section-heading">
+              <div>
+                <h3>单据信息</h3>
+                <span>{{ sourceSystemLabel(detail.sourceSystemCode) }}</span>
+              </div>
+            </div>
+            <div class="detail-field-grid">
+              <div class="detail-field"><span>回款单号</span><strong>{{ detail.paymentNo }}</strong></div>
+              <div class="detail-field"><span>销售订单号</span><strong>{{ detail.salesOrderNoSnapshot || '-' }}</strong></div>
+              <div class="detail-field"><span>来源单号</span><strong>{{ detail.sourceDocumentNo || '-' }}</strong></div>
+              <div class="detail-field detail-field--wide"><span>客户名称</span><strong>{{ detail.customerNameSnapshot || '-' }}</strong></div>
+              <div class="detail-field"><span>客户编码</span><strong>{{ detail.customerCodeSnapshot || '-' }}</strong></div>
+              <div class="detail-field"><span>员工编码</span><strong>{{ detail.collectorStaffCode || '-' }}</strong></div>
+              <div class="detail-field"><span>更新时间</span><strong>{{ formatTime(detail.updatedTime) }}</strong></div>
+              <div class="detail-field detail-field--full"><span>备注</span><strong>{{ detail.remark || '-' }}</strong></div>
+            </div>
+          </section>
+
+          <section class="detail-panel">
+            <div class="detail-section-heading">
+              <div>
+                <h3>回款凭证</h3>
+                <span>凭证 {{ paymentAttachmentItems(detail).length }} 个</span>
+              </div>
+            </div>
+            <div class="payment-attachment-panel">
+              <FundAttachmentPreviewList
+                :attachments="paymentAttachmentItems(detail)"
+                direction="row"
+                empty-text="暂无回款凭证"
+                unavailable-text="暂不可预览"
+              />
+            </div>
+          </section>
         </div>
       </div>
       <el-skeleton v-else :rows="8" animated />
@@ -144,9 +185,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import FundAttachmentPreviewList from '@/components/supply/FundAttachmentPreviewList.vue'
 import {
   deleteSalesPayment,
   getSalesPayment,
@@ -174,6 +216,7 @@ const pageData = ref<OrderPage<SalesPaymentSummary>>({ total: 0, begin: 0, step:
 const filters = reactive({
   paymentNo: '',
   salesOrderNo: '',
+  sourceDocumentNo: '',
   customerName: '',
   collectorStaffCode: '',
   paymentMethodCode: '',
@@ -200,6 +243,7 @@ async function loadRows() {
       step: pageSize.value,
       paymentNo: empty(filters.paymentNo),
       salesOrderNo: empty(filters.salesOrderNo),
+      sourceDocumentNo: empty(filters.sourceDocumentNo),
       customerName: empty(filters.customerName),
       collectorStaffCode: empty(filters.collectorStaffCode),
       paymentMethodCode: empty(filters.paymentMethodCode),
@@ -216,6 +260,7 @@ async function loadRows() {
 function resetFilters() {
   filters.paymentNo = ''
   filters.salesOrderNo = ''
+  filters.sourceDocumentNo = ''
   filters.customerName = ''
   filters.collectorStaffCode = ''
   filters.paymentMethodCode = ''
@@ -226,7 +271,12 @@ function resetFilters() {
 
 function applyRouteQuery() {
   let changed = false
+  changed = setFilterValue('paymentNo', routeText(route.query.paymentNo)) || changed
+  changed = setFilterValue('salesOrderNo', routeText(route.query.salesOrderNo)) || changed
+  changed = setFilterValue('sourceDocumentNo', routeText(route.query.sourceDocumentNo)) || changed
+  changed = setFilterValue('customerName', routeText(route.query.customerName)) || changed
   changed = setFilterValue('collectorStaffCode', routeText(route.query.collectorStaffCode)) || changed
+  changed = setFilterValue('paymentMethodCode', routeText(route.query.paymentMethodCode)) || changed
   const from = routeDate(route.query.paymentTimeFrom)
   const to = routeDate(route.query.paymentTimeTo)
   const nextRange = from || to ? [from, to].filter(Boolean) : []
@@ -237,7 +287,10 @@ function applyRouteQuery() {
   return changed
 }
 
-function setFilterValue(key: 'paymentNo' | 'salesOrderNo' | 'customerName' | 'collectorStaffCode' | 'paymentMethodCode', value: string) {
+function setFilterValue(
+  key: 'paymentNo' | 'salesOrderNo' | 'sourceDocumentNo' | 'customerName' | 'collectorStaffCode' | 'paymentMethodCode',
+  value: string,
+) {
   if (filters[key] === value) return false
   filters[key] = value
   return true
@@ -267,9 +320,20 @@ async function openDetail(row: SalesPaymentSummary) {
   detail.value = null
   try {
     detail.value = await getSalesPayment(row.id)
+    await nextTick()
+    scrollDetailToTop()
   } catch (reason) {
     ElMessage.error(errorMessage(reason, '销售回款详情加载失败'))
   }
+}
+
+function scrollDetailToTop() {
+  const reset = () => {
+    document.querySelector('.sales-payment-detail-drawer .el-drawer__body')?.scrollTo({ top: 0 })
+  }
+  reset()
+  requestAnimationFrame(reset)
+  window.setTimeout(reset, 0)
 }
 
 async function deleteRow(row: SalesPaymentSummary) {
@@ -293,6 +357,12 @@ async function deleteRow(row: SalesPaymentSummary) {
 
 function isExternalSource(row: Pick<SalesPaymentSummary, 'sourceSystemCode'>) {
   return Boolean(row.sourceSystemCode && row.sourceSystemCode.trim())
+}
+
+function sourceSystemLabel(value: string | null | undefined) {
+  if (value === 'FEISHU') return '飞书'
+  if (value === 'DINGHUOBAO' || value === 'DHB') return '订货宝'
+  return value || '-'
 }
 
 function paymentMethodLabel(value: string | null | undefined) {
@@ -329,6 +399,22 @@ function empty(value: string): string | undefined {
 function errorMessage(reason: unknown, fallback: string): string {
   if (reason instanceof Error && reason.message) return reason.message
   return fallback
+}
+
+function paymentAttachmentItems(row: SalesPaymentDetail) {
+  const result = [...(row.attachments || [])]
+  const existing = new Set(result.map((item) => item.objectKey))
+  for (const key of row.voucherKeys || []) {
+    if (!key || existing.has(key)) continue
+    result.push({ objectKey: key, fileName: attachmentName(key), url: null })
+  }
+  return result
+}
+
+function attachmentName(value: string) {
+  const normalized = value.split('?')[0] || value
+  const parts = normalized.split(/[\\/]/)
+  return parts[parts.length - 1] || normalized
 }
 </script>
 
@@ -386,40 +472,200 @@ function errorMessage(reason: unknown, fallback: string): string {
   padding-top: 12px;
 }
 
+.sales-payment-detail-drawer :deep(.el-drawer__body) {
+  padding: 0;
+}
+
 .detail-shell {
   display: flex;
   min-height: 100%;
   flex-direction: column;
+  background: var(--supply-page-background, #f6f8fb);
 }
 
 .detail-hero {
+  position: sticky;
+  z-index: 4;
+  top: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 24px;
-  color: #fff;
-  background: #0f766e;
+  gap: 18px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--supply-border, #e5e7eb);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+}
+
+.detail-hero-main {
+  min-width: 0;
 }
 
 .detail-hero span {
+  color: var(--supply-primary, #2563eb);
   font-size: 13px;
-  opacity: 0.85;
+  font-weight: 700;
 }
 
 .detail-hero h2 {
+  overflow: hidden;
   margin: 6px 0;
-  font-size: 26px;
+  color: var(--supply-text, #111827);
+  font-size: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detail-hero p {
   margin: 0;
-  opacity: 0.9;
+  color: var(--supply-text-muted, #64748b);
 }
 
 .detail-content {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 20px 24px;
+  gap: 14px;
+  padding: 18px 22px 24px;
 }
+
+.detail-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.payment-detail-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.detail-summary > div {
+  min-width: 0;
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+}
+
+.detail-summary span,
+.detail-summary strong {
+  display: block;
+  min-width: 0;
+}
+
+.detail-summary span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.detail-summary strong {
+  margin-top: 6px;
+  color: var(--el-text-color-primary);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.detail-panel {
+  padding: 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+}
+
+.detail-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.detail-section-heading h3 {
+  margin: 0;
+  color: var(--el-text-color-primary);
+  font-size: 16px;
+}
+
+.detail-section-heading span {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.detail-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.detail-field {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+}
+
+.detail-field span,
+.detail-field strong {
+  display: block;
+  min-width: 0;
+}
+
+.detail-field span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.detail-field strong {
+  margin-top: 6px;
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.detail-field--wide {
+  grid-column: span 2;
+}
+
+.detail-field--full {
+  grid-column: 1 / -1;
+}
+
+.payment-attachment-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+}
+
+@media (max-width: 900px) {
+  .payment-detail-summary,
+  .detail-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-field--wide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .detail-hero {
+    flex-direction: column;
+  }
+
+  .payment-detail-summary,
+  .detail-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-field--wide {
+    grid-column: auto;
+  }
+}
+
 </style>

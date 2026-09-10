@@ -16,12 +16,20 @@ export interface InternalCrmCustomerSummary {
   contactPhone: string | null
   customerTypeCode: string | null
   regionCode: string | null
+  regionName?: string | null
+  cityName?: string | null
+  customerSourceName?: string | null
+  businessCategoryName?: string | null
   ownerSalesUserId: string | null
   ownerSalesName: string | null
-  ownerStaffCode?: string | null
-  ownerStaffNameSnapshot?: string | null
+  ownerEmployeeCode?: string | null
+  ownerEmployeeNameSnapshot?: string | null
   settlementTypeCode: string | null
   statusCode: string
+  sourceSystemCode?: string | null
+  sourceDocumentNo?: string | null
+  sourceCreatedAt?: string | null
+  sourceUpdatedAt?: string | null
   revision: number
   updatedTime: string
 }
@@ -42,8 +50,8 @@ export interface InternalCrmCustomerCommand {
   regionCode?: string | null
   ownerSalesUserId?: string | null
   ownerSalesName?: string | null
-  ownerStaffCode?: string | null
-  ownerStaffNameSnapshot?: string | null
+  ownerEmployeeCode?: string | null
+  ownerEmployeeNameSnapshot?: string | null
   settlementTypeCode?: string | null
   address?: string | null
   statusCode?: string | null
@@ -60,7 +68,7 @@ export interface InternalCrmCustomerQuery {
   customerTypeCode?: string
   regionCode?: string
   ownerSalesUserId?: string
-  ownerStaffCode?: string
+  ownerEmployeeCode?: string
   statusCode?: string
 }
 
@@ -74,6 +82,14 @@ export interface CrmDictionaryView {
   parentCode: string | null
   sourcePresence?: string | null
   sourceAbsentAt?: string | null
+  revision?: number | null
+}
+
+export interface CrmCustomerAreaCommand {
+  areaName: string
+  parentAreaCode?: string | null
+  status?: string | null
+  revision?: number | null
 }
 
 export interface ShippingAddressSummaryView {
@@ -145,6 +161,27 @@ export function getCrmCustomerAreas(params: { begin?: number; step?: number; q?:
     params: { begin: 0, step: 200, ...params },
     stayOnUnauthorized: true,
   })
+}
+
+export function createCrmCustomerArea(command: CrmCustomerAreaCommand) {
+  return apiClient.post<CrmDictionaryView>(`${CRM_BASE_PATH}/customer-areas`, command, {
+    stayOnUnauthorized: true,
+  })
+}
+
+export function updateCrmCustomerArea(id: string | number, command: CrmCustomerAreaCommand) {
+  return apiClient.put<CrmDictionaryView>(
+    `${CRM_BASE_PATH}/customer-areas/${encodeURIComponent(String(id))}`,
+    command,
+    { stayOnUnauthorized: true },
+  )
+}
+
+export function deleteCrmCustomerArea(id: string | number, revision: number) {
+  return apiClient.delete<void>(
+    `${CRM_BASE_PATH}/customer-areas/${encodeURIComponent(String(id))}`,
+    { params: { revision }, stayOnUnauthorized: true },
+  )
 }
 
 export function getCrmShippingAddresses(params: { begin?: number; step?: number; q?: string } = {}) {

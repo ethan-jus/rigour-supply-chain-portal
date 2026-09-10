@@ -36,9 +36,16 @@ function snapshot(moduleCode: string, code: string): DictionarySnapshot {
 }
 
 function applySnapshot(target: DictionarySnapshot, result: EffectiveDictView) {
+  const seen = new Set<string>()
   target.items = [...result.items]
     .filter((item) => item.dictionaryItemCode.trim() !== '')
     .sort((left, right) => left.ordinal - right.ordinal || left.dictionaryItemCode.localeCompare(right.dictionaryItemCode))
+    .filter((item) => {
+      const key = item.dictionaryItemCode.trim().toUpperCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
   target.loaded = true
   target.failed = false
 }

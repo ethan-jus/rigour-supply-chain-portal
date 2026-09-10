@@ -19,6 +19,8 @@ export interface DhbSyncOrchestrationCommand {
   includeDictionary?: boolean | null
   includeErpProduct?: boolean | null
   includeErpSupply?: boolean | null
+  from?: string | null
+  to?: string | null
 }
 
 export interface DhbSyncOrchestrationStep {
@@ -152,7 +154,7 @@ export interface DhbWarehousingReceipt {
   typeName: string | null
   sourceStatus: string | null
   sourceStatusName: string | null
-  staffName: string | null
+  employeeName: string | null
   storageAt: string | null
   sourceCreatedAt: string | null
   sourceUpdatedAt: string | null

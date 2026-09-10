@@ -41,6 +41,28 @@ export interface SupplyDashboardRankingItem {
   rate: number
 }
 
+export interface SupplyDashboardSalesMonthlyPerformance {
+  period: string
+  ownerStaffCode: string
+  ownerStaffName: string
+  regionCode: string | null
+  regionName: string | null
+  salesAmount: number
+  paidAmount: number
+  unpaidAmount: number
+  orderCount: number
+  customerCount: number
+  rate: number
+}
+
+export interface SupplyDashboardPaymentAgingBucket {
+  bucketCode: string
+  bucketName: string
+  orderCount: number
+  customerCount: number
+  unpaidAmount: number
+}
+
 export interface SupplyDashboardCityCostItem {
   regionCode: string
   regionName: string | null
@@ -70,6 +92,40 @@ export interface SupplyDashboardProductSalesItem {
   costCoverageRate: number
   orderCount: number
   customerCount: number
+}
+
+export interface SupplyDashboardCustomerSegmentItem {
+  segmentCode: string
+  segmentName: string
+  customerCount: number
+  salesAmount: number
+  paidAmount: number
+  unpaidAmount: number
+  averageActivityScore: number
+  churnRiskCustomerCount: number
+}
+
+export interface SupplyDashboardCustomerActivityItem {
+  customerCode: string
+  customerName: string
+  regionCode: string | null
+  regionName: string | null
+  ownerStaffCode: string | null
+  ownerStaffName: string | null
+  customerTypeCode: string | null
+  customerTypeName: string | null
+  segmentCode: string
+  segmentName: string
+  salesAmount: number
+  paidAmount: number
+  unpaidAmount: number
+  orderCount: number
+  paymentCount: number
+  lastOrderTime: string | null
+  lastPaymentTime: string | null
+  inactiveDays: number
+  activityScore: number
+  churnRiskLevel: string
 }
 
 export interface SupplyDashboardTargetCompletionItem {
@@ -158,14 +214,21 @@ export interface SupplyDashboardOverview {
   cityCostTrend: SupplyDashboardTrendPoint[]
   citySalesRanking: SupplyDashboardRankingItem[]
   salesRanking: SupplyDashboardRankingItem[]
+  salesMonthlyPerformance: SupplyDashboardSalesMonthlyPerformance[]
+  cityCollectionRateRanking: SupplyDashboardRankingItem[]
   sourceSystemBreakdown: SupplyDashboardRankingItem[]
   productSalesRanking: SupplyDashboardProductSalesItem[]
+  skuSalesRanking: SupplyDashboardProductSalesItem[]
   categorySalesRanking: SupplyDashboardProductSalesItem[]
   brandSalesRanking: SupplyDashboardProductSalesItem[]
   paymentRiskCityRanking: SupplyDashboardRankingItem[]
   paymentRiskSalesRanking: SupplyDashboardRankingItem[]
+  paymentAgingBuckets: SupplyDashboardPaymentAgingBucket[]
   cityTargetCompletions: SupplyDashboardTargetCompletionItem[]
   salesTargetCompletions: SupplyDashboardTargetCompletionItem[]
+  customerSegments: SupplyDashboardCustomerSegmentItem[]
+  customerActivityRanking: SupplyDashboardCustomerActivityItem[]
+  customerChurnRiskRanking: SupplyDashboardCustomerActivityItem[]
   inventoryItemSummary: SupplyDashboardInventoryItemSummary[]
   inventoryReplenishment: SupplyDashboardInventoryReplenishmentItem[]
   cityCostRanking: SupplyDashboardCityCostItem[]
@@ -187,6 +250,21 @@ export interface SupplyDashboardRefreshRun {
   upsertedCount: number
   skippedCount: number
   failureReason: string | null
+}
+
+export type SupplyDashboardRefreshSourceCode =
+  | 'CRM_CUSTOMER'
+  | 'ORDER_SALES_ORDER'
+  | 'ORDER_SALES_ORDER_LINE'
+  | 'ERP_PRODUCT'
+  | 'ORDER_PAYMENT_RECORD'
+  | 'ERP_STOCK_BALANCE'
+  | 'ERP_INVENTORY_OPERATION'
+  | 'BI_RECONCILIATION_CURRENT'
+
+export interface SupplyDashboardRefreshCommand {
+  sourceCodes?: SupplyDashboardRefreshSourceCode[]
+  fullRefresh?: boolean
 }
 
 export interface SupplyDashboardCityCostImportRecord {
@@ -249,6 +327,7 @@ export interface SupplyDashboardReconciliationItem {
   businessAmount: number
   biAmount: number
   sourceBusinessRowDiff: number
+  sourceBusinessAmountDiff: number
   businessBiRowDiff: number
   businessBiAmountDiff: number
   status: string
@@ -333,8 +412,8 @@ const options = { stayOnUnauthorized: true }
 export const getSupplyDashboardOverview = (params: SupplyDashboardQuery) =>
   apiClient.get<SupplyDashboardOverview>(SUPPLY_DASHBOARD_PATH, { params, ...options })
 
-export const createSupplyDashboardRefreshRun = () =>
-  apiClient.post<SupplyDashboardRefreshRun>(SUPPLY_DASHBOARD_REFRESH_PATH, undefined, options)
+export const createSupplyDashboardRefreshRun = (command: SupplyDashboardRefreshCommand = {}) =>
+  apiClient.post<SupplyDashboardRefreshRun>(SUPPLY_DASHBOARD_REFRESH_PATH, command, options)
 
 export const getSupplyDashboardDataTrust = () =>
   apiClient.get<SupplyDashboardDataTrust>(SUPPLY_DASHBOARD_TRUST_PATH, options)

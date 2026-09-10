@@ -31,8 +31,17 @@
       <el-table-column prop="primaryOrganizationName" label="主组织" min-width="160">
         <template #default="scope">{{ scope.row.primaryOrganizationName || '未分配' }}</template>
       </el-table-column>
-      <el-table-column prop="primaryPositionName" label="主岗位" min-width="150">
+      <el-table-column prop="primaryPositionName" label="系统岗位" min-width="150">
         <template #default="scope">{{ scope.row.primaryPositionName || '未分配' }}</template>
+      </el-table-column>
+      <el-table-column label="来源岗位" min-width="130">
+        <template #default="scope">{{ staffTypeLabel(scope.row.sourceStaffType) }}</template>
+      </el-table-column>
+      <el-table-column label="来源职位" min-width="140">
+        <template #default="scope">{{ scope.row.sourceTitle || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="来源区域/城市" min-width="160">
+        <template #default="scope">{{ scope.row.sourceBranchName || '—' }}</template>
       </el-table-column>
       <el-table-column prop="mobile" label="手机号" min-width="140">
         <template #default="scope">{{ scope.row.mobile || '—' }}</template>
@@ -56,11 +65,13 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="订货宝快照" min-width="220">
+      <el-table-column label="来源快照" min-width="240">
         <template #default="scope">
           <span v-if="scope.row.sourceStaffId">
+            <el-tag class="source-system-tag" size="small" effect="plain">
+              {{ sourceSystemLabel(scope.row.sourceSystem) }}
+            </el-tag>
             {{ scope.row.sourceAccountName || scope.row.sourceStaffId }}
-            <small class="muted"> · {{ dhbStaffTypeLabel(scope.row.sourceStaffType) }}</small>
           </span>
           <span v-else>—</span>
         </template>
@@ -127,13 +138,13 @@
           <el-input v-model="form.remark" type="textarea" maxlength="500" :rows="3" />
         </el-form-item>
         <section v-if="editingSource" class="source-snapshot">
-          <strong>订货宝来源</strong>
+          <strong>{{ sourceSystemLabel(editingSource.sourceSystem) }}来源</strong>
           <dl>
-            <div><dt>员工ID</dt><dd>{{ editingSource.sourceStaffId }}</dd></div>
+            <div><dt>来源ID</dt><dd>{{ editingSource.sourceStaffId }}</dd></div>
             <div><dt>账号</dt><dd>{{ editingSource.sourceAccountName || '—' }}</dd></div>
-            <div><dt>类型</dt><dd>{{ dhbStaffTypeLabel(editingSource.sourceStaffType) }}</dd></div>
+            <div><dt>岗位</dt><dd>{{ staffTypeLabel(editingSource.sourceStaffType) }}</dd></div>
             <div><dt>职位</dt><dd>{{ editingSource.sourceTitle || '—' }}</dd></div>
-            <div><dt>部门</dt><dd>{{ editingSource.sourceBranchName || '—' }}</dd></div>
+            <div><dt>区域/城市</dt><dd>{{ editingSource.sourceBranchName || '—' }}</dd></div>
             <div><dt>角色</dt><dd>{{ editingSource.sourceRole || '—' }}</dd></div>
           </dl>
         </section>
@@ -287,16 +298,23 @@ function staffStatusTag(status: string) {
 }
 
 function originLabel(origin: string) {
-  return { MANUAL: '我方维护', DINGHUOBAO: '订货宝导入', IMPORT: '批量导入' }[origin] || origin
+  return { MANUAL: '我方维护', DINGHUOBAO: '订货宝导入', FEISHU: '飞书导入', IMPORT: '批量导入' }[origin] || origin
 }
 
-function dhbStaffTypeLabel(type: string | null) {
+function sourceSystemLabel(sourceSystem: string | null) {
+  if (sourceSystem === 'FEISHU') return '飞书'
+  if (sourceSystem === 'DINGHUOBAO') return '订货宝'
+  return sourceSystem || '外部'
+}
+
+function staffTypeLabel(type: string | null) {
   if (!type) return '—'
   return {
     salesman: '业务员',
     boss: '老板',
     indoorwork: '内勤',
     driver: '司机',
+    销售: '销售',
   }[type] || type
 }
 
@@ -352,6 +370,11 @@ onMounted(() => {
 
 .muted {
   color: #8a97a8;
+}
+
+.source-system-tag {
+  margin-right: 6px;
+  vertical-align: 1px;
 }
 
 .source-snapshot {

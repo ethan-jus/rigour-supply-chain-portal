@@ -79,6 +79,7 @@ export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
   'supply.crm.assignments.menu',
   'supply.crm.credit-policy.menu',
   'supply.order.menu',
+  'supply.hr.menu',
   'supply.city.scope.menu',
   'supply.city.tasks.menu',
   'supply.city.configuration.menu',
@@ -148,6 +149,7 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
   ...directPages('bi', '数据看板', 'analytics-bi-service', [
     { key: 'sales', title: '销售看板' },
     { key: 'city-operating', title: '城市经营看板' },
+    { key: 'customer', title: '客户看板' },
     { key: 'activity', title: '活动看板' },
     { key: 'product-inventory', title: '商品/库存看板' },
     { key: 'product-sales', title: '商品销售统计' },
@@ -157,6 +159,8 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'inventory-risk', title: '库存风险看板' },
   ]),
   ...directPages('hr', '人事与绩效', 'hr-payroll-service', [
+    { key: 'employees', title: '员工主档' },
+    { key: 'positions', title: '岗位职位' },
     { key: 'assignments', title: '任职与调动' }, { key: 'calendar-policies', title: '工作日历与考勤政策' },
     { key: 'attendance-appeals', title: '正式考勤与申诉' }, { key: 'payroll-commission', title: '薪酬与提成' },
     { key: 'performance', title: '绩效核算' }, { key: 'monthly-close', title: '月结与冲回' },
@@ -182,6 +186,11 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     domainKey: 'integration', domainTitle: '外部同步', groupTitle: '同步控制', title: '订货宝同步中心',
     routeKey: 'supply.integration.overview',
     path: '/supply-chain/integration', owner: 'integration-migration-service',
+  },
+  {
+    domainKey: 'integration', domainTitle: '外部同步', groupTitle: '同步控制', title: '飞书导入中心',
+    routeKey: 'supply.integration.feishu-import',
+    path: '/supply-chain/integration/feishu-import', owner: 'integration-migration-service',
   },
 ]
 

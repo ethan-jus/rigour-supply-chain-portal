@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { BarChart, FunnelChart, HeatmapChart, LineChart, PieChart } from 'echarts/charts'
+import { BarChart, FunnelChart, HeatmapChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
 import {
   DataZoomComponent,
   GridComponent,
@@ -22,6 +22,7 @@ use([
   HeatmapChart,
   LineChart,
   PieChart,
+  ScatterChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,

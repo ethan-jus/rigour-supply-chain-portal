@@ -13,26 +13,33 @@ export interface SalesOrderQuery {
   orderNo?: string
   sourceOrderNo?: string
   sourceStatusCode?: string
+  dataQualityStatusCode?: string
   customerName?: string
   contactPhone?: string
   regionCode?: string
   ownerSalesUserId?: string
-  ownerStaffCode?: string
+  ownerEmployeeCode?: string
   orderStatusCode?: string
   paymentStatusCode?: string
   outboundStatusCode?: string
   orderDateFrom?: string
   orderDateTo?: string
+  productId?: string | number
+  productVariantId?: string | number
+  productCodeSnapshot?: string
+  skuCodeSnapshot?: string
+  productNameSnapshot?: string
+  specificationSnapshot?: string
 }
 
 export interface SalesOrderLineCommand {
-  productId: string | number
-  productVariantId: string | number
+  productId?: string | number | null
+  productVariantId?: string | number | null
   productCodeSnapshot?: string | null
   skuCodeSnapshot?: string | null
-  productNameSnapshot: string
+  productNameSnapshot?: string | null
   specificationSnapshot?: string | null
-  unitCode: string
+  unitCode?: string | null
   quantity: number
   unitPrice: number
   discountRate?: number | null
@@ -41,7 +48,7 @@ export interface SalesOrderLineCommand {
 }
 
 export interface SalesOrderCommand {
-  customerId: string | number
+  customerId?: string | number | null
   sourceSystemCode?: string | null
   sourceOrderNo?: string | null
   sourceStatusCode?: string | null
@@ -49,17 +56,18 @@ export interface SalesOrderCommand {
   sourceCreatorStaffCode?: string | null
   sourceCreatorName?: string | null
   customerCodeSnapshot?: string | null
-  customerNameSnapshot: string
+  customerNameSnapshot?: string | null
   contactNameSnapshot?: string | null
   contactPhoneSnapshot?: string | null
   regionCode?: string | null
   ownerSalesUserId?: string | null
   ownerSalesName?: string | null
-  ownerStaffCode?: string | null
-  ownerStaffNameSnapshot?: string | null
+  ownerEmployeeCode?: string | null
+  ownerEmployeeNameSnapshot?: string | null
   orderDate?: string | null
   orderTypeCode?: string | null
   paymentMethodCode?: string | null
+  paymentVoucherKeys?: string[]
   discountRate?: number | null
   discountAmount?: number | null
   remark?: string | null
@@ -77,14 +85,17 @@ export interface SalesOrderSummary {
   sourceCreatorId: string | null
   sourceCreatorStaffCode: string | null
   sourceCreatorName: string | null
-  customerId: string
-  customerNameSnapshot: string
+  dataQualityStatusCode: string | null
+  dataQualityMessage: string | null
+  customerId: string | null
+  customerNameSnapshot: string | null
   contactPhoneSnapshot: string | null
   regionCode: string | null
+  regionName: string | null
   ownerSalesUserId: string | null
   ownerSalesName: string | null
-  ownerStaffCode: string | null
-  ownerStaffNameSnapshot: string | null
+  ownerEmployeeCode: string | null
+  ownerEmployeeNameSnapshot: string | null
   orderDate: string
   paymentTime: string | null
   shipmentTime: string | null
@@ -93,6 +104,8 @@ export interface SalesOrderSummary {
   paymentStatusCode: string
   outboundStatusCode: string
   totalQuantity: number
+  originalAmount: number | null
+  discountAmount: number | null
   payableAmount: number
   paidAmount: number
   unpaidAmount: number
@@ -100,16 +113,26 @@ export interface SalesOrderSummary {
   updatedTime: string
 }
 
+export interface SalesOrderTotals {
+  total: number
+  totalQuantity: number
+  originalAmount: number
+  discountAmount: number
+  payableAmount: number
+  paidAmount: number
+  unpaidAmount: number
+}
+
 export interface SalesOrderLineView {
   id: string
   lineNo: number
-  productId: string
-  productVariantId: string
+  productId: string | null
+  productVariantId: string | null
   productCodeSnapshot: string | null
   skuCodeSnapshot: string | null
-  productNameSnapshot: string
+  productNameSnapshot: string | null
   specificationSnapshot: string | null
-  unitCode: string
+  unitCode: string | null
   quantity: number
   unitPrice: number
   discountRate: number | null
@@ -123,6 +146,8 @@ export interface SalesOrderDetail extends SalesOrderSummary {
   contactNameSnapshot: string | null
   orderTypeCode: string | null
   paymentMethodCode: string | null
+  paymentVoucherKeys: string[]
+  paymentAttachments: FundDocumentAttachment[]
   originalAmount: number
   discountRate: number | null
   discountAmount: number
@@ -172,7 +197,7 @@ export interface SalesShipmentSummary {
   customerNameSnapshot: string | null
   contactPhoneSnapshot: string | null
   regionCode: string | null
-  ownerStaffCode: string | null
+  ownerEmployeeCode: string | null
   warehouseId: string | null
   stockOutOrderId: string | null
   stockOutNo: string | null
@@ -213,6 +238,7 @@ export interface SalesPaymentQuery {
   step: number
   paymentNo?: string
   salesOrderNo?: string
+  sourceDocumentNo?: string
   customerName?: string
   collectorStaffCode?: string
   paymentMethodCode?: string
@@ -242,6 +268,7 @@ export interface SalesPaymentSummary {
 
 export interface SalesPaymentDetail extends SalesPaymentSummary {
   voucherKeys: string[]
+  attachments: FundDocumentAttachment[]
   remark: string | null
   createdBy: string | null
   createdTime: string
@@ -364,6 +391,9 @@ const options = { stayOnUnauthorized: true }
 
 export const getSalesOrders = (params: SalesOrderQuery) =>
   apiClient.get<OrderPage<SalesOrderSummary>>(ORDER_BASE_PATH, { params, ...options })
+
+export const getSalesOrderTotals = (params: SalesOrderQuery) =>
+  apiClient.get<SalesOrderTotals>(`${ORDER_BASE_PATH}/totals`, { params, ...options })
 
 export const getSalesOrder = (id: string | number) =>
   apiClient.get<SalesOrderDetail>(`${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}`, options)

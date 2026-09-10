@@ -84,11 +84,14 @@ import fundDocumentSource from '@/views/supply-chain/order/FundDocumentView.vue?
 import salesShipmentSource from '@/views/supply-chain/order/SalesShipmentView.vue?raw'
 import salesPaymentRecordSource from '@/views/supply-chain/order/SalesPaymentRecordView.vue?raw'
 import salesRefundRecordSource from '@/views/supply-chain/order/SalesRefundRecordView.vue?raw'
+import biDashboardSource from '@/views/supply-chain/bi/IndexView.vue?raw'
 
 const globalStyleSource = readFileSync('src/assets/styles/index.scss', 'utf-8')
 const supplyChainStyleSource = readFileSync('src/assets/styles/_supply-chain.scss', 'utf-8')
 const erpDocumentsApiSource = readFileSync('src/api/core/erp-documents.ts', 'utf-8')
 const orderSalesApiSource = readFileSync('src/api/core/order-sales.ts', 'utf-8')
+const biApiSource = readFileSync('src/api/core/bi.ts', 'utf-8')
+const biChartSource = readFileSync('src/views/supply-chain/bi/components/EchartsChart.vue', 'utf-8')
 
 const passthrough = defineComponent({ template: '<div><slot name="header" /><slot name="footer" /><slot /></div>' })
 const emptyStub = defineComponent({ template: '<span />' })
@@ -101,6 +104,7 @@ const globalMountOptions = {
     ElCard: passthrough,
     ElCheckbox: emptyStub,
     ElCol: passthrough,
+    ElDatePicker: emptyStub,
     ElDialog: passthrough,
     ElDivider: passthrough,
     ElDrawer: passthrough,
@@ -215,11 +219,11 @@ describe('合同驱动的供应链页面', () => {
     expect(submitSearch).toContain('void loadCustomers()')
     expect(crmCustomerManagementSource).toContain('customerTypeCode: empty(filters.customerTypeCode)')
     expect(crmCustomerManagementSource).toContain('regionCode: empty(filters.regionCode)')
-    expect(crmCustomerManagementSource).toContain('ownerStaffCode: empty(filters.ownerStaffCode)')
+    expect(crmCustomerManagementSource).toContain('ownerEmployeeCode: empty(filters.ownerEmployeeCode)')
     expect(crmCustomerManagementSource).toContain('statusCode: empty(filters.statusCode)')
   })
 
-  it('订货宝同步中心只承载后台来源接入方案，不散成主业务页面动作', async () => {
+  it('订货宝同步中心只承载后台来源接入方案，并支持按范围手动同步', async () => {
     const wrapper = mount(DhbPage, { global: globalMountOptions })
     await flushPromises()
 
@@ -227,10 +231,16 @@ describe('合同驱动的供应链页面', () => {
       activeSectionDetail: { title: string }
       boundaryRules: Array<{ label: string; value: string }>
       sections: Array<{ title: string }>
+      selectSyncMode: (key: string) => void
+      syncModes: Array<{ key: string; label: string }>
+      runUnifiedSync: () => Promise<void>
     }
 
     expect(wrapper.text()).toContain('订货宝同步中心')
     expect(wrapper.text()).toContain('ERP、CRM、Order 主流程不承载同步运维动作')
+    expect(wrapper.text()).toContain('选择同步范围后执行订货宝同步')
+    expect(wrapper.text()).toContain('ERP商品')
+    expect(wrapper.text()).not.toContain('ERP 全部')
     expect(wrapper.text()).toContain('payload hash 跳过')
     expect(wrapper.text()).toContain('对象已存在跳过')
     expect(wrapper.text()).toContain('来源总数、Raw 落库数、目标业务表写入数分别记录')
@@ -248,13 +258,93 @@ describe('合同驱动的供应链页面', () => {
       label: '业务入口',
       value: 'ERP、CRM、Order 只展示我方业务表结果',
     })
+    expect(state.boundaryRules).toContainEqual({
+      label: '页面动作',
+      value: '手动同步可指定范围；单对象修复放在运维排障链路中逐步补齐',
+    })
+    expect(state.syncModes.map((mode) => mode.key)).toEqual([
+      'all',
+      'erp',
+      'dictionary-iam',
+      'crm',
+      'erp-supply',
+      'order',
+    ])
+    expect(state.syncModes.filter((mode) => mode.label === 'ERP商品')).toHaveLength(1)
     expect(getDhbOpenIssues).toHaveBeenCalledWith(500)
     expect(getDhbSyncTasks).toHaveBeenCalled()
     expect(apiClient.post).not.toHaveBeenCalled()
+
+    syncDhbOrchestration.mockResolvedValue({
+      batchId: 'batch-erp',
+      status: 'SUCCEEDED',
+      triggerType: 'MANUAL',
+      startedAt: '2026-09-08T07:00:00Z',
+      finishedAt: '2026-09-08T07:00:01Z',
+      tenants: [],
+    })
+    state.selectSyncMode('erp')
+    await state.runUnifiedSync()
+
+    expect(syncDhbOrchestration).toHaveBeenCalledWith({
+      includeDictionary: false,
+      includeIam: false,
+      includeErp: true,
+      includeErpProduct: true,
+      includeErpSupply: false,
+      includeCrm: false,
+      includeOrder: false,
+      maxPages: 100,
+    })
     expect(dhbPageSource).not.toContain('/orders/dhb/sync')
     expect(dhbPageSource).not.toContain('新增连接')
     expect(dhbPageSource).not.toContain('新增映射')
     expect(dhbPageSource).not.toContain('订单镜像')
+  })
+
+  it('BI 看板按角色保留经营闭环，不把核心指标退回旧的散点和重复表格', () => {
+    expect(biDashboardSource).toContain('经营总览驾驶舱')
+    expect(biDashboardSource).toContain('overviewBusinessShareDisplayRows')
+    expect(biDashboardSource).toContain('buildBusinessShareDonutOption')
+    expect(biDashboardSource).not.toContain('buildBusinessShareBarOption')
+    expect(biDashboardSource).not.toContain('帕累托')
+
+    expect(biDashboardSource).toContain('paymentRiskCityGroups')
+    expect(biDashboardSource).toContain('城市风险分组')
+
+    expect(biDashboardSource).toContain('shouldUseSalesMonthlyComparison')
+    expect(biDashboardSource).toContain('salesComparisonPeriodLabel')
+    expect(biDashboardSource).toContain('销售跟进总表')
+    expect(biDashboardSource).toContain("targetMetricTargetText(scope.row.salesTargetMetric, 'CNY')")
+    expect(biDashboardSource).toContain("targetMetricTargetText(scope.row.paidTargetMetric, 'CNY')")
+
+    expect(biDashboardSource).toContain('城市经营一张表')
+    expect(biDashboardSource).toContain('cityOperatingCards')
+    expect(biDashboardSource).toContain('复购/活跃')
+    expect(biDashboardSource).toContain('高价值/预警')
+    expect(biDashboardSource).toContain('城市商品结构')
+
+    expect(biDashboardSource).toContain('客户价值 / 活跃度矩阵')
+    expect(biDashboardSource).toContain('customerValueMatrixRows')
+    expect(biDashboardSource).toContain('低活跃跟进')
+    expect(biDashboardSource).toContain('流失预警跟进')
+
+    expect(biDashboardSource).toContain('按商品')
+    expect(biDashboardSource).toContain('按SKU')
+    expect(biDashboardSource).toContain('按分类')
+    expect(biDashboardSource).toContain('按品牌')
+    expect(biDashboardSource).toContain('productDimensionLabel')
+    expect(biDashboardSource).toContain('订货数量 / 客户覆盖')
+    expect(biDashboardSource).toContain('productCategoryPreviewRows')
+    expect(biDashboardSource).toContain('productBrandPreviewRows')
+    expect(biDashboardSource).toContain('分类销售 Top')
+    expect(biDashboardSource).toContain('品牌销售 Top')
+    expect(biDashboardSource).toContain('动销结构')
+    expect(biDashboardSource).toContain('商品销售统一放在商品销售统计')
+
+    expect(biApiSource).toContain('ownerStaffCode?: string')
+    expect(biApiSource).not.toContain('ownerEmployeeCode?: string')
+    expect(biChartSource).toContain('ScatterChart')
   })
 
 
@@ -310,8 +400,9 @@ describe('合同驱动的供应链页面', () => {
     expect(salesOrderSource).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
     expect(salesOrderSource).toMatch(/label="操作"[^>]*fixed="right"/)
     expect(salesOrderSource).toContain('function isExternalSource')
-    expect(salesOrderSource).toContain('if (isExternalSource(row)) return false')
-    expect(salesOrderSource).toContain('label="订货宝状态"')
+    expect(salesOrderSource).toContain('function isFeishuSource')
+    expect(salesOrderSource).toContain('if (isExternalSource(row) && !isFeishuSource(row)) return false')
+    expect(salesOrderSource).toContain('label="来源状态"')
     expect(salesOrderSource).toContain('DHB_ORDER_STATUS')
     expect(salesOrderSource).toContain('sourceStatusCode: empty(filters.sourceStatusCode)')
     expect(salesOrderSource).toContain('label="收款状态"')

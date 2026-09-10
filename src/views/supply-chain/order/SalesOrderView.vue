@@ -40,9 +40,9 @@
           <el-input v-model="filters.orderNo" clearable placeholder="销售订单号" style="width: 180px" />
         </el-form-item>
         <el-form-item label="来源单号">
-          <el-input v-model="filters.sourceOrderNo" clearable placeholder="订货宝订单号" style="width: 180px" />
+          <el-input v-model="filters.sourceOrderNo" clearable placeholder="飞书/订货宝单号" style="width: 180px" />
         </el-form-item>
-        <el-form-item label="订货宝状态">
+        <el-form-item label="来源状态">
           <el-select v-model="filters.sourceStatusCode" clearable placeholder="全部来源状态" style="width: 150px">
             <el-option v-for="item in sourceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
@@ -60,22 +60,37 @@
         </el-form-item>
         <el-form-item label="归属销售">
           <el-select
-            v-model="filters.ownerStaffCode"
+            v-model="filters.ownerEmployeeCode"
             clearable
             filterable
             remote
             reserve-keyword
             placeholder="搜索销售"
-            :remote-method="searchSalesStaff"
-            :loading="staffLoading"
+            :remote-method="searchSalesEmployees"
+            :loading="employeeLoading"
             style="width: 160px"
           >
-            <el-option v-for="item in staffOptions" :key="item.staffCode" :label="item.staffName" :value="item.staffCode" />
+            <el-option
+              v-for="item in employeeOptions"
+              :key="item.employeeCode"
+              :label="item.employeeName"
+              :value="item.employeeCode"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="订单状态">
           <el-select v-model="filters.orderStatusCode" clearable placeholder="全部订单状态" style="width: 150px">
             <el-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="数据状态">
+          <el-select v-model="filters.dataQualityStatusCode" clearable placeholder="全部数据状态" style="width: 150px">
+            <el-option
+              v-for="item in dataQualityStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="收款状态">
@@ -101,12 +116,28 @@
       </el-form>
     </el-card>
 
+    <el-alert
+      v-if="orderDrillContextText"
+      class="order-drill-context"
+      type="info"
+      :title="orderDrillContextText"
+      show-icon
+      :closable="false"
+    />
+
     <div class="result-heading">
       <div>
         <div class="result-title-line">
           <h2>销售订单列表</h2>
           <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
         </div>
+      </div>
+    </div>
+
+    <div class="order-total-strip">
+      <div v-for="item in orderTotalItems" :key="item.label" class="order-total-item">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
       </div>
     </div>
 
@@ -126,18 +157,30 @@
               <strong>{{ scope.row.orderNo }}</strong>
             </template>
           </el-table-column>
-          <el-table-column prop="sourceOrderNo" label="订货宝单号" width="180" show-overflow-tooltip>
+          <el-table-column prop="sourceOrderNo" label="来源单号" width="180" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.sourceOrderNo || '-' }}</template>
           </el-table-column>
           <el-table-column label="制单人" width="140" show-overflow-tooltip>
             <template #default="scope">{{ sourceCreatorLabel(scope.row) }}</template>
           </el-table-column>
-          <el-table-column label="订货宝状态" width="130">
+          <el-table-column label="来源状态" width="130">
             <template #default="scope">
               <el-tag v-if="scope.row.sourceStatusCode" effect="light">
                 {{ dhbOrderStatusLabel(scope.row.sourceStatusCode) }}
               </el-tag>
               <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="数据状态" width="130">
+            <template #default="scope">
+              <el-tooltip
+                v-if="isOrderNeedsReview(scope.row)"
+                :content="scope.row.dataQualityMessage || '待业务补齐'"
+                placement="top"
+              >
+                <el-tag type="warning" effect="light">待完善</el-tag>
+              </el-tooltip>
+              <el-tag v-else type="success" effect="light">完整</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="下单时间" width="170">
@@ -162,11 +205,11 @@
             <template #default="scope">{{ scope.row.contactPhoneSnapshot || '-' }}</template>
           </el-table-column>
           <el-table-column label="归属地区" width="120">
-            <template #default="scope">{{ regionLabel(scope.row.regionCode) }}</template>
+            <template #default="scope">{{ regionLabel(scope.row.regionCode, scope.row.regionName) }}</template>
           </el-table-column>
-          <el-table-column prop="ownerStaffNameSnapshot" label="归属销售人员" width="170">
+          <el-table-column prop="ownerEmployeeNameSnapshot" label="归属销售人员" width="170">
             <template #default="scope">
-              {{ scope.row.ownerStaffNameSnapshot || scope.row.ownerSalesName || scope.row.ownerStaffCode || '-' }}
+              {{ scope.row.ownerEmployeeNameSnapshot || scope.row.ownerSalesName || scope.row.ownerEmployeeCode || '-' }}
             </template>
           </el-table-column>
           <el-table-column label="订单状态" width="120">
@@ -187,7 +230,13 @@
           <el-table-column label="商品数量" width="110" align="right">
             <template #default="scope">{{ formatNumber(scope.row.totalQuantity) }}</template>
           </el-table-column>
-          <el-table-column label="应收金额" width="140" align="right">
+          <el-table-column label="原小计" width="130" align="right">
+            <template #default="scope">{{ formatMoney(scope.row.originalAmount) }}</template>
+          </el-table-column>
+          <el-table-column label="优惠金额" width="130" align="right">
+            <template #default="scope">{{ formatMoney(displayDiscountAmount(scope.row)) }}</template>
+          </el-table-column>
+          <el-table-column label="实际小计" width="140" align="right">
             <template #default="scope"><strong>{{ formatMoney(scope.row.payableAmount) }}</strong></template>
           </el-table-column>
           <el-table-column label="已收金额" width="140" align="right">
@@ -199,12 +248,13 @@
           <el-table-column label="更新时间" width="170">
             <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="220" fixed="right" align="center">
+          <el-table-column label="操作" width="230" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
               <el-button v-if="canSubmit(scope.row)" link type="primary" @click.stop="submitExisting(scope.row)">提交</el-button>
               <el-button v-if="canStockOut(scope.row)" link type="primary" @click.stop="openStockOut(scope.row)">出库</el-button>
               <el-button v-if="canEdit(scope.row)" link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
+              <el-button v-if="canDelete(scope.row)" link type="danger" @click.stop="deleteDraft(scope.row)">删除</el-button>
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无销售订单" /></template>
@@ -223,15 +273,22 @@
       </div>
     </el-card>
 
-    <el-drawer v-model="detailVisible" class="order-detail-drawer" size="min(980px, 92vw)" :with-header="false">
+    <el-drawer v-model="detailVisible" class="order-detail-drawer" size="min(1120px, 94vw)" :with-header="false">
       <div v-if="detail" class="detail-shell">
         <header class="detail-hero">
-          <div>
+          <div class="detail-hero-main">
             <span>销售订单详情</span>
             <h2>{{ detail.orderNo }}</h2>
-            <p>{{ detail.customerNameSnapshot }} · {{ formatTime(detail.orderDate) }}</p>
+            <p>{{ detail.customerNameSnapshot || '客户待补齐' }} · {{ formatTime(detail.orderDate) }}</p>
             <div class="detail-tags">
               <el-tag :type="orderStatusTag(detail.orderStatusCode)" effect="light">{{ salesOrderStatusLabel(detail.orderStatusCode) }}</el-tag>
+              <el-tooltip
+                v-if="isOrderNeedsReview(detail)"
+                :content="detail.dataQualityMessage || '待业务补齐'"
+                placement="bottom"
+              >
+                <el-tag type="warning" effect="light">待完善</el-tag>
+              </el-tooltip>
               <el-tag v-if="detail.sourceStatusCode" effect="light">{{ dhbOrderStatusLabel(detail.sourceStatusCode) }}</el-tag>
               <el-tag :type="paymentStatusTag(detail.paymentStatusCode)" effect="light">{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode, paymentStatusFallbackLabels) }}</el-tag>
               <el-tag :type="outboundStatusTag(detail.outboundStatusCode)" effect="light">{{ statusLabel(outboundStatusOptions, detail.outboundStatusCode) }}</el-tag>
@@ -240,59 +297,164 @@
               </el-tag>
             </div>
           </div>
-          <el-button circle plain aria-label="关闭销售订单详情" @click="detailVisible = false">×</el-button>
+          <div class="detail-hero-actions">
+            <el-button plain @click="openPayments(detail)">回款记录</el-button>
+            <el-button circle plain aria-label="关闭销售订单详情" @click="detailVisible = false">×</el-button>
+          </div>
         </header>
-        <div class="detail-content">
-          <div class="detail-summary detail-summary--three">
-            <div><span>原始金额</span><strong>{{ formatMoney(detail.originalAmount) }}</strong></div>
-            <div><span>应收金额</span><strong>{{ formatMoney(detail.payableAmount) }}</strong></div>
-            <div><span>折扣金额</span><strong>{{ formatMoney(detail.discountAmount) }}</strong></div>
+        <div class="detail-content order-detail-content">
+          <div class="detail-summary order-detail-summary">
+            <div><span>原小计</span><strong>{{ formatMoney(detail.originalAmount) }}</strong></div>
+            <div><span>实际小计</span><strong>{{ formatMoney(detail.payableAmount) }}</strong></div>
+            <div><span>优惠金额</span><strong>{{ formatMoney(displayDiscountAmount(detail)) }}</strong></div>
             <div><span>已收金额</span><strong>{{ formatMoney(detail.paidAmount) }}</strong></div>
             <div><span>未收金额</span><strong>{{ formatMoney(detail.unpaidAmount) }}</strong></div>
             <div><span>商品数量</span><strong>{{ formatNumber(detail.totalQuantity) }}</strong></div>
           </div>
-          <el-descriptions :column="3" border>
-            <el-descriptions-item label="客户编号">{{ detail.customerCodeSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户">{{ detail.customerNameSnapshot }}</el-descriptions-item>
-            <el-descriptions-item label="联系人">{{ detail.contactNameSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="电话">{{ detail.contactPhoneSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="地区">{{ regionLabel(detail.regionCode) }}</el-descriptions-item>
-            <el-descriptions-item label="归属销售人员">
-              {{ detail.ownerStaffNameSnapshot || detail.ownerSalesName || '-' }}
-            </el-descriptions-item>
-            <el-descriptions-item label="订单类型">{{ orderTypeLabel(detail.orderTypeCode) }}</el-descriptions-item>
-            <el-descriptions-item label="付款方式">{{ paymentMethodLabel(detail.paymentMethodCode) }}</el-descriptions-item>
-            <el-descriptions-item label="收款状态">{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode, paymentStatusFallbackLabels) }}</el-descriptions-item>
-            <el-descriptions-item label="来源系统">{{ sourceSystemLabel(detail.sourceSystemCode) }}</el-descriptions-item>
-            <el-descriptions-item label="来源单号">{{ detail.sourceOrderNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="订货宝状态">{{ dhbOrderStatusLabel(detail.sourceStatusCode) }}</el-descriptions-item>
-            <el-descriptions-item label="制单人">{{ sourceCreatorLabel(detail) }}</el-descriptions-item>
-            <el-descriptions-item label="付款时间">{{ formatTime(detail.paymentTime) }}</el-descriptions-item>
-            <el-descriptions-item label="发货时间">{{ formatTime(detail.shipmentTime) }}</el-descriptions-item>
-            <el-descriptions-item label="发货状态">{{ salesShipmentStatusLabel(detail.shipmentStatusCode) }}</el-descriptions-item>
-            <el-descriptions-item label="折扣比例">{{ percent(detail.discountRate) }}</el-descriptions-item>
-            <el-descriptions-item label="创建人">{{ auditActorLabel(detail.createdBy) }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ formatTime(detail.createdTime) }}</el-descriptions-item>
-            <el-descriptions-item label="更新人">{{ auditActorLabel(detail.updatedBy) }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ formatTime(detail.updatedTime) }}</el-descriptions-item>
-            <el-descriptions-item label="备注" :span="3">{{ detail.remark || '-' }}</el-descriptions-item>
-          </el-descriptions>
-          <h3 class="detail-title">商品明细</h3>
-          <el-table class="supply-scroll-table detail-table" :data="detail.lines" max-height="360" size="small">
-            <el-table-column prop="productNameSnapshot" label="商品" min-width="220" fixed="left" />
-            <el-table-column prop="productCodeSnapshot" label="商品编码" width="150" />
-            <el-table-column prop="skuCodeSnapshot" label="SKU" width="150" />
-            <el-table-column prop="specificationSnapshot" label="规格" min-width="160" />
-            <el-table-column label="单位" width="90">
-              <template #default="scope">{{ unitLabel(scope.row.unitCode) }}</template>
-            </el-table-column>
-            <el-table-column label="数量" width="100" align="right"><template #default="scope">{{ formatNumber(scope.row.quantity) }}</template></el-table-column>
-            <el-table-column label="单价" width="120" align="right"><template #default="scope">{{ formatMoney(scope.row.unitPrice) }}</template></el-table-column>
-            <el-table-column label="折扣比例" width="110" align="right"><template #default="scope">{{ percent(scope.row.discountRate) }}</template></el-table-column>
-            <el-table-column label="折扣金额" width="120" align="right"><template #default="scope">{{ formatMoney(scope.row.discountAmount) }}</template></el-table-column>
-            <el-table-column label="金额" width="130" align="right"><template #default="scope">{{ formatMoney(scope.row.lineAmount) }}</template></el-table-column>
-            <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
-          </el-table>
+          <section class="detail-panel">
+            <div class="detail-section-heading">
+              <div>
+                <h3>客户与来源</h3>
+                <span>{{ detail.sourceOrderNo || detail.orderNo }}</span>
+              </div>
+            </div>
+            <div class="detail-field-grid">
+              <div class="detail-field"><span>客户编号</span><strong>{{ detail.customerCodeSnapshot || '-' }}</strong></div>
+              <div class="detail-field detail-field--wide"><span>客户名称</span><strong>{{ detail.customerNameSnapshot || '-' }}</strong></div>
+              <div class="detail-field"><span>归属地区</span><strong>{{ regionLabel(detail.regionCode, detail.regionName) }}</strong></div>
+              <div class="detail-field"><span>归属销售人员</span><strong>{{ detail.ownerEmployeeNameSnapshot || detail.ownerSalesName || '-' }}</strong></div>
+              <div class="detail-field"><span>联系人</span><strong>{{ detail.contactNameSnapshot || '-' }}</strong></div>
+              <div class="detail-field"><span>联系电话</span><strong>{{ detail.contactPhoneSnapshot || '-' }}</strong></div>
+              <div class="detail-field"><span>来源系统</span><strong>{{ sourceSystemLabel(detail.sourceSystemCode) }}</strong></div>
+              <div class="detail-field"><span>来源单号</span><strong>{{ detail.sourceOrderNo || '-' }}</strong></div>
+              <div class="detail-field"><span>来源状态</span><strong>{{ dhbOrderStatusLabel(detail.sourceStatusCode) }}</strong></div>
+            </div>
+          </section>
+
+          <section class="detail-panel">
+            <div class="detail-section-heading">
+              <div>
+                <h3>订单与履约</h3>
+                <span>{{ dataQualityLabel(detail) }}</span>
+              </div>
+            </div>
+            <div class="detail-field-grid">
+              <div class="detail-field"><span>订单类型</span><strong>{{ orderTypeLabel(detail.orderTypeCode) }}</strong></div>
+              <div class="detail-field"><span>订单状态</span><strong>{{ salesOrderStatusLabel(detail.orderStatusCode) }}</strong></div>
+              <div class="detail-field"><span>收款状态</span><strong>{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode, paymentStatusFallbackLabels) }}</strong></div>
+              <div class="detail-field"><span>出库状态</span><strong>{{ statusLabel(outboundStatusOptions, detail.outboundStatusCode) }}</strong></div>
+              <div class="detail-field"><span>发货状态</span><strong>{{ salesShipmentStatusLabel(detail.shipmentStatusCode) }}</strong></div>
+              <div class="detail-field"><span>折扣比例</span><strong>{{ percent(detail.discountRate) }}</strong></div>
+              <div class="detail-field"><span>制单人</span><strong>{{ sourceCreatorLabel(detail) }}</strong></div>
+              <div class="detail-field"><span>付款时间</span><strong>{{ formatTime(detail.paymentTime) }}</strong></div>
+              <div class="detail-field"><span>发货时间</span><strong>{{ formatTime(detail.shipmentTime) }}</strong></div>
+              <div class="detail-field"><span>创建人</span><strong>{{ auditActorLabel(detail.createdBy) }}</strong></div>
+              <div class="detail-field"><span>创建时间</span><strong>{{ formatTime(detail.createdTime) }}</strong></div>
+              <div class="detail-field"><span>更新人</span><strong>{{ auditActorLabel(detail.updatedBy) }}</strong></div>
+              <div class="detail-field"><span>更新时间</span><strong>{{ formatTime(detail.updatedTime) }}</strong></div>
+              <div class="detail-field detail-field--full"><span>备注</span><strong>{{ detail.remark || '-' }}</strong></div>
+            </div>
+          </section>
+
+          <section class="detail-panel detail-payment-section">
+            <div class="detail-section-heading">
+              <div>
+                <h3>订单付款信息</h3>
+                <span>回款凭证 {{ orderPaymentAttachmentItems(detail).length }} 个</span>
+              </div>
+            </div>
+            <div class="payment-overview">
+              <div>
+                <span>付款时间</span>
+                <strong>{{ formatTime(detail.paymentTime) }}</strong>
+              </div>
+              <div>
+                <span>付款方式</span>
+                <strong>{{ paymentMethodLabel(detail.paymentMethodCode) }}</strong>
+              </div>
+              <div>
+                <span>已付金额</span>
+                <strong>{{ formatMoney(detail.paidAmount) }}</strong>
+              </div>
+              <div>
+                <span>收款状态</span>
+                <strong>{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode, paymentStatusFallbackLabels) }}</strong>
+              </div>
+            </div>
+            <div v-if="orderPaymentAttachmentItems(detail).length" class="payment-attachment-panel">
+              <span>回款凭证</span>
+              <FundAttachmentPreviewList :attachments="orderPaymentAttachmentItems(detail)" />
+            </div>
+            <div v-else class="payment-attachment-empty">暂无回款凭证</div>
+          </section>
+          <section class="detail-panel detail-payment-section">
+            <div class="detail-section-heading">
+              <div>
+                <h3>关联回款记录</h3>
+                <span>回款记录 {{ detailPayments.length }} 条</span>
+              </div>
+              <el-button link type="primary" @click="openPayments(detail)">打开回款记录</el-button>
+            </div>
+            <el-table
+              class="supply-scroll-table detail-table"
+              :data="detailPayments"
+              v-loading="detailPaymentsLoading"
+              max-height="260"
+              size="small"
+            >
+              <el-table-column prop="paymentNo" label="回款单号" width="150" fixed="left" />
+              <el-table-column prop="sourceDocumentNo" label="来源单号" width="170" show-overflow-tooltip>
+                <template #default="scope">{{ scope.row.sourceDocumentNo || '-' }}</template>
+              </el-table-column>
+              <el-table-column label="回款时间" width="170">
+                <template #default="scope">{{ formatTime(scope.row.paymentTime) }}</template>
+              </el-table-column>
+              <el-table-column label="回款金额" width="120" align="right">
+                <template #default="scope">{{ formatMoney(scope.row.paidAmount) }}</template>
+              </el-table-column>
+              <el-table-column label="付款方式" width="130">
+                <template #default="scope">{{ paymentMethodLabel(scope.row.paymentMethodCode) }}</template>
+              </el-table-column>
+              <el-table-column label="回款人员" width="140" show-overflow-tooltip>
+                <template #default="scope">{{ scope.row.collectorNameSnapshot || scope.row.collectorStaffCode || '-' }}</template>
+              </el-table-column>
+              <el-table-column label="回款凭证" min-width="220">
+                <template #default="scope">
+                  <FundAttachmentPreviewList
+                    v-if="paymentAttachmentItems(scope.row).length"
+                    :attachments="paymentAttachmentItems(scope.row)"
+                  />
+                  <span v-else class="attachment-unavailable">暂无凭证</span>
+                </template>
+              </el-table-column>
+              <template #empty>
+                <el-empty description="暂无关联回款记录" />
+              </template>
+            </el-table>
+          </section>
+          <section class="detail-panel">
+            <div class="detail-section-heading">
+              <div>
+                <h3>商品明细</h3>
+                <span>商品 {{ detail.lines.length }} 条</span>
+              </div>
+            </div>
+            <el-table class="supply-scroll-table detail-table" :data="detail.lines" max-height="360" size="small">
+              <el-table-column prop="productNameSnapshot" label="商品" min-width="220" fixed="left" />
+              <el-table-column prop="productCodeSnapshot" label="商品编码" width="150" />
+              <el-table-column prop="skuCodeSnapshot" label="SKU" width="150" />
+              <el-table-column prop="specificationSnapshot" label="规格" min-width="160" />
+              <el-table-column label="单位" width="90">
+                <template #default="scope">{{ unitLabel(scope.row.unitCode) }}</template>
+              </el-table-column>
+              <el-table-column label="数量" width="100" align="right"><template #default="scope">{{ formatNumber(scope.row.quantity) }}</template></el-table-column>
+              <el-table-column label="单价" width="120" align="right"><template #default="scope">{{ formatMoney(scope.row.unitPrice) }}</template></el-table-column>
+              <el-table-column label="折扣比例" width="110" align="right"><template #default="scope">{{ percent(scope.row.discountRate) }}</template></el-table-column>
+              <el-table-column label="折扣金额" width="120" align="right"><template #default="scope">{{ formatMoney(scope.row.discountAmount) }}</template></el-table-column>
+              <el-table-column label="金额" width="130" align="right"><template #default="scope">{{ formatMoney(scope.row.lineAmount) }}</template></el-table-column>
+              <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
+            </el-table>
+          </section>
         </div>
       </div>
       <el-skeleton v-else :rows="8" animated />
@@ -323,33 +485,44 @@
               <el-date-picker v-model="form.orderDate" type="datetime" placeholder="默认当前时间" style="width: 100%" />
             </el-form-item>
           </el-col>
+          <el-col :span="12">
+            <el-form-item label="客户名称快照">
+              <el-input v-model="form.customerNameSnapshot" clearable placeholder="导入缺客户映射时可先保留名称" />
+            </el-form-item>
+          </el-col>
           <el-col :span="8"><el-form-item label="联系人"><el-input v-model="form.contactNameSnapshot" clearable /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="联系电话"><el-input v-model="form.contactPhoneSnapshot" clearable /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="归属地区"><el-input v-model="form.regionCode" clearable placeholder="地区编码" /></el-form-item></el-col>
+          <el-col :span="8">
+            <el-form-item label="归属地区">
+              <el-select v-model="form.regionCode" clearable filterable placeholder="选择归属地区" style="width: 100%">
+                <el-option v-for="item in regionOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col :span="8">
             <el-form-item label="归属销售人员">
               <el-select
-                v-model="form.ownerStaffCode"
+                v-model="form.ownerEmployeeCode"
                 clearable
                 filterable
                 remote
                 reserve-keyword
                 placeholder="搜索姓名/员工编码"
-                :remote-method="searchSalesStaff"
-                :loading="staffLoading"
+                :remote-method="searchSalesEmployees"
+                :loading="employeeLoading"
                 style="width: 100%"
-                @change="selectOwnerStaff"
-                @clear="selectOwnerStaff('')"
+                @change="selectOwnerEmployee"
+                @clear="selectOwnerEmployee('')"
               >
                 <el-option
-                  v-for="item in staffOptions"
-                  :key="item.staffCode"
-                  :label="item.staffName"
-                  :value="item.staffCode"
+                  v-for="item in employeeOptions"
+                  :key="item.employeeCode"
+                  :label="item.employeeName"
+                  :value="item.employeeCode"
                 >
-                  <div class="staff-option">
-                    <strong>{{ item.staffName }}</strong>
-                    <span>{{ item.staffCode }}</span>
+                  <div class="employee-option">
+                    <strong>{{ item.employeeName }}</strong>
+                    <span>{{ item.employeeCode }}</span>
                   </div>
                 </el-option>
               </el-select>
@@ -398,6 +571,16 @@
                 <el-select v-model="line.productVariantId" placeholder="选择规格" style="width: 100%" @change="selectVariant(line)">
                   <el-option v-for="item in line.variants" :key="item.id" :label="variantLabel(item)" :value="item.id" />
                 </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="5">
+              <el-form-item label="商品名称快照">
+                <el-input v-model="line.productNameSnapshot" clearable placeholder="飞书导入商品名" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="4">
+              <el-form-item label="单位编码">
+                <el-input v-model="line.unitCode" clearable placeholder="单位" />
               </el-form-item>
             </el-col>
             <el-col :span="3"><el-form-item label="数量"><el-input-number v-model="line.quantity" :min="0.000001" :precision="2" style="width: 100%" /></el-form-item></el-col>
@@ -453,26 +636,37 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { apiClient } from '@/api'
+import { computed, nextTick, onActivated, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import FundAttachmentPreviewList from '@/components/supply/FundAttachmentPreviewList.vue'
 import {
   confirmSalesOrderStockOut,
   createSalesOrder,
+  deleteSalesOrder,
+  getSalesPayment,
+  getSalesPayments,
   getSalesOrder,
   getSalesOrders,
+  getSalesOrderTotals,
   submitSalesOrder,
   updateSalesOrder,
+  type FundDocumentAttachment,
   type OrderPage,
   type SalesOrderCommand,
   type SalesOrderDetail,
+  type SalesOrderQuery,
   type SalesOrderSummary,
+  type SalesOrderTotals,
+  type SalesPaymentDetail,
 } from '@/api/core/order-sales'
 import {
+  getCrmCustomerAreas,
   getInternalCrmCustomers,
+  type CrmDictionaryView,
   type InternalCrmCustomerSummary,
 } from '@/api/core/crm'
+import { getHrEmployees, type HrEmployeeRecord } from '@/api/core/hr'
 import {
   getErpManagedProduct,
   getErpManagedProducts,
@@ -490,7 +684,6 @@ import {
 } from '@/utils/business-dictionary'
 import { formatOrderStatus as formatDhbOrderStatus } from '@/utils/dhb-order-status'
 import { auditActorLabel } from '@/utils/audit-actor'
-import type { StaffRecord } from '@/types/management'
 
 const orderStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_ORDER_STATUS'))
 const sourceStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'DHB_ORDER_STATUS'))
@@ -498,10 +691,26 @@ const outboundStatusOptions = computed(() => businessDictionaryOptions('ORDER', 
 const shipmentStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_SHIPMENT_STATUS'))
 const paymentStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'PAYMENT_STATUS'))
 const paymentMethodOptions = computed(() => businessDictionaryOptions('ORDER', 'PAYMENT_METHOD'))
-const regionOptions = computed(() => businessDictionaryOptions('COMMON', 'REGION'))
+const customerAreaOptions = ref<CrmDictionaryView[]>([])
+const regionOptions = computed(() => {
+  const options = customerAreaOptions.value.map((item) => ({
+    label: areaOptionLabel(item),
+    value: item.code,
+  }))
+  const existing = new Set(options.map((item) => item.value))
+  for (const item of businessDictionaryOptions('COMMON', 'REGION')) {
+    if (!existing.has(item.value)) options.push(item)
+  }
+  return options
+})
+const dataQualityStatusOptions = [
+  { label: '完整', value: 'COMPLETE' },
+  { label: '待完善', value: 'NEEDS_REVIEW' },
+]
 const salesOrderStatusFallbackLabels: Record<string, string> = {
   DRAFT: '草稿',
   SUBMITTED: '已提交',
+  COMPLETED: '已完成',
   CANCELLED: '已取消',
 }
 const dhbOrderStatusFallbackLabels: Record<string, string> = {
@@ -531,11 +740,14 @@ const paymentStatusFallbackLabels: Record<string, string> = {
   CANCELLED: '已取消',
 }
 const route = useRoute()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
 const detailVisible = ref(false)
 const detail = ref<SalesOrderDetail | null>(null)
+const detailPayments = ref<SalesPaymentDetail[]>([])
+const detailPaymentsLoading = ref(false)
 const editorVisible = ref(false)
 const editingId = ref<string | null>(null)
 const stockOutVisible = ref(false)
@@ -544,6 +756,7 @@ const selectedStockOutOrder = ref<SalesOrderSummary | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const pageData = ref<OrderPage<SalesOrderSummary>>({ total: 0, begin: 0, step: 20, items: [] })
+const orderTotals = ref<SalesOrderTotals>(emptyOrderTotals())
 
 const filters = reactive({
   orderNo: '',
@@ -552,18 +765,26 @@ const filters = reactive({
   customerName: '',
   contactPhone: '',
   regionCode: '',
-  ownerStaffCode: '',
+  ownerEmployeeCode: '',
   orderStatusCode: '',
+  dataQualityStatusCode: '',
   paymentStatusCode: '',
   outboundStatusCode: '',
   orderDateFrom: '',
   orderDateTo: '',
+  productId: '',
+  productVariantId: '',
+  productCodeSnapshot: '',
+  skuCodeSnapshot: '',
+  productNameSnapshot: '',
+  specificationSnapshot: '',
+  drillLabel: '',
 })
 
 interface SalesOrderLineForm {
   localId: string
-  productId: string
-  productVariantId: string
+  productId: string | null
+  productVariantId: string | null
   productCodeSnapshot: string | null
   skuCodeSnapshot: string | null
   productNameSnapshot: string
@@ -577,6 +798,7 @@ interface SalesOrderLineForm {
 }
 
 const form = reactive({
+  sourceSystemCode: '',
   customerId: '',
   customerCodeSnapshot: '',
   customerNameSnapshot: '',
@@ -585,8 +807,8 @@ const form = reactive({
   regionCode: '',
   ownerSalesUserId: '',
   ownerSalesName: '',
-  ownerStaffCode: '',
-  ownerStaffNameSnapshot: '',
+  ownerEmployeeCode: '',
+  ownerEmployeeNameSnapshot: '',
   orderDate: null as Date | string | null,
   paymentMethodCode: '',
   remark: '',
@@ -600,16 +822,26 @@ const stockOutForm = reactive({
   remark: '',
 })
 
+const orderTotalItems = computed(() => [
+  { label: '订单数', value: formatNumber(orderTotals.value.total || pageData.value.total) },
+  { label: '商品数量', value: formatNumber(orderTotals.value.totalQuantity) },
+  { label: '原小计', value: formatMoney(orderTotals.value.originalAmount) },
+  { label: '优惠金额', value: formatMoney(orderTotals.value.discountAmount) },
+  { label: '实际小计', value: formatMoney(orderTotals.value.payableAmount) },
+  { label: '已收金额', value: formatMoney(orderTotals.value.paidAmount) },
+  { label: '未收金额', value: formatMoney(orderTotals.value.unpaidAmount) },
+])
+
 function tableRowIndex(index: number): number {
   return (currentPage.value - 1) * pageSize.value + index + 1
 }
 
 const customerLoading = ref(false)
-const staffLoading = ref(false)
+const employeeLoading = ref(false)
 const productLoading = ref(false)
 const warehouseLoading = ref(false)
 const customerOptions = ref<InternalCrmCustomerSummary[]>([])
-const staffOptions = ref<StaffRecord[]>([])
+const employeeOptions = ref<HrEmployeeRecord[]>([])
 const productOptions = ref<ErpManagedProductSummary[]>([])
 const warehouseOptions = ref<ErpInternalWarehouseView[]>([])
 
@@ -626,7 +858,18 @@ onMounted(() => {
     { moduleCode: 'ORDER', code: 'PAYMENT_METHOD' },
   ])
   applyRouteQuery()
-  void Promise.all([loadOrders(), searchCustomers(''), searchSalesStaff(''), searchProducts(''), searchWarehouses('')])
+  void Promise.all([
+    loadCustomerAreas(),
+    loadOrders(),
+    searchCustomers(''),
+    searchSalesEmployees(''),
+    searchProducts(''),
+    searchWarehouses(''),
+  ])
+})
+
+onActivated(() => {
+  if (!customerAreaOptions.value.length) void loadCustomerAreas()
 })
 
 watch(() => route.query, () => {
@@ -638,26 +881,55 @@ watch(() => route.query, () => {
 async function loadOrders() {
   loading.value = true
   try {
-    pageData.value = await getSalesOrders({
-      begin: (currentPage.value - 1) * pageSize.value,
-      step: pageSize.value,
-      orderNo: empty(filters.orderNo),
-      sourceOrderNo: empty(filters.sourceOrderNo),
-      sourceStatusCode: empty(filters.sourceStatusCode),
-      customerName: empty(filters.customerName),
-      contactPhone: empty(filters.contactPhone),
-      regionCode: empty(filters.regionCode),
-      ownerStaffCode: empty(filters.ownerStaffCode),
-      orderStatusCode: empty(filters.orderStatusCode),
-      paymentStatusCode: empty(filters.paymentStatusCode),
-      outboundStatusCode: empty(filters.outboundStatusCode),
-      orderDateFrom: startOfDay(filters.orderDateFrom),
-      orderDateTo: endOfDay(filters.orderDateTo),
-    })
+    const query = salesOrderQuery()
+    const [orders, totals] = await Promise.all([
+      getSalesOrders(query),
+      getSalesOrderTotals(query),
+    ])
+    pageData.value = orders
+    orderTotals.value = totals
   } catch (reason) {
     ElMessage.error(errorMessage(reason, '销售订单加载失败'))
   } finally {
     loading.value = false
+  }
+}
+
+function salesOrderQuery(): SalesOrderQuery {
+  return {
+    begin: (currentPage.value - 1) * pageSize.value,
+    step: pageSize.value,
+    orderNo: empty(filters.orderNo),
+    sourceOrderNo: empty(filters.sourceOrderNo),
+    sourceStatusCode: empty(filters.sourceStatusCode),
+    dataQualityStatusCode: empty(filters.dataQualityStatusCode),
+    customerName: empty(filters.customerName),
+    contactPhone: empty(filters.contactPhone),
+    regionCode: empty(filters.regionCode),
+    ownerEmployeeCode: empty(filters.ownerEmployeeCode),
+    orderStatusCode: empty(filters.orderStatusCode),
+    paymentStatusCode: empty(filters.paymentStatusCode),
+    outboundStatusCode: empty(filters.outboundStatusCode),
+    orderDateFrom: startOfDay(filters.orderDateFrom),
+    orderDateTo: endOfDay(filters.orderDateTo),
+    productId: empty(filters.productId),
+    productVariantId: empty(filters.productVariantId),
+    productCodeSnapshot: empty(filters.productCodeSnapshot),
+    skuCodeSnapshot: empty(filters.skuCodeSnapshot),
+    productNameSnapshot: empty(filters.productNameSnapshot),
+    specificationSnapshot: empty(filters.specificationSnapshot),
+  }
+}
+
+function emptyOrderTotals(): SalesOrderTotals {
+  return {
+    total: 0,
+    totalQuantity: 0,
+    originalAmount: 0,
+    discountAmount: 0,
+    payableAmount: 0,
+    paidAmount: 0,
+    unpaidAmount: 0,
   }
 }
 
@@ -668,12 +940,20 @@ function resetFilters() {
   filters.customerName = ''
   filters.contactPhone = ''
   filters.regionCode = ''
-  filters.ownerStaffCode = ''
+  filters.ownerEmployeeCode = ''
   filters.orderStatusCode = ''
+  filters.dataQualityStatusCode = ''
   filters.paymentStatusCode = ''
   filters.outboundStatusCode = ''
   filters.orderDateFrom = ''
   filters.orderDateTo = ''
+  filters.productId = ''
+  filters.productVariantId = ''
+  filters.productCodeSnapshot = ''
+  filters.skuCodeSnapshot = ''
+  filters.productNameSnapshot = ''
+  filters.specificationSnapshot = ''
+  filters.drillLabel = ''
   currentPage.value = 1
   void loadOrders()
 }
@@ -683,13 +963,31 @@ function applyRouteQuery() {
   changed = setFilterValue('orderDateFrom', routeDate(route.query.orderDateFrom)) || changed
   changed = setFilterValue('orderDateTo', routeDate(route.query.orderDateTo)) || changed
   changed = setFilterValue('regionCode', routeText(route.query.regionCode)) || changed
-  changed = setFilterValue('ownerStaffCode', routeText(route.query.ownerStaffCode)) || changed
+  changed = setFilterValue('ownerEmployeeCode', routeText(route.query.ownerEmployeeCode)) || changed
   changed = setFilterValue('sourceStatusCode', routeText(route.query.sourceStatusCode)) || changed
+  changed = setFilterValue('dataQualityStatusCode', routeText(route.query.dataQualityStatusCode)) || changed
   changed = setFilterValue('paymentStatusCode', routeText(route.query.paymentStatusCode)) || changed
-  const ownerStaffCode = routeText(route.query.ownerStaffCode)
-  if (ownerStaffCode) ensureStaffOption(ownerStaffCode, routeText(route.query.ownerStaffName) || ownerStaffCode)
+  changed = setFilterValue('productId', routeText(route.query.productId)) || changed
+  changed = setFilterValue('productVariantId', routeText(route.query.productVariantId)) || changed
+  changed = setFilterValue('productCodeSnapshot', routeText(route.query.productCodeSnapshot)) || changed
+  changed = setFilterValue('skuCodeSnapshot', routeText(route.query.skuCodeSnapshot)) || changed
+  changed = setFilterValue('productNameSnapshot', routeText(route.query.productNameSnapshot)) || changed
+  changed = setFilterValue('specificationSnapshot', routeText(route.query.specificationSnapshot)) || changed
+  changed = setFilterValue('drillLabel', routeText(route.query.drillLabel)) || changed
+  const ownerEmployeeCode = routeText(route.query.ownerEmployeeCode)
+  if (ownerEmployeeCode) ensureEmployeeOption(ownerEmployeeCode, routeText(route.query.ownerEmployeeName) || ownerEmployeeCode)
   return changed
 }
+
+const orderDrillContextText = computed(() => {
+  if (filters.drillLabel) return `BI 穿透：${filters.drillLabel}`
+  const productName = filters.productNameSnapshot || filters.productCodeSnapshot
+  const skuName = filters.specificationSnapshot || filters.skuCodeSnapshot
+  if (productName && skuName) return `BI 穿透：${productName} / ${skuName}`
+  if (productName) return `BI 穿透：${productName}`
+  if (skuName) return `BI 穿透：${skuName}`
+  return ''
+})
 
 function setFilterValue(key: keyof typeof filters, value: string) {
   if (filters[key] === value) return false
@@ -715,10 +1013,55 @@ function handleSizeChange() {
 async function openDetail(row: SalesOrderSummary) {
   detailVisible.value = true
   detail.value = null
+  detailPayments.value = []
   try {
-    detail.value = await getSalesOrder(row.id)
+    const current = await getSalesOrder(row.id)
+    detail.value = current
+    await loadDetailPayments(current)
+    await nextTick()
+    scrollDetailToTop('.order-detail-drawer')
   } catch (reason) {
     ElMessage.error(errorMessage(reason, '销售订单详情加载失败'))
+  }
+}
+
+function scrollDetailToTop(selector: string) {
+  const reset = () => {
+    document.querySelector(`${selector} .el-drawer__body`)?.scrollTo({ top: 0 })
+  }
+  reset()
+  requestAnimationFrame(reset)
+  window.setTimeout(reset, 0)
+}
+
+async function loadDetailPayments(order: SalesOrderDetail) {
+  detailPaymentsLoading.value = true
+  try {
+    const result = await getSalesPayments({
+      begin: 0,
+      step: 50,
+      salesOrderNo: order.orderNo,
+    })
+    detailPayments.value = await Promise.all(result.items.map(async (item) => {
+      try {
+        return await getSalesPayment(item.id)
+      } catch {
+        return {
+          ...item,
+          voucherKeys: [],
+          attachments: [],
+          remark: null,
+          createdBy: null,
+          createdTime: item.updatedTime,
+          updatedBy: null,
+        }
+      }
+    }))
+  } catch (reason) {
+    detailPayments.value = []
+    ElMessage.error(errorMessage(reason, '销售订单回款凭证加载失败'))
+  } finally {
+    detailPaymentsLoading.value = false
   }
 }
 
@@ -734,30 +1077,32 @@ async function openEdit(row: SalesOrderSummary) {
     const current = await getSalesOrder(row.id)
     editingId.value = row.id
     resetForm()
-    form.customerId = String(current.customerId)
+    form.sourceSystemCode = current.sourceSystemCode || ''
+    form.customerId = idString(current.customerId)
     form.customerCodeSnapshot = current.customerCodeSnapshot || ''
-    form.customerNameSnapshot = current.customerNameSnapshot
+    form.customerNameSnapshot = current.customerNameSnapshot || ''
+    ensureCustomerOption(form.customerId, form.customerNameSnapshot, form.customerCodeSnapshot)
     form.contactNameSnapshot = current.contactNameSnapshot || ''
     form.contactPhoneSnapshot = current.contactPhoneSnapshot || ''
     form.regionCode = current.regionCode || ''
     form.ownerSalesUserId = current.ownerSalesUserId || ''
     form.ownerSalesName = current.ownerSalesName || ''
-    form.ownerStaffCode = current.ownerStaffCode || ''
-    form.ownerStaffNameSnapshot = current.ownerStaffNameSnapshot || current.ownerSalesName || ''
-    ensureStaffOption(form.ownerStaffCode, form.ownerStaffNameSnapshot)
+    form.ownerEmployeeCode = current.ownerEmployeeCode || ''
+    form.ownerEmployeeNameSnapshot = current.ownerEmployeeNameSnapshot || current.ownerSalesName || ''
+    ensureEmployeeOption(form.ownerEmployeeCode, form.ownerEmployeeNameSnapshot)
     form.orderDate = current.orderDate
     form.paymentMethodCode = current.paymentMethodCode || ''
     form.remark = current.remark || ''
     form.revision = current.revision
     form.lines = current.lines.map((line) => ({
       localId: crypto.randomUUID(),
-      productId: String(line.productId),
-      productVariantId: String(line.productVariantId),
+      productId: idString(line.productId),
+      productVariantId: idString(line.productVariantId),
       productCodeSnapshot: line.productCodeSnapshot,
       skuCodeSnapshot: line.skuCodeSnapshot,
-      productNameSnapshot: line.productNameSnapshot,
+      productNameSnapshot: line.productNameSnapshot || '',
       specificationSnapshot: line.specificationSnapshot,
-      unitCode: line.unitCode,
+      unitCode: line.unitCode || '',
       quantity: Number(line.quantity),
       unitPrice: Number(line.unitPrice),
       discountAmount: Number(line.discountAmount || 0),
@@ -805,19 +1150,57 @@ function isExternalSource(row: Pick<SalesOrderSummary, 'sourceSystemCode'>) {
   return Boolean(row.sourceSystemCode && row.sourceSystemCode.trim())
 }
 
+function isFeishuSource(row: Pick<SalesOrderSummary, 'sourceSystemCode'>) {
+  return row.sourceSystemCode === 'FEISHU'
+}
+
+function isOrderNeedsReview(row: Pick<SalesOrderSummary, 'dataQualityStatusCode'>) {
+  return row.dataQualityStatusCode === 'NEEDS_REVIEW'
+}
+
+function isFeishuRepairForm() {
+  return form.sourceSystemCode === 'FEISHU'
+}
+
 function canSubmit(row: SalesOrderSummary) {
-  if (isExternalSource(row)) return false
+  if (isExternalSource(row) && !isFeishuSource(row)) return false
+  if (isOrderNeedsReview(row)) return false
   return row.orderStatusCode === 'DRAFT'
 }
 
 function canEdit(row: SalesOrderSummary) {
-  if (isExternalSource(row)) return false
+  if (isExternalSource(row) && !isFeishuSource(row)) return false
   return row.orderStatusCode === 'DRAFT'
 }
 
+function canDelete(row: SalesOrderSummary) {
+  return canEdit(row)
+}
+
 function canStockOut(row: SalesOrderSummary) {
-  if (isExternalSource(row)) return false
+  if (isExternalSource(row) && !isFeishuSource(row)) return false
+  if (isOrderNeedsReview(row)) return false
   return row.orderStatusCode === 'SUBMITTED' && row.outboundStatusCode === 'PENDING'
+}
+
+async function deleteDraft(row: SalesOrderSummary) {
+  try {
+    await ElMessageBox.confirm(`确认删除草稿订单 ${row.orderNo}？`, '删除草稿订单', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await deleteSalesOrder(row.id, row.revision)
+    if (detail.value?.id === row.id) {
+      detailVisible.value = false
+      detail.value = null
+    }
+    ElMessage.success('草稿订单已删除')
+    await loadOrders()
+  } catch (reason) {
+    if (reason === 'cancel' || reason === 'close') return
+    ElMessage.error(errorMessage(reason, '草稿订单删除失败'))
+  }
 }
 
 function openStockOut(row: SalesOrderSummary) {
@@ -826,6 +1209,44 @@ function openStockOut(row: SalesOrderSummary) {
   stockOutForm.stockOutTime = new Date()
   stockOutForm.remark = ''
   stockOutVisible.value = true
+}
+
+function openPayments(row: Pick<SalesOrderSummary, 'orderNo' | 'sourceOrderNo' | 'customerNameSnapshot'>) {
+  detailVisible.value = false
+  void router.push({
+    name: 'SupplyOrderSalesPayments',
+    query: {
+      salesOrderNo: row.orderNo,
+      sourceDocumentNo: row.sourceOrderNo || undefined,
+      customerName: row.customerNameSnapshot || undefined,
+    },
+  })
+}
+
+function paymentAttachmentItems(row: SalesPaymentDetail) {
+  const result: FundDocumentAttachment[] = [...(row.attachments || [])]
+  const existing = new Set(result.map((item) => item.objectKey))
+  for (const key of row.voucherKeys || []) {
+    if (!key || existing.has(key)) continue
+    result.push({ objectKey: key, fileName: attachmentName(key), url: null })
+  }
+  return result
+}
+
+function orderPaymentAttachmentItems(order: SalesOrderDetail) {
+  const result: FundDocumentAttachment[] = [...(order.paymentAttachments || [])]
+  const existing = new Set(result.map((item) => item.objectKey))
+  for (const key of order.paymentVoucherKeys || []) {
+    if (!key || existing.has(key)) continue
+    result.push({ objectKey: key, fileName: attachmentName(key), url: null })
+  }
+  return result
+}
+
+function attachmentName(value: string) {
+  const normalized = value.split('?')[0] || value
+  const parts = normalized.split(/[\\/]/)
+  return parts[parts.length - 1] || normalized
 }
 
 async function confirmStockOut() {
@@ -867,6 +1288,16 @@ async function searchCustomers(query: string) {
   }
 }
 
+async function loadCustomerAreas() {
+  try {
+    const result = await getCrmCustomerAreas({ begin: 0, step: 500 })
+    customerAreaOptions.value = result.items.filter((item) => item.status === 'ACTIVE')
+  } catch (reason) {
+    customerAreaOptions.value = []
+    ElMessage.warning(errorMessage(reason, '归属地区加载失败，可稍后刷新'))
+  }
+}
+
 function selectCustomer(value: string | number) {
   const customer = customerOptions.value.find((item) => String(item.id) === String(value))
   if (!customer) return
@@ -875,62 +1306,86 @@ function selectCustomer(value: string | number) {
   form.contactNameSnapshot = customer.contactName || ''
   form.contactPhoneSnapshot = customer.contactPhone || ''
   form.regionCode = customer.regionCode || ''
-  form.ownerStaffCode = customer.ownerStaffCode || ''
-  form.ownerStaffNameSnapshot = customer.ownerStaffNameSnapshot || customer.ownerSalesName || ''
-  ensureStaffOption(form.ownerStaffCode, form.ownerStaffNameSnapshot)
+  form.ownerEmployeeCode = customer.ownerEmployeeCode || ''
+  form.ownerEmployeeNameSnapshot = customer.ownerEmployeeNameSnapshot || customer.ownerSalesName || ''
+  ensureEmployeeOption(form.ownerEmployeeCode, form.ownerEmployeeNameSnapshot)
 }
 
-async function searchSalesStaff(query: string) {
-  staffLoading.value = true
+function ensureCustomerOption(customerId: string, customerName: string, customerCode: string) {
+  if (!customerId || customerOptions.value.some((item) => String(item.id) === customerId)) return
+  customerOptions.value = [{
+    id: customerId,
+    customerCode,
+    customerName: customerName || customerId,
+    contactName: null,
+    contactPhone: null,
+    customerTypeCode: null,
+    regionCode: null,
+    ownerSalesUserId: null,
+    ownerSalesName: null,
+    ownerEmployeeCode: null,
+    ownerEmployeeNameSnapshot: null,
+    settlementTypeCode: null,
+    statusCode: 'ACTIVE',
+    revision: 0,
+    updatedTime: '',
+  }, ...customerOptions.value]
+}
+
+async function searchSalesEmployees(query: string) {
+  employeeLoading.value = true
   try {
-    const params = new URLSearchParams()
-    params.set('status', 'ACTIVE')
-    if (query.trim()) params.set('keyword', query.trim())
-    staffOptions.value = await apiClient.get(`/management/tenant/staff?${params.toString()}`) as StaffRecord[]
+    const result = await getHrEmployees({
+      begin: 0,
+      step: 20,
+      keyword: empty(query),
+      employmentStatus: 'ACTIVE',
+    })
+    employeeOptions.value = result.items
   } finally {
-    staffLoading.value = false
+    employeeLoading.value = false
   }
 }
 
-function selectOwnerStaff(value: string | number) {
+function selectOwnerEmployee(value: string | number) {
   const code = String(value || '')
-  const selected = staffOptions.value.find((item) => item.staffCode === code)
-  form.ownerStaffCode = code
-  form.ownerStaffNameSnapshot = selected?.staffName || ''
+  const selected = employeeOptions.value.find((item) => item.employeeCode === code)
+  form.ownerEmployeeCode = code
+  form.ownerEmployeeNameSnapshot = selected?.employeeName || ''
   form.ownerSalesUserId = ''
-  form.ownerSalesName = selected?.staffName || ''
+  form.ownerSalesName = selected?.employeeName || ''
 }
 
-function ensureStaffOption(staffCode: string, staffName: string) {
-  if (!staffCode || staffOptions.value.some((item) => item.staffCode === staffCode)) return
-  staffOptions.value = [{
-    id: staffCode,
-    staffCode,
-    staffName: staffName || staffCode,
+function ensureEmployeeOption(employeeCode: string, employeeName: string) {
+  if (!employeeCode || employeeOptions.value.some((item) => item.employeeCode === employeeCode)) return
+  employeeOptions.value = [{
+    id: employeeCode,
+    employeeCode,
+    employeeName: employeeName || employeeCode,
     mobile: null,
     email: null,
     employmentStatus: 'ACTIVE',
-    primaryOrganizationId: null,
-    primaryOrganizationName: null,
-    primaryPositionId: null,
-    primaryPositionName: null,
-    userId: null,
-    username: null,
-    userDisplayName: null,
-    recordOrigin: 'IMPORTED',
-    remark: null,
+    jobCategory: null,
+    positionCode: null,
+    positionName: null,
+    departmentName: null,
+    leaderEmployeeCode: null,
+    leaderName: null,
+    regionName: null,
+    cityName: null,
     sourceSystem: null,
-    sourceStaffId: null,
-    sourceStaffType: null,
-    sourceAccountName: null,
-    sourceTitle: null,
-    sourceBranchName: null,
-    sourceRole: null,
-    sourceStatus: null,
-    sourcePresence: null,
-    lastSeenAt: null,
-    version: 0,
-  }, ...staffOptions.value]
+    sourceDocumentNo: null,
+    sourceCreatedAt: null,
+    sourceUpdatedAt: null,
+    entryDate: null,
+    leaveDate: null,
+    remark: null,
+    revision: 0,
+    createdBy: null,
+    createdTime: null,
+    updatedBy: null,
+    updatedTime: null,
+  }, ...employeeOptions.value]
 }
 
 async function searchProducts(query: string) {
@@ -997,8 +1452,8 @@ async function searchWarehouses(query: string) {
 function addLine() {
   form.lines.push({
     localId: crypto.randomUUID(),
-    productId: '',
-    productVariantId: '',
+    productId: null,
+    productVariantId: null,
     productCodeSnapshot: null,
     skuCodeSnapshot: null,
     productNameSnapshot: '',
@@ -1021,38 +1476,39 @@ function removeLine(index: number) {
 }
 
 function buildCommand(submit: boolean): SalesOrderCommand | null {
-  if (!form.customerId || !form.customerNameSnapshot) {
+  const allowPartialDraft = isFeishuRepairForm() && !submit
+  if (!allowPartialDraft && (!form.customerId || !form.customerNameSnapshot)) {
     ElMessage.warning('请选择客户')
     return null
   }
   const lines = form.lines.map((line) => ({
-    productId: line.productId,
-    productVariantId: line.productVariantId,
+    productId: idPayload(line.productId),
+    productVariantId: idPayload(line.productVariantId),
     productCodeSnapshot: line.productCodeSnapshot,
     skuCodeSnapshot: line.skuCodeSnapshot,
-    productNameSnapshot: line.productNameSnapshot,
+    productNameSnapshot: empty(line.productNameSnapshot) || null,
     specificationSnapshot: line.specificationSnapshot,
-    unitCode: line.unitCode,
+    unitCode: empty(line.unitCode) || null,
     quantity: line.quantity,
     unitPrice: line.unitPrice,
     discountAmount: line.discountAmount || 0,
     remark: line.remark,
   }))
-  if (lines.some((line) => !line.productId || !line.productVariantId || !line.productNameSnapshot || !line.unitCode)) {
+  if (!allowPartialDraft && lines.some((line) => !line.productId || !line.productVariantId || !line.productNameSnapshot || !line.unitCode)) {
     ElMessage.warning('请完善商品、规格和单位')
     return null
   }
   return {
-    customerId: form.customerId,
+    customerId: idPayload(form.customerId),
     customerCodeSnapshot: empty(form.customerCodeSnapshot),
-    customerNameSnapshot: form.customerNameSnapshot,
+    customerNameSnapshot: empty(form.customerNameSnapshot) || null,
     contactNameSnapshot: empty(form.contactNameSnapshot),
     contactPhoneSnapshot: empty(form.contactPhoneSnapshot),
     regionCode: empty(form.regionCode),
     ownerSalesUserId: empty(form.ownerSalesUserId),
     ownerSalesName: empty(form.ownerSalesName),
-    ownerStaffCode: empty(form.ownerStaffCode),
-    ownerStaffNameSnapshot: empty(form.ownerStaffNameSnapshot),
+    ownerEmployeeCode: empty(form.ownerEmployeeCode),
+    ownerEmployeeNameSnapshot: empty(form.ownerEmployeeNameSnapshot),
     orderDate: toIso(form.orderDate),
     paymentMethodCode: empty(form.paymentMethodCode),
     discountAmount: 0,
@@ -1064,6 +1520,7 @@ function buildCommand(submit: boolean): SalesOrderCommand | null {
 }
 
 function resetForm() {
+  form.sourceSystemCode = ''
   form.customerId = ''
   form.customerCodeSnapshot = ''
   form.customerNameSnapshot = ''
@@ -1072,8 +1529,8 @@ function resetForm() {
   form.regionCode = ''
   form.ownerSalesUserId = ''
   form.ownerSalesName = ''
-  form.ownerStaffCode = ''
-  form.ownerStaffNameSnapshot = ''
+  form.ownerEmployeeCode = ''
+  form.ownerEmployeeNameSnapshot = ''
   form.orderDate = new Date()
   form.paymentMethodCode = ''
   form.remark = ''
@@ -1116,6 +1573,7 @@ function paymentMethodLabel(value: string | null | undefined) {
 
 function sourceSystemLabel(value: string | null | undefined) {
   if (value === 'DINGHUOBAO' || value === 'DHB') return '订货宝'
+  if (value === 'FEISHU') return '飞书'
   return value || '-'
 }
 
@@ -1123,12 +1581,28 @@ function sourceCreatorLabel(value: Pick<SalesOrderSummary, 'sourceCreatorName' |
   return value.sourceCreatorName || value.sourceCreatorStaffCode || value.sourceCreatorId || '-'
 }
 
+function dataQualityLabel(value: Pick<SalesOrderSummary, 'dataQualityStatusCode' | 'dataQualityMessage'>) {
+  if (value.dataQualityStatusCode === 'NEEDS_REVIEW') return value.dataQualityMessage || '待业务补齐'
+  return '完整'
+}
+
 function orderTypeLabel(value: string | null | undefined) {
   return businessDictionaryLabel('ORDER', 'SALES_ORDER_TYPE', value, '订单类型')
 }
 
-function regionLabel(value: string | null | undefined) {
-  return businessDictionaryLabel('COMMON', 'REGION', value, '地区')
+function areaOptionLabel(item: CrmDictionaryView) {
+  if (!item.parentCode) return item.name
+  const parent = customerAreaOptions.value.find((row) => row.code === item.parentCode)
+  return parent ? `${parent.name} / ${item.name}` : item.name
+}
+
+function regionLabel(value: string | null | undefined, displayName?: string | null) {
+  const normalizedName = displayName?.trim()
+  if (normalizedName) return normalizedName
+  const rawValue = value?.trim()
+  if (!rawValue) return '-'
+  return customerAreaOptions.value.find((item) => item.code === rawValue)?.name
+    || businessDictionaryLabel('COMMON', 'REGION', rawValue, '地区')
 }
 
 function unitLabel(value: string | null | undefined) {
@@ -1136,7 +1610,7 @@ function unitLabel(value: string | null | undefined) {
 }
 
 function orderStatusTag(value: string) {
-  if (value === 'SUBMITTED') return 'success'
+  if (value === 'SUBMITTED' || value === 'COMPLETED') return 'success'
   if (value === 'CANCELLED') return 'info'
   return 'warning'
 }
@@ -1175,6 +1649,29 @@ function formatMoney(value: number | null | undefined) {
   return `¥${Number(value).toFixed(2)}`
 }
 
+function displayDiscountAmount(
+  row: Pick<SalesOrderSummary, 'originalAmount' | 'discountAmount' | 'payableAmount'>,
+) {
+  const original = numericAmount(row.originalAmount)
+  const payable = numericAmount(row.payableAmount)
+  const stored = numericAmount(row.discountAmount)
+  if (original !== null && payable !== null) {
+    const derived = roundMoney(original - payable)
+    if (derived > 0) return derived
+  }
+  return stored ?? 0
+}
+
+function numericAmount(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
 function formatNumber(value: number | string | null | undefined) {
   if (value === null || value === undefined || value === '') return '-'
   return Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
@@ -1207,6 +1704,17 @@ function empty(value: string | null | undefined) {
   return normalized || undefined
 }
 
+function idString(value: string | number | null | undefined) {
+  if (value === null || value === undefined) return ''
+  const normalized = String(value).trim()
+  return normalized === 'null' || normalized === 'undefined' ? '' : normalized
+}
+
+function idPayload(value: string | number | null | undefined) {
+  const normalized = idString(value)
+  return normalized || null
+}
+
 function errorMessage(reason: unknown, fallback: string) {
   if (reason && typeof reason === 'object' && 'message' in reason) {
     return String((reason as { message?: unknown }).message || fallback)
@@ -1218,6 +1726,41 @@ function errorMessage(reason: unknown, fallback: string) {
 <style scoped lang="scss">
 .sales-order-page {
   min-height: 0;
+}
+
+.order-drill-context {
+  margin-bottom: 12px;
+}
+
+.order-total-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+  margin: -4px 0 12px;
+}
+
+.order-total-item {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+
+  span {
+    display: block;
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
+
+  strong {
+    display: block;
+    margin-top: 4px;
+    color: var(--el-text-color-primary);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
 }
 
 .form-section-title {
@@ -1244,7 +1787,7 @@ function errorMessage(reason: unknown, fallback: string) {
   align-items: center;
 }
 
-.staff-option {
+.employee-option {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1256,9 +1799,201 @@ function errorMessage(reason: unknown, fallback: string) {
   }
 }
 
+.order-detail-drawer :deep(.el-drawer__body) {
+  padding: 0;
+}
+
+.order-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.detail-hero-main {
+  min-width: 0;
+}
+
+.detail-hero-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.order-detail-summary {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-bottom: 0;
+
+  > div {
+    min-height: 76px;
+  }
+}
+
+.detail-panel {
+  padding: 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+}
+
+.detail-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.detail-field {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+
+  span,
+  strong {
+    display: block;
+    min-width: 0;
+  }
+
+  span {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
+
+  strong {
+    margin-top: 6px;
+    color: var(--el-text-color-primary);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+}
+
+.detail-field--wide {
+  grid-column: span 2;
+}
+
+.detail-field--full {
+  grid-column: 1 / -1;
+}
+
+.detail-payment-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  span {
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
+  }
+}
+
+.payment-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+
+  div {
+    padding: 12px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 6px;
+    background: var(--el-fill-color-light);
+  }
+
+  span {
+    display: block;
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: var(--el-text-color-primary);
+    font-size: 15px;
+  }
+}
+
+.payment-attachment-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-blank);
+
+  > span {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
+}
+
+.payment-attachment-empty {
+  padding: 12px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 6px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+}
+
+.attachment-unavailable {
+  color: var(--el-text-color-secondary);
+}
+
 .sales-order-form {
   max-height: min(640px, 68vh);
   overflow: auto;
   padding-right: 6px;
+}
+
+@media (max-width: 900px) {
+  .order-detail-summary,
+  .payment-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-field--wide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .detail-hero {
+    flex-direction: column;
+  }
+
+  .detail-hero-actions {
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .order-detail-summary,
+  .detail-field-grid,
+  .payment-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-field--wide {
+    grid-column: auto;
+  }
 }
 </style>
