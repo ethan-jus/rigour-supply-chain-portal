@@ -51,13 +51,7 @@
           <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
           <el-table-column label="多规格名称" min-width="240" show-overflow-tooltip>
             <template #default="scope">
-              <div class="record-identity record-identity--plain">
-                <span class="record-avatar">规</span>
-                <div class="record-identity-content">
-                  <strong>{{ scope.row.specificationName || '-' }}</strong>
-                  <small>{{ scope.row.valueCount || 0 }} 个子规格</small>
-                </div>
-              </div>
+              <span class="record-name">{{ scope.row.specificationName || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="specificationCode" label="多规格编号" width="180" show-overflow-tooltip />
@@ -481,10 +475,6 @@ function errorMessage(reason: unknown, fallback: string): string {
 
 .erp-product-specification-page {
   min-height: 100%;
-}
-
-.record-identity--plain {
-  grid-template-columns: 40px minmax(0, 1fr);
 }
 
 .detail-summary--three {

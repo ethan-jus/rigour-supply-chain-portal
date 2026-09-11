@@ -35,7 +35,7 @@
     </div>
 
     <el-card class="filter-card" shadow="never">
-      <el-form :model="filters" inline @submit.prevent="loadCustomers">
+      <el-form :model="filters" inline @submit.prevent="submitSearch">
         <el-form-item label="客户编号">
           <el-input v-model="filters.customerCode" clearable placeholder="系统生成的客户编号" style="width: 180px" />
         </el-form-item>
@@ -57,7 +57,7 @@
         </el-form-item>
         <el-form-item label="归属销售人员">
           <el-select
-            v-model="filters.ownerStaffCode"
+            v-model="filters.ownerEmployeeCode"
             clearable
             filterable
             remote
@@ -68,10 +68,10 @@
             style="width: 190px"
           >
             <el-option
-              v-for="item in staffOptions"
-              :key="item.staffCode"
-              :label="item.staffName"
-              :value="item.staffCode"
+              v-for="item in employeeOptions"
+              :key="item.employeeCode"
+              :label="item.employeeName"
+              :value="item.employeeCode"
             />
           </el-select>
         </el-form-item>
@@ -81,7 +81,7 @@
           </el-select>
         </el-form-item>
         <el-form-item class="filter-actions">
-          <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
+          <el-button type="primary" :loading="loading" @click="submitSearch">查询</el-button>
           <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
@@ -112,13 +112,7 @@
           </el-table-column>
           <el-table-column prop="customerName" label="客户名称" min-width="240" show-overflow-tooltip>
             <template #default="scope">
-              <div class="record-identity">
-                <span class="record-avatar">客</span>
-                <div class="record-identity-content">
-                  <strong>{{ scope.row.customerName }}</strong>
-                  <small>{{ scope.row.customerCode || '编号由后端生成' }}</small>
-                </div>
-              </div>
+              <span class="record-name">{{ scope.row.customerName || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="contactName" label="联系人" min-width="140" show-overflow-tooltip>
@@ -131,11 +125,17 @@
             <template #default="scope">{{ customerTypeLabel(scope.row.customerTypeCode) }}</template>
           </el-table-column>
           <el-table-column prop="regionCode" label="归属地区" min-width="130" show-overflow-tooltip>
-            <template #default="scope">{{ customerAreaLabel(scope.row.regionCode) }}</template>
+            <template #default="scope">{{ customerAreaText(scope.row) }}</template>
           </el-table-column>
-          <el-table-column prop="ownerStaffNameSnapshot" label="归属销售人员" min-width="150" show-overflow-tooltip>
+          <el-table-column prop="customerSourceName" label="客户来源" min-width="130" show-overflow-tooltip>
+            <template #default="scope">{{ scope.row.customerSourceName || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="businessCategoryName" label="业务类目" min-width="140" show-overflow-tooltip>
+            <template #default="scope">{{ scope.row.businessCategoryName || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="ownerEmployeeNameSnapshot" label="归属销售人员" min-width="150" show-overflow-tooltip>
             <template #default="scope">
-              {{ scope.row.ownerStaffNameSnapshot || scope.row.ownerSalesName || scope.row.ownerStaffCode || '-' }}
+              {{ scope.row.ownerEmployeeNameSnapshot || scope.row.ownerSalesName || scope.row.ownerEmployeeCode || '-' }}
             </template>
           </el-table-column>
           <el-table-column prop="settlementTypeCode" label="结算类型" width="130">
@@ -147,6 +147,17 @@
                 {{ statusLabel(scope.row.statusCode) }}
               </el-tag>
             </template>
+          </el-table-column>
+          <el-table-column prop="sourceSystemCode" label="来源" width="110">
+            <template #default="scope">
+              <el-tag v-if="scope.row.sourceSystemCode" :type="sourceTag(scope.row.sourceSystemCode)" effect="plain">
+                {{ sourceLabel(scope.row.sourceSystemCode) }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sourceDocumentNo" label="来源单号" min-width="170" show-overflow-tooltip>
+            <template #default="scope">{{ scope.row.sourceDocumentNo || '-' }}</template>
           </el-table-column>
           <el-table-column label="更新时间" width="170">
             <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
@@ -191,12 +202,18 @@
             <el-descriptions-item label="联系人">{{ detail.contactName || '-' }}</el-descriptions-item>
             <el-descriptions-item label="联系电话">{{ detail.contactPhone || '-' }}</el-descriptions-item>
             <el-descriptions-item label="客户类型">{{ customerTypeLabel(detail.customerTypeCode) }}</el-descriptions-item>
-            <el-descriptions-item label="归属地区">{{ customerAreaLabel(detail.regionCode) }}</el-descriptions-item>
+            <el-descriptions-item label="归属地区">{{ customerAreaText(detail) }}</el-descriptions-item>
+            <el-descriptions-item label="客户来源">{{ detail.customerSourceName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="业务类目">{{ detail.businessCategoryName || '-' }}</el-descriptions-item>
             <el-descriptions-item label="归属销售人员">
-              {{ detail.ownerStaffNameSnapshot || detail.ownerSalesName || detail.ownerStaffCode || '-' }}
+              {{ detail.ownerEmployeeNameSnapshot || detail.ownerSalesName || detail.ownerEmployeeCode || '-' }}
             </el-descriptions-item>
             <el-descriptions-item label="结算类型">{{ settlementTypeLabel(detail.settlementTypeCode) }}</el-descriptions-item>
             <el-descriptions-item label="状态">{{ statusLabel(detail.statusCode) }}</el-descriptions-item>
+            <el-descriptions-item label="来源">{{ sourceLabel(detail.sourceSystemCode) }}</el-descriptions-item>
+            <el-descriptions-item label="来源单号">{{ detail.sourceDocumentNo || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="来源创建时间">{{ formatTime(detail.sourceCreatedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="来源更新时间">{{ formatTime(detail.sourceUpdatedAt) }}</el-descriptions-item>
             <el-descriptions-item label="客户地址" :span="2">{{ detail.address || '-' }}</el-descriptions-item>
             <el-descriptions-item label="备注" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
             <el-descriptions-item label="创建人">{{ actorLabel(detail.createdBy) }}</el-descriptions-item>
@@ -263,7 +280,7 @@
           <el-col :span="12">
             <el-form-item label="归属销售人员">
               <el-select
-                v-model="form.ownerStaffCode"
+                v-model="form.ownerEmployeeCode"
                 clearable
                 filterable
                 remote
@@ -276,14 +293,14 @@
                 @clear="selectOwnerStaff('')"
               >
                 <el-option
-                  v-for="item in staffOptions"
-                  :key="item.staffCode"
-                  :label="item.staffName"
-                  :value="item.staffCode"
+                  v-for="item in employeeOptions"
+                  :key="item.employeeCode"
+                  :label="item.employeeName"
+                  :value="item.employeeCode"
                 >
                   <div class="staff-option">
-                    <strong>{{ item.staffName }}</strong>
-                    <span>{{ item.staffCode }}</span>
+                    <strong>{{ item.employeeName }}</strong>
+                    <span>{{ item.employeeCode }}</span>
                   </div>
                 </el-option>
               </el-select>
@@ -313,7 +330,6 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiClient } from '@/api'
 import {
   createInternalCrmCustomer,
   deleteInternalCrmCustomer,
@@ -333,7 +349,7 @@ import {
   businessDictionaryOptions,
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
-import type { StaffRecord } from '@/types/management'
+import { getHrEmployees, type HrEmployeeRecord } from '@/api/core/hr'
 
 const route = useRoute()
 const statusOptions = computed(() => businessDictionaryOptions('CRM', 'CUSTOMER_STATUS'))
@@ -349,7 +365,7 @@ const editingId = ref<string | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const pageData = ref<CrmPage<InternalCrmCustomerSummary>>({ total: 0, begin: 0, step: 20, items: [] })
-const staffOptions = ref<StaffRecord[]>([])
+const employeeOptions = ref<HrEmployeeRecord[]>([])
 const customerTypeOptions = ref<CrmDictionaryView[]>([])
 const customerAreaOptions = ref<CrmDictionaryView[]>([])
 
@@ -359,7 +375,7 @@ const filters = reactive({
   contactPhone: '',
   customerTypeCode: '',
   regionCode: '',
-  ownerStaffCode: '',
+  ownerEmployeeCode: '',
   statusCode: '',
 })
 
@@ -371,8 +387,8 @@ const form = reactive({
   regionCode: '',
   ownerSalesUserId: '',
   ownerSalesName: '',
-  ownerStaffCode: '',
-  ownerStaffNameSnapshot: '',
+  ownerEmployeeCode: '',
+  ownerEmployeeNameSnapshot: '',
   settlementTypeCode: '',
   address: '',
   statusCode: '',
@@ -410,7 +426,7 @@ async function loadCustomers() {
       contactPhone: empty(filters.contactPhone),
       customerTypeCode: empty(filters.customerTypeCode),
       regionCode: empty(filters.regionCode),
-      ownerStaffCode: empty(filters.ownerStaffCode),
+      ownerEmployeeCode: empty(filters.ownerEmployeeCode),
       statusCode: empty(filters.statusCode),
     })
   } catch (reason) {
@@ -426,22 +442,43 @@ function resetFilters() {
   filters.contactPhone = ''
   filters.customerTypeCode = ''
   filters.regionCode = ''
-  filters.ownerStaffCode = ''
+  filters.ownerEmployeeCode = ''
   filters.statusCode = ''
   currentPage.value = 1
   void loadCustomers()
 }
 
+function submitSearch() {
+  currentPage.value = 1
+  void loadCustomers()
+}
+
 function applyRouteFilters() {
+  const customerCode = queryText(route.query.customerCode)
+  const customerName = queryText(route.query.customerName)
   const customerTypeCode = queryText(route.query.customerTypeCode)
   const regionCode = queryText(route.query.regionCode)
+  const ownerEmployeeCode = queryText(route.query.ownerEmployeeCode)
   let changed = false
+  if (customerCode && filters.customerCode !== customerCode) {
+    filters.customerCode = customerCode
+    changed = true
+  }
+  if (customerName && filters.customerName !== customerName) {
+    filters.customerName = customerName
+    changed = true
+  }
   if (customerTypeCode && filters.customerTypeCode !== customerTypeCode) {
     filters.customerTypeCode = customerTypeCode
     changed = true
   }
   if (regionCode && filters.regionCode !== regionCode) {
     filters.regionCode = regionCode
+    changed = true
+  }
+  if (ownerEmployeeCode && filters.ownerEmployeeCode !== ownerEmployeeCode) {
+    filters.ownerEmployeeCode = ownerEmployeeCode
+    ensureEmployeeOption(ownerEmployeeCode, ownerEmployeeCode)
     changed = true
   }
   return changed
@@ -483,10 +520,10 @@ async function openEdit(row: InternalCrmCustomerSummary) {
     form.customerTypeCode = current.customerTypeCode || ''
     form.regionCode = current.regionCode || ''
     form.ownerSalesUserId = current.ownerSalesUserId || ''
-    form.ownerSalesName = current.ownerSalesName || current.ownerStaffNameSnapshot || ''
-    form.ownerStaffCode = current.ownerStaffCode || ''
-    form.ownerStaffNameSnapshot = current.ownerStaffNameSnapshot || current.ownerSalesName || ''
-    ensureStaffOption(form.ownerStaffCode, form.ownerStaffNameSnapshot)
+    form.ownerSalesName = current.ownerSalesName || current.ownerEmployeeNameSnapshot || ''
+    form.ownerEmployeeCode = current.ownerEmployeeCode || ''
+    form.ownerEmployeeNameSnapshot = current.ownerEmployeeNameSnapshot || current.ownerSalesName || ''
+    ensureEmployeeOption(form.ownerEmployeeCode, form.ownerEmployeeNameSnapshot)
     form.settlementTypeCode = current.settlementTypeCode || ''
     form.address = current.address || ''
     form.statusCode = current.statusCode || ''
@@ -548,8 +585,8 @@ function buildCommand(): InternalCrmCustomerCommand | null {
     regionCode: empty(form.regionCode),
     ownerSalesUserId: empty(form.ownerSalesUserId),
     ownerSalesName: empty(form.ownerSalesName),
-    ownerStaffCode: empty(form.ownerStaffCode),
-    ownerStaffNameSnapshot: empty(form.ownerStaffNameSnapshot),
+    ownerEmployeeCode: empty(form.ownerEmployeeCode),
+    ownerEmployeeNameSnapshot: empty(form.ownerEmployeeNameSnapshot),
     settlementTypeCode: empty(form.settlementTypeCode),
     address: empty(form.address),
     statusCode: empty(form.statusCode),
@@ -566,8 +603,8 @@ function resetForm() {
   form.regionCode = ''
   form.ownerSalesUserId = ''
   form.ownerSalesName = ''
-  form.ownerStaffCode = ''
-  form.ownerStaffNameSnapshot = ''
+  form.ownerEmployeeCode = ''
+  form.ownerEmployeeNameSnapshot = ''
   form.settlementTypeCode = ''
   form.address = ''
   form.statusCode = ''
@@ -594,7 +631,27 @@ function customerAreaLabel(value: string | null | undefined) {
 }
 
 function areaOptionLabel(item: CrmDictionaryView) {
-  return item.parentCode ? `${item.name} / ${item.parentCode}` : item.name
+  if (!item.parentCode) return item.name
+  const parent = customerAreaOptions.value.find((row) => row.code === item.parentCode)
+  return parent ? `${parent.name} / ${item.name}` : item.name
+}
+
+function customerAreaText(row: Pick<InternalCrmCustomerSummary, 'regionCode' | 'regionName' | 'cityName'>) {
+  if (row.regionCode) return customerAreaLabel(row.regionCode)
+  if (row.regionName && row.cityName) return `${row.regionName} / ${row.cityName}`
+  return row.regionName || row.cityName || '-'
+}
+
+function sourceLabel(value: string | null | undefined) {
+  if (value === 'FEISHU') return '飞书'
+  if (value === 'DINGHUOBAO') return '订货宝'
+  return value || '-'
+}
+
+function sourceTag(value: string | null | undefined) {
+  if (value === 'FEISHU') return 'success'
+  if (value === 'DINGHUOBAO') return 'warning'
+  return 'info'
 }
 
 function empty(value: string | null | undefined) {
@@ -624,10 +681,13 @@ function errorMessage(reason: unknown, fallback: string) {
 async function searchSalesStaff(query: string) {
   staffLoading.value = true
   try {
-    const params = new URLSearchParams()
-    params.set('status', 'ACTIVE')
-    if (query.trim()) params.set('keyword', query.trim())
-    staffOptions.value = await apiClient.get(`/management/tenant/staff?${params.toString()}`) as StaffRecord[]
+    const employees = await getHrEmployees({
+      begin: 0,
+      step: 50,
+      keyword: empty(query),
+      employmentStatus: 'ACTIVE',
+    })
+    employeeOptions.value = employees.items
   } finally {
     staffLoading.value = false
   }
@@ -648,43 +708,43 @@ async function loadCrmMasterOptions() {
 
 function selectOwnerStaff(value: string | number) {
   const code = String(value || '')
-  const selected = staffOptions.value.find((item) => item.staffCode === code)
-  form.ownerStaffCode = code
-  form.ownerStaffNameSnapshot = selected?.staffName || ''
+  const selected = employeeOptions.value.find((item) => item.employeeCode === code)
+  form.ownerEmployeeCode = code
+  form.ownerEmployeeNameSnapshot = selected?.employeeName || ''
   form.ownerSalesUserId = ''
-  form.ownerSalesName = selected?.staffName || ''
+  form.ownerSalesName = selected?.employeeName || ''
 }
 
-function ensureStaffOption(staffCode: string, staffName: string) {
-  if (!staffCode || staffOptions.value.some((item) => item.staffCode === staffCode)) return
-  staffOptions.value = [{
-    id: staffCode,
-    staffCode,
-    staffName: staffName || staffCode,
+function ensureEmployeeOption(employeeCode: string, employeeName: string) {
+  if (!employeeCode || employeeOptions.value.some((item) => item.employeeCode === employeeCode)) return
+  employeeOptions.value = [{
+    id: employeeCode,
+    employeeCode,
+    employeeName: employeeName || employeeCode,
     mobile: null,
     email: null,
     employmentStatus: 'ACTIVE',
-    primaryOrganizationId: null,
-    primaryOrganizationName: null,
-    primaryPositionId: null,
-    primaryPositionName: null,
-    userId: null,
-    username: null,
-    userDisplayName: null,
-    recordOrigin: 'MANUAL',
-    remark: null,
+    jobCategory: null,
+    positionCode: null,
+    positionName: null,
+    departmentName: null,
+    leaderEmployeeCode: null,
+    leaderName: null,
+    regionName: null,
+    cityName: null,
     sourceSystem: null,
-    sourceStaffId: null,
-    sourceStaffType: null,
-    sourceAccountName: null,
-    sourceTitle: null,
-    sourceBranchName: null,
-    sourceRole: null,
-    sourceStatus: null,
-    sourcePresence: null,
-    lastSeenAt: null,
-    version: 0,
-  }, ...staffOptions.value]
+    sourceDocumentNo: null,
+    sourceCreatedAt: null,
+    sourceUpdatedAt: null,
+    entryDate: null,
+    leaveDate: null,
+    remark: null,
+    revision: 0,
+    createdBy: null,
+    createdTime: null,
+    updatedBy: null,
+    updatedTime: null,
+  }, ...employeeOptions.value]
 }
 </script>
 

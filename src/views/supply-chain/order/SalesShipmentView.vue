@@ -60,13 +60,7 @@
           </el-table-column>
           <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip>
             <template #default="scope">
-              <div class="record-identity">
-                <span class="record-avatar">发</span>
-                <div class="record-identity-content">
-                  <strong>{{ scope.row.customerNameSnapshot || '-' }}</strong>
-                  <small>{{ scope.row.customerCodeSnapshot || scope.row.contactPhoneSnapshot || '-' }}</small>
-                </div>
-              </div>
+              <span class="record-name">{{ scope.row.customerNameSnapshot || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="shipmentStatusCode" label="发货状态" width="120">
@@ -91,7 +85,7 @@
           <el-table-column label="操作" width="150" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
+              <el-button v-if="!isExternalSource(scope.row)" link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无发货单" /></template>
@@ -133,9 +127,9 @@
             <el-descriptions-item label="ERP出库单号">{{ detail.stockOutNo || '-' }}</el-descriptions-item>
             <el-descriptions-item label="发货时间">{{ formatTime(detail.shipTime) }}</el-descriptions-item>
             <el-descriptions-item label="备注" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="创建人">{{ detail.createdBy || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="创建人">{{ auditActorLabel(detail.createdBy) }}</el-descriptions-item>
             <el-descriptions-item label="创建时间">{{ formatTime(detail.createdTime) }}</el-descriptions-item>
-            <el-descriptions-item label="更新人">{{ detail.updatedBy || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="更新人">{{ auditActorLabel(detail.updatedBy) }}</el-descriptions-item>
             <el-descriptions-item label="更新时间">{{ formatTime(detail.updatedTime) }}</el-descriptions-item>
           </el-descriptions>
 
@@ -177,6 +171,7 @@ import {
   businessDictionaryOptions,
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
+import { auditActorLabel } from '@/utils/audit-actor'
 
 const shipmentStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_SHIPMENT_STATUS'))
 
@@ -252,6 +247,10 @@ async function openDetail(row: SalesShipmentSummary) {
 }
 
 async function deleteRow(row: SalesShipmentSummary) {
+  if (isExternalSource(row)) {
+    ElMessage.warning('外部来源发货单仅支持查看')
+    return
+  }
   try {
     await ElMessageBox.confirm(`确认删除发货单「${row.shipmentNo}」？后端会做逻辑删除，不会物理清库。`, '删除发货单', {
       confirmButtonText: '删除',
@@ -265,6 +264,10 @@ async function deleteRow(row: SalesShipmentSummary) {
     if (reason === 'cancel' || reason === 'close') return
     ElMessage.error(errorMessage(reason, '发货单删除失败'))
   }
+}
+
+function isExternalSource(row: Pick<SalesShipmentSummary, 'sourceSystemCode'>) {
+  return Boolean(row.sourceSystemCode && row.sourceSystemCode.trim())
 }
 
 function shipmentStatusLabel(value: string | null | undefined) {

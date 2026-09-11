@@ -7,149 +7,275 @@
         <p>{{ pageConfig.description }}</p>
       </div>
       <div class="heading-actions">
-        <el-button type="primary" @click="openCreate">新增{{ pageConfig.shortTitle }}</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">{{ createButtonLabel }}</el-button>
       </div>
     </div>
 
-    <el-card class="filter-card" shadow="never">
-      <el-form :model="filters" inline @submit.prevent="loadRows">
-        <el-form-item :label="`${pageConfig.shortTitle}编号`">
-          <el-input v-model="filters.code" clearable placeholder="后端自动生成的编号" style="width: 180px" />
-        </el-form-item>
-        <el-form-item :label="`${pageConfig.shortTitle}名称`">
-          <el-input v-model="filters.name" clearable placeholder="按名称查询" style="width: 220px" />
-        </el-form-item>
-        <el-form-item v-if="pageKind === 'supplier'" label="联系电话">
-          <el-input v-model="filters.contactPhone" clearable placeholder="供应商联系电话" style="width: 180px" />
-        </el-form-item>
-        <el-form-item v-if="pageKind === 'warehouse'" label="归属地区">
-          <el-input v-model="filters.regionCode" clearable placeholder="地区编码" style="width: 150px" />
-        </el-form-item>
-        <el-form-item v-if="pageKind === 'tag'" label="标签类型">
-          <el-input v-model="filters.tagTypeCode" clearable placeholder="标签类型编码" style="width: 150px" />
-        </el-form-item>
-        <el-form-item v-if="hasStatus" label="状态">
-          <el-select v-model="filters.statusCode" clearable placeholder="全部状态" style="width: 130px">
-            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item class="filter-actions">
-          <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
-          <el-button @click="resetFilters">重置</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+    <template v-if="pageKind === 'category'">
+      <div v-loading="loading" class="category-workspace">
+        <aside class="category-tree-panel">
+          <div class="category-panel-header">
+            <div>
+              <h2>分类树</h2>
+              <span>{{ pageData.total }} 个分类</span>
+            </div>
+            <el-button :icon="Refresh" circle plain aria-label="刷新分类" @click="loadRows" />
+          </div>
+          <el-input
+            v-model="categoryKeyword"
+            class="category-search"
+            clearable
+            placeholder="搜索分类名称/编码"
+            :prefix-icon="Search"
+          />
+          <button
+            class="category-tree-root"
+            :class="{ 'is-active': !selectedCategoryId }"
+            type="button"
+            @click="selectAllCategories"
+          >
+            <span>全部分类</span>
+            <strong>{{ categoryRows.length }}</strong>
+          </button>
+          <el-scrollbar class="category-tree-scroll">
+            <el-tree
+              v-if="categoryTreeRows.length"
+              class="category-tree"
+              :data="categoryTreeRows"
+              node-key="id"
+              :props="{ children: 'children', label: 'categoryName' }"
+              :default-expand-all="true"
+              :expand-on-click-node="false"
+              :current-node-key="selectedCategoryId || undefined"
+              highlight-current
+              @node-click="selectCategory"
+            >
+              <template #default="{ data }">
+                <div class="category-tree-node">
+                  <span class="category-tree-node__name">{{ data.categoryName }}</span>
+                  <span v-if="data.children?.length" class="category-tree-node__count">
+                    {{ data.children.length }}
+                  </span>
+                </div>
+              </template>
+            </el-tree>
+            <el-empty v-else description="暂无匹配分类" :image-size="72" />
+          </el-scrollbar>
+        </aside>
 
-    <div class="result-heading">
-      <div>
-        <div class="result-title-line">
-          <h2>{{ pageConfig.title }}列表</h2>
-          <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
-        </div>
-      </div>
-    </div>
-
-    <el-card class="list-card" shadow="never">
-      <div class="table-viewport">
-        <el-table
-          class="business-table supply-scroll-table"
-          height="100%"
-          v-loading="loading"
-          :data="tableRows"
-          row-key="id"
-          :tree-props="{ children: 'children' }"
-          :default-expand-all="pageKind === 'category'"
-          @row-click="openDetail"
-        >
-          <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
-          <el-table-column :label="`${pageConfig.shortTitle}编号`" width="170" show-overflow-tooltip>
-            <template #default="scope">{{ rowCode(scope.row) || '-' }}</template>
-          </el-table-column>
-          <el-table-column :label="`${pageConfig.shortTitle}名称`" min-width="240" show-overflow-tooltip>
-            <template #default="scope">
-              <div class="record-identity">
-                <span class="record-avatar">{{ pageConfig.avatar }}</span>
-                <div class="record-identity-content">
-                  <strong>{{ rowName(scope.row) }}</strong>
-                  <small>{{ rowSubtitle(scope.row) }}</small>
+        <main class="category-detail-panel">
+          <template v-if="selectedCategory">
+            <header class="category-detail-header">
+              <div>
+                <span>当前分类</span>
+                <h2>{{ selectedCategory.categoryName }}</h2>
+                <p>{{ categoryPath(selectedCategory) }}</p>
+              </div>
+              <div class="category-detail-actions">
+                <el-button :icon="Plus" @click="openCreateCategoryChild(selectedCategory)">新增子分类</el-button>
+                <el-button type="primary" @click="openEdit(selectedCategory)">编辑</el-button>
+                <el-button type="danger" plain @click="deleteRow(selectedCategory)">删除</el-button>
+              </div>
+            </header>
+            <div class="category-summary">
+              <div>
+                <span>上级分类</span>
+                <strong>{{ categoryParentName(selectedCategory) }}</strong>
+              </div>
+              <div>
+                <span>直属子类</span>
+                <strong>{{ selectedCategoryChildCount }}</strong>
+              </div>
+              <div>
+                <span>全部下级</span>
+                <strong>{{ selectedCategoryDescendantCount }}</strong>
+              </div>
+              <div>
+                <span>排序</span>
+                <strong>{{ selectedCategory.ordinal ?? '-' }}</strong>
+              </div>
+            </div>
+            <section class="category-section">
+              <h3>直属子分类</h3>
+              <div v-if="selectedCategoryChildren.length" class="category-child-list">
+                <button
+                  v-for="child in selectedCategoryChildren"
+                  :key="child.id"
+                  class="category-child-item"
+                  type="button"
+                  @click="selectCategory(child)"
+                >
+                  <span>{{ child.categoryName }}</span>
+                  <small>{{ child.children?.length || directCategoryChildCount(child) }} 个子类</small>
+                </button>
+              </div>
+              <el-empty v-else description="暂无子分类" :image-size="56" />
+            </section>
+            <section class="category-section">
+              <h3>系统信息</h3>
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="分类编码">{{ selectedCategory.categoryCode || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="层级">{{ selectedCategory.categoryLevel || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="创建时间">{{ formatTime(selectedCategory.createdTime) }}</el-descriptions-item>
+                <el-descriptions-item label="更新时间">{{ formatTime(selectedCategory.updatedTime) }}</el-descriptions-item>
+                <el-descriptions-item label="备注" :span="2">{{ selectedCategory.remark || '-' }}</el-descriptions-item>
+              </el-descriptions>
+            </section>
+          </template>
+          <template v-else>
+            <div class="category-overview">
+              <span>分类概览</span>
+              <h2>全部商品分类</h2>
+              <div class="category-summary">
+                <div>
+                  <span>一级分类</span>
+                  <strong>{{ rootCategoryCount }}</strong>
+                </div>
+                <div>
+                  <span>叶子分类</span>
+                  <strong>{{ leafCategoryCount }}</strong>
+                </div>
+                <div>
+                  <span>全部分类</span>
+                  <strong>{{ categoryRows.length }}</strong>
                 </div>
               </div>
-            </template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'category'" label="上级分类" width="140">
-            <template #default="scope">{{ categoryParent(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'category'" label="层级" width="90" align="center">
-            <template #default="scope">{{ categoryLevel(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'category'" label="排序" width="90" align="center">
-            <template #default="scope">{{ rowOrdinal(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'tag'" label="标签类型" min-width="160" show-overflow-tooltip>
-            <template #default="scope">{{ tagTypeLabel(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'warehouse'" label="归属地区" min-width="150" show-overflow-tooltip>
-            <template #default="scope">{{ regionLabel(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'warehouse'" label="仓库类型" min-width="150" show-overflow-tooltip>
-            <template #default="scope">{{ warehouseTypeLabel(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'warehouse'" label="默认仓库" width="120" align="center">
-            <template #default="scope">
-              <el-tag v-if="isDefaultWarehouse(scope.row)" type="success" effect="light">默认</el-tag>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="联系人" min-width="130" show-overflow-tooltip>
-            <template #default="scope">{{ contactName(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="联系电话" min-width="150" show-overflow-tooltip>
-            <template #default="scope">{{ contactPhone(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'supplier'" label="开户银行" min-width="160" show-overflow-tooltip>
-            <template #default="scope">{{ bankName(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'supplier'" label="银行账号" min-width="150" show-overflow-tooltip>
-            <template #default="scope">{{ bankAccountDisplay(bankAccountNo(scope.row)) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="地址" min-width="240" show-overflow-tooltip>
-            <template #default="scope">{{ address(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="pageKind === 'brand' || pageKind === 'tag'" label="备注" min-width="180" show-overflow-tooltip>
-            <template #default="scope">{{ remark(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column v-if="hasStatus" label="状态" width="110">
-            <template #default="scope">
-              <el-tag :type="statusTag(rowStatus(scope.row))" effect="light">{{ statusLabel(rowStatus(scope.row)) }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="更新时间" width="170">
-            <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="190" fixed="right" align="center">
-            <template #default="scope">
-              <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
-              <el-button link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
-            </template>
-          </el-table-column>
-          <template #empty><el-empty :description="`暂无${pageConfig.shortTitle}`" /></template>
-        </el-table>
+            </div>
+          </template>
+        </main>
       </div>
-      <div class="pagination-row">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          layout="total, sizes, prev, pager, next"
-          :page-sizes="[20, 50, 100]"
-          :total="pageData.total"
-          @current-change="loadRows"
-          @size-change="handleSizeChange"
-        />
-      </div>
-    </el-card>
+    </template>
 
-    <el-drawer v-model="detailVisible" class="erp-basic-detail-drawer" size="min(820px, 92vw)" :with-header="false">
+    <template v-else>
+      <el-card class="filter-card" shadow="never">
+        <el-form :model="filters" inline @submit.prevent="loadRows">
+          <el-form-item :label="`${pageConfig.shortTitle}编号`">
+            <el-input v-model="filters.code" clearable placeholder="后端自动生成的编号" style="width: 180px" />
+          </el-form-item>
+          <el-form-item :label="`${pageConfig.shortTitle}名称`">
+            <el-input v-model="filters.name" clearable placeholder="按名称查询" style="width: 220px" />
+          </el-form-item>
+          <el-form-item v-if="pageKind === 'supplier'" label="联系电话">
+            <el-input v-model="filters.contactPhone" clearable placeholder="供应商联系电话" style="width: 180px" />
+          </el-form-item>
+          <el-form-item v-if="pageKind === 'warehouse'" label="归属地区">
+            <el-input v-model="filters.regionCode" clearable placeholder="地区编码" style="width: 150px" />
+          </el-form-item>
+          <el-form-item v-if="pageKind === 'tag'" label="标签类型">
+            <el-input v-model="filters.tagTypeCode" clearable placeholder="标签类型编码" style="width: 150px" />
+          </el-form-item>
+          <el-form-item v-if="hasStatus" label="状态">
+            <el-select v-model="filters.statusCode" clearable placeholder="全部状态" style="width: 130px">
+              <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item class="filter-actions">
+            <el-button type="primary" :icon="Search" :loading="loading" native-type="submit">查询</el-button>
+            <el-button :icon="Refresh" @click="resetFilters">重置</el-button>
+          </el-form-item>
+        </el-form>
+      </el-card>
+
+      <div class="result-heading">
+        <div>
+          <div class="result-title-line">
+            <h2>{{ pageConfig.title }}列表</h2>
+            <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+          </div>
+        </div>
+      </div>
+
+      <el-card class="list-card" shadow="never">
+        <div class="table-viewport">
+          <el-table
+            class="business-table supply-scroll-table"
+            height="100%"
+            v-loading="loading"
+            :data="tableRows"
+            row-key="id"
+            @row-click="openDetail"
+          >
+            <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+            <el-table-column :label="`${pageConfig.shortTitle}编号`" width="170" show-overflow-tooltip>
+              <template #default="scope">{{ rowCode(scope.row) || '-' }}</template>
+            </el-table-column>
+            <el-table-column :label="`${pageConfig.shortTitle}名称`" min-width="240" show-overflow-tooltip>
+              <template #default="scope">
+                <span class="record-name">{{ rowName(scope.row) || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'tag'" label="标签类型" min-width="160" show-overflow-tooltip>
+              <template #default="scope">{{ tagTypeLabel(scope.row) }}</template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'warehouse'" label="归属地区" min-width="150" show-overflow-tooltip>
+              <template #default="scope">{{ regionLabel(scope.row) }}</template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'warehouse'" label="仓库类型" min-width="150" show-overflow-tooltip>
+              <template #default="scope">{{ warehouseTypeLabel(scope.row) }}</template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'warehouse'" label="默认仓库" width="120" align="center">
+              <template #default="scope">
+                <el-tag v-if="isDefaultWarehouse(scope.row)" type="success" effect="light">默认</el-tag>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="联系人" min-width="130" show-overflow-tooltip>
+              <template #default="scope">{{ contactName(scope.row) }}</template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="联系电话" min-width="150" show-overflow-tooltip>
+              <template #default="scope">{{ contactPhone(scope.row) }}</template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'supplier'" label="开户银行" min-width="160" show-overflow-tooltip>
+              <template #default="scope">{{ bankName(scope.row) }}</template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'supplier'" label="银行账号" min-width="150" show-overflow-tooltip>
+              <template #default="scope">{{ bankAccountDisplay(bankAccountNo(scope.row)) }}</template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="地址" min-width="240" show-overflow-tooltip>
+              <template #default="scope">{{ address(scope.row) }}</template>
+            </el-table-column>
+            <el-table-column v-if="pageKind === 'brand' || pageKind === 'tag'" label="备注" min-width="180" show-overflow-tooltip>
+              <template #default="scope">{{ remark(scope.row) }}</template>
+            </el-table-column>
+            <el-table-column v-if="hasStatus" label="状态" width="110">
+              <template #default="scope">
+                <el-tag :type="statusTag(rowStatus(scope.row))" effect="light">{{ statusLabel(rowStatus(scope.row)) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="更新时间" width="170">
+              <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="190" fixed="right" align="center">
+              <template #default="scope">
+                <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
+                <el-button link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
+                <el-button link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
+              </template>
+            </el-table-column>
+            <template #empty><el-empty :description="`暂无${pageConfig.shortTitle}`" /></template>
+          </el-table>
+        </div>
+        <div class="pagination-row">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            layout="total, sizes, prev, pager, next"
+            :page-sizes="[20, 50, 100]"
+            :total="pageData.total"
+            @current-change="loadRows"
+            @size-change="handleSizeChange"
+          />
+        </div>
+      </el-card>
+    </template>
+
+    <el-drawer
+      v-if="pageKind !== 'category'"
+      v-model="detailVisible"
+      class="erp-basic-detail-drawer"
+      size="min(820px, 92vw)"
+      :with-header="false"
+    >
       <div v-if="detail" class="detail-shell">
         <header class="detail-hero">
           <div>
@@ -180,15 +306,15 @@
           </el-col>
           <el-col v-if="pageKind === 'category'" :span="12">
             <el-form-item label="上级分类">
-              <el-select v-model="form.parentId" clearable filterable placeholder="不选择表示一级分类" style="width: 100%">
-                <el-option
-                  v-for="item in categoryParentOptions"
-                  :key="item.value"
-                  :disabled="item.disabled"
-                  :label="item.label"
-                  :value="item.value"
-                />
-              </el-select>
+              <ProductCategorySelect
+                v-model="form.parentId"
+                :categories="categorySelectRows"
+                :disabled-values="categoryParentDisabledValues"
+                :loading="categorySelectLoading"
+                placeholder="不选择表示一级分类"
+                style="width: 100%"
+                @visible-change="handleCategorySelectVisibleChange"
+              />
             </el-form-item>
           </el-col>
           <el-col v-if="pageKind === 'category'" :span="12">
@@ -267,6 +393,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import {
   createErpInventoryWarehouse,
   createErpProductBrand,
@@ -310,20 +437,21 @@ import {
   businessDictionaryOptions,
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
+import ProductCategorySelect from '@/components/supply/ProductCategorySelect.vue'
+import { loadAllErpProductCategories } from '@/utils/product-categories'
 
 type PageKind = 'category' | 'brand' | 'tag' | 'warehouse' | 'supplier'
 type BasicRow = ErpProductCategoryView | ErpProductBrandView | ErpProductTagView | ErpInternalWarehouseView | ErpSupplierProfileView
 type CategoryTreeRow = ErpProductCategoryView & { children?: CategoryTreeRow[]; depth?: number }
-type CategoryParentOption = { label: string; value: string; disabled: boolean }
 
 const route = useRoute()
 
-const pageConfigs: Record<PageKind, { title: string; shortTitle: string; description: string; avatar: string }> = {
-  category: { title: '商品分类', shortTitle: '分类', description: '维护商品分类，用于商品建档、筛选和后续订货展示。', avatar: '类' },
-  brand: { title: '商品品牌', shortTitle: '品牌', description: '维护商品所属品牌，商品新增和编辑时从这里选择。', avatar: '牌' },
-  tag: { title: '商品标签', shortTitle: '标签', description: '维护新品、推荐、热销等商品标签，商品页只引用标签编码。', avatar: '签' },
-  warehouse: { title: '仓库信息', shortTitle: '仓库', description: '维护自研 ERP 仓库，销售出库、采购入库和库存调拨都从这里选择仓库。', avatar: '仓' },
-  supplier: { title: '供应商档案', shortTitle: '供应商', description: '维护采购业务使用的供应商档案。', avatar: '供' },
+const pageConfigs: Record<PageKind, { title: string; shortTitle: string; description: string }> = {
+  category: { title: '商品分类', shortTitle: '分类', description: '维护商品分类，用于商品建档、筛选和后续订货展示。' },
+  brand: { title: '商品品牌', shortTitle: '品牌', description: '维护商品所属品牌，商品新增和编辑时从这里选择。' },
+  tag: { title: '商品标签', shortTitle: '标签', description: '维护新品、推荐、热销等商品标签，商品页只引用标签编码。' },
+  warehouse: { title: '仓库信息', shortTitle: '仓库', description: '维护自研 ERP 仓库，销售出库、采购入库和库存调拨都从这里选择仓库。' },
+  supplier: { title: '供应商档案', shortTitle: '供应商', description: '维护采购业务使用的供应商档案。' },
 }
 
 const pageKind = computed<PageKind>(() => {
@@ -336,6 +464,7 @@ const pageKind = computed<PageKind>(() => {
   return 'category'
 })
 const pageConfig = computed(() => pageConfigs[pageKind.value])
+const createButtonLabel = computed(() => pageKind.value === 'category' ? '新增一级分类' : `新增${pageConfig.value.shortTitle}`)
 const hasStatus = computed(() => pageKind.value === 'warehouse' || pageKind.value === 'supplier')
 const statusDictionaryCode = computed(() => pageKind.value === 'supplier' ? 'SUPPLIER_STATUS' : 'WAREHOUSE_STATUS')
 const statusOptions = computed(() => businessDictionaryOptions('ERP', statusDictionaryCode.value))
@@ -349,16 +478,30 @@ const editingId = ref<string | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const pageData = ref<ErpInternalPage<BasicRow>>({ total: 0, begin: 0, step: 20, items: [] })
+const categorySelectRows = ref<ErpProductCategoryView[]>([])
+const categorySelectLoading = ref(false)
+const selectedCategoryId = ref<string | null>(null)
+const categoryKeyword = ref('')
 const tableRows = computed<BasicRow[]>(() => {
-  if (pageKind.value !== 'category') return pageData.value.items
-  return buildCategoryTree(categoryRows.value)
+  return pageData.value.items
 })
 const categoryRows = computed(() =>
   pageData.value.items.filter((row): row is ErpProductCategoryView => 'categoryCode' in row),
 )
-const categoryParentOptions = computed<CategoryParentOption[]>(() =>
-  flattenCategoryOptions(buildCategoryTree(categoryRows.value), editingId.value),
-)
+const filteredCategoryRows = computed(() => filterCategoryRows(categoryRows.value, categoryKeyword.value))
+const allCategoryTreeRows = computed(() => buildCategoryTree(categoryRows.value))
+const categoryTreeRows = computed(() => buildCategoryTree(filteredCategoryRows.value))
+const categoryParentDisabledValues = computed(() => disabledCategoryValues(categorySelectRows.value, editingId.value))
+const categoryRowMap = computed(() => new Map(categoryRows.value.map((row) => [rowId(row), row])))
+const selectedCategory = computed<CategoryTreeRow | null>(() => {
+  if (!selectedCategoryId.value) return null
+  return findCategoryTreeRow(allCategoryTreeRows.value, selectedCategoryId.value)
+})
+const selectedCategoryChildren = computed<CategoryTreeRow[]>(() => selectedCategory.value?.children || [])
+const selectedCategoryChildCount = computed(() => selectedCategoryChildren.value.length)
+const selectedCategoryDescendantCount = computed(() => selectedCategory.value ? categoryDescendantCount(selectedCategory.value) : 0)
+const rootCategoryCount = computed(() => categoryRows.value.filter((row) => !row.parentId).length)
+const leafCategoryCount = computed(() => categoryRows.value.filter((row) => directCategoryChildCount(row) === 0).length)
 
 const filters = reactive({
   code: '',
@@ -403,6 +546,8 @@ function tableRowIndex(index: number): number {
 }
 
 watch(pageKind, () => {
+  selectedCategoryId.value = null
+  categoryKeyword.value = ''
   resetFilters()
 })
 
@@ -411,7 +556,10 @@ async function loadRows() {
   try {
     const common = { begin: (currentPage.value - 1) * pageSize.value, step: pageSize.value }
     if (pageKind.value === 'category') {
-      pageData.value = await getErpProductCategories({ ...common, categoryCode: empty(filters.code), categoryName: empty(filters.name) })
+      const items = await loadAllErpProductCategories()
+      categorySelectRows.value = items
+      pageData.value = { total: items.length, begin: 0, step: Math.max(items.length, 1), items }
+      ensureCategorySelection()
     } else if (pageKind.value === 'brand') {
       pageData.value = await getErpProductBrands({ ...common, brandCode: empty(filters.code), brandName: empty(filters.name) })
     } else if (pageKind.value === 'tag') {
@@ -440,6 +588,24 @@ async function loadRows() {
   }
 }
 
+async function loadCategorySelectRows() {
+  if (pageKind.value !== 'category') return
+  categorySelectLoading.value = true
+  try {
+    categorySelectRows.value = await loadAllErpProductCategories()
+  } catch {
+    categorySelectRows.value = []
+  } finally {
+    categorySelectLoading.value = false
+  }
+}
+
+function handleCategorySelectVisibleChange(visible: boolean) {
+  if (visible && pageKind.value === 'category' && !categorySelectRows.value.length && !categorySelectLoading.value) {
+    void loadCategorySelectRows()
+  }
+}
+
 function resetFilters() {
   filters.code = ''
   filters.name = ''
@@ -447,6 +613,7 @@ function resetFilters() {
   filters.regionCode = ''
   filters.tagTypeCode = ''
   filters.statusCode = ''
+  categoryKeyword.value = ''
   currentPage.value = 1
   void loadRows()
 }
@@ -480,6 +647,15 @@ async function openEdit(row: BasicRow) {
 function openCreate() {
   editingId.value = null
   resetForm()
+  if (pageKind.value === 'category') form.ordinal = nextCategoryOrdinal(null)
+  editorVisible.value = true
+}
+
+function openCreateCategoryChild(row: ErpProductCategoryView) {
+  editingId.value = null
+  resetForm()
+  form.parentId = rowId(row)
+  form.ordinal = nextCategoryOrdinal(rowId(row))
   editorVisible.value = true
 }
 
@@ -490,8 +666,10 @@ async function saveRow() {
   }
   saving.value = true
   try {
-    if (editingId.value) await updateCurrent(editingId.value)
-    else await createCurrent()
+    const saved = editingId.value ? await updateCurrent(editingId.value) : await createCurrent()
+    if (pageKind.value === 'category' && saved && 'categoryCode' in saved) {
+      selectedCategoryId.value = rowId(saved)
+    }
     ElMessage.success(`${pageConfig.value.shortTitle}已保存`)
     editorVisible.value = false
     await loadRows()
@@ -503,6 +681,10 @@ async function saveRow() {
 }
 
 async function deleteRow(row: BasicRow) {
+  if (pageKind.value === 'category' && 'categoryCode' in row && directCategoryChildCount(row) > 0) {
+    ElMessage.warning('该分类已有子分类，请先调整或删除子分类')
+    return
+  }
   try {
     await ElMessageBox.confirm(`确认删除${pageConfig.value.shortTitle}「${rowName(row)}」？后端会按规则做逻辑删除。`, `删除${pageConfig.value.shortTitle}`, {
       confirmButtonText: '删除',
@@ -707,14 +889,6 @@ function remark(row: BasicRow) {
   return row.remark || '-'
 }
 
-function rowSubtitle(row: BasicRow) {
-  if ('parentId' in row) return `第 ${categoryLevel(row)} 层`
-  if ('tagTypeCode' in row) return businessDictionaryLabel('ERP', 'PRODUCT_TAG_TYPE', row.tagTypeCode, '标签类型')
-  if ('warehouseTypeCode' in row) return row.defaultFlag ? '默认仓库' : businessDictionaryLabel('ERP', 'WAREHOUSE_TYPE', row.warehouseTypeCode, '仓库类型')
-  if ('supplierName' in row) return row.contactPhone || '供应商资料'
-  return row.remark || '商品品牌'
-}
-
 function bankAccountDisplay(value: string | null | undefined) {
   if (!value) return '-'
   const normalized = value.replace(/\s+/g, '')
@@ -779,6 +953,64 @@ function numberOrNull(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function selectCategory(row: CategoryTreeRow) {
+  selectedCategoryId.value = rowId(row)
+}
+
+function selectAllCategories() {
+  selectedCategoryId.value = null
+}
+
+function ensureCategorySelection() {
+  if (!selectedCategoryId.value) return
+  const exists = categoryRows.value.some((row) => rowId(row) === selectedCategoryId.value)
+  if (!exists) selectedCategoryId.value = null
+}
+
+function filterCategoryRows(rows: ErpProductCategoryView[], keyword: string) {
+  const normalized = normalizeKeyword(keyword)
+  if (!normalized) return rows
+  const byId = new Map(rows.map((row) => [rowId(row), row]))
+  const childrenByParent = categoryChildrenMap(rows)
+  const kept = new Set<string>()
+
+  const keepAncestors = (row: ErpProductCategoryView) => {
+    let cursor: ErpProductCategoryView | undefined = row
+    const visited = new Set<string>()
+    while (cursor) {
+      const id = rowId(cursor)
+      if (visited.has(id)) break
+      visited.add(id)
+      kept.add(id)
+      cursor = cursor.parentId == null ? undefined : byId.get(String(cursor.parentId))
+    }
+  }
+  const keepDescendants = (row: ErpProductCategoryView) => {
+    for (const child of childrenByParent.get(rowId(row)) || []) {
+      const id = rowId(child)
+      if (kept.has(id)) continue
+      kept.add(id)
+      keepDescendants(child)
+    }
+  }
+
+  for (const row of rows) {
+    if (!categoryMatches(row, normalized)) continue
+    keepAncestors(row)
+    keepDescendants(row)
+  }
+  return rows.filter((row) => kept.has(rowId(row)))
+}
+
+function categoryMatches(row: ErpProductCategoryView, keyword: string) {
+  return normalizeKeyword(row.categoryName).includes(keyword)
+    || normalizeKeyword(row.categoryCode).includes(keyword)
+}
+
+function normalizeKeyword(value: string | null | undefined) {
+  return String(value || '').trim().toLocaleLowerCase('zh-CN')
+}
+
 function buildCategoryTree(rows: ErpProductCategoryView[]): CategoryTreeRow[] {
   const nodes = new Map<string, CategoryTreeRow>()
   const roots: CategoryTreeRow[] = []
@@ -795,6 +1027,15 @@ function buildCategoryTree(rows: ErpProductCategoryView[]): CategoryTreeRow[] {
   }
   assignCategoryDepth(roots, 1)
   return sortCategoryTree(roots)
+}
+
+function findCategoryTreeRow(rows: CategoryTreeRow[], id: string): CategoryTreeRow | null {
+  for (const row of rows) {
+    if (rowId(row) === id) return row
+    const child = row.children?.length ? findCategoryTreeRow(row.children, id) : null
+    if (child) return child
+  }
+  return null
 }
 
 function assignCategoryDepth(rows: CategoryTreeRow[], depth: number) {
@@ -817,27 +1058,83 @@ function sortCategoryTree(rows: CategoryTreeRow[]): CategoryTreeRow[] {
   return rows
 }
 
-function flattenCategoryOptions(rows: CategoryTreeRow[], currentId: string | null) {
-  const options: CategoryParentOption[] = []
-  const walk = (items: CategoryTreeRow[], parentDisabled: boolean) => {
-    for (const item of items) {
-      const disabled = parentDisabled || (currentId != null && rowId(item) === currentId)
-      options.push({
-        label: `${'　'.repeat(Math.max((item.depth || 1) - 1, 0))}${item.categoryName}`,
-        value: rowId(item),
-        disabled,
-      })
-      if (item.children?.length) walk(item.children, disabled)
-    }
-  }
-  walk(rows, false)
-  return options
-}
-
 function categoryParentName(row: ErpProductCategoryView) {
   if (!row.parentId) return '一级分类'
   const parent = categoryRows.value.find((item) => rowId(item) === String(row.parentId))
   return parent ? parent.categoryName : String(row.parentId)
+}
+
+function categoryPath(row: ErpProductCategoryView) {
+  const path: string[] = []
+  const visited = new Set<string>()
+  let cursor: ErpProductCategoryView | undefined = row
+  while (cursor) {
+    const id = rowId(cursor)
+    if (visited.has(id)) break
+    visited.add(id)
+    path.unshift(cursor.categoryName)
+    cursor = cursor.parentId == null ? undefined : categoryRowMap.value.get(String(cursor.parentId))
+  }
+  return path.join(' / ')
+}
+
+function directCategoryChildCount(row: ErpProductCategoryView) {
+  const id = rowId(row)
+  return categoryRows.value.filter((item) => item.parentId != null && String(item.parentId) === id).length
+}
+
+function categoryDescendantCount(row: ErpProductCategoryView) {
+  const childrenByParent = categoryChildrenMap(categoryRows.value)
+  const walk = (parentId: string): number => {
+    const children = childrenByParent.get(parentId) || []
+    return children.reduce((total, child) => total + 1 + walk(rowId(child)), 0)
+  }
+  return walk(rowId(row))
+}
+
+function nextCategoryOrdinal(parentId: string | null) {
+  const siblings = categoryRows.value.filter((row) => {
+    const currentParentId = row.parentId == null ? null : String(row.parentId)
+    return currentParentId === parentId
+  })
+  if (!siblings.length) return 0
+  return Math.max(...siblings.map((row) => Number(row.ordinal ?? 0))) + 1
+}
+
+function categoryChildrenMap(rows: ErpProductCategoryView[]) {
+  const result = new Map<string, ErpProductCategoryView[]>()
+  for (const row of rows) {
+    if (row.parentId == null) continue
+    const parentId = String(row.parentId)
+    const children = result.get(parentId) || []
+    children.push(row)
+    result.set(parentId, children)
+  }
+  return result
+}
+
+function disabledCategoryValues(rows: ErpProductCategoryView[], currentId: string | null) {
+  if (!currentId) return []
+  const byParent = new Map<string, ErpProductCategoryView[]>()
+  for (const row of rows) {
+    if (row.parentId == null) continue
+    const key = String(row.parentId)
+    const children = byParent.get(key) || []
+    children.push(row)
+    byParent.set(key, children)
+  }
+
+  const disabled = new Set<string>([currentId])
+  const walk = (parentId: string) => {
+    for (const child of byParent.get(parentId) || []) {
+      const childId = String(child.id)
+      if (disabled.has(childId)) continue
+      disabled.add(childId)
+      walk(childId)
+    }
+  }
+  walk(currentId)
+  return [...disabled]
 }
 
 function rowId(row: { id: string | number }) {
@@ -862,5 +1159,297 @@ function errorMessage(reason: unknown, fallback: string) {
 <style scoped lang="scss">
 .erp-basic-data-page {
   min-height: 0;
+}
+
+.category-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 16px;
+  min-height: 520px;
+}
+
+.category-tree-panel,
+.category-detail-panel {
+  min-width: 0;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+}
+
+.category-tree-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.category-panel-header,
+.category-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.category-panel-header {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+
+  h2 {
+    margin: 0;
+    color: var(--el-text-color-primary);
+    font-size: 18px;
+    line-height: 24px;
+  }
+
+  span {
+    display: block;
+    margin-top: 4px;
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
+  }
+}
+
+.category-search {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 16px 0;
+}
+
+.category-tree-root {
+  display: flex;
+  width: calc(100% - 32px);
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 16px 4px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-primary);
+  cursor: pointer;
+
+  strong {
+    color: var(--el-color-primary);
+    font-weight: 600;
+  }
+
+  &.is-active,
+  &:hover {
+    border-color: var(--el-color-primary-light-5);
+    background: var(--el-color-primary-light-9);
+  }
+}
+
+.category-tree-scroll {
+  flex: 1;
+  min-height: 360px;
+  padding: 8px 10px 12px;
+}
+
+.category-tree {
+  --el-tree-node-hover-bg-color: var(--el-color-primary-light-9);
+
+  :deep(.el-tree-node__content) {
+    height: 38px;
+    border-radius: 6px;
+  }
+
+  :deep(.el-tree-node.is-current > .el-tree-node__content) {
+    background: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
+    font-weight: 600;
+  }
+}
+
+.category-tree-node {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.category-tree-node__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-tree-node__count {
+  flex: 0 0 auto;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--el-fill-color);
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.category-detail-panel {
+  padding: 20px;
+  overflow: auto;
+}
+
+.category-detail-header {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+
+  span,
+  p {
+    color: var(--el-text-color-secondary);
+  }
+
+  span {
+    font-size: 13px;
+  }
+
+  h2 {
+    margin: 6px 0;
+    color: var(--el-text-color-primary);
+    font-size: 24px;
+    line-height: 32px;
+  }
+
+  p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+  }
+}
+
+.category-detail-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.category-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+
+  > div {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 8px;
+    background: var(--el-fill-color-lighter);
+  }
+
+  span,
+  strong {
+    display: block;
+    min-width: 0;
+  }
+
+  span {
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
+  }
+
+  strong {
+    margin-top: 6px;
+    overflow: hidden;
+    color: var(--el-text-color-primary);
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.category-section {
+  margin-top: 18px;
+
+  h3 {
+    margin: 0 0 10px;
+    color: var(--el-text-color-primary);
+    font-size: 16px;
+    line-height: 24px;
+  }
+}
+
+.category-child-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.category-child-item {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+  text-align: left;
+  cursor: pointer;
+
+  span,
+  small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    color: var(--el-text-color-primary);
+    font-weight: 600;
+  }
+
+  small {
+    margin-top: 4px;
+    color: var(--el-text-color-secondary);
+  }
+
+  &:hover {
+    border-color: var(--el-color-primary-light-5);
+    background: var(--el-color-primary-light-9);
+  }
+}
+
+.category-overview {
+  > span {
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
+  }
+
+  h2 {
+    margin: 6px 0 0;
+    color: var(--el-text-color-primary);
+    font-size: 24px;
+    line-height: 32px;
+  }
+}
+
+@media (max-width: 980px) {
+  .category-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .category-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .category-detail-header {
+    display: block;
+  }
+
+  .category-detail-actions {
+    justify-content: flex-start;
+    margin-top: 12px;
+  }
+
+  .category-summary {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -104,7 +104,7 @@ export function setupPermissionGuard(router: Router): void {
     if (entitlementApplicationCode) {
       const applicationStore = useApplicationStore()
       try {
-        if (!applicationStore.loaded) {
+        if (!applicationStore.loaded || applicationStore.applications.length === 0) {
           await applicationStore.fetchApplications({ deferSessionRecovery: true })
         }
       } catch (error) {

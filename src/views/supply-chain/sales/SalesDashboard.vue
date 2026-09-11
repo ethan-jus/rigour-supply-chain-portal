@@ -226,27 +226,27 @@ onMounted(() => { void load() })
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
 
-.dashboard { display: grid; gap: $spacing-lg; }
-.dashboard-toolbar { display: flex; flex-wrap: wrap; gap: $spacing-sm; align-items: center; padding: $spacing-md; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-lg; }
+.dashboard { display: grid; gap: $spacing-sm; }
+.dashboard-toolbar { display: flex; flex-wrap: wrap; gap: $spacing-sm; align-items: center; padding: 10px 12px; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-base; }
 .range-shortcuts { display: flex; gap: $spacing-sm; }
-.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: $spacing-md; }
-.metric-card { padding: 20px; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-lg; box-shadow: $shadow-sm; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: $spacing-sm; }
+.metric-card { min-height: 104px; padding: 12px 14px; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-base; box-shadow: none; }
 .metric-card > span { color: $color-text-secondary; font-size: $font-size-sm; }
-.metric-card > strong { display: block; margin-top: 10px; color: $color-text-primary; font-size: 32px; line-height: 1; }
-.metric-card > p { margin: 10px 0 0; color: $color-text-secondary; font-size: $font-size-xs; }
+.metric-card > strong { display: block; margin-top: 7px; color: $color-text-primary; font-size: 26px; line-height: 1; }
+.metric-card > p { margin: 7px 0 0; color: $color-text-secondary; font-size: $font-size-xs; line-height: 1.35; }
 .metric-card--primary > strong { color: $color-primary; }
 .metric-card--success > strong { color: $color-success; }
 .metric-card--warning > strong { color: $color-warning; }
-.operations-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: $spacing-md; }
-.fact-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: $spacing-md; text-align: center; }
-.fact-grid div { padding: 12px; background: $color-bg-muted; border-radius: $border-radius-base; }
+.operations-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: $spacing-sm; }
+.fact-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: $spacing-sm; text-align: center; }
+.fact-grid div { padding: 9px; background: $color-bg-muted; border-radius: $border-radius-base; }
 .fact-grid span { display: block; color: $color-text-secondary; font-size: $font-size-xs; }
-.fact-grid strong { display: block; margin-top: 7px; color: $color-text-primary; font-size: $font-size-xl; }
-.evidence-callout { padding: 10px 4px; }
+.fact-grid strong { display: block; margin-top: 5px; color: $color-text-primary; font-size: $font-size-lg; }
+.evidence-callout { padding: 4px 2px; }
 .evidence-callout span { color: $color-text-secondary; font-size: $font-size-sm; }
-.evidence-callout strong { display: block; margin-top: 8px; color: $color-success; font-size: 28px; }
+.evidence-callout strong { display: block; margin-top: 5px; color: $color-success; font-size: 24px; }
 .evidence-callout--warning strong { color: $color-warning; }
-.evidence-callout p { margin: 8px 0 0; color: $color-text-secondary; font-size: $font-size-xs; }
+.evidence-callout p { margin: 5px 0 0; color: $color-text-secondary; font-size: $font-size-xs; line-height: 1.35; }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .card-header > div { display: flex; flex-direction: column; gap: 4px; }
 .card-header small { color: $color-text-secondary; }

@@ -11,17 +11,32 @@ export interface ErpManagedProductSummary {
   id: string
   productCode: string
   productName: string
+  businessLineName: string | null
   categoryId: string | null
   categoryName: string | null
+  categoryNameSnapshot: string | null
   brandId: string | null
   brandName: string | null
+  brandNameSnapshot: string | null
+  industryName: string | null
   unitCode: string | null
   saleTypeCode: string
   shelfStatusCode: string
   submitStatusCode: string
+  sourceSystemCode: string | null
+  sourceDocumentNo: string | null
+  sourceCreatedAt: string | null
+  sourceUpdatedAt: string | null
   defaultWarehouseId: string | null
   defaultWarehouseName: string | null
   defaultSalePrice: number | null
+  minOrderQuantity?: number | null
+  orderMultipleFlag?: boolean | null
+  orderMultipleQuantity?: number | null
+  limitQuantity?: number | null
+  tagCodes?: string[]
+  recommendProductIds?: Array<string | number>
+  createdBy?: string | null
   mainImageKey: string | null
   mainImageUrl: string | null
   variantCount: number
@@ -58,11 +73,13 @@ export interface ErpManagedProductDetail extends ErpManagedProductSummary {
   minOrderQuantity: number | null
   orderMultipleFlag: boolean | null
   orderMultipleQuantity: number | null
+  sourceStatusName: string | null
   tagCodes: string[]
   limitQuantity: number | null
   images: ErpManagedProductImage[]
   variants: ErpManagedProductVariant[]
-  recommendProductIds: string[]
+  recommendProductIds: Array<string | number>
+  sourceFields: Record<string, unknown>
   remark: string | null
   createdBy: string | null
   createdTime: string

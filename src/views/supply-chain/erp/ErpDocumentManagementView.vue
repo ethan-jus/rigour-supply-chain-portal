@@ -22,15 +22,96 @@
     </div>
 
     <el-card class="filter-card" shadow="never">
-      <el-form :model="filters" inline @submit.prevent="loadRows">
+      <el-form :model="filters" inline @submit.prevent="searchRows">
         <el-form-item :label="`${pageConfig.shortTitle}号`">
-          <el-input v-model="filters.documentNo" clearable :placeholder="`输入${pageConfig.shortTitle}号`" style="width: 190px" />
+          <el-input v-model="filters.documentNo" clearable :placeholder="documentNoPlaceholder" style="width: 210px" />
         </el-form-item>
         <el-form-item v-if="mode === 'stockOut'" label="客户名称">
           <el-input v-model="filters.customerName" clearable placeholder="销售出库客户" style="width: 180px" />
         </el-form-item>
         <el-form-item v-if="mode === 'stockOut'" label="销售订单">
           <el-input v-model="filters.salesOrderNo" clearable placeholder="销售订单号" style="width: 180px" />
+        </el-form-item>
+        <el-form-item v-if="mode === 'stockIn'" label="入库类型">
+          <el-select v-model="filters.stockInTypeCode" clearable placeholder="全部类型" style="width: 150px">
+            <el-option v-for="item in stockInTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="mode === 'stockOut'" label="出库类型">
+          <el-select v-model="filters.stockOutTypeCode" clearable placeholder="全部类型" style="width: 150px">
+            <el-option v-for="item in stockOutTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="mode === 'procurement' || mode === 'stockIn'" label="供应商">
+          <el-select
+            v-model="filters.supplierId"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="searchSuppliers"
+            :loading="supplierLoading"
+            placeholder="全部供应商"
+            style="width: 180px"
+          >
+            <el-option v-for="item in supplierOptions" :key="item.id" :label="item.supplierName" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="mode !== 'transfer'" :label="warehouseFilterLabel">
+          <el-select
+            v-model="filters.warehouseId"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="searchWarehouses"
+            :loading="warehouseLoading"
+            placeholder="全部仓库"
+            style="width: 170px"
+          >
+            <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.warehouseName" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="mode === 'transfer'" label="调出仓库">
+          <el-select
+            v-model="filters.sourceWarehouseId"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="searchWarehouses"
+            :loading="warehouseLoading"
+            placeholder="全部调出仓"
+            style="width: 170px"
+          >
+            <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.warehouseName" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="mode === 'transfer'" label="调入仓库">
+          <el-select
+            v-model="filters.targetWarehouseId"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="searchWarehouses"
+            :loading="warehouseLoading"
+            placeholder="全部调入仓"
+            style="width: 170px"
+          >
+            <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.warehouseName" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="timeRangeLabel">
+          <el-date-picker
+            v-model="filters.timeRange"
+            type="datetimerange"
+            unlink-panels
+            range-separator="至"
+            start-placeholder="开始时间"
+            end-placeholder="截止时间"
+            style="width: 330px"
+          />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="filters.statusCode" clearable placeholder="全部状态" style="width: 140px">
@@ -401,6 +482,7 @@ type DocumentMode = 'procurement' | 'stockIn' | 'stockOut' | 'transfer'
 type DocumentSummary = ProcurementOrderSummary | StockInOrderSummary | StockOutOrderSummary | TransferOrderSummary
 type DocumentDetail = ProcurementOrderDetail | StockInOrderDetail | StockOutOrderDetail | TransferOrderDetail
 type WorkflowStep = { index: number; title: string; description: string; active: boolean }
+type FilterDateRange = Array<Date | string> | null
 
 interface LineForm {
   localId: string
@@ -469,6 +551,25 @@ const statusDictionaryCode = computed(() => {
   return 'TRANSFER_STATUS'
 })
 const statusOptions = computed(() => businessDictionaryOptions('ERP', statusDictionaryCode.value))
+const stockInTypeOptions = computed(() => businessDictionaryOptions('ERP', 'STOCK_IN_TYPE'))
+const stockOutTypeOptions = computed(() => businessDictionaryOptions('ERP', 'STOCK_OUT_TYPE'))
+const documentNoPlaceholder = computed(() => {
+  if (mode.value === 'stockIn') return 'SI/RK/采购/调拨/备注'
+  if (mode.value === 'stockOut') return 'SO/FH/销售/调拨'
+  if (mode.value === 'transfer') return 'TR/DB'
+  return 'PO/来源采购单'
+})
+const warehouseFilterLabel = computed(() => {
+  if (mode.value === 'procurement') return '入库仓库'
+  if (mode.value === 'stockOut') return '出库仓库'
+  return '入库仓库'
+})
+const timeRangeLabel = computed(() => {
+  if (mode.value === 'procurement') return '预计到货'
+  if (mode.value === 'stockOut') return '出库时间'
+  if (mode.value === 'transfer') return '出库时间'
+  return '入库时间'
+})
 const workflowSteps = computed<WorkflowStep[]>(() => {
   const activeIndex = mode.value === 'stockIn' || mode.value === 'stockOut'
     ? 1
@@ -500,6 +601,13 @@ const filters = reactive({
   documentNo: '',
   customerName: '',
   salesOrderNo: '',
+  supplierId: '',
+  warehouseId: '',
+  sourceWarehouseId: '',
+  targetWarehouseId: '',
+  stockInTypeCode: '',
+  stockOutTypeCode: '',
+  timeRange: null as FilterDateRange,
   statusCode: '',
 })
 
@@ -558,20 +666,51 @@ async function loadRows() {
   loading.value = true
   try {
     const common = { begin: (currentPage.value - 1) * pageSize.value, step: pageSize.value }
+    const from = rangeStart(filters.timeRange)
+    const to = rangeEnd(filters.timeRange)
     if (mode.value === 'procurement') {
-      pageData.value = await getProcurementOrders({ ...common, procurementNo: empty(filters.documentNo), statusCode: empty(filters.statusCode) }) as ErpInternalPage<DocumentSummary>
+      pageData.value = await getProcurementOrders({
+        ...common,
+        procurementNo: empty(filters.documentNo),
+        supplierId: empty(filters.supplierId),
+        targetWarehouseId: empty(filters.warehouseId),
+        statusCode: empty(filters.statusCode),
+        expectedArrivalFrom: from,
+        expectedArrivalTo: to,
+      }) as ErpInternalPage<DocumentSummary>
     } else if (mode.value === 'stockIn') {
-      pageData.value = await getStockInOrders({ ...common, stockInNo: empty(filters.documentNo), statusCode: empty(filters.statusCode) }) as ErpInternalPage<DocumentSummary>
+      pageData.value = await getStockInOrders({
+        ...common,
+        stockInNo: empty(filters.documentNo),
+        stockInTypeCode: empty(filters.stockInTypeCode),
+        warehouseId: empty(filters.warehouseId),
+        supplierId: empty(filters.supplierId),
+        statusCode: empty(filters.statusCode),
+        stockInTimeFrom: from,
+        stockInTimeTo: to,
+      }) as ErpInternalPage<DocumentSummary>
     } else if (mode.value === 'stockOut') {
       pageData.value = await getStockOutOrders({
         ...common,
         stockOutNo: empty(filters.documentNo),
+        stockOutTypeCode: empty(filters.stockOutTypeCode),
+        warehouseId: empty(filters.warehouseId),
         statusCode: empty(filters.statusCode),
         customerName: empty(filters.customerName),
         salesOrderNo: empty(filters.salesOrderNo),
+        stockOutTimeFrom: from,
+        stockOutTimeTo: to,
       }) as ErpInternalPage<DocumentSummary>
     } else {
-      pageData.value = await getTransferOrders({ ...common, transferNo: empty(filters.documentNo), statusCode: empty(filters.statusCode) }) as ErpInternalPage<DocumentSummary>
+      pageData.value = await getTransferOrders({
+        ...common,
+        transferNo: empty(filters.documentNo),
+        sourceWarehouseId: empty(filters.sourceWarehouseId),
+        targetWarehouseId: empty(filters.targetWarehouseId),
+        statusCode: empty(filters.statusCode),
+        stockOutTimeFrom: from,
+        stockOutTimeTo: to,
+      }) as ErpInternalPage<DocumentSummary>
     }
   } catch (reason) {
     ElMessage.error(errorMessage(reason, `${pageConfig.value.shortTitle}列表加载失败`))
@@ -580,10 +719,22 @@ async function loadRows() {
   }
 }
 
+function searchRows() {
+  currentPage.value = 1
+  void loadRows()
+}
+
 function resetFilters() {
   filters.documentNo = ''
   filters.customerName = ''
   filters.salesOrderNo = ''
+  filters.supplierId = ''
+  filters.warehouseId = ''
+  filters.sourceWarehouseId = ''
+  filters.targetWarehouseId = ''
+  filters.stockInTypeCode = ''
+  filters.stockOutTypeCode = ''
+  filters.timeRange = null
   filters.statusCode = ''
   currentPage.value = 1
   void loadRows()
@@ -946,6 +1097,19 @@ function documentNo(row: DocumentSummary | DocumentDetail) {
   return '-'
 }
 
+function isExternalSource(row: DocumentSummary | DocumentDetail) {
+  return Boolean(row.sourceSystemCode)
+}
+
+function sourceSystemLabel(row: DocumentSummary | DocumentDetail) {
+  if (row.sourceSystemCode === 'DINGHUOBAO') return '订货宝'
+  return row.sourceSystemCode || '-'
+}
+
+function sourceDocumentNo(row: DocumentSummary | DocumentDetail) {
+  return row.sourceDocumentNo || '-'
+}
+
 function mainRelation(row: DocumentSummary | DocumentDetail) {
   if (mode.value === 'procurement' && 'supplierName' in row) return `供应商：${row.supplierName || '-'}`
   if (mode.value === 'stockIn' && 'stockInNo' in row) {
@@ -1052,6 +1216,12 @@ function documentDetailItems(row: DocumentDetail) {
     { label: '商品数量', value: formatNumber(row.totalQuantity) },
     { label: '明细行', value: String(row.lines?.length || row.lineCount || 0) },
   ]
+  if (isExternalSource(row)) {
+    result.push(
+      { label: '来源系统', value: sourceSystemLabel(row) },
+      { label: '来源单号', value: sourceDocumentNo(row), span: 2 },
+    )
+  }
   if (mode.value === 'procurement' && 'procurementNo' in row) {
     result.push(
       { label: '供应商', value: supplierName(row) },
@@ -1099,6 +1269,7 @@ function documentDetailItems(row: DocumentDetail) {
 }
 
 function canEdit(row: DocumentSummary) {
+  if (isExternalSource(row)) return false
   return (mode.value === 'procurement' || mode.value === 'transfer') && row.statusCode === 'DRAFT'
 }
 
@@ -1107,14 +1278,17 @@ function canDelete(row: DocumentSummary) {
 }
 
 function canStockIn(row: DocumentSummary) {
+  if (isExternalSource(row)) return false
   return mode.value === 'procurement' && ['SUBMITTED', 'PARTIAL_IN'].includes(row.statusCode)
 }
 
 function canTransferStockOut(row: DocumentSummary) {
+  if (isExternalSource(row)) return false
   return mode.value === 'transfer' && row.statusCode === 'DRAFT'
 }
 
 function canTransferStockIn(row: DocumentSummary) {
+  if (isExternalSource(row)) return false
   return mode.value === 'transfer' && row.statusCode === 'OUT_CONFIRMED'
 }
 
@@ -1171,6 +1345,14 @@ function toIso(value: Date | string | null) {
   if (value instanceof Date) return value.toISOString()
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+function rangeStart(value: FilterDateRange) {
+  return toIso(value?.[0] ?? null) || undefined
+}
+
+function rangeEnd(value: FilterDateRange) {
+  return toIso(value?.[1] ?? null) || undefined
 }
 
 function empty(value: string | null | undefined) {

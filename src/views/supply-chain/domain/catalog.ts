@@ -79,6 +79,7 @@ export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
   'supply.crm.assignments.menu',
   'supply.crm.credit-policy.menu',
   'supply.order.menu',
+  'supply.hr.menu',
   'supply.city.scope.menu',
   'supply.city.tasks.menu',
   'supply.city.configuration.menu',
@@ -110,7 +111,7 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
   ]),
   ...groupPages('crm', 'CRM', 'merchant-crm-service', [
     { key: 'customers', title: '客户管理', pages: [
-      { key: 'profiles', title: '客户档案' }, { key: 'shipping-addresses', title: '收货地址簿' },
+      { key: 'profiles', title: '客户档案' }, { key: 'shipping-addresses', title: '客户地址' },
       { key: 'stores', title: '门店档案' },
       { key: 'levels-tags', title: '客户类型' }, { key: 'areas', title: '归属地区' },
     ] },
@@ -145,14 +146,21 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
       { key: 'partners', title: '合作方配置' },
     ] },
   ]),
-  ...directPages('bi', 'BI 数据看板', 'analytics-bi-service', [
-    { key: 'orders-fulfillment', title: '订单与履约' }, { key: 'sales', title: '销售经营' },
-    { key: 'cities', title: '城市经营' }, { key: 'customers-stores', title: '客户与门店' },
-    { key: 'products-procurement-inventory', title: '商品、采购与库存' },
-    { key: 'finance-collections', title: '财务与回款' }, { key: 'sync-quality', title: '数据同步质量' },
-    { key: 'metrics', title: '指标中心' }, { key: 'dashboards', title: '看板管理' },
+  ...directPages('bi', '数据看板', 'analytics-bi-service', [
+    { key: 'sales', title: '销售看板' },
+    { key: 'city-operating', title: '城市经营看板' },
+    { key: 'customer', title: '客户看板' },
+    { key: 'activity', title: '活动看板' },
+    { key: 'product-inventory', title: '商品/库存看板' },
+    { key: 'product-sales', title: '商品销售统计' },
+    { key: 'gross-profit', title: '销售毛利分析' },
+    { key: 'payment-risk', title: '回款风险看板' },
+    { key: 'city-cost', title: '城市成本看板' },
+    { key: 'inventory-risk', title: '库存风险看板' },
   ]),
   ...directPages('hr', '人事与绩效', 'hr-payroll-service', [
+    { key: 'employees', title: '员工主档' },
+    { key: 'positions', title: '岗位职位' },
     { key: 'assignments', title: '任职与调动' }, { key: 'calendar-policies', title: '工作日历与考勤政策' },
     { key: 'attendance-appeals', title: '正式考勤与申诉' }, { key: 'payroll-commission', title: '薪酬与提成' },
     { key: 'performance', title: '绩效核算' }, { key: 'monthly-close', title: '月结与冲回' },
@@ -178,6 +186,11 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     domainKey: 'integration', domainTitle: '外部同步', groupTitle: '同步控制', title: '订货宝同步中心',
     routeKey: 'supply.integration.overview',
     path: '/supply-chain/integration', owner: 'integration-migration-service',
+  },
+  {
+    domainKey: 'integration', domainTitle: '外部同步', groupTitle: '同步控制', title: '飞书导入中心',
+    routeKey: 'supply.integration.feishu-import',
+    path: '/supply-chain/integration/feishu-import', owner: 'integration-migration-service',
   },
 ]
 

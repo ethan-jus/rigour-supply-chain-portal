@@ -1,0 +1,75 @@
+# 供应链 Portal 页面展示优化交接
+
+更新时间：2026-08-27 10:45
+
+范围：`rigour-supply-chain-portal`，仅供应链业务页展示层；不涉及后端接口、数据库、Flyway、BI 刷新任务、平台管理或系统管理后台。
+
+## 已完成
+
+- 压缩供应链业务页整体视觉骨架：
+  - 收紧 `.console__content`、页头、筛选区、结果标题、表格、分页、流程条间距。
+  - 普通供应链业务页默认隐藏重复的模块 eyebrow 和长描述文案，首屏优先展示业务操作、筛选、指标、表格。
+- 统一筛选区布局：
+  - 新增共享筛选网格样式，ERP/CRM/Order/设置等挂在 `.filter-card` 的页面会按规则网格对齐。
+  - 标签列固定、控件列自适应，避免截图中“标签和输入框宽度不一、换行散乱”的问题。
+- BI 页面专项优化：
+  - 删除原大块 BI 顶部页头。
+  - 将“更新时间 / 刷新”收进筛选卡右侧，刷新按钮改为低权重浅色按钮。
+  - BI 筛选区也改为规则网格；日期范围跨两列展示，避免日期文本截断。
+  - 压缩 BI 指标卡、图表面板、排行列表间距。
+- 销售管理页优化：
+  - 移除业务页面不该展示的研发态内容：`真实数据`、`页面骨架`、`API待接入`、`职责边界`、`目标接口`、`实现约束` 等。
+  - 未开放页面只保留业务可理解的“功能暂未开放”空状态。
+  - 修复销售管控台因局部 grid 布局导致页头被拉高的问题。
+
+## 关键文件
+
+- `src/assets/styles/_supply-chain.scss`
+  - 供应链业务页共享骨架、表格、分页、流程条、筛选网格。
+- `src/views/supply-chain/bi/IndexView.vue`
+  - BI 顶部区域删除、筛选栏重排、指标/图表间距压缩。
+- `src/views/supply-chain/sales/IndexView.vue`
+  - 删除研发态展示，修正销售页整体布局。
+- `src/views/supply-chain/sales/SalesDashboard.vue`
+  - 压缩销售管控台工具栏、指标卡、运营卡片间距。
+
+## 验证记录
+
+- `pnpm typecheck`：通过。
+- `pnpm vitest run tests/route-registry.test.ts`：通过，15 tests。
+- `pnpm build`：通过。
+  - 仅出现第三方 `@vueuse/core` Rollup PURE 注释 warning，非本次代码错误。
+- Chrome 目视验收：
+  - `/supply-chain/bi`
+  - `/supply-chain/order/sales-orders`
+  - `/supply-chain/crm/customers/profiles`
+  - `/supply-chain/erp/master-data/products`
+  - `/supply-chain/erp/inventory/inventory`
+  - `/supply-chain/sales`
+- 截图证据：
+  - `/var/folders/d7/wdgwb_ts03q_f1833lj24yth0000gn/T/portal-supply-ui-check/sales-orders-filter-grid.png`
+  - `/var/folders/d7/wdgwb_ts03q_f1833lj24yth0000gn/T/portal-supply-ui-check/bi-final-compact-filter.png`
+
+## 当前 Git 状态说明
+
+- Portal 当前分支：`feature/sync-reconciliation-repair`。
+- 工作树在本次接手前已有大量 staged/unstaged 改动，未做回滚、清理、提交、推送。
+- 本次交接文件：`handoff.mad` 已新建在 Portal 仓库根目录并已暂存。
+- 本次 UI 优化主要涉及：
+  - `src/assets/styles/_supply-chain.scss`
+  - `src/views/supply-chain/bi/IndexView.vue`
+  - `src/views/supply-chain/sales/IndexView.vue`
+  - `src/views/supply-chain/sales/SalesDashboard.vue`
+
+## 注意事项
+
+- 不要把 `/Users/guorongrong/IdeaProjects/瑞盖` 当作正常 Git 仓库根目录操作；该路径向上解析到 `/Users` 的异常 Git 仓库，容易误伤用户目录。
+- 后续如果继续做视觉优化，应优先走共享供应链样式，不要逐页复制布局规则。
+- 搜索条件特别多的页面仍需要按业务优先级决定是否折叠高级筛选；本次只做规整对齐，没有删除任何业务筛选项。
+- 当前账号访问部分销售子页面会被路由权限拦截到 403，因此未开放销售页的空状态主要通过源码和构建验证。
+
+## 建议下一步
+
+1. 让业务人员在 Chrome 现有登录态下重点验收：BI、销售订单、客户管理、商品管理、库存。
+2. 如果仍觉得高频列表筛选项过多，下一步做“常用筛选 + 高级筛选折叠”，但要逐页确认哪些字段是低频条件。
+3. 若要推广到平台管理/系统管理后台，单独开一轮，不要复用供应链业务页规则直接覆盖。

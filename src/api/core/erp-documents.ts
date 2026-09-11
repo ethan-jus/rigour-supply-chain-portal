@@ -4,6 +4,8 @@ import type { ErpInternalPage } from './erp-internal'
 export interface ProcurementOrderSummary {
   id: string
   procurementNo: string
+  sourceSystemCode: string | null
+  sourceDocumentNo: string | null
   supplierId: string
   supplierName: string
   targetWarehouseId: string
@@ -76,6 +78,8 @@ export interface ProcurementStockInCommand {
 export interface StockInOrderSummary {
   id: string
   stockInNo: string
+  sourceSystemCode: string | null
+  sourceDocumentNo: string | null
   stockInTypeCode: string
   procurementOrderId: string | null
   procurementNo: string | null
@@ -122,6 +126,8 @@ export interface StockInOrderDetail extends StockInOrderSummary {
 export interface StockOutOrderSummary {
   id: string
   stockOutNo: string
+  sourceSystemCode: string | null
+  sourceDocumentNo: string | null
   stockOutTypeCode: string
   warehouseId: string
   warehouseName: string
@@ -165,6 +171,8 @@ export interface StockOutOrderDetail extends StockOutOrderSummary {
 export interface TransferOrderSummary {
   id: string
   transferNo: string
+  sourceSystemCode: string | null
+  sourceDocumentNo: string | null
   sourceWarehouseId: string
   sourceWarehouseName: string
   targetWarehouseId: string
