@@ -137,6 +137,8 @@ export interface SupplyDashboardTargetCompletionItem {
   targetValue: number
   actualValue: number
   achievementRate: number
+  configuredMonthCount?: number | null
+  periodMonthCount?: number | null
 }
 
 export interface SupplyDashboardInventoryItemSummary {
@@ -401,6 +403,42 @@ export interface SupplyDashboardFeishuArchive {
 }
 
 const SUPPLY_DASHBOARD_PATH = '/analytics/supply/dashboard/overview'
+export interface SupplyDashboardOperatingAnalysis {
+  from: string
+  to: string
+  generatedAt: string
+  previousFrom: string
+  previousTo: string
+  previousSalesRanking: SupplyDashboardRankingItem[]
+  cityProducts: {
+    regionCode: string | null
+    regionName: string | null
+    categoryCode: string
+    categoryName: string
+    salesAmount: number
+    orderCount: number
+    customerCount: number
+  }[]
+  cityCustomers: {
+    regionCode: string | null
+    regionName: string | null
+    orderingCustomerCount: number
+    repeatCustomerCount: number
+  }[]
+  salesReceipts: {
+    ownerStaffCode: string
+    ownerStaffName: string
+    paidAmount: number
+    paymentCount: number
+    customerCount: number
+  }[]
+}
+
+export const getSupplyDashboardOperatingAnalysis = (params: SupplyDashboardQuery) =>
+  apiClient.get<SupplyDashboardOperatingAnalysis>(
+    '/analytics/supply/dashboard/operating-analysis',
+    { params, ...options },
+  )
 const SUPPLY_DASHBOARD_REFRESH_PATH = '/analytics/supply/dashboard/refresh-runs'
 const SUPPLY_DASHBOARD_TRUST_PATH = '/analytics/supply/dashboard/trust'
 const SUPPLY_DASHBOARD_RECONCILIATION_PATH = '/analytics/supply/dashboard/reconciliation'
@@ -419,16 +457,31 @@ export const getSupplyDashboardDataTrust = () =>
   apiClient.get<SupplyDashboardDataTrust>(SUPPLY_DASHBOARD_TRUST_PATH, options)
 
 export const getSupplyDashboardReconciliation = (params: SupplyDashboardQuery = {}) =>
-  apiClient.get<SupplyDashboardReconciliation>(SUPPLY_DASHBOARD_RECONCILIATION_PATH, { params, ...options })
+  apiClient.get<SupplyDashboardReconciliation>(SUPPLY_DASHBOARD_RECONCILIATION_PATH, {
+    params,
+    ...options,
+  })
 
 export const getSupplyDashboardFilterOptions = () =>
   apiClient.get<SupplyDashboardFilterOptions>(SUPPLY_DASHBOARD_FILTER_OPTIONS_PATH, options)
 
-export const importSupplyDashboardCityCostRecords = (command: SupplyDashboardCityCostImportCommand) =>
-  apiClient.post<SupplyDashboardCityCostImportResult>(SUPPLY_DASHBOARD_CITY_COST_IMPORT_PATH, command, options)
+export const importSupplyDashboardCityCostRecords = (
+  command: SupplyDashboardCityCostImportCommand,
+) =>
+  apiClient.post<SupplyDashboardCityCostImportResult>(
+    SUPPLY_DASHBOARD_CITY_COST_IMPORT_PATH,
+    command,
+    options,
+  )
 
 export const getSupplyDashboardFeishuArchives = () =>
   apiClient.get<SupplyDashboardFeishuArchive[]>(SUPPLY_DASHBOARD_FEISHU_ARCHIVES_PATH, options)
 
-export const registerSupplyDashboardFeishuArchive = (command: SupplyDashboardFeishuArchiveCommand) =>
-  apiClient.post<SupplyDashboardFeishuArchive>(SUPPLY_DASHBOARD_FEISHU_ARCHIVES_PATH, command, options)
+export const registerSupplyDashboardFeishuArchive = (
+  command: SupplyDashboardFeishuArchiveCommand,
+) =>
+  apiClient.post<SupplyDashboardFeishuArchive>(
+    SUPPLY_DASHBOARD_FEISHU_ARCHIVES_PATH,
+    command,
+    options,
+  )

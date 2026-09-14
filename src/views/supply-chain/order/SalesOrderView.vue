@@ -160,6 +160,7 @@
           <el-table-column prop="sourceOrderNo" label="来源单号" width="180" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.sourceOrderNo || '-' }}</template>
           </el-table-column>
+          <!-- @vue-generic {SalesOrderSummary} -->
           <el-table-column label="制单人" width="140" show-overflow-tooltip>
             <template #default="scope">{{ sourceCreatorLabel(scope.row) }}</template>
           </el-table-column>
@@ -171,6 +172,7 @@
               <span v-else>-</span>
             </template>
           </el-table-column>
+          <!-- @vue-generic {SalesOrderSummary} -->
           <el-table-column label="数据状态" width="130">
             <template #default="scope">
               <el-tooltip
@@ -233,6 +235,7 @@
           <el-table-column label="原小计" width="130" align="right">
             <template #default="scope">{{ formatMoney(scope.row.originalAmount) }}</template>
           </el-table-column>
+          <!-- @vue-generic {SalesOrderSummary} -->
           <el-table-column label="优惠金额" width="130" align="right">
             <template #default="scope">{{ formatMoney(displayDiscountAmount(scope.row)) }}</template>
           </el-table-column>
@@ -248,9 +251,11 @@
           <el-table-column label="更新时间" width="170">
             <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
           </el-table-column>
+          <!-- @vue-generic {SalesOrderSummary} -->
           <el-table-column label="操作" width="230" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
+              <el-button v-if="canRepairProducts(scope.row)" link type="primary" @click.stop="openProductRepair(scope.row.id)">商品复核</el-button>
               <el-button v-if="canSubmit(scope.row)" link type="primary" @click.stop="submitExisting(scope.row)">提交</el-button>
               <el-button v-if="canStockOut(scope.row)" link type="primary" @click.stop="openStockOut(scope.row)">出库</el-button>
               <el-button v-if="canEdit(scope.row)" link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
@@ -272,6 +277,9 @@
         />
       </div>
     </el-card>
+
+    <OrderProductRepairDialog v-model="productRepairVisible" :order-id="productRepairOrderId"
+      :source-context="productRepairSourceContext" @applied="productRepairApplied" />
 
     <el-drawer v-model="detailVisible" class="order-detail-drawer" size="min(1120px, 94vw)" :with-header="false">
       <div v-if="detail" class="detail-shell">
@@ -418,6 +426,7 @@
               <el-table-column label="回款人员" width="140" show-overflow-tooltip>
                 <template #default="scope">{{ scope.row.collectorNameSnapshot || scope.row.collectorStaffCode || '-' }}</template>
               </el-table-column>
+              <!-- @vue-generic {SalesPaymentDetail} -->
               <el-table-column label="回款凭证" min-width="220">
                 <template #default="scope">
                   <FundAttachmentPreviewList
@@ -640,6 +649,8 @@ import { computed, nextTick, onActivated, onMounted, reactive, ref, watch } from
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FundAttachmentPreviewList from '@/components/supply/FundAttachmentPreviewList.vue'
+import OrderProductRepairDialog from './components/OrderProductRepairDialog.vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   confirmSalesOrderStockOut,
   createSalesOrder,
@@ -661,7 +672,7 @@ import {
   type SalesPaymentDetail,
 } from '@/api/core/order-sales'
 import {
-  getCrmCustomerAreas,
+  getAllCrmCustomerAreas,
   getInternalCrmCustomers,
   type CrmDictionaryView,
   type InternalCrmCustomerSummary,
@@ -686,6 +697,26 @@ import { formatOrderStatus as formatDhbOrderStatus } from '@/utils/dhb-order-sta
 import { auditActorLabel } from '@/utils/audit-actor'
 
 const orderStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_ORDER_STATUS'))
+const repairAuth = useAuthStore()
+const productRepairVisible = ref(false)
+const productRepairOrderId = ref<string | number | null>(null)
+const hasRepairPermission = computed(() => repairAuth.hasPermission('order:read') && repairAuth.hasPermission('order:write'))
+
+function canRepairProducts(row: { sourceSystemCode?: unknown }) {
+  return hasRepairPermission.value && row.sourceSystemCode === 'FEISHU'
+}
+
+function openProductRepair(id: string | number) {
+  productRepairOrderId.value = id
+  productRepairVisible.value = true
+}
+
+async function productRepairApplied() {
+  await loadOrders()
+  if (detail.value && String(detail.value.id) === String(productRepairOrderId.value)) {
+    await openDetail(detail.value)
+  }
+}
 const sourceStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'DHB_ORDER_STATUS'))
 const outboundStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'OUTBOUND_STATUS'))
 const shipmentStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_SHIPMENT_STATUS'))
@@ -741,6 +772,22 @@ const paymentStatusFallbackLabels: Record<string, string> = {
 }
 const route = useRoute()
 const router = useRouter()
+const productRepairSourceContext = computed(() => {
+  const sourceNamespace = routeText(route.query.repairSourceNamespace)
+  const sourceCaptureRef = routeText(route.query.repairSourceCaptureRef)
+  if (!sourceNamespace || !sourceCaptureRef) return undefined
+  return {
+    sourceNamespace, sourceCaptureRef,
+    sourceProductRecordId: routeText(route.query.repairSourceProductRecordId) || undefined,
+    sourceProductCode: routeText(route.query.repairSourceProductCode) || undefined,
+    sourceOrderNo: routeText(route.query.sourceOrderNo) || undefined,
+    lineId: routeText(route.query.repairLineId) || undefined,
+  }
+})
+watch(() => [route.query.repairOrderId, hasRepairPermission.value], () => {
+  const id = routeText(route.query.repairOrderId)
+  if (hasRepairPermission.value && /^\d+$/.test(id)) openProductRepair(id)
+}, { immediate: true })
 
 const loading = ref(false)
 const saving = ref(false)
@@ -960,6 +1007,8 @@ function resetFilters() {
 
 function applyRouteQuery() {
   let changed = false
+  changed = setFilterValue('orderNo', routeText(route.query.orderNo)) || changed
+  changed = setFilterValue('sourceOrderNo', routeText(route.query.sourceOrderNo)) || changed
   changed = setFilterValue('orderDateFrom', routeDate(route.query.orderDateFrom)) || changed
   changed = setFilterValue('orderDateTo', routeDate(route.query.orderDateTo)) || changed
   changed = setFilterValue('regionCode', routeText(route.query.regionCode)) || changed
@@ -1290,8 +1339,8 @@ async function searchCustomers(query: string) {
 
 async function loadCustomerAreas() {
   try {
-    const result = await getCrmCustomerAreas({ begin: 0, step: 500 })
-    customerAreaOptions.value = result.items.filter((item) => item.status === 'ACTIVE')
+    const areas = await getAllCrmCustomerAreas()
+    customerAreaOptions.value = areas.filter((item) => item.status === 'ACTIVE')
   } catch (reason) {
     customerAreaOptions.value = []
     ElMessage.warning(errorMessage(reason, '归属地区加载失败，可稍后刷新'))

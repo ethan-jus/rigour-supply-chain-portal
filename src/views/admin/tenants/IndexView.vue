@@ -21,6 +21,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="policyVersion" label="策略版本" width="100" />
+      <!-- @vue-generic {TenantRecord} -->
       <el-table-column label="操作" width="250" fixed="right">
         <template #default="scope">
           <el-button link type="primary" @click="openTenant(scope.row)">编辑</el-button>

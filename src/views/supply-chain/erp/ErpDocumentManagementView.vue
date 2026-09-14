@@ -145,69 +145,91 @@
           @row-click="openDetail"
         >
           <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column :label="`${pageConfig.shortTitle}号`" width="190" show-overflow-tooltip>
             <template #default="scope"><strong>{{ documentNo(scope.row) }}</strong></template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'procurement'" label="供应商" min-width="190" show-overflow-tooltip>
             <template #default="scope">{{ supplierName(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'procurement'" label="入库仓库" min-width="170" show-overflow-tooltip>
             <template #default="scope">{{ targetWarehouseName(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'procurement'" label="预计到货" width="170">
             <template #default="scope">{{ formatTime(expectedArrivalTime(scope.row)) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockIn'" label="入库类型" width="130">
             <template #default="scope">{{ stockInTypeLabel(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockIn'" label="来源采购单" width="170" show-overflow-tooltip>
             <template #default="scope">{{ procurementNo(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockIn'" label="来源调拨单" width="170" show-overflow-tooltip>
             <template #default="scope">{{ transferNo(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockIn'" label="入库仓库" min-width="170" show-overflow-tooltip>
             <template #default="scope">{{ warehouseName(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockIn'" label="供应商" min-width="170" show-overflow-tooltip>
             <template #default="scope">{{ supplierName(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockIn'" label="入库时间" width="170">
             <template #default="scope">{{ formatTime(stockInTime(scope.row)) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockOut'" label="出库类型" width="130">
             <template #default="scope">{{ stockOutTypeLabel(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockOut'" label="销售订单" width="170" show-overflow-tooltip>
             <template #default="scope">{{ salesOrderNo(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockOut'" label="调拨单号" width="170" show-overflow-tooltip>
             <template #default="scope">{{ transferNo(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockOut'" label="客户名称" min-width="190" show-overflow-tooltip>
             <template #default="scope">{{ customerName(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockOut'" label="出库仓库" min-width="170" show-overflow-tooltip>
             <template #default="scope">{{ warehouseName(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'stockOut'" label="出库时间" width="170">
             <template #default="scope">{{ formatTime(stockOutTime(scope.row)) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'transfer'" label="来源仓库" min-width="180" show-overflow-tooltip>
             <template #default="scope">{{ sourceWarehouseName(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'transfer'" label="目标仓库" min-width="180" show-overflow-tooltip>
             <template #default="scope">{{ targetWarehouseName(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'transfer'" label="调拨出库单" width="170" show-overflow-tooltip>
             <template #default="scope">{{ stockOutNo(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'transfer'" label="调拨入库单" width="170" show-overflow-tooltip>
             <template #default="scope">{{ stockInNo(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'transfer'" label="出库时间" width="170">
             <template #default="scope">{{ formatTime(stockOutTime(scope.row)) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column v-if="mode === 'transfer'" label="入库时间" width="170">
             <template #default="scope">{{ formatTime(stockInTime(scope.row)) }}</template>
           </el-table-column>
@@ -225,6 +247,7 @@
           <el-table-column label="更新时间" width="170">
             <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
           </el-table-column>
+          <!-- @vue-generic {DocumentSummary} -->
           <el-table-column label="操作" width="260" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
@@ -278,6 +301,7 @@
             </el-descriptions-item>
           </el-descriptions>
           <h3 class="detail-title">商品明细</h3>
+          <!-- @vue-generic {DocumentDetail['lines'][number]} -->
           <el-table class="supply-scroll-table detail-table" :data="detail.lines || []" max-height="360" size="small">
             <el-table-column prop="productName" label="商品" min-width="220" fixed="left">
               <template #default="scope">{{ lineProductName(scope.row) }}</template>
@@ -448,15 +472,19 @@ import {
   getTransferOrders,
   updateProcurementOrder,
   updateTransferOrder,
+  type ProcurementOrderCommand,
   type ProcurementOrderDetail,
   type ProcurementOrderLine,
+  type ProcurementOrderLineCommand,
   type ProcurementOrderSummary,
   type ProcurementStockInCommand,
   type StockInOrderDetail,
   type StockInOrderSummary,
   type StockOutOrderDetail,
   type StockOutOrderSummary,
+  type TransferOrderCommand,
   type TransferOrderDetail,
+  type TransferOrderLineCommand,
   type TransferOrderSummary,
 } from '@/api/core/erp-documents'
 import {
@@ -482,7 +510,10 @@ type DocumentMode = 'procurement' | 'stockIn' | 'stockOut' | 'transfer'
 type DocumentSummary = ProcurementOrderSummary | StockInOrderSummary | StockOutOrderSummary | TransferOrderSummary
 type DocumentDetail = ProcurementOrderDetail | StockInOrderDetail | StockOutOrderDetail | TransferOrderDetail
 type WorkflowStep = { index: number; title: string; description: string; active: boolean }
-type FilterDateRange = Array<Date | string> | null
+type FilterDateRange = Date[] | string[] | null
+type DocumentCommand =
+  | { mode: 'procurement'; command: ProcurementOrderCommand }
+  | { mode: 'transfer'; command: TransferOrderCommand }
 
 interface LineForm {
   localId: string
@@ -775,14 +806,16 @@ async function openEdit(row: DocumentSummary) {
 
 async function saveDocument(submit: boolean) {
   if (mode.value !== 'procurement' && mode.value !== 'transfer') return
-  const command = buildDocumentCommand(submit)
-  if (!command) return
+  const result = buildDocumentCommand(submit)
+  if (!result) return
   saving.value = true
   try {
-    if (mode.value === 'procurement') {
+    if (result.mode === 'procurement') {
+      const { command } = result
       if (editingId.value) await updateProcurementOrder(editingId.value, command)
       else await createProcurementOrder(command)
     } else {
+      const { command } = result
       if (editingId.value) await updateTransferOrder(editingId.value, command)
       else await createTransferOrder(command)
     }
@@ -906,7 +939,7 @@ async function fetchDetail(id: string): Promise<DocumentDetail> {
   return getTransferOrder(id)
 }
 
-function buildDocumentCommand(submit: boolean) {
+function buildDocumentCommand(submit: boolean): DocumentCommand | null {
   if (mode.value === 'procurement') {
     if (!form.supplierId) {
       ElMessage.warning('请选择供应商')
@@ -919,13 +952,16 @@ function buildDocumentCommand(submit: boolean) {
     const lines = buildLines(true)
     if (!lines) return null
     return {
-      submit,
-      supplierId: form.supplierId,
-      targetWarehouseId: form.sourceWarehouseId,
-      expectedArrivalTime: toIso(form.expectedArrivalTime),
-      lines,
-      remark: empty(form.remark),
-      revision: editingId.value ? form.revision : null,
+      mode: 'procurement',
+      command: {
+        submit,
+        supplierId: form.supplierId,
+        targetWarehouseId: form.sourceWarehouseId,
+        expectedArrivalTime: toIso(form.expectedArrivalTime),
+        lines,
+        remark: empty(form.remark),
+        revision: editingId.value ? form.revision : null,
+      },
     }
   }
   if (!form.sourceWarehouseId || !form.targetWarehouseId) {
@@ -939,15 +975,20 @@ function buildDocumentCommand(submit: boolean) {
   const lines = buildLines(false)
   if (!lines) return null
   return {
-    sourceWarehouseId: form.sourceWarehouseId,
-    targetWarehouseId: form.targetWarehouseId,
-    lines,
-    remark: empty(form.remark),
-    revision: editingId.value ? form.revision : null,
+    mode: 'transfer',
+    command: {
+      sourceWarehouseId: form.sourceWarehouseId,
+      targetWarehouseId: form.targetWarehouseId,
+      lines,
+      remark: empty(form.remark),
+      revision: editingId.value ? form.revision : null,
+    },
   }
 }
 
-function buildLines(withPrice: boolean) {
+function buildLines(withPrice: true): ProcurementOrderLineCommand[] | null
+function buildLines(withPrice: false): TransferOrderLineCommand[] | null
+function buildLines(withPrice: boolean): ProcurementOrderLineCommand[] | TransferOrderLineCommand[] | null {
   if (!form.lines.length) {
     ElMessage.warning('请添加商品明细')
     return null
@@ -969,7 +1010,7 @@ function fillForm(current: DocumentDetail) {
   resetForm()
   form.revision = current.revision
   form.remark = current.remark || ''
-  if ('supplierId' in current) {
+  if ('expectedArrivalTime' in current) {
     form.supplierId = String(current.supplierId)
     form.sourceWarehouseId = String(current.targetWarehouseId)
     form.expectedArrivalTime = current.expectedArrivalTime
@@ -1112,10 +1153,10 @@ function sourceDocumentNo(row: DocumentSummary | DocumentDetail) {
 
 function mainRelation(row: DocumentSummary | DocumentDetail) {
   if (mode.value === 'procurement' && 'supplierName' in row) return `供应商：${row.supplierName || '-'}`
-  if (mode.value === 'stockIn' && 'stockInNo' in row) {
+  if (mode.value === 'stockIn' && 'stockInTypeCode' in row) {
     return row.procurementNo ? `来源采购单：${row.procurementNo}` : row.transferOrderNo ? `来源调拨单：${row.transferOrderNo}` : '手工入库'
   }
-  if (mode.value === 'stockOut' && 'stockOutNo' in row) {
+  if (mode.value === 'stockOut' && 'stockOutTypeCode' in row) {
     return row.salesOrderNo ? `来源销售单：${row.salesOrderNo}` : row.transferOrderNo ? `来源调拨单：${row.transferOrderNo}` : '手工出库'
   }
   if (mode.value === 'transfer' && 'sourceWarehouseName' in row) {
@@ -1193,22 +1234,6 @@ function stockOutTime(row: DocumentSummary | DocumentDetail) {
   return 'stockOutTime' in row ? row.stockOutTime : null
 }
 
-function primaryInfo(row: DocumentSummary | DocumentDetail) {
-  if ('targetWarehouseName' in row && 'procurementNo' in row) return `入库仓库：${row.targetWarehouseName || '-'}`
-  if ('warehouseName' in row) return `仓库：${row.warehouseName || '-'}`
-  if ('customerNameSnapshot' in row) return `客户：${row.customerNameSnapshot || '-'}`
-  if ('sourceWarehouseName' in row) return `来源仓库：${row.sourceWarehouseName || '-'}`
-  return '-'
-}
-
-function secondaryInfo(row: DocumentSummary | DocumentDetail) {
-  if ('expectedArrivalTime' in row) return `预计到货：${formatTime(row.expectedArrivalTime)}`
-  if ('stockInTime' in row) return `入库时间：${formatTime(row.stockInTime)}`
-  if ('stockOutTime' in row && 'stockOutNo' in row) return `出库时间：${formatTime(row.stockOutTime)}`
-  if ('targetWarehouseName' in row) return `目标仓库：${row.targetWarehouseName || '-'}`
-  return '-'
-}
-
 function documentDetailItems(row: DocumentDetail) {
   const result: Array<{ label: string; value: string; span?: number }> = [
     { label: `${pageConfig.value.shortTitle}号`, value: documentNo(row) },
@@ -1229,7 +1254,7 @@ function documentDetailItems(row: DocumentDetail) {
       { label: '预计到货', value: formatTime(expectedArrivalTime(row)) },
       { label: '采购金额', value: formatMoney(row.totalAmount) },
     )
-  } else if (mode.value === 'stockIn' && 'stockInNo' in row) {
+  } else if (mode.value === 'stockIn' && 'stockInTypeCode' in row) {
     result.push(
       { label: '入库类型', value: stockInTypeLabel(row) },
       { label: '来源采购单', value: procurementNo(row) },

@@ -8,7 +8,7 @@
       </template>
       <template v-else>
         <p class="error" role="alert">{{ errorMsg }}</p>
-        <button class="retry" type="button" @click="startLogin">重新登录</button>
+        <button class="retry" type="button" @click="startLogin(true)">重新登录</button>
       </template>
     </div>
   </main>

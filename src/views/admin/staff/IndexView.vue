@@ -76,6 +76,7 @@
           <span v-else>—</span>
         </template>
       </el-table-column>
+      <!-- @vue-generic {StaffRecord} -->
       <el-table-column label="操作" width="140" fixed="right">
         <template #default="scope">
           <el-button v-if="canWrite" link type="primary" @click="open(scope.row)">编辑</el-button>

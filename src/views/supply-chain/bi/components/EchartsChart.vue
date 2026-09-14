@@ -3,10 +3,11 @@
 </template>
 
 <script setup lang="ts">
-import { BarChart, FunnelChart, HeatmapChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
+import { BarChart, FunnelChart, GaugeChart, HeatmapChart, LineChart, PieChart, ScatterChart, SunburstChart } from 'echarts/charts'
 import {
   DataZoomComponent,
   GridComponent,
+  GraphicComponent,
   LegendComponent,
   TooltipComponent,
   VisualMapComponent,
@@ -19,11 +20,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 use([
   BarChart,
   FunnelChart,
+  GaugeChart,
   HeatmapChart,
   LineChart,
   PieChart,
   ScatterChart,
+  SunburstChart,
   GridComponent,
+  GraphicComponent,
   TooltipComponent,
   LegendComponent,
   DataZoomComponent,

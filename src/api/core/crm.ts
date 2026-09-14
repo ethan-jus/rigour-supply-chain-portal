@@ -163,6 +163,20 @@ export function getCrmCustomerAreas(params: { begin?: number; step?: number; q?:
   })
 }
 
+export async function getAllCrmCustomerAreas(): Promise<CrmDictionaryView[]> {
+  const items: CrmDictionaryView[] = []
+  let total = Number.POSITIVE_INFINITY
+  while (items.length < total) {
+    const page = await getCrmCustomerAreas({ begin: items.length, step: 200 })
+    if (page.begin !== items.length || (page.total > items.length && !page.items.length)) {
+      throw new Error('归属地区返回不完整，请重新载入')
+    }
+    items.push(...page.items)
+    total = page.total
+  }
+  return items
+}
+
 export function createCrmCustomerArea(command: CrmCustomerAreaCommand) {
   return apiClient.post<CrmDictionaryView>(`${CRM_BASE_PATH}/customer-areas`, command, {
     stayOnUnauthorized: true,

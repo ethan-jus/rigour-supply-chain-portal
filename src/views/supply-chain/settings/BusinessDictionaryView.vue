@@ -48,6 +48,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="dictionaryName" label="字典名称" min-width="220" show-overflow-tooltip />
+          <!-- @vue-generic {DictView} -->
           <el-table-column label="字典项汇总" min-width="520" show-overflow-tooltip>
             <template #default="scope">
               <strong>{{ scope.row.dictionaryName }}：</strong>{{ dictionaryItemSummary(scope.row) }}
@@ -56,9 +57,11 @@
           <el-table-column prop="remark" label="说明" min-width="220" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.remark || '-' }}</template>
           </el-table-column>
+          <!-- @vue-generic {DictView} -->
           <el-table-column label="字典项" width="100" align="center">
             <template #default="scope">{{ dictionaryItems(scope.row).length }}</template>
           </el-table-column>
+          <!-- @vue-generic {DictView} -->
           <el-table-column label="操作" width="170" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openItemsDrawer(scope.row)">字典项</el-button>
@@ -105,6 +108,7 @@
           <el-table-column prop="remark" label="说明" min-width="180" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.remark || '-' }}</template>
           </el-table-column>
+          <!-- @vue-generic {DictItemView} -->
           <el-table-column v-if="canWrite" label="操作" width="90" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click="openItem(scope.row)">编辑</el-button>

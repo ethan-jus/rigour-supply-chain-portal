@@ -58,9 +58,11 @@
           <el-table-column prop="phone" label="联系电话" min-width="150" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.phone || '-' }}</template>
           </el-table-column>
+          <!-- @vue-generic {ShippingAddressSummaryView} -->
           <el-table-column prop="areaName" label="地区" min-width="160" show-overflow-tooltip>
             <template #default="scope">{{ areaLabel(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {ShippingAddressSummaryView} -->
           <el-table-column prop="fullAddress" label="详细地址" min-width="300" show-overflow-tooltip>
             <template #default="scope">{{ addressLabel(scope.row) }}</template>
           </el-table-column>
@@ -80,6 +82,7 @@
           <el-table-column label="同步时间" width="180">
             <template #default="scope">{{ formatTime(scope.row.syncedAt || scope.row.sourceUpdatedAt) }}</template>
           </el-table-column>
+          <!-- @vue-generic {ShippingAddressSummaryView} -->
           <el-table-column label="操作" width="120" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openCustomer(scope.row)">查看客户</el-button>

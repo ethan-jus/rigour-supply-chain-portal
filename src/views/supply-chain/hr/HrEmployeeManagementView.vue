@@ -165,6 +165,7 @@
         <el-table-column label="更新时间" width="170">
           <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
         </el-table-column>
+        <!-- @vue-generic {HrEmployeeRecord} -->
         <el-table-column label="操作" width="96" fixed="right" align="center">
           <template #default="scope">
             <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>

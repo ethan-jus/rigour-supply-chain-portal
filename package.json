@@ -6,12 +6,12 @@
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "pnpm typecheck && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.ts,.tsx",
     "lint:fix": "eslint . --ext .vue,.js,.jsx,.ts,.tsx --fix",
     "format": "prettier --write \"src/**/*.{vue,ts,tsx,js,jsx,css,scss,json,md}\"",
-    "typecheck": "vue-tsc --noEmit",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json",
     "test": "vitest",
     "test:run": "vitest run"
   },
@@ -20,6 +20,7 @@
     "axios": "^1.7.0",
     "echarts": "^6.1.0",
     "element-plus": "^2.14.0",
+    "exceljs": "^4.4.0",
     "pinia": "^2.3.0",
     "vue": "^3.5.0",
     "vue-router": "^4.6.0"

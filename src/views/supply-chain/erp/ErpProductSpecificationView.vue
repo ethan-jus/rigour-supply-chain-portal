@@ -55,6 +55,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="specificationCode" label="多规格编号" width="180" show-overflow-tooltip />
+          <!-- @vue-generic {ErpProductSpecificationView} -->
           <el-table-column label="多规格值" min-width="360" show-overflow-tooltip>
             <template #default="scope">{{ specificationValuesText(scope.row) }}</template>
           </el-table-column>
@@ -68,6 +69,7 @@
           <el-table-column label="更新时间" width="180">
             <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
           </el-table-column>
+          <!-- @vue-generic {ErpProductSpecificationView} -->
           <el-table-column label="操作" width="190" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>

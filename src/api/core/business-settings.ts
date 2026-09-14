@@ -91,7 +91,7 @@ export function getEffectiveBizDict(dictionaryCode: string) {
 
 /** 解析历史业务数据；返回可用于历史记录显示的整本字典。 */
 export function resolveBizDict(dictionaryCode: string) {
-  return apiClient.get<EffectiveDictView>(`${BASE_PATH}/resolve`, {
+  return apiClient.get<EffectiveDictView, EffectiveDictView>(`${BASE_PATH}/resolve`, {
     params: { dictionaryCode },
     stayOnUnauthorized: true,
   })

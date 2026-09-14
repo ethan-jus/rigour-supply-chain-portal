@@ -9,7 +9,6 @@
       </router-link>
 
       <div class="topbar-right">
-        <span class="verified"><i aria-hidden="true" />身份已由 IAM 验证</span>
         <div class="account">
           <div class="account__avatar">{{ authStore.user?.displayName?.slice(0, 1) || '用' }}</div>
           <div class="account__copy">

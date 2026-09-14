@@ -56,6 +56,7 @@
             <span v-else>尚未开始</span>
           </template>
         </el-table-column>
+        <!-- @vue-generic {ManagementVisitPlan} -->
         <el-table-column v-if="canManagePlans" label="操作" width="150" fixed="right">
           <template #default="scope">
             <template v-if="scope.row.status === 'PLANNED'">

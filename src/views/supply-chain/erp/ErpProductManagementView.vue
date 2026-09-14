@@ -12,7 +12,7 @@
     </div>
 
     <el-card class="filter-card" shadow="never">
-      <el-form :model="filters" inline @submit.prevent="loadRows">
+      <el-form :model="filters" inline @submit.prevent="searchRows">
         <el-form-item label="商品编码">
           <el-input
             v-model="filters.productCode"
@@ -28,6 +28,25 @@
             placeholder="按商品名称查询"
             style="width: 220px"
           />
+        </el-form-item>
+        <el-form-item label="品牌">
+          <el-select
+            v-model="filters.brandId"
+            clearable
+            filterable
+            remote
+            :remote-method="searchBrands"
+            :loading="brandLoading"
+            placeholder="全部品牌"
+            style="width: 220px"
+          >
+            <el-option
+              v-for="item in filterBrandOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="上架状态">
           <el-select
@@ -136,18 +155,21 @@
           <el-table-column label="默认售价" width="130" align="right" header-align="right" sortable>
             <template #default="scope">{{ money(scope.row.defaultSalePrice) }}</template>
           </el-table-column>
+          <!-- @vue-generic {ErpManagedProductSummary} -->
           <el-table-column label="推荐商品" width="110" align="center">
             <template #default="scope">{{ recommendProductText(scope.row) }}</template>
           </el-table-column>
           <el-table-column label="起订量" width="110" align="right" header-align="right">
             <template #default="scope">{{ quantityWithUnit(scope.row.minOrderQuantity, unitLabel(scope.row.unitCode)) }}</template>
           </el-table-column>
+          <!-- @vue-generic {ErpManagedProductSummary} -->
           <el-table-column label="整倍订货量" width="120" align="right" header-align="right">
             <template #default="scope">{{ orderMultipleText(scope.row) }}</template>
           </el-table-column>
           <el-table-column label="限购量" width="110" align="right" header-align="right">
             <template #default="scope">{{ quantityWithUnit(scope.row.limitQuantity, unitLabel(scope.row.unitCode)) }}</template>
           </el-table-column>
+          <!-- @vue-generic {ErpManagedProductSummary} -->
           <el-table-column label="商品标签" min-width="160" show-overflow-tooltip>
             <template #default="scope">{{ productTagText(scope.row) }}</template>
           </el-table-column>
@@ -177,6 +199,7 @@
           <el-table-column label="更新时间" width="170">
             <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
           </el-table-column>
+          <!-- @vue-generic {ErpManagedProductSummary} -->
           <el-table-column label="操作" width="190" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
@@ -722,6 +745,7 @@ import { loadAllErpProductCategories } from '@/utils/product-categories'
 interface ProductFilters {
   productCode: string
   productName: string
+  brandId: string
   shelfStatusCode: string
   submitStatusCode: string
 }
@@ -806,6 +830,7 @@ const pageData = ref<ErpPage<ErpManagedProductSummary>>({
 const filters = reactive<ProductFilters>({
   productCode: '',
   productName: '',
+  brandId: '',
   shelfStatusCode: '',
   submitStatusCode: '',
 })
@@ -813,6 +838,16 @@ const form = reactive<ProductForm>(emptyForm())
 
 const categoryOptions = ref<ErpProductCategoryView[]>([])
 const brandOptions = ref<ErpProductBrandView[]>([])
+const filterBrandOptions = computed(() => {
+  const options = brandOptions.value.map((item) => ({ value: String(item.id), label: item.brandName }))
+  const routeBrandId = routeText(route.query.brandId)
+  const routeBrandName = routeText(route.query.brandName)
+  if (routeBrandId && routeBrandName && filters.brandId === routeBrandId
+    && !options.some((item) => item.value === routeBrandId)) {
+    options.push({ value: routeBrandId, label: routeBrandName })
+  }
+  return options
+})
 const tagOptions = ref<ErpProductTagView[]>([])
 const warehouseOptions = ref<ErpInternalWarehouseView[]>([])
 const categoryLoading = ref(false)
@@ -955,6 +990,11 @@ watch(() => route.query, () => {
   void loadRows()
 })
 
+async function searchRows() {
+  currentPage.value = 1
+  await loadRows()
+}
+
 async function loadRows() {
   loading.value = true
   try {
@@ -963,6 +1003,7 @@ async function loadRows() {
       step: pageSize.value,
       productCode: empty(filters.productCode),
       productName: empty(filters.productName),
+      brandId: empty(filters.brandId),
       shelfStatusCode: empty(filters.shelfStatusCode),
       submitStatusCode: empty(filters.submitStatusCode),
     })
@@ -1032,6 +1073,7 @@ async function searchWarehouses(query: string) {
 async function resetFilters() {
   filters.productCode = ''
   filters.productName = ''
+  filters.brandId = ''
   filters.shelfStatusCode = ''
   filters.submitStatusCode = ''
   currentPage.value = 1
@@ -1042,6 +1084,7 @@ function applyRouteQuery() {
   let changed = false
   changed = setFilterValue('productCode', routeText(route.query.productCode)) || changed
   changed = setFilterValue('productName', routeText(route.query.productName)) || changed
+  changed = setFilterValue('brandId', routeText(route.query.brandId)) || changed
   changed = setFilterValue('shelfStatusCode', routeText(route.query.shelfStatusCode)) || changed
   changed = setFilterValue('submitStatusCode', routeText(route.query.submitStatusCode)) || changed
   return changed
@@ -1513,11 +1556,6 @@ function relatedProductCard(
 
 function money(value: number | null | undefined) {
   return value === null || value === undefined ? '-' : `¥${Number(value).toFixed(2)}`
-}
-
-function quantity(value: number | null | undefined) {
-  if (value === null || value === undefined) return '-'
-  return Number(value).toString()
 }
 
 function recommendProductText(row: ErpManagedProductSummary) {

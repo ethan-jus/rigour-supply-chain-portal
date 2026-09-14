@@ -164,7 +164,7 @@ interface OidcDiscovery {
 }
 
 interface JsonWebKeySet {
-  keys: JsonWebKey[]
+  keys: (JsonWebKey & { kid?: string })[]
 }
 
 interface IdTokenClaims {

@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia } from 'pinia'
+import { useNavigationStore } from '@/stores/navigation'
 
 const routeMeta = vi.hoisted(() => ({
   applicationCode: 'SUPPLY_CHAIN',
@@ -143,16 +145,31 @@ describe('合同驱动的供应链页面', () => {
     queryDhbWarehousingReceipts.mockResolvedValue({ total: 0, items: [] })
   })
 
-  it('供应链首页展示新业务方案落地进度，不再把主流程和旧同步混在一起', () => {
-    const wrapper = mount(ConsoleDashboard, { global: globalMountOptions })
+  it('供应链首页仅展示当前应用已授权导航，不展示开发计划或虚构统计', () => {
+    const pinia = createPinia()
+    const navigation = useNavigationStore(pinia)
+    navigation.loadedApplications = ['SUPPLY_CHAIN']
+    navigation.navigationByApplication.SUPPLY_CHAIN = [{
+      id: 'orders', parentId: null, code: 'orders', type: 'PAGE', displayName: '销售订单',
+      permissionCode: 'order:read', routeKey: 'supply.order.sales-orders',
+      routePath: '/supply-chain/order/sales-orders', iconKey: 'order', sortOrder: 0,
+      visible: true, keepAlive: true, children: [],
+    }]
+    const wrapper = mount(ConsoleDashboard, { global: {
+      ...globalMountOptions,
+      plugins: [pinia],
+      stubs: { ...globalMountOptions.stubs, ElIcon: passthrough, RouterLink: {
+        props: ['to'], template: '<a :href="to"><slot /></a>',
+      } },
+    } })
 
-    expect(wrapper.text()).toContain('新业务主流程')
-    expect(wrapper.text()).toContain('主业务按我方流程展示，订货宝只作为后台同步来源')
-    expect(wrapper.text()).toContain('商品管理、基础资料、供应商档案、采购订单、入库单、出库单、库存调拨、仓库信息')
-    expect(wrapper.text()).toContain('订货宝订单重新同步到我方销售订单表')
+    expect(wrapper.get('nav').text()).toContain('销售订单')
+    expect(wrapper.get('a').attributes('href')).toBe('/supply-chain/order/sales-orders')
+    expect(wrapper.text()).not.toMatch(/新业务主流程|当前落地范围|业务新表|下一步|未接入/)
     expect(wrapper.text()).not.toContain('当前没有待处理事项')
     expect(wrapper.text()).not.toContain('今日订单金额')
-    expect(wrapper.find('button').exists()).toBe(false)
+    expect(apiClient.get).not.toHaveBeenCalled()
+    wrapper.unmount()
   })
 
   it('数据字典只按新字典表契约查询，不再暴露模块和作用域筛选', async () => {
@@ -302,46 +319,18 @@ describe('合同驱动的供应链页面', () => {
     expect(dhbPageSource).not.toContain('订单镜像')
   })
 
-  it('BI 看板按角色保留经营闭环，不把核心指标退回旧的散点和重复表格', () => {
-    expect(biDashboardSource).toContain('经营总览驾驶舱')
-    expect(biDashboardSource).toContain('overviewBusinessShareDisplayRows')
-    expect(biDashboardSource).toContain('buildBusinessShareDonutOption')
-    expect(biDashboardSource).not.toContain('buildBusinessShareBarOption')
-    expect(biDashboardSource).not.toContain('帕累托')
-
-    expect(biDashboardSource).toContain('paymentRiskCityGroups')
-    expect(biDashboardSource).toContain('城市风险分组')
-
-    expect(biDashboardSource).toContain('shouldUseSalesMonthlyComparison')
-    expect(biDashboardSource).toContain('salesComparisonPeriodLabel')
-    expect(biDashboardSource).toContain('销售跟进总表')
-    expect(biDashboardSource).toContain("targetMetricTargetText(scope.row.salesTargetMetric, 'CNY')")
-    expect(biDashboardSource).toContain("targetMetricTargetText(scope.row.paidTargetMetric, 'CNY')")
-
-    expect(biDashboardSource).toContain('城市经营一张表')
-    expect(biDashboardSource).toContain('cityOperatingCards')
-    expect(biDashboardSource).toContain('复购/活跃')
-    expect(biDashboardSource).toContain('高价值/预警')
-    expect(biDashboardSource).toContain('城市商品结构')
-
-    expect(biDashboardSource).toContain('客户价值 / 活跃度矩阵')
-    expect(biDashboardSource).toContain('customerValueMatrixRows')
-    expect(biDashboardSource).toContain('低活跃跟进')
-    expect(biDashboardSource).toContain('流失预警跟进')
-
-    expect(biDashboardSource).toContain('按商品')
-    expect(biDashboardSource).toContain('按SKU')
-    expect(biDashboardSource).toContain('按分类')
-    expect(biDashboardSource).toContain('按品牌')
-    expect(biDashboardSource).toContain('productDimensionLabel')
-    expect(biDashboardSource).toContain('订货数量 / 客户覆盖')
-    expect(biDashboardSource).toContain('productCategoryPreviewRows')
-    expect(biDashboardSource).toContain('productBrandPreviewRows')
-    expect(biDashboardSource).toContain('分类销售 Top')
-    expect(biDashboardSource).toContain('品牌销售 Top')
-    expect(biDashboardSource).toContain('动销结构')
-    expect(biDashboardSource).toContain('商品销售统一放在商品销售统计')
-
+  it('BI 专题通过驾驶舱呈现，明细和数据治理按需打开', () => {
+    expect(biDashboardSource).toContain('CockpitFigure')
+    expect(biDashboardSource).toContain('cockpit-canvas')
+    expect(biDashboardSource).toContain('核心经营指标')
+    expect(biDashboardSource).toContain('getSupplyDashboardOverview')
+    expect(biDashboardSource).toContain('getSupplyDashboardReconciliation')
+    expect(biDashboardSource).toContain('inspectFigure')
+    expect(biDashboardSource).toContain('scopeQuery')
+    expect(biDashboardSource).toContain('样例')
+    expect(biDashboardSource).not.toContain('dashboard-data-trust-strip')
+    expect(biDashboardSource).not.toContain('角色运营工作台')
+    expect(biDashboardSource).not.toContain('overview-supply-chain-map')
     expect(biApiSource).toContain('ownerStaffCode?: string')
     expect(biApiSource).not.toContain('ownerEmployeeCode?: string')
     expect(biChartSource).toContain('ScatterChart')
@@ -408,8 +397,9 @@ describe('合同驱动的供应链页面', () => {
     expect(salesOrderSource).toContain('label="收款状态"')
     expect(salesOrderSource).toContain('label="发货状态"')
     expect(salesOrderSource).toContain('SALES_SHIPMENT_STATUS')
-    expect(salesOrderSource).toContain('label="客户编号"')
-    expect(salesOrderSource).toContain('label="订单类型"')
+    expect(salesOrderSource).not.toContain('label="客户编号"')
+    expect(salesOrderSource).toContain('客户名称')
+    expect(salesOrderSource).toContain('<span>订单类型</span>')
     expect(salesOrderSource).toContain('label="折扣金额"')
     expect(salesOrderSource).toContain('label="商品编码"')
     expect(orderSalesApiSource).toContain('sourceSystemCode: string | null')

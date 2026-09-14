@@ -50,6 +50,7 @@
               <span class="record-name">{{ scope.row.name || '-' }}</span>
             </template>
           </el-table-column>
+          <!-- @vue-generic {CrmDictionaryView} -->
           <el-table-column v-if="isAreaPage" label="上级地区" min-width="180" show-overflow-tooltip>
             <template #default="scope">{{ parentAreaLabel(scope.row) }}</template>
           </el-table-column>
@@ -63,6 +64,7 @@
           <el-table-column label="同步时间" width="180">
             <template #default="scope">{{ formatTime(scope.row.syncedAt) }}</template>
           </el-table-column>
+          <!-- @vue-generic {CrmDictionaryView} -->
           <el-table-column label="操作" width="210" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openCustomers(scope.row)">查看客户</el-button>

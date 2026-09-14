@@ -7,6 +7,7 @@
       <el-table-column label="状态" width="100"><template #default="scope"><el-tag :type="scope.row.status==='ACTIVE'?'success':scope.row.status==='LOCKED'?'warning':'info'">{{ statusLabel(scope.row.status) }}</el-tag></template></el-table-column>
       <el-table-column label="角色" min-width="180"><template #default="scope">{{ roleNames(scope.row.roleIds) || '—' }}</template></el-table-column>
       <el-table-column label="组织" min-width="180"><template #default="scope">{{ organizationNames(scope.row.organizationIds) || '—' }}</template></el-table-column>
+      <!-- @vue-generic {UserRecord} -->
       <el-table-column label="操作" width="180" fixed="right"><template #default="scope">
         <el-button v-if="canEdit" link type="primary" @click="open(scope.row)">编辑</el-button>
         <el-button v-if="canResetPassword" link type="warning" @click="openPasswordReset(scope.row)">重置密码</el-button>

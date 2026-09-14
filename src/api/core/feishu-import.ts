@@ -136,7 +136,7 @@ const FEISHU_IMPORT_PREFLIGHT_PATH = `${FEISHU_IMPORT_BASE_PATH}/preflight`
 const FEISHU_IMPORT_BATCH_PREFLIGHT_PATH = `${FEISHU_IMPORT_BASE_PATH}/batch-preflight`
 
 export function getFeishuImportBatches(limit = 20) {
-  return apiClient.get<FeishuImportBatchSummary[]>(FEISHU_IMPORT_BASE_PATH, {
+  return apiClient.get<FeishuImportBatchSummary[], FeishuImportBatchSummary[]>(FEISHU_IMPORT_BASE_PATH, {
     params: { limit },
     stayOnUnauthorized: true,
   })
@@ -166,7 +166,7 @@ export function preflightFeishuImportBundle(file: File, sourceUrl?: string | nul
 export function preflightFeishuImportBundleFiles(files: File[], sourceUrl?: string | null) {
   const form = new FormData()
   files.forEach((file) => form.append('files', file))
-  return apiClient.post<FeishuImportPreflightResult>(
+  return apiClient.post<FeishuImportPreflightResult, FeishuImportPreflightResult>(
     FEISHU_IMPORT_BATCH_PREFLIGHT_PATH,
     form,
     {

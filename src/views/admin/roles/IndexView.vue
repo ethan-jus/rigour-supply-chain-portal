@@ -11,6 +11,7 @@
           clearable
           placeholder="角色名称、编码"
           class="keyword-input"
+          aria-label="搜索角色"
         />
         <el-select v-model="filters.status" clearable placeholder="全部状态" class="status-select">
           <el-option label="启用" value="ACTIVE" />
@@ -20,6 +21,8 @@
         <el-button v-if="canManage" type="primary" :icon="Plus" @click="open()">新增角色</el-button>
       </div>
     </header>
+
+    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon role="alert" />
 
     <el-table v-loading="loading" :data="filteredRoles" row-key="id" class="management-table">
       <el-table-column type="index" label="序号" width="72" />
@@ -42,12 +45,14 @@
           </el-tag>
         </template>
       </el-table-column>
+      <!-- @vue-generic {RolePermissionRecord} -->
       <el-table-column label="授权范围" min-width="180">
         <template #default="scope">{{ grantSummary(scope.row) }}</template>
       </el-table-column>
       <el-table-column label="更新时间" min-width="180">
         <template #default="scope">{{ formatTime(scope.row.updatedAt) }}</template>
       </el-table-column>
+      <!-- @vue-generic {RolePermissionRecord} -->
       <el-table-column label="操作" width="130" fixed="right">
         <template #default="scope">
           <el-button
@@ -63,13 +68,14 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '角色权限' : '新增角色'" width="980px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '角色权限' : '新增角色'" width="min(980px, calc(100vw - 32px))"
+      :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving">
       <el-form label-width="96px" class="role-form">
         <el-form-item v-if="editingId" label="角色编码">
           <el-input v-model="form.code" disabled />
         </el-form-item>
         <el-form-item label="角色名称" required>
-          <el-input v-model="form.name" maxlength="128" :disabled="readOnly" />
+          <el-input v-model="form.name" maxlength="128" :disabled="readOnly || saving" aria-label="角色名称" />
         </el-form-item>
         <el-form-item label="角色说明">
           <el-input
@@ -77,11 +83,11 @@
             type="textarea"
             maxlength="500"
             :rows="3"
-            :disabled="readOnly"
+            :disabled="readOnly || saving"
           />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="form.status" style="width: 100%" :disabled="readOnly">
+          <el-select v-model="form.status" style="width: 100%" :disabled="readOnly || saving">
             <el-option label="启用" value="ACTIVE" />
             <el-option label="停用" value="DISABLED" />
           </el-select>
@@ -93,6 +99,10 @@
           <strong>授权范围</strong>
           <el-tag>{{ selectedResourceIds.size }} 项</el-tag>
         </header>
+        <p v-if="permissionMode === 'ALL_ENTITLED'" class="permission-mode" role="status">
+          管理员默认拥有本租户已授权应用的全部可用权限，新增权限自动生效。
+        </p>
+        <el-input v-model="resourceKeyword" clearable placeholder="搜索菜单或操作权限" aria-label="搜索权限" />
 
         <el-tabs v-model="activeApplicationId" class="permission-tabs">
           <el-tab-pane
@@ -109,7 +119,8 @@
               <el-checkbox
                 :model-value="isApplicationChecked(group)"
                 :indeterminate="isApplicationIndeterminate(group)"
-                :disabled="readOnly"
+                :disabled="readOnly || saving"
+                :aria-label="`全选${group.applicationName}权限`"
                 @change="toggleApplication(group, Boolean($event))"
               >
                 全选
@@ -117,8 +128,9 @@
             </div>
 
             <div class="permission-list">
+              <div v-if="!visibleResources(group).length" class="permission-empty">未找到匹配权限</div>
               <div
-                v-for="resource in group.flatResources"
+                v-for="resource in visibleResources(group)"
                 :key="resource.id"
                 class="permission-row"
                 :style="{ paddingLeft: `${resource.depth * 22}px` }"
@@ -126,7 +138,8 @@
                 <el-checkbox
                   :model-value="selectedResourceIds.has(resource.id)"
                   :indeterminate="isResourceIndeterminate(resource)"
-                  :disabled="readOnly"
+                  :disabled="readOnly || saving"
+                  :aria-label="resource.displayName"
                   @change="toggleResource(resource, Boolean($event))"
                 />
                 <el-tag size="small" :type="resourceTypeTag(resource.type)">
@@ -140,8 +153,10 @@
         </el-tabs>
       </section>
 
+      <el-alert v-if="saveError" :title="saveError" type="error" :closable="false" show-icon role="alert" />
+
       <template #footer>
-        <el-button @click="dialogVisible = false">{{ readOnly ? '关闭' : '取消' }}</el-button>
+        <el-button :disabled="saving" @click="dialogVisible = false">{{ readOnly ? '关闭' : '取消' }}</el-button>
         <el-button v-if="!readOnly" type="primary" :loading="saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
@@ -166,6 +181,7 @@ interface RolePermissionRecord {
   version: number
   updatedAt: string | null
   resourceIds: string[]
+  permissionMode?: 'ALL_ENTITLED' | 'EXPLICIT'
 }
 
 interface GrantableResourceRecord {
@@ -208,6 +224,10 @@ const saving = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref('')
 const readOnly = ref(false)
+const permissionMode = ref<'ALL_ENTITLED' | 'EXPLICIT'>('EXPLICIT')
+const resourceKeyword = ref('')
+const loadError = ref('')
+const saveError = ref('')
 const activeApplicationId = ref('')
 const selectedResourceIds = ref<Set<string>>(new Set())
 const filters = reactive({ keyword: '', status: '' })
@@ -263,6 +283,7 @@ const resourceGroups = computed<ApplicationResourceGroup[]>(() => {
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     ;[roles.value, resources.value] = await Promise.all([
       apiClient.get('/management/tenant/role-permissions/roles') as Promise<RolePermissionRecord[]>,
@@ -271,14 +292,22 @@ async function load() {
     if (!activeApplicationId.value && resourceGroups.value.length > 0) {
       activeApplicationId.value = resourceGroups.value[0].applicationId
     }
+  } catch (error) {
+    roles.value = []
+    resources.value = []
+    loadError.value = failureMessage(error, '角色权限加载失败，请刷新重试')
   } finally {
     loading.value = false
   }
 }
 
 function open(row?: RolePermissionRecord) {
+  if (saving.value || (!row && !canManage.value)) return
   editingId.value = row?.id || ''
-  readOnly.value = !!row && (row.type !== 'CUSTOM' || !canManage.value)
+  permissionMode.value = row?.permissionMode || 'EXPLICIT'
+  readOnly.value = !canManage.value || (!!row && (row.type !== 'CUSTOM' || permissionMode.value === 'ALL_ENTITLED'))
+  resourceKeyword.value = ''
+  saveError.value = ''
   Object.assign(form, row
     ? {
         code: row.code,
@@ -302,6 +331,8 @@ function open(row?: RolePermissionRecord) {
 }
 
 async function save() {
+  if (readOnly.value || !canManage.value || saving.value) return
+  saveError.value = ''
   try {
     if (!form.name.trim()) throw new Error('请填写角色名称')
     saving.value = true
@@ -321,13 +352,14 @@ async function save() {
     dialogVisible.value = false
     await load()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '角色权限保存失败')
+    saveError.value = failureMessage(error, '角色权限保存失败，请重试')
   } finally {
     saving.value = false
   }
 }
 
 function toggleApplication(group: ApplicationResourceGroup, checked: boolean) {
+  if (readOnly.value || saving.value) return
   const next = new Set(selectedResourceIds.value)
   for (const resource of group.flatResources) {
     if (checked) next.add(resource.id)
@@ -337,6 +369,7 @@ function toggleApplication(group: ApplicationResourceGroup, checked: boolean) {
 }
 
 function toggleResource(resource: ResourceNode, checked: boolean) {
+  if (readOnly.value || saving.value) return
   const next = new Set(selectedResourceIds.value)
   const relatedIds = [resource.id, ...descendantIds(resource)]
   if (checked) {
@@ -395,6 +428,7 @@ function flattenNodes(nodes: ResourceNode[], depth: number): ResourceNode[] {
 }
 
 function grantSummary(role: RolePermissionRecord) {
+  if (role.permissionMode === 'ALL_ENTITLED') return '全部可用权限（自动）'
   const permissionCount = role.resourceIds
     .map((id) => resourceById.value.get(id))
     .filter((resource): resource is GrantableResourceRecord => !!resource?.permissionCode)
@@ -402,11 +436,29 @@ function grantSummary(role: RolePermissionRecord) {
   return `${role.resourceIds.length} 项，${permissionCount} 个权限`
 }
 
+function visibleResources(group: ApplicationResourceGroup) {
+  const keyword = resourceKeyword.value.trim().toLowerCase()
+  if (!keyword) return group.flatResources
+  const ids = new Set<string>()
+  for (const resource of group.flatResources) {
+    if ([resource.displayName, resource.permissionCode, resource.code].some(value => value?.toLowerCase().includes(keyword))) {
+      ids.add(resource.id)
+      ancestorIds(resource).forEach(id => ids.add(id))
+    }
+  }
+  return group.flatResources.filter(resource => ids.has(resource.id))
+}
+
+function failureMessage(error: unknown, fallback: string) {
+  return error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message.trim()
+    ? error.message : fallback
+}
+
 function resourceTypeTag(type: string) {
   if (type === 'MENU') return 'info'
   if (type === 'PAGE') return 'success'
   if (type === 'API') return 'warning'
-  return ''
+  return 'primary'
 }
 
 function formatTime(value: string | null | undefined) {
@@ -482,6 +534,9 @@ onMounted(() => {
   gap: 12px;
 }
 
+.permission-mode { margin: 0; color: #475569; font-size: 14px; }
+.permission-empty { padding: 24px; text-align: center; color: #64748b; }
+
 .application-grant-header span {
   margin-left: 10px;
   color: #64748b;
@@ -528,5 +583,12 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #64748b;
+}
+
+@media (max-width: 720px) {
+  .page-header { align-items: stretch; flex-direction: column; }
+  .page-actions { flex-wrap: wrap; }
+  .permission-row { grid-template-columns: 28px 64px minmax(100px, 1fr); }
+  .permission-row small { grid-column: 3; }
 }
 </style>

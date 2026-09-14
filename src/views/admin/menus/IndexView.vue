@@ -62,6 +62,7 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <!-- @vue-generic {TenantMenuRecord} -->
             <el-table-column label="操作" width="90" fixed="right">
               <template #default="scope">
                 <el-button v-if="canWrite" link type="primary" @click="openMenu(scope.row)">配置</el-button>
@@ -86,6 +87,7 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <!-- @vue-generic {TenantMenuGroupRecord} -->
             <el-table-column label="操作" width="90">
               <template #default="scope">
                 <el-button v-if="canWrite" link type="primary" @click="openGroup(scope.row)">编辑</el-button>

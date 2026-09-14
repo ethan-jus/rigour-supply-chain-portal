@@ -23,16 +23,18 @@
           <strong>{{ importTemplates.length }} 个</strong>
           <em>按模板识别表、字段、依赖和重复策略。</em>
         </div>
-        <el-button :icon="Refresh" :loading="templateLoading" @click="loadTemplates">刷新</el-button>
+        <el-button :icon="Refresh" :loading="templateLoading" @click="loadTemplates()">刷新</el-button>
       </div>
       <el-table :data="importTemplates" border max-height="220" empty-text="暂无导入模板">
         <el-table-column prop="templateName" label="模板" min-width="150" fixed show-overflow-tooltip />
         <el-table-column prop="templateCode" label="编码" min-width="190" show-overflow-tooltip />
         <el-table-column prop="domainCode" label="目标域" width="90" />
         <el-table-column prop="objectType" label="对象" min-width="130" show-overflow-tooltip />
+        <!-- @vue-generic {FeishuImportTemplate} -->
         <el-table-column label="重复判断" min-width="220" show-overflow-tooltip>
           <template #default="scope">{{ deduplicationText(scope.row) }}</template>
         </el-table-column>
+        <!-- @vue-generic {FeishuImportTemplate} -->
         <el-table-column label="依赖" min-width="220" show-overflow-tooltip>
           <template #default="scope">{{ dependencyText(scope.row) }}</template>
         </el-table-column>
@@ -109,6 +111,7 @@
       </div>
       <el-table :data="batchRows" border max-height="360" row-key="id">
         <el-table-column prop="fileName" label="文件" min-width="260" fixed show-overflow-tooltip />
+        <!-- @vue-generic {ImportFileRow} -->
         <el-table-column label="状态" width="140">
           <template #default="scope">
             <el-tag :type="batchRowTag(scope.row)" effect="light">
@@ -127,6 +130,7 @@
           <template #default="scope">{{ scope.row.issueErrors }} / {{ scope.row.issueWarnings }}</template>
         </el-table-column>
         <el-table-column prop="message" label="说明" min-width="260" show-overflow-tooltip />
+        <!-- @vue-generic {ImportFileRow} -->
         <el-table-column label="操作" width="110" fixed="right">
           <template #default="scope">
             <el-button
@@ -430,6 +434,7 @@
             <el-tag :type="issueTag(scope.row.severity)" effect="light">{{ scope.row.severity }}</el-tag>
           </template>
         </el-table-column>
+        <!-- @vue-generic {FeishuImportIssue} -->
         <el-table-column label="影响" width="130">
           <template #default="scope">
             <el-tag :type="issueBlocking(scope.row) ? 'danger' : 'info'" effect="light">
@@ -437,6 +442,7 @@
             </el-tag>
           </template>
         </el-table-column>
+        <!-- @vue-generic {FeishuImportIssue} -->
         <el-table-column label="类别" width="130">
           <template #default="scope">{{ issueCategoryLabel(issueCategory(scope.row)) }}</template>
         </el-table-column>
@@ -444,6 +450,7 @@
         <el-table-column prop="tableName" label="工作表" min-width="160" show-overflow-tooltip />
         <el-table-column prop="fieldName" label="字段" min-width="160" show-overflow-tooltip />
         <el-table-column prop="message" label="说明" min-width="320" show-overflow-tooltip />
+        <!-- @vue-generic {FeishuImportIssue} -->
         <el-table-column label="处理建议" min-width="360" show-overflow-tooltip>
           <template #default="scope">{{ issueResolutionHint(scope.row) }}</template>
         </el-table-column>
@@ -457,7 +464,7 @@
           <strong>最近 {{ importBatches.length }} 个</strong>
           <em>未完成批次可继续导入，已完成批次可按原始行重新导入。</em>
         </div>
-        <el-button :icon="Refresh" :loading="historyLoading" @click="loadHistory">刷新</el-button>
+        <el-button :icon="Refresh" :loading="historyLoading" @click="loadHistory()">刷新</el-button>
       </div>
       <el-table
         :data="importBatches"
@@ -483,8 +490,16 @@
         <el-table-column label="文件大小" width="110" align="right">
           <template #default="scope">{{ formatBytes(scope.row.fileSizeBytes) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <!-- @vue-generic {FeishuImportBatchSummary} -->
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="scope">
+            <el-button
+              link
+              type="primary"
+              :icon="View"
+              :disabled="running || preflighting || historyResultLoading"
+              @click="viewHistoryResult(scope.row)"
+            >查看结果</el-button>
             <el-button
               v-if="canRunHistoryBatch(scope.row)"
               link
@@ -503,6 +518,54 @@
       </el-table>
     </section>
 
+    <el-drawer v-model="historyResultVisible" title="历史导入结果" size="min(1080px, 100vw)">
+      <div v-loading="historyResultLoading">
+        <p v-if="historyResultBatch">{{ historyResultBatch.originalFileName }}</p>
+        <el-alert v-if="historyResultError" type="error" :closable="false" :title="historyResultError" />
+        <template v-if="historyResult">
+          <p>
+            {{ runStatusLabel(historyResult.status, historyResult.dryRun) }} ·
+            {{ formatTime(historyResult.executedAt) }}
+          </p>
+          <p>
+            共 {{ historyResult.totalRows }} 行，已投影 {{ historyResult.projectedRows }} 行，
+            已跳过 {{ historyResult.skippedRows }} 行，待映射 {{ historyResult.waitingMappingRows }} 行，
+            失败 {{ historyResult.failedRows }} 行
+          </p>
+          <el-table v-if="historyResult.issueSummaries?.length" :data="historyResult.issueSummaries" max-height="240">
+            <el-table-column prop="targetObjectType" label="目标对象" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="projectionStatus" label="状态" width="120">
+              <template #default="scope">{{ projectionLabel(scope.row.projectionStatus, historyResult.dryRun) }}</template>
+            </el-table-column>
+            <el-table-column prop="rowCount" label="行数" width="80" />
+            <el-table-column prop="message" label="原因" min-width="300" />
+          </el-table>
+          <p class="muted-text">
+            已读取明细 {{ historyResult.rows.length }} / {{ historyResult.totalRows }} 行。
+            <span v-if="historyResult.rows.length < historyResult.totalRows">当前为部分明细，筛选和搜索仅针对已读取记录。</span>
+          </p>
+          <el-input v-model="historyResultSearch" aria-label="搜索历史导入明细" placeholder="来源单号 / 处理结果" clearable @input="historyResultPage = 1" />
+          <el-radio-group v-model="historyResultFilter" aria-label="历史导入结果状态" @change="historyResultPage = 1">
+            <el-radio-button value="ALL">全部</el-radio-button>
+            <el-radio-button value="WAITING_MAPPING">待处理</el-radio-button>
+            <el-radio-button value="FAILED">失败</el-radio-button>
+            <el-radio-button value="SKIPPED">已跳过</el-radio-button>
+            <el-radio-button value="PROJECTED">已投影</el-radio-button>
+          </el-radio-group>
+          <el-table :data="historyResultRows.slice((historyResultPage - 1) * 50, historyResultPage * 50)" max-height="520" empty-text="暂无匹配明细">
+            <el-table-column prop="sheetName" label="工作表" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="rowNumber" label="原始行号" width="90" />
+            <el-table-column prop="sourceDocumentNo" label="来源单号" min-width="180" />
+            <el-table-column label="状态" width="120">
+              <template #default="scope">{{ projectionLabel(scope.row.projectionStatus, historyResult.dryRun) }}</template>
+            </el-table-column>
+            <el-table-column prop="message" label="处理结果" min-width="320" />
+          </el-table>
+          <el-pagination v-model:current-page="historyResultPage" :page-size="50" :total="historyResultRows.length" layout="total, prev, pager, next" />
+        </template>
+      </div>
+    </el-drawer>
+
     <div v-if="hasImportProgress" class="floating-import-actions">
       <el-button type="primary" :icon="Upload" @click="scrollToUpload">返回导入入口</el-button>
     </div>
@@ -511,7 +574,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ElMessage, type UploadFile, type UploadFiles } from 'element-plus'
+import { ElMessage, type TagProps, type UploadFile, type UploadFiles } from 'element-plus'
 import { CircleCheck, DocumentChecked, Refresh, Upload, UploadFilled, View } from '@element-plus/icons-vue'
 import {
   getFeishuImportBatches,
@@ -563,6 +626,22 @@ const importTemplates = ref<FeishuImportTemplate[]>([])
 const historyLoading = ref(false)
 const templateLoading = ref(false)
 const runningHistoryBatchId = ref<string | null>(null)
+const historyResultVisible = ref(false)
+const historyResultLoading = ref(false)
+const historyResultError = ref('')
+const historyResultBatch = ref<FeishuImportBatchSummary | null>(null)
+const historyResult = ref<FeishuImportRunResult | null>(null)
+const historyResultSearch = ref('')
+const historyResultFilter = ref('ALL')
+const historyResultPage = ref(1)
+const historyResultRows = computed(() => {
+  const search = historyResultSearch.value.trim().toLowerCase()
+  return (historyResult.value?.rows || []).filter((row) =>
+    (historyResultFilter.value === 'ALL' || row.projectionStatus === historyResultFilter.value ||
+      (historyResultFilter.value === 'WAITING_MAPPING' && row.projectionStatus === 'PENDING')) &&
+    (!search || `${row.sourceDocumentNo || ''} ${row.message || ''}`.toLowerCase().includes(search)),
+  )
+})
 const uploadPanelRef = ref<HTMLElement | null>(null)
 const batchPanelRef = ref<HTMLElement | null>(null)
 const resultPanelRef = ref<HTMLElement | null>(null)
@@ -684,7 +763,7 @@ const runIssueTotal = computed(() =>
 const runIssueGroups = computed(() => runIssueSummaries.value
   .map((item, index) => {
     const status = item.projectionStatus || 'PENDING'
-    const tagType = status === 'FAILED'
+    const tagType: TagProps['type'] = status === 'FAILED'
       ? 'danger'
       : (status === 'WAITING_MAPPING' || status === 'PENDING' ? 'warning' : 'info')
     return {
@@ -735,7 +814,14 @@ const runButtonText = computed(() => {
     : (dryRun.value ? `开始试跑 ${count} 个批次` : `正式导入 ${count} 个批次`)
 })
 
-const importOutcome = computed(() => {
+const importOutcome = computed<{
+  tone: string
+  tagType: TagProps['type']
+  tagLabel: string
+  title: string
+  description: string
+  nextAction: string
+}>(() => {
   if (lastOperationError.value) {
     return {
       tone: 'danger',
@@ -1100,6 +1186,25 @@ async function runImport() {
   }
 }
 
+async function viewHistoryResult(batch: FeishuImportBatchSummary) {
+  if (historyResultLoading.value || running.value || preflighting.value) return
+  historyResultVisible.value = true
+  historyResultBatch.value = batch
+  historyResult.value = null
+  historyResultSearch.value = ''
+  historyResultFilter.value = 'ALL'
+  historyResultPage.value = 1
+  historyResultError.value = ''
+  historyResultLoading.value = true
+  try {
+    historyResult.value = await getFeishuImportRunStatus(batch.batchId, Math.max(1, Math.min(batch.totalRows, 10000)))
+  } catch (reason) {
+    historyResultError.value = errorMessage(reason, '历史导入结果读取失败')
+  } finally {
+    historyResultLoading.value = false
+  }
+}
+
 async function runHistoryBatch(batch: FeishuImportBatchSummary) {
   if (!canRunHistoryBatch(batch)) {
     ElMessage.warning('当前历史批次状态不允许继续导入')
@@ -1233,7 +1338,7 @@ function scrollToUpload() {
 function syncSelectedFiles(uploadFiles: UploadFiles) {
   const validFiles = uploadFiles
     .map((item) => item.raw)
-    .filter((file): file is File => Boolean(file))
+    .filter((file) => file !== undefined)
     .filter((file) => file.name.toLowerCase().endsWith('.xlsx'))
   selectedFiles.value = validFiles
   if (validFiles.length > 1) {

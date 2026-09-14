@@ -1,161 +1,331 @@
 <template>
-  <section class="dashboard">
-    <div class="dashboard__heading">
+  <section class="dashboard" aria-label="业务首页">
+    <header class="dashboard__heading">
       <div>
-        <h1>{{ greeting }}，{{ authStore.user?.displayName || '当前用户' }}</h1>
-        <p>{{ todayText }} · 当前仅展示已接入且已授权的业务能力</p>
+        <h1>{{ title }}</h1>
+        <p>{{ authStore.user?.displayName || '当前用户' }} · {{ todayText }}</p>
       </div>
-      <span class="data-status" :class="{ 'data-status--pending': !isSupply }">
-        <i />{{ isSupply ? '新业务主流程' : '数据接口未接入' }}
-      </span>
+      <el-input
+        v-model="keyword"
+        class="dashboard__search"
+        :prefix-icon="Search"
+        placeholder="搜索业务入口"
+        aria-label="搜索业务入口"
+        clearable
+        :disabled="!ready"
+      />
+    </header>
+
+    <div v-if="loading" class="dashboard__state" role="status" aria-live="polite">
+      <el-icon class="is-loading"><Loading /></el-icon>
+      <span>正在加载业务入口</span>
     </div>
-
-    <template v-if="isSupply">
-      <article class="business-overview" aria-live="polite">
-        <div class="business-overview__main">
-          <span class="business-overview__eyebrow">供应链系统 · 当前落地范围</span>
-          <h2>主业务按我方流程展示，订货宝只作为后台同步来源</h2>
-          <p>
-            ERP、CRM、订单、数据字典只承载新业务主流程；订货宝同步规则沉到后台映射链路，
-            同步任务把数据写入我方新表，不再提供旧订货宝档案菜单。
-          </p>
-        </div>
-        <div class="business-overview__rule">
-          <span>当前原则</span>
-          <strong>业务菜单看新表，外部同步看来源，页面不展示未落地动作</strong>
-        </div>
-      </article>
-
-      <div class="business-progress">
-        <article v-for="item in businessProgress" :key="item.title" class="business-progress__card">
-          <div class="business-progress__header">
-            <span>{{ item.domain }}</span>
-            <strong>{{ item.title }}</strong>
-          </div>
-          <p>{{ item.description }}</p>
-          <dl>
-            <div>
-              <dt>已接入</dt>
-              <dd>{{ item.done }}</dd>
-            </div>
-            <div>
-              <dt>下一步</dt>
-              <dd>{{ item.next }}</dd>
-            </div>
-          </dl>
-        </article>
-      </div>
-    </template>
-
-    <article v-else class="integration-empty" aria-live="polite">
-      <div class="integration-empty__mark" aria-hidden="true">
-        <svg viewBox="0 0 48 48" fill="none">
-          <rect x="8" y="10" width="32" height="28" rx="7" />
-          <path d="M15 30l6-6 5 4 7-9" />
-          <path d="M15 17h8" />
-        </svg>
-      </div>
-      <div class="integration-empty__content">
-        <span class="integration-empty__eyebrow">{{ isSupply ? '供应链业务概览' : '平台运营概览' }}</span>
-        <h2>{{ isSupply ? '供应链首页数据接口尚未接入' : '平台首页数据接口尚未接入' }}</h2>
-        <p>
-          当前页面不生成模拟指标，也不推断待办或最近动态。后端提供真实统计、趋势和待办接口后，
-          这里再按当前账号权限展示可核对的数据。
-        </p>
-        <div class="integration-empty__scope">
-          <span>当前可用</span>
-          <strong>身份与页面权限</strong>
-          <span>等待接入</span>
-          <strong>统计、趋势、待办与动态</strong>
-        </div>
-      </div>
-    </article>
+    <div v-else-if="!ready" class="dashboard__state" :role="error ? 'alert' : 'status'">
+      <span>{{ error || '业务入口尚未加载' }}</span>
+      <el-button :icon="Refresh" :disabled="!applicationCode" @click="retryNavigation"
+        >重新加载</el-button
+      >
+    </div>
+    <div v-else-if="!groups.length" class="dashboard__state" role="status">
+      <span>暂无已授权的业务入口</span>
+      <el-button :icon="Refresh" @click="retryNavigation">重新加载</el-button>
+    </div>
+    <div v-else-if="!filteredGroups.length" class="dashboard__state" role="status">
+      <span>没有匹配的业务入口</span>
+      <el-button link @click="keyword = ''">清空搜索</el-button>
+    </div>
+    <nav v-else aria-label="已授权业务入口">
+      <section
+        v-for="group in filteredGroups"
+        :key="group.id"
+        class="entry-group"
+        :aria-label="group.name"
+      >
+        <h2><ConsoleNavIcon :icon-key="group.iconKey" />{{ group.name }}</h2>
+        <ul>
+          <li v-for="entry in group.entries" :key="entry.path">
+            <router-link :to="entry.path" class="entry-link">
+              <ConsoleNavIcon :icon-key="entry.iconKey" />
+              <span class="entry-link__text">
+                <span>{{ entry.name }}</span>
+                <small v-if="entry.context">{{ entry.context }}</small>
+              </span>
+              <el-icon class="entry-link__arrow"><ArrowRight /></el-icon>
+            </router-link>
+          </li>
+        </ul>
+      </section>
+    </nav>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores'
+import { ArrowRight, Loading, Refresh, Search } from '@element-plus/icons-vue'
+import { useAuthStore } from '@/stores/auth'
+import { useNavigationStore } from '@/stores/navigation'
+import type { NavigationNode } from '@/types/management'
+import ConsoleNavIcon from './ConsoleNavIcon.vue'
+
+interface Entry {
+  name: string
+  path: string
+  iconKey: string | null
+  context: string
+}
+interface EntryGroup {
+  id: string
+  name: string
+  iconKey: string | null
+  entries: Entry[]
+}
 
 const route = useRoute()
 const authStore = useAuthStore()
-const isSupply = computed(() => route.meta.applicationCode === 'SUPPLY_CHAIN')
-const greeting = computed(() => new Date().getHours() < 12 ? '早上好' : new Date().getHours() < 18 ? '下午好' : '晚上好')
-const todayText = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
-const businessProgress = [
-  {
-    domain: 'ERP',
-    title: '商品、采购、库存',
-    description: '围绕我方商品库、供应商、采购订单、入库单、出库单、库存调拨和仓库信息组织菜单。',
-    done: '商品管理、基础资料、供应商档案、采购订单、入库单、出库单、库存调拨、仓库信息',
-    next: '订货宝商品、采购、库存数据映射到我方 ERP 新表',
-  },
-  {
-    domain: 'CRM',
-    title: '客户管理',
-    description: '客户、商家、门店统一为客户管理，联系方式、归属销售、归属地区在客户内维护。',
-    done: '客户新增、编辑、删除、详情、联系方式、归属信息',
-    next: '订货宝客户资料映射到我方客户表',
-  },
-  {
-    domain: 'Order',
-    title: '销售订单',
-    description: '订单主流程走我方销售订单接口，后续订货宝订单只作为来源映射到销售订单表。',
-    done: '销售订单列表、保存、提交、编辑、详情、确认出库',
-    next: '订货宝订单重新同步到我方销售订单表',
-  },
-  {
-    domain: 'Dict',
-    title: '数据字典',
-    description: '字典主表与字典项统一支撑单位、类型、状态、支付方式等业务选项。',
-    done: 'DATA_DICTIONARY、DATA_DICTIONARY_ITEM 业务页面',
-    next: '补齐 ERP、CRM、Order 必需字典项和调用方 dictionaryCode',
-  },
-]
+const navigationStore = useNavigationStore()
+const applicationCode = computed(() => String(route.meta.applicationCode || ''))
+const title = computed(
+  () =>
+    ({
+      SUPPLY_CHAIN: '供应链业务',
+      PLATFORM_ADMIN: '平台管理',
+      SYSTEM_ADMIN: '系统管理',
+    })[applicationCode.value] || '业务首页',
+)
+const todayText = new Date().toLocaleDateString('zh-CN', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+  weekday: 'long',
+})
+const keyword = ref('')
+const pending = reactive<Record<string, number>>({})
+const errors = reactive<Record<string, string>>({})
+const requestNumbers: Record<string, number> = {}
+const loading = computed(() => (pending[applicationCode.value] || 0) > 0)
+const error = computed(() => errors[applicationCode.value] || '')
+const ready = computed(
+  () => !loading.value && !error.value && navigationStore.isLoaded(applicationCode.value),
+)
+
+// Shell owns the initial fetch; observe the same action so retry never overlaps it.
+const stopObserving = navigationStore.$onAction(({ name, args, after, onError }) => {
+  if (name !== 'fetchNavigation') return
+  const code = String(args[0])
+  const request = (requestNumbers[code] || 0) + 1
+  requestNumbers[code] = request
+  pending[code] = (pending[code] || 0) + 1
+  errors[code] = ''
+  after(() => {
+    pending[code]--
+    if (requestNumbers[code] === request) errors[code] = ''
+  })
+  onError((reason: unknown) => {
+    pending[code]--
+    if (requestNumbers[code] !== request) return
+    const failure = reason as { code?: string; response?: { status?: number } } | null
+    errors[code] =
+      failure?.code === 'FORBIDDEN' || failure?.response?.status === 403
+        ? '暂无业务入口访问权限'
+        : '业务入口加载失败，请重试'
+  })
+})
+onBeforeUnmount(stopObserving)
+watch(applicationCode, () => {
+  keyword.value = ''
+})
+
+async function retryNavigation() {
+  if (!applicationCode.value || loading.value) return
+  try {
+    await navigationStore.fetchNavigation(applicationCode.value)
+  } catch {
+    // The action subscription supplies the same failure state for Shell and manual retries.
+  }
+}
+
+const groups = computed<EntryGroup[]>(() => {
+  if (!ready.value) return []
+  const seen = new Set<string>()
+  const currentPath = (route.path || '').replace(/\/+$/, '') || '/'
+  const collect = (node: NavigationNode, parents: string[] = []): Entry[] => {
+    if (!node.visible) return []
+    const entries: Entry[] = []
+    const path = node.routePath
+    if (path && (path.replace(/\/+$/, '') || '/') !== currentPath && !seen.has(path)) {
+      seen.add(path)
+      entries.push({
+        name: node.displayName,
+        path,
+        iconKey: node.iconKey,
+        context: parents.join(' / '),
+      })
+    }
+    for (const child of node.children)
+      entries.push(...collect(child, [...parents, node.displayName]))
+    return entries
+  }
+  const result: EntryGroup[] = []
+  const direct: Entry[] = []
+  for (const node of navigationStore.getNavigation(applicationCode.value)) {
+    if (!node.visible) continue
+    const entries = collect(node)
+    if (!entries.length) continue
+    if (node.children.some((child) => child.visible)) {
+      result.push({
+        id: node.id,
+        name: node.displayName,
+        iconKey: node.iconKey,
+        entries: entries.map((entry) => ({
+          ...entry,
+          context:
+            entry.context === node.displayName
+              ? ''
+              : entry.context.startsWith(node.displayName + ' / ')
+                ? entry.context.slice(node.displayName.length + 3)
+                : entry.context,
+        })),
+      })
+    } else direct.push(...entries)
+  }
+  if (direct.length)
+    result.unshift({ id: 'direct-entries', name: '业务入口', iconKey: null, entries: direct })
+  return result
+})
+const filteredGroups = computed(() => {
+  const query = keyword.value.trim().toLocaleLowerCase()
+  return groups.value
+    .map((group) => ({
+      ...group,
+      entries: group.entries.filter((entry) =>
+        [group.name, entry.name, entry.context].some((value) =>
+          value.toLocaleLowerCase().includes(query),
+        ),
+      ),
+    }))
+    .filter((group) => group.entries.length)
+})
 </script>
 
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
 
-.dashboard { width: 100%; max-width: 1200px; margin: 0 auto; }
-.dashboard__heading { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; }
-.dashboard__heading h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
-.dashboard__heading p { margin: 7px 0 0; color: $color-text-secondary; font-size: $font-size-sm; }
-.data-status { display: flex; gap: 7px; align-items: center; color: $color-success; font-size: $font-size-xs; }
-.data-status i { width: 7px; height: 7px; background: $color-success; border-radius: 50%; }
-.data-status--pending { color: #b45309; }
-.data-status--pending i { background: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, .12); }
-.business-overview { display: grid; margin-bottom: 18px; padding: 26px 28px; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; background: #fff; border: 1px solid #dbe5f2; border-radius: 18px; box-shadow: 0 14px 32px rgba(15, 23, 42, .05); }
-.business-overview__eyebrow { color: $color-primary; font-size: $font-size-xs; font-weight: 700; letter-spacing: .08em; }
-.business-overview h2 { margin: 8px 0 10px; color: $color-text-primary; font-size: 26px; line-height: 1.32; }
-.business-overview p { max-width: 760px; margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.85; }
-.business-overview__rule { display: grid; min-width: 280px; padding: 16px 18px; gap: 7px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; }
-.business-overview__rule span { color: #2563eb; font-size: $font-size-xs; font-weight: 700; }
-.business-overview__rule strong { color: $color-text-regular; font-size: $font-size-sm; line-height: 1.6; }
-.business-progress { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.business-progress__card { display: grid; padding: 20px; gap: 14px; background: #fff; border: 1px solid #dbe5f2; border-radius: 16px; box-shadow: 0 10px 24px rgba(15, 23, 42, .045); }
-.business-progress__header { display: flex; gap: 10px; align-items: center; }
-.business-progress__header span { display: inline-flex; min-width: 48px; height: 28px; align-items: center; justify-content: center; color: $color-primary; font-size: $font-size-xs; font-weight: 800; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; }
-.business-progress__header strong { color: $color-text-primary; font-size: 18px; }
-.business-progress__card p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.75; }
-.business-progress__card dl { display: grid; margin: 0; gap: 10px; }
-.business-progress__card dl > div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 10px; }
-.business-progress__card dt { color: $color-text-placeholder; font-size: $font-size-xs; }
-.business-progress__card dd { margin: 0; color: $color-text-regular; font-size: $font-size-sm; line-height: 1.65; }
-.integration-empty { position: relative; display: grid; min-height: 440px; padding: clamp(28px, 5vw, 64px); overflow: hidden; grid-template-columns: auto minmax(0, 640px); align-content: center; justify-content: center; gap: clamp(24px, 4vw, 48px); background: linear-gradient(145deg, #fff 0%, #f8fbff 55%, #eff6ff 100%); border: 1px solid #dbeafe; border-radius: 18px; box-shadow: 0 18px 45px rgba(15, 23, 42, .06); }
-.integration-empty::after { position: absolute; right: -90px; bottom: -110px; width: 260px; height: 260px; content: ''; background: radial-gradient(circle, rgba(37, 99, 235, .14), rgba(37, 99, 235, 0) 70%); }
-.integration-empty__mark { display: grid; width: 92px; height: 92px; color: $color-primary; background: rgba(255, 255, 255, .88); border: 1px solid #bfdbfe; border-radius: 26px; box-shadow: 0 16px 35px rgba(37, 99, 235, .14); place-items: center; }
-.integration-empty__mark svg { width: 52px; height: 52px; }
-.integration-empty__mark rect, .integration-empty__mark path { stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.integration-empty__content { position: relative; z-index: 1; }
-.integration-empty__eyebrow { color: $color-primary; font-size: $font-size-xs; font-weight: 700; letter-spacing: .1em; }
-.integration-empty__content h2 { margin: 9px 0 12px; color: $color-text-primary; font-size: clamp(24px, 3vw, 32px); line-height: 1.25; }
-.integration-empty__content p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.9; }
-.integration-empty__scope { display: grid; margin-top: 28px; padding: 16px 18px; grid-template-columns: auto 1fr; gap: 8px 16px; background: rgba(255, 255, 255, .78); border: 1px solid rgba(191, 219, 254, .78); border-radius: 12px; }
-.integration-empty__scope span { color: $color-text-placeholder; font-size: $font-size-xs; }
-.integration-empty__scope strong { color: $color-text-regular; font-size: $font-size-sm; font-weight: 600; }
-@media (max-width: 960px) { .business-overview { grid-template-columns: 1fr; } .business-progress { grid-template-columns: 1fr; } }
-@media (max-width: 760px) { .integration-empty { min-height: 380px; grid-template-columns: 1fr; justify-items: start; } }
-@media (max-width: 520px) { .dashboard__heading { align-items: flex-start; flex-direction: column; gap: 12px; } }
+.dashboard {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  color: $color-text-primary;
+}
+.dashboard__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.dashboard__heading h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.dashboard__heading > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dashboard__heading p {
+  margin: 6px 0 0;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+}
+.dashboard__search {
+  width: 300px;
+  max-width: 100%;
+}
+.dashboard__state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 32px 0;
+  color: $color-text-secondary;
+  font-size: $font-size-base;
+}
+.entry-group {
+  padding: 16px 0;
+  border-top: 1px solid $color-border-base;
+}
+.entry-group h2 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 10px;
+  font-size: $font-size-base;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.entry-group ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.entry-group li {
+  min-width: 0;
+}
+.entry-link {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 10px;
+  color: $color-text-regular;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.entry-link:hover {
+  color: $color-primary;
+  background: $color-bg-white;
+}
+.entry-link:focus-visible {
+  outline: 2px solid $color-primary;
+  outline-offset: 2px;
+}
+.entry-link__text {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  font-size: $font-size-base;
+  overflow-wrap: anywhere;
+}
+.entry-link__text small {
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
+}
+.entry-link__arrow {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: $color-text-placeholder;
+}
+@media (max-width: 960px) {
+  .entry-group ul {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .dashboard__heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .dashboard__search {
+    width: 100%;
+  }
+  .entry-group ul {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 </style>

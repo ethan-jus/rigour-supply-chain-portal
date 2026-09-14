@@ -82,6 +82,7 @@
           <el-table-column prop="shipTime" label="发货时间" width="180">
             <template #default="scope">{{ formatTime(scope.row.shipTime) }}</template>
           </el-table-column>
+          <!-- @vue-generic {SalesShipmentSummary} -->
           <el-table-column label="操作" width="150" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>

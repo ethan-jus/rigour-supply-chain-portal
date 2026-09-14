@@ -15,6 +15,7 @@
         <el-table-column prop="name" label="名称" min-width="140" />
         <el-table-column prop="description" label="说明" min-width="220" />
         <el-table-column label="状态" width="90"><template #default="scope">{{ formatPortalStatus(scope.row.status) }}</template></el-table-column>
+        <!-- @vue-generic {DictionaryTypeRecord} -->
         <el-table-column label="操作" width="90" fixed="right">
           <template #default="scope"><el-button link type="primary" @click.stop="openType(scope.row)">编辑</el-button></template>
         </el-table-column>
@@ -37,6 +38,7 @@
           <el-table-column prop="value" label="值" min-width="160" />
           <el-table-column prop="sortOrder" label="排序" width="80" />
           <el-table-column label="状态" width="90"><template #default="scope">{{ formatPortalStatus(scope.row.status) }}</template></el-table-column>
+          <!-- @vue-generic {DictionaryItemRecord} -->
           <el-table-column label="操作" width="90" fixed="right">
             <template #default="scope"><el-button link type="primary" @click="openItem(scope.row)">编辑</el-button></template>
           </el-table-column>

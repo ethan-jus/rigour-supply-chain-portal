@@ -96,6 +96,7 @@
             </div>
           </template>
         </el-table-column>
+        <!-- @vue-generic {VisitReviewQueueItem} -->
         <el-table-column label="操作" width="110" fixed="right">
           <template #default="scope">
             <el-button type="primary" link @click="openReview(scope.row)">复核</el-button>

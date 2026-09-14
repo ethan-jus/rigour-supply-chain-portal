@@ -66,12 +66,21 @@
         </div>
       </header>
       <main ref="contentViewport" class="console__content">
-        <ConsoleTabPane
-          v-for="tab in workspaceTabs"
-          :key="tab.id"
-          :active="activeTabId === tab.id"
-          :route="tab.route"
-        />
+        <template v-for="tab in workspaceTabs" :key="tab.id">
+          <section
+            v-if="workspaceTabErrors[tab.id]"
+            v-show="activeTabId === tab.id"
+            class="workspace-tab-pane workspace-tab-pane--error"
+          >
+            <strong>页面加载失败</strong>
+            <span>{{ workspaceTabErrors[tab.id] }}</span>
+          </section>
+          <ConsoleTabPane
+            v-else
+            :active="activeTabId === tab.id"
+            :route="tab.route"
+          />
+        </template>
       </main>
     </section>
   </div>
@@ -85,7 +94,7 @@
  * 菜单数据由 navigationStore 按应用编码从 IAM 实时加载，
  * 菜单树由递归导航组件渲染，支持业务分组、二级菜单和三级页面。
  */
-import { computed, nextTick, onMounted, shallowReactive, shallowRef, ref, watch } from 'vue'
+import { computed, nextTick, onErrorCaptured, onMounted, reactive, shallowReactive, shallowRef, ref, watch } from 'vue'
 import {
   onBeforeRouteUpdate,
   useRoute,
@@ -112,6 +121,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const navigationStore = useNavigationStore()
 const workspaceTabs = shallowRef<WorkspaceTab[]>([])
+const workspaceTabErrors = reactive<Record<string, string>>({})
 const tabStrip = ref<HTMLElement | null>(null)
 const contentViewport = ref<HTMLElement | null>(null)
 
@@ -175,10 +185,14 @@ function upsertWorkspaceTab(currentRoute: RouteLocationNormalizedLoaded, pageTit
 
   if (workspaceTabs.value.some((tab) => tab.applicationCode !== appCode)) {
     workspaceTabs.value = []
+    Object.keys(workspaceTabErrors).forEach((key) => {
+      delete workspaceTabErrors[key]
+    })
   }
 
   const id = workspaceTabId(appCode, currentRoute.path)
   const existing = workspaceTabs.value.find((tab) => tab.id === id)
+  delete workspaceTabErrors[id]
   if (existing) {
     Object.assign(existing.route, cloneRoute(currentRoute))
     workspaceTabs.value = workspaceTabs.value.map((tab) => tab.id === id
@@ -221,6 +235,7 @@ async function closeWorkspaceTab(tab: WorkspaceTab) {
     }
   }
   workspaceTabs.value = workspaceTabs.value.filter((item) => item.id !== tab.id)
+  delete workspaceTabErrors[tab.id]
 }
 
 function canCloseWorkspaceTab(tab: WorkspaceTab) {
@@ -249,6 +264,11 @@ function restoreActivePageScroll() {
 function logout(): void {
   authStore.logout()
 }
+
+onErrorCaptured((error) => {
+  workspaceTabErrors[activeTabId.value] = error instanceof Error ? error.message : String(error)
+  return false
+})
 
 watch(
   () => [route.fullPath, currentPageName.value] as const,
@@ -509,6 +529,28 @@ onMounted(() => {
 
 .console__content {
   padding: 28px;
+}
+
+.workspace-tab-pane--error {
+  display: grid;
+  height: auto;
+  min-height: 120px;
+  gap: 8px;
+  margin: 24px;
+  padding: 16px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #991b1b;
+}
+
+.workspace-tab-pane--error strong {
+  font-size: 16px;
+}
+
+.workspace-tab-pane--error span {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 900px) {

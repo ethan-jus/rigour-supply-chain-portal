@@ -1,6 +1,10 @@
 <template>
   <section v-show="active" class="workspace-tab-pane">
-    <router-view :route="route" v-slot="{ Component }">
+    <div v-if="renderError" class="workspace-tab-pane__error">
+      <strong>页面加载失败</strong>
+      <span>{{ renderError }}</span>
+    </div>
+    <router-view v-else :route="route" v-slot="{ Component }">
       <KeepAlive>
         <component :is="Component" v-if="active && Component" />
       </KeepAlive>
@@ -15,7 +19,7 @@
  * 多个菜单会复用同一个业务组件。为页签提供独立 routeLocationKey 后，
  * 非活动页不会再跟随全局路由变化而重置筛选；移除本组件也会一并释放缓存。
  */
-import { provide } from 'vue'
+import { onErrorCaptured, provide, ref, watch } from 'vue'
 import { routeLocationKey, type RouteLocationNormalizedLoaded } from 'vue-router'
 
 const props = defineProps<{
@@ -23,7 +27,21 @@ const props = defineProps<{
   route: RouteLocationNormalizedLoaded
 }>()
 
+const renderError = ref('')
+
 provide(routeLocationKey, props.route)
+
+watch(
+  () => props.route.fullPath,
+  () => {
+    renderError.value = ''
+  },
+)
+
+onErrorCaptured((error) => {
+  renderError.value = error instanceof Error ? error.message : String(error)
+  return false
+})
 </script>
 
 <style scoped>
@@ -32,5 +50,25 @@ provide(routeLocationKey, props.route)
   height: 100%;
   min-width: 0;
   min-height: 0;
+}
+
+.workspace-tab-pane__error {
+  display: grid;
+  gap: 8px;
+  margin: 24px;
+  padding: 16px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #991b1b;
+}
+
+.workspace-tab-pane__error strong {
+  font-size: 16px;
+}
+
+.workspace-tab-pane__error span {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 </style>

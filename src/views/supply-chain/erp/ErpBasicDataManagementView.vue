@@ -196,47 +196,60 @@
             @row-click="openDetail"
           >
             <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column :label="`${pageConfig.shortTitle}编号`" width="170" show-overflow-tooltip>
               <template #default="scope">{{ rowCode(scope.row) || '-' }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column :label="`${pageConfig.shortTitle}名称`" min-width="240" show-overflow-tooltip>
               <template #default="scope">
                 <span class="record-name">{{ rowName(scope.row) || '-' }}</span>
               </template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'tag'" label="标签类型" min-width="160" show-overflow-tooltip>
               <template #default="scope">{{ tagTypeLabel(scope.row) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'warehouse'" label="归属地区" min-width="150" show-overflow-tooltip>
               <template #default="scope">{{ regionLabel(scope.row) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'warehouse'" label="仓库类型" min-width="150" show-overflow-tooltip>
               <template #default="scope">{{ warehouseTypeLabel(scope.row) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'warehouse'" label="默认仓库" width="120" align="center">
               <template #default="scope">
                 <el-tag v-if="isDefaultWarehouse(scope.row)" type="success" effect="light">默认</el-tag>
                 <span v-else>-</span>
               </template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="联系人" min-width="130" show-overflow-tooltip>
               <template #default="scope">{{ contactName(scope.row) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="联系电话" min-width="150" show-overflow-tooltip>
               <template #default="scope">{{ contactPhone(scope.row) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'supplier'" label="开户银行" min-width="160" show-overflow-tooltip>
               <template #default="scope">{{ bankName(scope.row) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'supplier'" label="银行账号" min-width="150" show-overflow-tooltip>
               <template #default="scope">{{ bankAccountDisplay(bankAccountNo(scope.row)) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="地址" min-width="240" show-overflow-tooltip>
               <template #default="scope">{{ address(scope.row) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="pageKind === 'brand' || pageKind === 'tag'" label="备注" min-width="180" show-overflow-tooltip>
               <template #default="scope">{{ remark(scope.row) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="hasStatus" label="状态" width="110">
               <template #default="scope">
                 <el-tag :type="statusTag(rowStatus(scope.row))" effect="light">{{ statusLabel(rowStatus(scope.row)) }}</el-tag>
@@ -245,6 +258,7 @@
             <el-table-column label="更新时间" width="170">
               <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
             </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
             <el-table-column label="操作" width="190" fixed="right" align="center">
               <template #default="scope">
                 <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
@@ -409,7 +423,6 @@ import {
   getErpInventoryWarehouses,
   getErpProductBrand,
   getErpProductBrands,
-  getErpProductCategories,
   getErpProductCategory,
   getErpProductTag,
   getErpProductTags,
@@ -837,18 +850,6 @@ function rowStatus(row: BasicRow) {
   return null
 }
 
-function categoryParent(row: BasicRow) {
-  return 'parentId' in row ? categoryParentName(row) : '-'
-}
-
-function categoryLevel(row: BasicRow) {
-  return 'categoryLevel' in row ? row.categoryLevel || '-' : '-'
-}
-
-function rowOrdinal(row: BasicRow) {
-  return 'ordinal' in row ? row.ordinal ?? '-' : '-'
-}
-
 function tagTypeLabel(row: BasicRow) {
   return 'tagTypeCode' in row ? businessDictionaryLabel('ERP', 'PRODUCT_TAG_TYPE', row.tagTypeCode, '标签类型') : '-'
 }
@@ -897,7 +898,7 @@ function bankAccountDisplay(value: string | null | undefined) {
 }
 
 function detailItems(row: BasicRow) {
-  const base = [
+  const base: Array<{ label: string; value: string; span?: number }> = [
     { label: `${pageConfig.value.shortTitle}编号`, value: rowCode(row) },
     { label: `${pageConfig.value.shortTitle}名称`, value: rowName(row) },
   ]

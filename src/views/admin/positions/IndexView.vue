@@ -26,6 +26,7 @@
           </el-tag>
         </template>
       </el-table-column>
+      <!-- @vue-generic {PositionRecord} -->
       <el-table-column label="操作" width="120" fixed="right">
         <template #default="scope">
           <el-button v-if="canWrite" link type="primary" @click="open(scope.row)">编辑</el-button>

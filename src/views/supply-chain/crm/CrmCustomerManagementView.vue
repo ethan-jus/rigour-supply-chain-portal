@@ -124,6 +124,7 @@
           <el-table-column prop="customerTypeCode" label="客户类型" min-width="130" show-overflow-tooltip>
             <template #default="scope">{{ customerTypeLabel(scope.row.customerTypeCode) }}</template>
           </el-table-column>
+          <!-- @vue-generic {InternalCrmCustomerSummary} -->
           <el-table-column prop="regionCode" label="归属地区" min-width="130" show-overflow-tooltip>
             <template #default="scope">{{ customerAreaText(scope.row) }}</template>
           </el-table-column>
@@ -162,6 +163,7 @@
           <el-table-column label="更新时间" width="170">
             <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
           </el-table-column>
+          <!-- @vue-generic {InternalCrmCustomerSummary} -->
           <el-table-column label="操作" width="190" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>

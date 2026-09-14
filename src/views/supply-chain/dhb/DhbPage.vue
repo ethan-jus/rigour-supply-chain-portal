@@ -177,6 +177,7 @@
             {{ formatTime(scope.row.updatedAt) }}
           </template>
         </el-table-column>
+        <!-- @vue-generic {IssueItemWithAction} -->
         <el-table-column label="操作" width="180">
           <template #default="scope">
             <div class="issue-actions">
@@ -363,7 +364,7 @@ interface SyncSection {
   key: string
   title: string
   domain: string
-  description: string
+  description?: string
   rules: SyncRule[]
 }
 

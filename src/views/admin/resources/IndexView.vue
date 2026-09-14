@@ -8,7 +8,7 @@
     <el-table :data="resources" row-key="id"><el-table-column prop="displayName" label="名称" />
       <el-table-column prop="code" label="资源编码" min-width="220" /><el-table-column label="类型"><template #default="scope">{{ formatPortalResourceType(scope.row.type) }}</template></el-table-column>
       <el-table-column prop="permissionCode" label="权限码" min-width="180" /><el-table-column prop="routePath" label="路由" min-width="180" />
-      <el-table-column label="状态"><template #default="scope">{{ formatPortalStatus(scope.row.status) }}</template></el-table-column><el-table-column label="操作"><template #default="scope"><el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button></template></el-table-column>
+      <el-table-column label="状态"><template #default="scope">{{ formatPortalStatus(scope.row.status) }}</template></el-table-column><!-- @vue-generic {ResourceRecord} --><el-table-column label="操作"><template #default="scope"><el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button></template></el-table-column>
     </el-table>
   </el-card>
   <el-dialog v-model="dialog" title="资源配置" width="620px"><el-form label-width="110px">

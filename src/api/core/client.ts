@@ -1,4 +1,4 @@
-import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
+import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
 import type { ApiResponse } from '@/types'
 import { getAuthorizationHeader, removeToken } from '@/utils/token'
 import { generateRequestId } from '@/utils/request-id'
@@ -13,6 +13,28 @@ declare module 'axios' {
 }
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
+type ReadMethod = 'get' | 'delete' | 'head' | 'options'
+type WriteMethod = 'post' | 'put' | 'patch' | 'postForm' | 'putForm' | 'patchForm' | 'query'
+type BodyRead = <T = unknown, R = T, D = unknown>(url: string, config?: AxiosRequestConfig<D>) => Promise<R>
+type BodyWrite = <T = unknown, R = T, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig<D>) => Promise<R>
+
+interface TransformingResponseInterceptors<Input, Failure = unknown> {
+  use(onFulfilled?: ((value: Input) => unknown) | null, onRejected?: ((error: Failure) => unknown) | null): number
+  eject(id: number): void
+  clear(): void
+}
+
+/** This instance returns unwrapped business bodies; ordinary Axios instances keep AxiosResponse. */
+export type ApiClient = Omit<AxiosInstance, ReadMethod | WriteMethod | 'request' | 'interceptors'> & {
+  <T = unknown, R = T, D = unknown>(config: AxiosRequestConfig<D>): Promise<R>
+  <T = unknown, R = T, D = unknown>(url: string, config?: AxiosRequestConfig<D>): Promise<R>
+  request<T = unknown, R = T, D = unknown>(config: AxiosRequestConfig<D>): Promise<R>
+  interceptors: {
+    request: AxiosInstance['interceptors']['request']
+    response: TransformingResponseInterceptors<unknown>
+  }
+} & Record<ReadMethod, BodyRead> & Record<WriteMethod, BodyWrite>
 
 type UnauthorizedSessionHandler = () => void
 
@@ -54,7 +76,7 @@ function isApiResponse(value: unknown): value is ApiResponse {
  * 边界：不包含业务判定逻辑；错误码映射在 error.ts 维护。
  * Access Token仅在当前页面内存中保存；刷新页面后通过IAM会话重新授权。
  */
-function createClient(): AxiosInstance {
+function createClient(): ApiClient {
   const client = axios.create({
     baseURL: BASE_URL,
     timeout: 30000,
@@ -83,7 +105,10 @@ function createClient(): AxiosInstance {
   })
 
   /** 响应拦截器：统一解包、错误处理 */
-  client.interceptors.response.use(
+  // Axios's declarations assume every response interceptor preserves AxiosResponse.
+  // Only this first interceptor receives the transport response and changes the public result.
+  const responseInterceptors = client.interceptors.response as TransformingResponseInterceptors<AxiosResponse<unknown>, AxiosError<ApiResponse>>
+  responseInterceptors.use(
     (response: AxiosResponse<unknown>) => {
       devInfo('接口请求完成', {
         requestId: response.config.headers?.['X-Request-Id'],
@@ -123,7 +148,7 @@ function createClient(): AxiosInstance {
           code: errorBody?.code || 'UNAUTHORIZED',
           message: errorBody?.code
             ? getErrorMessage(errorBody.code, errorBody.message)
-            : '订单接口暂时无法访问，请检查订单服务配置后重试',
+            : '当前请求未通过身份校验，请重新登录；若仍失败，请联系管理员检查服务认证配置',
           requestId: requestId ? String(requestId) : '',
           timestamp: errorBody?.timestamp || new Date().toISOString(),
           response: error.response,
@@ -144,7 +169,7 @@ function createClient(): AxiosInstance {
     },
   )
 
-  return client
+  return client as ApiClient
 }
 
 export const apiClient = createClient()

@@ -84,15 +84,18 @@
           @row-click="openDetail"
         >
           <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <!-- @vue-generic {FundDocumentSummary} -->
           <el-table-column prop="sourceDocumentNo" label="单号" width="180" show-overflow-tooltip>
             <template #default="scope">{{ primaryDocumentNo(scope.row) }}</template>
           </el-table-column>
           <el-table-column prop="occurredTime" label="收支时间" width="180">
             <template #default="scope">{{ formatTime(scope.row.occurredTime) }}</template>
           </el-table-column>
+          <!-- @vue-generic {FundDocumentSummary} -->
           <el-table-column prop="customerCodeSnapshot" label="客户编号" width="130" show-overflow-tooltip>
             <template #default="scope">{{ customerCode(scope.row) }}</template>
           </el-table-column>
+          <!-- @vue-generic {FundDocumentSummary} -->
           <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip>
             <template #default="scope">
               <span class="record-name">{{ customerName(scope.row) }}</span>
@@ -104,16 +107,19 @@
           <el-table-column prop="settlementMethodCode" label="支付方式" width="130">
             <template #default="scope">{{ paymentMethodLabel(scope.row.settlementMethodCode) }}</template>
           </el-table-column>
+          <!-- @vue-generic {FundDocumentSummary} -->
           <el-table-column prop="amount" label="收入" width="130" align="right">
             <template #default="scope">
               <span class="money-cell money-cell--income">{{ incomeAmount(scope.row) }}</span>
             </template>
           </el-table-column>
+          <!-- @vue-generic {FundDocumentSummary} -->
           <el-table-column prop="amount" label="支出" width="130" align="right">
             <template #default="scope">
               <span class="money-cell money-cell--expense">{{ expenseAmount(scope.row) }}</span>
             </template>
           </el-table-column>
+          <!-- @vue-generic {FundDocumentSummary} -->
           <el-table-column prop="sourceOrderNo" label="关联单号" width="180" show-overflow-tooltip>
             <template #default="scope">{{ linkedDocumentNo(scope.row) }}</template>
           </el-table-column>
@@ -124,6 +130,7 @@
               </el-tag>
             </template>
           </el-table-column>
+          <!-- @vue-generic {FundDocumentSummary} -->
           <el-table-column label="操作" width="110" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">查看</el-button>

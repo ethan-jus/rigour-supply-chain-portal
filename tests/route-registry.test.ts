@@ -170,8 +170,16 @@ describe('数据库导航注册表', () => {
       ...SUPPLY_DOMAIN_PAGES.map((item) => node(item.routeKey, item.path)),
     ]
 
-    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(13)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(82)
+    expect(new Set(SUPPLY_DOMAIN_MENU_KEYS).size).toBe(SUPPLY_DOMAIN_MENU_KEYS.length)
+    expect(new Set(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).size)
+      .toBe(SUPPLY_DOMAIN_PAGES.length)
+    expect(SUPPLY_DOMAIN_MENU_KEYS).toEqual(expect.arrayContaining([
+      'supply.order.menu', 'supply.hr.menu', 'supply.erp.cost-settlement.menu',
+    ]))
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).toEqual(expect.arrayContaining([
+      'supply.bi.product-sales', 'supply.bi.city-cost', 'supply.hr.employees',
+      'supply.hr.payroll-commission', 'supply.hr.performance',
+    ]))
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
@@ -193,9 +201,9 @@ describe('数据库导航注册表', () => {
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.bi.dashboards')
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.domainKey === 'bi').map((item) => item.title))
-      .toEqual(['销售看板', '城市经营看板', '活动看板', '商品/库存看板', '商品销售统计', '销售毛利分析', '回款风险看板', '城市成本看板', '库存风险看板'])
+      .toEqual(['销售看板', '城市经营看板', '客户看板', '活动看板', '商品/库存看板', '商品销售统计', '销售毛利分析', '回款风险看板', '城市成本看板', '库存风险看板'])
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '同步控制').map((item) => item.title))
-      .toEqual(['订货宝同步中心'])
+      .toEqual(['订货宝同步中心', '飞书导入中心'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.erp.master-data.skus')
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '商品中心').map((item) => item.title))
@@ -210,7 +218,7 @@ describe('数据库导航注册表', () => {
       .not.toContain('supply.crm.customers.customer-360')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.crm.assignments.external-staff')
-    expect(validateNavigation(navigation)).toHaveLength(95)
+    expect(validateNavigation(navigation)).toHaveLength(navigation.length)
   })
 
   it('接受已实现的供应链 BI 子看板路由', () => {

@@ -153,8 +153,8 @@
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑组织' : '新增组织'" width="560px">
       <el-form label-width="96px">
         <el-form-item label="上级组织">
-          <el-select v-model="form.parentId" clearable filterable style="width: 100%">
-            <el-option label="无上级组织" :value="null" />
+          <el-select v-model="parentSelection" clearable filterable style="width: 100%">
+            <el-option label="无上级组织" value="" />
             <el-option
               v-for="organization in parentOptions"
               :key="organization.id"
@@ -228,6 +228,10 @@ const form = reactive({
   version: 0,
 })
 
+const parentSelection = computed({
+  get: () => form.parentId ?? '',
+  set: (value: string) => { form.parentId = value || null },
+})
 const canWrite = computed(() => auth.hasPermission('iam:organization:write'))
 const organizationById = computed(() => new Map(organizations.value.map((item) => [item.id, item])))
 const usersByOrganization = computed(() => {
