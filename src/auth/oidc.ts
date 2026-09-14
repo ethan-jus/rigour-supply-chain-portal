@@ -1,4 +1,5 @@
 import { devInfo, devWarn } from '@/utils/dev-log'
+import { allowDevelopmentHttp, sha256, verifyRs256 } from './oidc-crypto'
 
 interface OidcTokenResponse {
   access_token: string
@@ -31,17 +32,17 @@ function config() {
     import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || `${window.location.origin}/`
   if (!issuer || !clientId || !isAllowedOidcUrl(issuer) || !isAllowedOidcUrl(redirectUri)
     || !isAllowedOidcUrl(postLogoutRedirectUri)) {
-    throw new Error('OIDC 配置不完整：仅允许 HTTPS，开发模式额外允许 localhost loopback HTTP')
+    throw new Error('OIDC 配置不完整：开发环境允许 HTTP，正式环境需要 HTTPS')
   }
   return { issuer, clientId, redirectUri, postLogoutRedirectUri }
 }
 
-function isAllowedOidcUrl(value: string): boolean {
+export function isAllowedOidcUrl(value: string): boolean {
   try {
     const url = new URL(value)
+    if (url.username || url.password || url.hash) return false
     if (url.protocol === 'https:') return true
-    return import.meta.env.DEV && url.protocol === 'http:'
-      && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    return allowDevelopmentHttp() && url.protocol === 'http:'
   } catch {
     return false
   }
@@ -63,8 +64,7 @@ function base64Url(value: Uint8Array): string {
 
 export async function createPkcePair(): Promise<{ verifier: string; challenge: string }> {
   const verifier = randomUrlSafe(48)
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
-  return { verifier, challenge: base64Url(new Uint8Array(digest)) }
+  return { verifier, challenge: base64Url(await sha256(verifier)) }
 }
 
 export function safeReturnPath(value: string | null | undefined): string {
@@ -204,13 +204,7 @@ async function validateIdToken(token: string, issuer: string, clientId: string, 
   const jwk = jwks.keys.find((key) => key.kid === header.kid && key.kty === 'RSA'
     && (!key.alg || key.alg === 'RS256') && (!key.use || key.use === 'sig'))
   if (!jwk) throw new Error('找不到ID Token签名公钥')
-  const key = await crypto.subtle.importKey(
-    'jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'],
-  )
-  const valid = await crypto.subtle.verify(
-    'RSASSA-PKCS1-v1_5', key, decodeBase64Url(parts[2]!),
-    new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
-  )
+  const valid = await verifyRs256(jwk, decodeBase64Url(parts[2]!), `${parts[0]}.${parts[1]}`)
   if (!valid) throw new Error('ID Token签名无效')
 }
 

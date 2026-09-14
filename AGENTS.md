@@ -13,7 +13,7 @@ PC 运营后台，使用 Vue 3 + TypeScript + Vite + Element Plus。
    - `src/api/generated/` — OpenAPI 生成的代码（只读，不手工修改）
 3. **路由权限**：路由守卫在 `src/router/permissionGuard.ts`，权限过滤在 `src/stores/permission.ts`。
 4. **认证**：使用 IAM OIDC Authorization Code + PKCE；Access/ID Token 只保存在页面内存，禁止写入 Web Storage。
-5. **数据环境**：当前可在本机运行服务，但仍连接指定 DEV 真实接口和数据库；需要测试数据时在 DEV 数据库按规范构造，不维护运行时 Mock 分支。HTTP 仅允许开发模式下的 loopback 地址。
+5. **数据环境**：当前可在本机运行服务，但仍连接指定 DEV 真实接口和数据库；需要测试数据时在 DEV 数据库按规范构造，不维护运行时 Mock 分支。按用户确认，开发模式及 `--mode desktop` 构建允许 HTTP 局域网部署；正式构建仍要求 HTTPS，不关闭 PKCE、签名与权限校验。
 6. **设计 Token**：定义在 `src/assets/styles/_variables.scss`，由各使用方显式引入。
 
 ## 代码生命周期（断舍离）

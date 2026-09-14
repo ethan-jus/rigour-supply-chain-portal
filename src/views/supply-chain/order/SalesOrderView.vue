@@ -642,6 +642,7 @@
 </template>
 
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import { computed, nextTick, onActivated, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -1101,7 +1102,7 @@ async function openEdit(row: SalesOrderSummary) {
     form.remark = current.remark || ''
     form.revision = current.revision
     form.lines = current.lines.map((line) => ({
-      localId: crypto.randomUUID(),
+      localId: randomId(),
       productId: idString(line.productId),
       productVariantId: idString(line.productVariantId),
       productCodeSnapshot: line.productCodeSnapshot,
@@ -1457,7 +1458,7 @@ async function searchWarehouses(query: string) {
 
 function addLine() {
   form.lines.push({
-    localId: crypto.randomUUID(),
+    localId: randomId(),
     productId: null,
     productVariantId: null,
     productCodeSnapshot: null,
