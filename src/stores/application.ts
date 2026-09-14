@@ -11,12 +11,14 @@ export const useApplicationStore = defineStore('application', () => {
   const loading = ref(false)
   const error = ref('')
 
-  async function fetchApplications() {
+  async function fetchApplications(options: { deferSessionRecovery?: boolean } = {}) {
     loading.value = true
     error.value = ''
     devInfo('开始加载门户应用卡片')
     try {
-      applications.value = (await apiClient.get('/portal/apps')) as PortalApplication[]
+      applications.value = (await apiClient.get('/portal/apps', {
+        deferSessionRecovery: options.deferSessionRecovery,
+      })) as PortalApplication[]
       loaded.value = true
       devInfo('门户应用卡片加载成功', {
         count: applications.value.length,

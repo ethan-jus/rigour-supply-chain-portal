@@ -397,7 +397,7 @@ describe('合同驱动的供应链页面', () => {
     expect(salesOrderSource).toContain('label="收款状态"')
     expect(salesOrderSource).toContain('label="发货状态"')
     expect(salesOrderSource).toContain('SALES_SHIPMENT_STATUS')
-    expect(salesOrderSource).not.toContain('label="客户编号"')
+    expect(salesOrderSource).toContain('prop="customerCodeSnapshot" label="客户编号"')
     expect(salesOrderSource).toContain('客户名称')
     expect(salesOrderSource).toContain('<span>订单类型</span>')
     expect(salesOrderSource).toContain('label="折扣金额"')

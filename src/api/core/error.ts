@@ -11,9 +11,12 @@
 /** 业务错误码 → 用户可见消息 */
 const ERROR_MESSAGES: Record<string, string> = {
   IAM_FORBIDDEN: '无权访问当前数据范围',
+  IAM_TOKEN_INVALID: '登录已过期，请重新登录',
   IAM_UNAUTHORIZED: '登录已过期，请重新登录',
   IAM_INVALID_TOKEN: '无效的访问令牌',
+  IAM_SESSION_CHECK_UNAVAILABLE: '身份服务暂时不可用，请稍后重试',
   IAM_TENANT_MISMATCH: '租户信息不匹配',
+  TRUSTED_CONTEXT_INVALID: '当前业务服务身份校验失败，请稍后重试',
   VALIDATION_ERROR: '请求参数校验失败',
   RATE_LIMITED: '请求过于频繁，请稍后重试',
   SERVICE_UNAVAILABLE: '服务暂不可用，请稍后重试',

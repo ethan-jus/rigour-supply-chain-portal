@@ -203,6 +203,12 @@
             </template>
           </el-table-column>
           <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="customerCodeSnapshot" label="客户编号" width="150" show-overflow-tooltip>
+            <template #default="scope">{{ scope.row.customerCodeSnapshot || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="订单类型" width="130">
+            <template #default="scope">{{ orderTypeLabel(scope.row.orderTypeCode) }}</template>
+          </el-table-column>
           <el-table-column prop="contactPhoneSnapshot" label="联系电话" min-width="150" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.contactPhoneSnapshot || '-' }}</template>
           </el-table-column>
@@ -645,6 +651,7 @@
 </template>
 
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import { computed, nextTick, onActivated, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -1144,7 +1151,7 @@ async function openEdit(row: SalesOrderSummary) {
     form.remark = current.remark || ''
     form.revision = current.revision
     form.lines = current.lines.map((line) => ({
-      localId: crypto.randomUUID(),
+      localId: randomId(),
       productId: idString(line.productId),
       productVariantId: idString(line.productVariantId),
       productCodeSnapshot: line.productCodeSnapshot,
@@ -1500,7 +1507,7 @@ async function searchWarehouses(query: string) {
 
 function addLine() {
   form.lines.push({
-    localId: crypto.randomUUID(),
+    localId: randomId(),
     productId: null,
     productVariantId: null,
     productCodeSnapshot: null,

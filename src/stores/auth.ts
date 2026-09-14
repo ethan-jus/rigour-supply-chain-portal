@@ -23,7 +23,7 @@ import { devInfo, devWarn } from '@/utils/dev-log'
  * - 公开SPA不接收Refresh Token；页面刷新或Token失效后复用IAM会话重新授权
  *
  * 风险：
- * - fetchUser 失败会导致菜单为空，已通过 catch 中的 logout 处理
+ * - fetchUser失败向上抛出，由路由守卫或当前页区分会话失效与服务异常
  */
 
 export const useAuthStore = defineStore('auth', () => {
@@ -46,10 +46,12 @@ export const useAuthStore = defineStore('auth', () => {
    * 成功后调用 permissionStore.initRoutes(user.permissions) 生成菜单树。
    * 这是登录、页面刷新恢复会话的统一入口。
    */
-  async function fetchUser() {
+  async function fetchUser(options: { deferSessionRecovery?: boolean } = {}) {
     devInfo('开始恢复当前用户会话')
     try {
-      const userData = (await apiClient.get('/me')) as UserInfo
+      const userData = (await apiClient.get('/me', {
+        deferSessionRecovery: options.deferSessionRecovery,
+      })) as UserInfo
       user.value = userData
 
       // 根据用户权限初始化侧边菜单

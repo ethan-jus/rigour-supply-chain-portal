@@ -51,10 +51,15 @@ export const useNavigationStore = defineStore('navigation', () => {
   const navigationByApplication = ref<Record<string, NavigationNode[]>>({})
   const loadedApplications = ref<string[]>([])
 
-  async function fetchNavigation(applicationCode: string): Promise<NavigationNode[]> {
+  async function fetchNavigation(
+    applicationCode: string,
+    options: { deferSessionRecovery?: boolean } = {},
+  ): Promise<NavigationNode[]> {
     devInfo('开始加载应用菜单', { applicationCode })
     try {
-      const response = (await apiClient.get(`/portal/navigation/${encodeURIComponent(applicationCode)}`)) as NavigationNode[]
+      const response = (await apiClient.get(`/portal/navigation/${encodeURIComponent(applicationCode)}`, {
+        deferSessionRecovery: options.deferSessionRecovery,
+      })) as NavigationNode[]
       const nodes = applyDisplayNameOverrides(validateNavigation(response))
       navigationByApplication.value[applicationCode] = nodes
       if (!loadedApplications.value.includes(applicationCode)) loadedApplications.value.push(applicationCode)
@@ -67,6 +72,7 @@ export const useNavigationStore = defineStore('navigation', () => {
           ? (error as { code?: string }).code : undefined,
         status: typeof error === 'object' && error !== null && 'response' in error
           ? (error as { response?: { status?: number } }).response?.status : undefined,
+        message: error instanceof Error ? error.message : undefined,
       })
       throw error
     }

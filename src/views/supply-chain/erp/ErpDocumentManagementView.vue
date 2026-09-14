@@ -451,6 +451,7 @@
 </template>
 
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -1025,7 +1026,7 @@ function fillForm(current: DocumentDetail) {
 
 function lineFromProcurement(line: ProcurementOrderLine): LineForm {
   return {
-    localId: crypto.randomUUID(),
+    localId: randomId(),
     productId: String(line.productId),
     productVariantId: String(line.productVariantId),
     productName: line.productName,
@@ -1038,7 +1039,7 @@ function lineFromProcurement(line: ProcurementOrderLine): LineForm {
 
 function lineFromTransfer(line: TransferOrderDetail['lines'][number]): LineForm {
   return {
-    localId: crypto.randomUUID(),
+    localId: randomId(),
     productId: String(line.productId),
     productVariantId: String(line.productVariantId),
     productName: line.productName,
@@ -1061,7 +1062,7 @@ function resetForm() {
 
 function addLine() {
   form.lines.push({
-    localId: crypto.randomUUID(),
+    localId: randomId(),
     productId: '',
     productVariantId: '',
     productName: '',

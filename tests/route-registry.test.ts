@@ -180,6 +180,8 @@ describe('数据库导航注册表', () => {
       'supply.bi.product-sales', 'supply.bi.city-cost', 'supply.hr.employees',
       'supply.hr.payroll-commission', 'supply.hr.performance',
     ]))
+    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(14)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(86)
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))

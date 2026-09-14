@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest'
 import { createRouter, createWebHashHistory, type Router } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
@@ -18,6 +18,15 @@ function createTestRouter(): Router {
   return router
 }
 
+function markAuthenticated(authStore: ReturnType<typeof useAuthStore>): void {
+  ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
+  vi.spyOn(authStore, 'synchronizeTokenState').mockImplementation(() => {})
+}
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('路由守卫：未登录', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -30,6 +39,21 @@ describe('路由守卫：未登录', () => {
     router.push('/platform-admin')
     await router.isReady()
     expect(router.currentRoute.value.path).toBe('/login')
+  })
+
+  it('已登录用户的内存Token到期时标记续期原因并保留原菜单', async () => {
+    const authStore = useAuthStore()
+    ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
+    vi.spyOn(authStore, 'synchronizeTokenState').mockImplementation(() => {
+      ;(authStore as unknown as Record<string, boolean>).isAuthenticated = false
+    })
+    const router = createTestRouter()
+    router.push('/supply-chain/crm/customers/areas?from=order')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/login')
+    expect(router.currentRoute.value.query.reason).toBe('session_expired')
+    expect(router.currentRoute.value.query.redirect).toBe('/supply-chain/crm/customers/areas?from=order')
   })
 
   it('未登录访问 /login 应该直接放行', async () => {
@@ -52,7 +76,7 @@ describe('路由守卫：无权限跳转 403', () => {
       id: 'u002', principalScope: 'TENANT', username: 'viewer', displayName: '访客',
       roles: ['viewer'], permissions: [], tenantId: 'demo', tenantName: '测试租户',
     }
-    ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
+    markAuthenticated(authStore)
     const applicationStore = useApplicationStore()
     applicationStore.applications = []
     applicationStore.loaded = true
@@ -70,7 +94,7 @@ describe('路由守卫：无权限跳转 403', () => {
       id: 'u003', principalScope: 'TENANT', username: 'admin', displayName: '管理员',
       roles: ['super_admin'], permissions: ['*:*:*'], tenantId: 'demo', tenantName: '测试租户',
     }
-    ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
+    markAuthenticated(authStore)
 
     const applicationStore = useApplicationStore()
     applicationStore.applications = [{
@@ -105,7 +129,7 @@ describe('路由守卫：应用许可', () => {
       id: 'u-platform', principalScope: 'PLATFORM', username: 'admin', displayName: '平台管理员',
       roles: ['SUPER_ADMIN'], permissions: ['*:*:*'], tenantId: null, tenantName: null,
     }
-    ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
+    markAuthenticated(authStore)
   }
 
   it('只有IAM返回PLATFORM_ADMIN卡片时才允许进入系统管理', async () => {
@@ -190,9 +214,99 @@ describe('路由守卫：应用许可', () => {
     expect(router.currentRoute.value.query.reason).toBe('navigation-unavailable')
   })
 
+  it('菜单接口明确返回IAM_FORBIDDEN时进入403', async () => {
+    authenticatedPlatformUser()
+    const applicationStore = useApplicationStore()
+    applicationStore.applications = [{
+      id: 'app-1', code: 'PLATFORM_ADMIN', name: '平台管理中心', iconKey: null,
+      launchMode: 'INTERNAL_ROUTE', targetUri: '/platform-admin', sortOrder: 10,
+    }]
+    applicationStore.loaded = true
+    const navigationStore = useNavigationStore()
+    navigationStore.fetchNavigation = vi.fn().mockRejectedValue({
+      code: 'IAM_FORBIDDEN', response: { status: 403 },
+    })
+
+    const router = createTestRouter()
+    router.push('/platform-admin')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/403')
+  })
+
+  it('菜单接口返回标准FORBIDDEN HTTP 403时进入403', async () => {
+    authenticatedPlatformUser()
+    const applicationStore = useApplicationStore()
+    applicationStore.applications = [{
+      id: 'app-1', code: 'PLATFORM_ADMIN', name: '平台管理中心', iconKey: null,
+      launchMode: 'INTERNAL_ROUTE', targetUri: '/platform-admin', sortOrder: 10,
+    }]
+    applicationStore.loaded = true
+    const navigationStore = useNavigationStore()
+    navigationStore.fetchNavigation = vi.fn().mockRejectedValue({
+      code: 'FORBIDDEN', response: { status: 403 },
+    })
+
+    const router = createTestRouter()
+    router.push('/platform-admin')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/403')
+  })
+
+  it('菜单接口返回通用FORBIDDEN 403时仍进入403', async () => {
+    authenticatedPlatformUser()
+    const applicationStore = useApplicationStore()
+    applicationStore.applications = [{
+      id: 'app-1', code: 'PLATFORM_ADMIN', name: '平台管理中心', iconKey: null,
+      launchMode: 'INTERNAL_ROUTE', targetUri: '/platform-admin', sortOrder: 10,
+    }]
+    applicationStore.loaded = true
+    const navigationStore = useNavigationStore()
+    navigationStore.fetchNavigation = vi.fn().mockRejectedValue({
+      code: 'FORBIDDEN', response: { status: 403 },
+    })
+
+    const router = createTestRouter()
+    router.push('/platform-admin')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/403')
+  })
+
+  it('直接访问飞书销售工作台必须具有FEISHU_SALES应用许可', async () => {
+    authenticatedPlatformUser()
+    const applicationStore = useApplicationStore()
+    applicationStore.applications = [{
+      id: 'app-sales', code: 'FEISHU_SALES', name: '飞书销售工作台', iconKey: null,
+      launchMode: 'FEISHU_DEEPLINK', targetUri: '/sales-workbench', sortOrder: 30,
+    }]
+    applicationStore.loaded = true
+
+    const router = createTestRouter()
+    router.push('/sales-workbench')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/sales-workbench')
+  })
+
+  it('缺少FEISHU_SALES应用许可时拒绝直接访问销售工作台', async () => {
+    authenticatedPlatformUser()
+    const applicationStore = useApplicationStore()
+    applicationStore.applications = []
+    applicationStore.loaded = true
+    applicationStore.fetchApplications = vi.fn().mockResolvedValue(undefined)
+
+    const router = createTestRouter()
+    router.push('/sales-workbench')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/403')
+  })
+
   it('恢复用户信息遇到服务异常时不应清除会话或跳转登录', async () => {
     const authStore = useAuthStore()
-    ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
+    markAuthenticated(authStore)
     vi.spyOn(authStore, 'fetchUser').mockRejectedValue({ code: 'NETWORK_ERROR' })
 
     const router = createTestRouter()
@@ -203,17 +317,37 @@ describe('路由守卫：应用许可', () => {
     expect(authStore.isAuthenticated).toBe(true)
   })
 
-  it('恢复用户信息明确返回401时才清除会话并跳转登录', async () => {
+  it('恢复用户信息明确返回IAM_TOKEN_INVALID时清除会话并保留原路径', async () => {
     const authStore = useAuthStore()
-    ;(authStore as unknown as Record<string, boolean>).isAuthenticated = true
-    vi.spyOn(authStore, 'fetchUser').mockRejectedValue({ code: 'IAM_UNAUTHORIZED' })
+    markAuthenticated(authStore)
+    vi.spyOn(authStore, 'fetchUser').mockRejectedValue({
+      code: 'IAM_TOKEN_INVALID', response: { status: 401 },
+    })
 
     const router = createTestRouter()
-    router.push('/apps')
+    router.push('/apps?tab=mine')
     await router.isReady()
 
     expect(router.currentRoute.value.path).toBe('/login')
+    expect(router.currentRoute.value.query.redirect).toBe('/apps?tab=mine')
+    expect(router.currentRoute.value.query.reason).toBe('session_expired')
     expect(authStore.isAuthenticated).toBe(false)
+  })
+
+  it('恢复用户信息返回TRUSTED_CONTEXT_INVALID 401时保留会话并进入503', async () => {
+    const authStore = useAuthStore()
+    markAuthenticated(authStore)
+    vi.spyOn(authStore, 'fetchUser').mockRejectedValue({
+      code: 'TRUSTED_CONTEXT_INVALID', response: { status: 401 },
+    })
+
+    const router = createTestRouter()
+    router.push('/apps?tab=mine')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/service-unavailable')
+    expect(router.currentRoute.value.query.redirect).toBe('/apps?tab=mine')
+    expect(authStore.isAuthenticated).toBe(true)
   })
 })
 

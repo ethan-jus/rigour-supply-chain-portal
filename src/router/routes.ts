@@ -66,7 +66,19 @@ const procurementPaymentPlaceholderRouteKeys = new Set([
   'supply.erp.procurement.payments',
 ])
 
-const supplyDomainRoutes: RouteRecordRaw[] = SUPPLY_DOMAIN_PAGES.filter((page) => page.domainKey !== 'bi').map((page) => ({
+/** 订单域已有独立业务页面，不能再生成同路径的通用Capability路由。 */
+const dedicatedOrderRouteKeys = new Set([
+  'supply.order.sales-orders',
+  'supply.order.shipments',
+  'supply.order.sales-payments',
+  'supply.order.fund-documents',
+  'supply.order.sales-refunds',
+])
+
+const routableSupplyDomainPages = SUPPLY_DOMAIN_PAGES
+  .filter((page) => page.domainKey !== 'bi' && !dedicatedOrderRouteKeys.has(page.routeKey))
+
+const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page) => ({
   path: page.path.replace('/supply-chain/', ''),
   name: `SupplyDomain${page.routeKey.split('.').map((part) => part.replace(/(^|-)([a-z])/g, (_, __, letter) => letter.toUpperCase())).join('')}`,
   component: erpProductManagementRouteKeys.has(page.routeKey)
@@ -177,6 +189,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       title: '飞书销售工作台',
       hidden: true,
       requiresAuth: true,
+      requiredApplicationCode: 'FEISHU_SALES',
     },
   },
   {

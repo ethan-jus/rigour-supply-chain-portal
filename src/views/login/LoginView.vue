@@ -57,6 +57,11 @@ onMounted(() => {
     }, 350)
     return
   }
+  if (route.query.reason === 'session_expired') {
+    statusText.value = '登录状态已过期，正在安全续期…'
+  } else if (route.query.reason === 'service_unavailable') {
+    statusText.value = '正在重新建立统一登录会话…'
+  }
   if (authStore.isAuthenticated) {
     void router.replace(typeof route.query.redirect === 'string' ? route.query.redirect : '/apps')
     return

@@ -1,4 +1,5 @@
 import { devInfo, devWarn } from '@/utils/dev-log'
+import { allowDevelopmentHttp, sha256, verifyRs256 } from './oidc-crypto'
 
 interface OidcTokenResponse {
   access_token: string
@@ -12,9 +13,11 @@ const VERIFIER_KEY = 'rigour_oidc_code_verifier'
 const REDIRECT_KEY = 'rigour_oidc_return_path'
 const NONCE_KEY = 'rigour_oidc_nonce'
 const LOGOUT_PENDING_KEY = 'rigour_oidc_logout_pending'
+const ACCESS_TOKEN_EXPIRY_SAFETY_WINDOW_MS = 5_000
 
 let accessToken: string | null = null
 let idToken: string | null = null
+let accessTokenExpiresAt: number | null = null
 
 export interface OidcLoginOptions {
   /** 要求IAM重新显示登录表单，避免退出后复用旧浏览器会话。 */
@@ -29,17 +32,17 @@ function config() {
     import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || `${window.location.origin}/`
   if (!issuer || !clientId || !isAllowedOidcUrl(issuer) || !isAllowedOidcUrl(redirectUri)
     || !isAllowedOidcUrl(postLogoutRedirectUri)) {
-    throw new Error('OIDC 配置不完整：仅允许 HTTPS，开发模式额外允许 localhost loopback HTTP')
+    throw new Error('OIDC 配置不完整：开发环境允许 HTTP，正式环境需要 HTTPS')
   }
   return { issuer, clientId, redirectUri, postLogoutRedirectUri }
 }
 
-function isAllowedOidcUrl(value: string): boolean {
+export function isAllowedOidcUrl(value: string): boolean {
   try {
     const url = new URL(value)
+    if (url.username || url.password || url.hash) return false
     if (url.protocol === 'https:') return true
-    return import.meta.env.DEV && url.protocol === 'http:'
-      && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    return allowDevelopmentHttp() && url.protocol === 'http:'
   } catch {
     return false
   }
@@ -61,8 +64,7 @@ function base64Url(value: Uint8Array): string {
 
 export async function createPkcePair(): Promise<{ verifier: string; challenge: string }> {
   const verifier = randomUrlSafe(48)
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
-  return { verifier, challenge: base64Url(new Uint8Array(digest)) }
+  return { verifier, challenge: base64Url(await sha256(verifier)) }
 }
 
 export function safeReturnPath(value: string | null | undefined): string {
@@ -139,12 +141,15 @@ export async function completeOidcCallback(): Promise<string | null> {
     })
     if (!response.ok) throw new Error(`OIDC Token 交换失败：${response.status}`)
     const tokens = (await response.json()) as OidcTokenResponse
-    if (!tokens.access_token || !tokens.id_token || tokens.token_type.toLowerCase() !== 'bearer') {
+    if (!tokens.access_token || !tokens.id_token || typeof tokens.token_type !== 'string'
+      || tokens.token_type.toLowerCase() !== 'bearer'
+      || !Number.isFinite(tokens.expires_in) || tokens.expires_in <= 0) {
       throw new Error('OIDC Token 响应不完整')
     }
     await validateIdToken(tokens.id_token, issuer, clientId, expectedNonce)
     accessToken = tokens.access_token
     idToken = tokens.id_token
+    accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000
     devInfo('OIDC回调完成，Token已保存在当前页面内存')
     return safeReturnPath(sessionStorage.getItem(REDIRECT_KEY))
   } catch (error) {
@@ -199,13 +204,7 @@ async function validateIdToken(token: string, issuer: string, clientId: string, 
   const jwk = jwks.keys.find((key) => key.kid === header.kid && key.kty === 'RSA'
     && (!key.alg || key.alg === 'RS256') && (!key.use || key.use === 'sig'))
   if (!jwk) throw new Error('找不到ID Token签名公钥')
-  const key = await crypto.subtle.importKey(
-    'jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'],
-  )
-  const valid = await crypto.subtle.verify(
-    'RSASSA-PKCS1-v1_5', key, decodeBase64Url(parts[2]!),
-    new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
-  )
+  const valid = await verifyRs256(jwk, decodeBase64Url(parts[2]!), `${parts[0]}.${parts[1]}`)
   if (!valid) throw new Error('ID Token签名无效')
 }
 
@@ -244,12 +243,18 @@ function decodeBase64Url(value: string): Uint8Array {
 }
 
 export function getAccessToken(): string | null {
+  if (accessToken && accessTokenExpiresAt !== null
+    && Date.now() >= accessTokenExpiresAt - ACCESS_TOKEN_EXPIRY_SAFETY_WINDOW_MS) {
+    devInfo('OIDC Access Token已到或接近到期，等待复用IAM会话重新授权')
+    clearOidcTokens()
+  }
   return accessToken
 }
 
 export function clearOidcTokens(): void {
   accessToken = null
   idToken = null
+  accessTokenExpiresAt = null
 }
 
 /** 标记一次跨域OIDC退出，防止退出回到Portal后立即静默重新登录。 */

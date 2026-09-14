@@ -12,9 +12,11 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import { safeReturnPath } from '@/auth/oidc'
+import { useAuthStore } from '@/stores'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 function retry() {
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
@@ -22,7 +24,14 @@ function retry() {
 }
 
 function goLogin() {
-  window.location.hash = '/login'
+  const redirect = safeReturnPath(
+    typeof route.query.redirect === 'string' ? route.query.redirect : null,
+  )
+  // 503路径会刻意保留当前内存Token；若这里只切到/login，LoginView会把
+  // “仍已登录”的用户立即送回redirect，形成503→login→503循环。
+  // 用户明确选择重新登录时才清理本地状态，IAM浏览器会话仍可用于免打扰续签。
+  authStore.clearLocalSession()
+  void router.replace({ path: '/login', query: { redirect, reason: 'service_unavailable' } })
 }
 </script>
 
