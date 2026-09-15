@@ -85,11 +85,18 @@
         </header>
 
         <div class="drawer-toolbar">
-          <span>共 {{ items.length }} 个字典项</span>
-          <el-button v-if="canWrite" type="primary" plain @click="openItem()">新增字典项</el-button>
+          <el-radio-group v-model="itemMode">
+            <el-radio-button value="standard">标准项（{{ standardItems.length }}）</el-radio-button>
+            <el-radio-button value="aliases">历史兼容（{{ items.length - standardItems.length }}）</el-radio-button>
+            <el-radio-button value="sources">来源映射</el-radio-button>
+          </el-radio-group>
+          <el-button v-if="canWrite && itemMode === 'standard'" type="primary" plain @click="openItem()">新增字典项</el-button>
         </div>
+        <el-alert v-if="itemMode === 'aliases'" type="info" :closable="false" title="旧编码用于历史记录解析，新录入使用对应标准项。" />
+        <DictionarySourceMappings v-if="itemMode === 'sources'" :dictionary-code="selectedDict.dictionaryCode" :dictionaries="dictionaries" :can-write="canWrite" />
 
         <el-table
+          v-if="itemMode !== 'sources'"
           v-loading="itemsLoading"
           class="supply-scroll-table detail-table"
           max-height="560"
@@ -104,14 +111,18 @@
             <template #default="scope">{{ scope.row.parentDictionaryItemCode || '-' }}</template>
           </el-table-column>
           <el-table-column prop="dictionaryItemLevel" label="层级" width="80" align="center" />
+          <el-table-column v-if="itemMode === 'aliases'" label="对应标准项" min-width="190">
+            <template #default="{ row }">{{ row.canonicalDictionaryCode }} / {{ row.canonicalItemCode }}</template>
+          </el-table-column>
           <el-table-column prop="ordinal" label="排序" width="90" align="center" />
           <el-table-column prop="remark" label="说明" min-width="180" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.remark || '-' }}</template>
           </el-table-column>
           <!-- @vue-generic {DictItemView} -->
-          <el-table-column v-if="canWrite" label="操作" width="90" fixed="right" align="center">
+          <el-table-column v-if="canWrite && itemMode === 'standard'" label="操作" width="135" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click="openItem(scope.row)">编辑</el-button>
+              <el-button link type="primary" @click="openMerge(scope.row)">合并</el-button>
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无字典项" /></template>
@@ -119,6 +130,26 @@
       </div>
       <el-empty v-else description="请选择数据字典" />
     </el-drawer>
+
+    <el-dialog v-model="mergeDialog" title="合并字典项" width="620px">
+      <p v-if="mergeSource">待合并：{{ mergeSource.dictionaryItemName }}（{{ mergeSource.dictionaryItemCode }}）</p>
+      <el-form label-width="95px">
+        <el-form-item label="保留标准项">
+          <el-select v-model="mergeTargetId" filterable @change="loadMergePreview">
+            <el-option v-for="item in mergeTargets" :key="item.id" :value="item.id" :label="`${item.dictionaryItemName}（${item.dictionaryItemCode}）`" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="合并原因"><el-input v-model="mergeReason" type="textarea" maxlength="500" /></el-form-item>
+      </el-form>
+      <div v-loading="mergeLoading">
+        <template v-if="mergePreview">
+          <p>字典内引用：{{ mergePreview.childReferences }} 个下级条目、{{ mergePreview.aliasReferences }} 个兼容编码。</p>
+          <el-alert v-for="blocker in mergePreview.blockers" :key="blocker" :title="blocker" type="warning" :closable="false" />
+          <p>合并后保留旧编码的历史解析关系，业务记录不删除。</p>
+        </template>
+      </div>
+      <template #footer><el-button @click="mergeDialog = false">取消</el-button><el-button type="primary" :loading="saving" :disabled="!mergePreview || mergeLoading || mergePreview.blockers.length > 0 || !mergeReason.trim()" @click="saveMerge">确认合并</el-button></template>
+    </el-dialog>
 
     <el-dialog v-model="dictDialog" :title="editingDictId ? '修改字典' : '新增字典'" width="620px">
       <el-form :model="dictForm" label-width="100px">
@@ -174,7 +205,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import DictionarySourceMappings from './DictionarySourceMappings.vue'
+import { refreshBusinessDictionaries } from '@/utils/business-dictionary'
 import {
+  previewBizDictMerge,
+  mergeBizDictItem,
+  type DictMergePreview,
   createBizDict,
   createBizDictItem,
   getBizDictItems,
@@ -199,6 +235,37 @@ const saving = ref(false)
 const dictionaries = ref<DictView[]>([])
 const dictionaryItemsMap = ref<Record<string, DictItemView[]>>({})
 const items = ref<DictItemView[]>([])
+const itemMode = ref<'standard' | 'aliases' | 'sources'>('standard')
+const standardItems = computed(() => items.value.filter(item => !item.canonicalItemCode))
+const visibleItems = computed(() => items.value.filter(item => itemMode.value === 'aliases' ? !!item.canonicalItemCode : !item.canonicalItemCode))
+const mergeDialog = ref(false), mergeLoading = ref(false)
+const mergeSource = ref<DictItemView | null>(null)
+const mergeTargetId = ref(''), mergeReason = ref('')
+const mergePreview = ref<DictMergePreview | null>(null)
+const mergeTargets = computed(() => standardItems.value.filter(item => item.id !== mergeSource.value?.id && item.parentDictionaryItemCode === mergeSource.value?.parentDictionaryItemCode))
+let mergeRequestVersion = 0
+function openMerge(item: DictItemView) {
+  ++mergeRequestVersion; mergeSource.value = item; mergeTargetId.value = ''; mergeReason.value = ''; mergePreview.value = null; mergeLoading.value = false; mergeDialog.value = true
+}
+async function loadMergePreview() {
+  const version = ++mergeRequestVersion
+  mergePreview.value = null
+  if (!mergeSource.value || !mergeTargetId.value) return
+  mergeLoading.value = true
+  try { const result = await previewBizDictMerge(mergeSource.value.id, mergeTargetId.value); if (version === mergeRequestVersion) mergePreview.value = result }
+  finally { if (version === mergeRequestVersion) mergeLoading.value = false }
+}
+async function saveMerge() {
+  const preview = mergePreview.value
+  if (!preview || preview.blockers.length || !mergeReason.value.trim()) return
+  saving.value = true
+  try {
+    await mergeBizDictItem(preview.source.id, { targetItemId: preview.target.id, sourceRevision: preview.source.revision, targetRevision: preview.target.revision, reason: mergeReason.value.trim() })
+    mergeDialog.value = false; ElMessage.success('字典项已合并'); await loadDicts()
+    if (selectedDict.value) await selectDict(selectedDict.value)
+    await refreshBusinessDictionaries()
+  } finally { saving.value = false }
+}
 const selectedDict = ref<DictView | null>(null)
 const dictDialog = ref(false)
 const itemDialog = ref(false)
@@ -229,11 +296,11 @@ const itemForm = reactive<DictItemCommand>({
 })
 
 const canWrite = computed(() => auth.hasPermission('business-settings:dict:write'))
-const parentOptions = computed(() => items.value.filter((item) => item.id !== editingItemId.value))
+const parentOptions = computed(() => standardItems.value.filter((item) => item.id !== editingItemId.value))
 
 const itemTree = computed<DictItemTree[]>(() => {
   const nodes = new Map<string, DictItemTree>()
-  items.value.forEach((item) => nodes.set(item.dictionaryItemCode, { ...item, children: [] }))
+  visibleItems.value.forEach((item) => nodes.set(item.dictionaryItemCode, { ...item, children: [] }))
   const roots: DictItemTree[] = []
   nodes.forEach((node) => {
     const parent = node.parentDictionaryItemCode ? nodes.get(node.parentDictionaryItemCode) : null
@@ -280,6 +347,7 @@ async function loadDictionaryItemSummaries(rows: DictView[]) {
 }
 
 async function openItemsDrawer(row: DictView) {
+  itemMode.value = 'standard'
   itemDrawerVisible.value = true
   await selectDict(row)
 }
@@ -298,7 +366,7 @@ async function selectDict(row: DictView | null) {
 }
 
 function dictionaryItems(dictionary: DictView) {
-  return (dictionaryItemsMap.value[dictionary.id] || [])
+  return (dictionaryItemsMap.value[dictionary.id] || []).filter(item => !item.canonicalItemCode)
     .sort((a, b) => a.ordinal - b.ordinal || a.dictionaryItemCode.localeCompare(b.dictionaryItemCode))
 }
 
@@ -401,6 +469,7 @@ async function saveItem() {
     ElMessage.success('字典项保存成功')
     itemDialog.value = false
     await selectDict(selectedDict.value)
+    await refreshBusinessDictionaries()
   } finally {
     saving.value = false
   }

@@ -30,6 +30,9 @@ export interface DictItemView {
   dictionaryItemCode: string
   /** 面向业务人员的字典项名称。 */
   dictionaryItemName: string
+  /** 旧编码对应的标准项；存在时只用于历史解析。 */
+  canonicalDictionaryCode?: string | null
+  canonicalItemCode?: string | null
   /** 字典项说明。 */
   remark: string | null
   /** 展示顺序。 */
@@ -115,4 +118,53 @@ export function createBizDictItem(dictId: string | number, command: DictItemComm
 /** 修改字典项。 */
 export function updateBizDictItem(itemId: string | number, command: DictItemCommand) {
   return apiClient.put<DictItemView>(`${BASE_PATH}/items/${encodeURIComponent(String(itemId))}`, command)
+}
+
+export interface DictMergePreview {
+  source: DictItemView
+  target: DictItemView
+  childReferences: number
+  aliasReferences: number
+  blockers: string[]
+}
+
+export function previewBizDictMerge(itemId: string | number, targetItemId: string | number) {
+  return apiClient.get<DictMergePreview>(`${BASE_PATH}/items/${itemId}/merge-preview`, { params: { targetItemId } })
+}
+
+export function mergeBizDictItem(itemId: string | number, command: {
+  targetItemId: string | number; sourceRevision: number; targetRevision: number; reason: string
+}) {
+  return apiClient.post<DictMergePreview>(`${BASE_PATH}/items/${itemId}/merge`, command)
+}
+
+export interface DictionarySourceMapping {
+  id: string
+  sourceSystem: string
+  sourceScope: string
+  dictionaryCode: string
+  sourceField: string
+  sourceValue: string
+  targetDictionaryCode: string | null
+  targetItemCode: string | null
+  mappingStatus: 'PENDING' | 'MAPPED'
+  manualOverride: boolean
+  revision: number
+  firstSeen: string
+  lastSeen: string
+}
+
+export function getDictionarySourceMappings(dictionaryCode: string) {
+  return apiClient.get<DictionarySourceMapping[]>('/integration/dictionary-mappings', { params: { dictionaryCode } })
+}
+
+export function updateDictionarySourceMapping(id: string, command: {
+  targetDictionaryCode: string; targetItemCode: string; revision: number
+}) {
+  return apiClient.put<DictionarySourceMapping>(`/integration/dictionary-mappings/${id}`, command)
+}
+
+export function rescanDictionarySources(dictionaryCode: string) {
+  return apiClient.post<{ batches: number; rows: number; observedValues: number; pendingValues: number; truncated: boolean }>(
+    '/integration/dictionary-mappings/rescan', null, { params: { dictionaryCode }, timeout: 120000 })
 }

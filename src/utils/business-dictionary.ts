@@ -105,6 +105,7 @@ export function businessDictionaryLabel(
 /** 返回启用字典项，供筛选器与业务表格共用同一份服务端配置。 */
 export function businessDictionaryOptions(moduleCode: string, code: string): BusinessDictionaryOption[] {
   return snapshot(moduleCode, code).items
+    .filter((item) => !item.canonicalItemCode)
     .map((item) => ({ label: item.dictionaryItemName, value: item.dictionaryItemCode }))
 }
 
@@ -112,6 +113,14 @@ export function businessDictionaryOptions(moduleCode: string, code: string): Bus
 export function sourceText(value: string | null | undefined): string {
   const normalized = value?.trim()
   return normalized || '-'
+}
+
+/** 字典治理保存后刷新已加载快照，使已打开业务页面同步更新。 */
+export async function refreshBusinessDictionaries(): Promise<void> {
+  await Promise.all([...requests.values()])
+  const codes = Object.keys(snapshots)
+  codes.forEach((code) => { snapshots[code]!.loaded = false })
+  await loadBusinessDictionaries(codes.map((code) => ({ moduleCode: '', code })))
 }
 
 /** 测试隔离入口；生产代码不应主动清空已加载快照。 */
