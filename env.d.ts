@@ -1,4 +1,6 @@
 /// <reference types="vite/client" />
+/// <reference types="element-plus/global" />
+// 首次 Git 克隆也加载组件类型，不依赖 Vite 上次生成的 components.d.ts。
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
