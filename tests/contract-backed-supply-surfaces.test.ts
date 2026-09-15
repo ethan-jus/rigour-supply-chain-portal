@@ -320,8 +320,8 @@ describe('合同驱动的供应链页面', () => {
   })
 
   it('BI 专题通过驾驶舱呈现，明细和数据治理按需打开', () => {
-    expect(biDashboardSource).toContain('CockpitFigure')
-    expect(biDashboardSource).toContain('cockpit-canvas')
+    expect(biDashboardSource).toContain('CockpitWorkspace')
+    expect(biDashboardSource).toContain('workspace-navigation')
     expect(biDashboardSource).toContain('核心经营指标')
     expect(biDashboardSource).toContain('getSupplyDashboardOverview')
     expect(biDashboardSource).toContain('getSupplyDashboardReconciliation')
@@ -333,7 +333,10 @@ describe('合同驱动的供应链页面', () => {
     expect(biDashboardSource).not.toContain('overview-supply-chain-map')
     expect(biApiSource).toContain('ownerStaffCode?: string')
     expect(biApiSource).not.toContain('ownerEmployeeCode?: string')
-    expect(biChartSource).toContain('ScatterChart')
+    expect(biChartSource).toContain('HeatmapChart')
+    expect(biChartSource).toContain('LineChart')
+    expect(biChartSource).not.toContain('ScatterChart')
+    expect(biChartSource).not.toContain('SunburstChart')
   })
 
 

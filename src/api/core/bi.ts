@@ -33,6 +33,10 @@ export interface SupplyDashboardRankingItem {
   dimensionName: string
   regionCode: string | null
   regionName: string | null
+  /** HR 员工当前归属；不参与订单城市筛选。 */
+  currentRegionName?: string | null
+  /** 所选期间及筛选范围内的订单城市。 */
+  orderRegionNames?: string[]
   salesAmount: number
   paidAmount: number
   unpaidAmount: number
@@ -263,6 +267,8 @@ export type SupplyDashboardRefreshSourceCode =
   | 'ERP_STOCK_BALANCE'
   | 'ERP_INVENTORY_OPERATION'
   | 'BI_RECONCILIATION_CURRENT'
+  | 'HR_EMPLOYEE'
+  | 'SALES_SUBMITTED_VISIT'
 
 export interface SupplyDashboardRefreshCommand {
   sourceCodes?: SupplyDashboardRefreshSourceCode[]

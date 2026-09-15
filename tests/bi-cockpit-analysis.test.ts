@@ -150,6 +150,39 @@ describe('经营分析与筛选口径', () => {
     expect(figure.rows[0]).toMatchObject({ regionCode: 'BJ', code: '7', dimension: 'CATEGORY' })
     expect(figure.rows[0].cells.销售额).toBe('¥123.45')
   })
+  it('未归类订单金额在前五品类外仍可见并能按城市核查订单', () => {
+    const data = analysis()
+    data.cityProducts = Array.from({ length: 6 }, (_, i) => ({
+      regionCode: 'BJ',
+      regionName: '北京',
+      categoryCode: String(i + 1),
+      categoryName: `分类${i + 1}`,
+      salesAmount: 100 - i,
+      orderCount: 2,
+      customerCount: 1,
+    }))
+    data.cityProducts.push({
+      regionCode: 'BJ',
+      regionName: '北京',
+      categoryCode: 'UNKNOWN',
+      categoryName: '分类关联待核对',
+      salesAmount: 10.01,
+      orderCount: 1,
+      customerCount: 1,
+    })
+    const figure = operatingAnalysisFigures(data, 'product-sales')[0]
+    const unlinked = figure.rows.find((row) => row.code === 'UNKNOWN')!
+    const option = figure.option as { series: { data: { rowKey: string }[] }[] }
+    expect(figure.rows).toHaveLength(7)
+    expect(unlinked).toMatchObject({
+      kind: 'product',
+      regionCode: 'BJ',
+      dimension: 'CATEGORY',
+      cells: { 销售额: '¥10.01' },
+    })
+    expect(option.series[0].data.some((cell) => cell.rowKey === unlinked.key)).toBe(true)
+    expect(figure.note).toContain('分类关联待核对另行保留')
+  })
   it('期间复购用下单客户作分母，不能平均或相加跨城市客户', () => {
     const data = analysis()
     data.cityCustomers = [

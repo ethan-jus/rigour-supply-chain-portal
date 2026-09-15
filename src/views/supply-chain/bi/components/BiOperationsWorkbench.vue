@@ -51,7 +51,7 @@ const value = ref('')
 const remark = ref('')
 const metrics: Record<BiTargetMetric, string> = {
   SALES_AMOUNT: '销售额', PAID_AMOUNT: '回款额',
-  CONTACTED_CUSTOMER: '建联客户数', COOPERATED_CUSTOMER: '合作客户数',
+  CONTACTED_CUSTOMER: '留资客户数', COOPERATED_CUSTOMER: '合作客户数',
 }
 const statusLabels: Record<BiActionStatus, string> = {
   OPEN: '待处理', IN_PROGRESS: '处理中', RESOLVED: '已解决', DISMISSED: '已驳回',

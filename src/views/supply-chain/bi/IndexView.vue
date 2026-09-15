@@ -69,11 +69,12 @@
         <el-tooltip content="指标口径与数据同步" placement="bottom"
           ><el-button
             text
-            circle
             :icon="InfoFilled"
             aria-label="指标口径与数据同步"
-            @click="openGovernance"
-        /></el-tooltip>
+            @click="openGovernance()"
+            >口径说明</el-button
+          ></el-tooltip
+        >
         <el-tooltip :content="expanded ? '退出大屏' : '大屏模式'" placement="bottom"
           ><el-button
             text
@@ -98,18 +99,19 @@
         ><el-radio-button value="last-month">上月</el-radio-button
         ><el-radio-button value="year">本年</el-radio-button>
       </el-radio-group>
-      <el-date-picker
-        v-model="filters.dateRange"
-        type="daterange"
-        value-format="YYYY-MM-DD"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        range-separator="至"
-        aria-label="日期范围"
-        class="date-filter"
-        size="small"
-        @change="quickPeriod = 'custom'"
-      />
+      <div class="date-filter">
+        <el-date-picker
+          v-model="filters.dateRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          range-separator="至"
+          aria-label="日期范围"
+          size="small"
+          @change="quickPeriod = 'custom'"
+        />
+      </div>
       <el-select
         v-model="filters.regionCode"
         filterable
@@ -139,6 +141,15 @@
           :value="item.optionValue"
           :label="item.optionLabel"
       /></el-select>
+      <ProductCategorySelect
+        v-if="categoryFilterSupported"
+        v-model="filters.productCategoryId"
+        :categories="productCategories"
+        class="dimension-filter"
+        size="small"
+        aria-label="商品分类"
+        placeholder="全部商品分类"
+      />
       <el-tooltip content="更多筛选" placement="bottom"
         ><el-button
           text
@@ -168,12 +179,6 @@
             :value="item.optionValue"
             :label="item.optionLabel"
         /></el-select>
-        <ProductCategorySelect
-          v-if="categoryFilterSupported"
-          v-model="filters.productCategoryId"
-          :categories="productCategories"
-          placeholder="全部商品分类"
-        />
         <el-select
           v-model="filters.sourceSystemCode"
           clearable
@@ -217,104 +222,117 @@
 
     <template v-if="overview && !errorMessage">
       <div class="cockpit-kpis" aria-label="核心经营指标">
-        <component
-          :is="kpi.section ? 'button' : 'div'"
-          v-for="kpi in model.kpis"
+        <div
+          v-for="kpi in headlineKpis"
           :key="kpi.label"
-          :type="kpi.section ? 'button' : undefined"
           class="cockpit-kpi"
-          :class="{ 'cockpit-kpi--link': kpi.section }"
           :style="{ '--metric-color': kpi.color }"
-          :title="kpi.definition"
-          @click="kpi.section && openSection(kpi.section)"
+          :title="
+            [kpi.definition, comparisonLabel(comparison, kpi.label), comparisonPeriod]
+              .filter(Boolean)
+              .join('；')
+          "
         >
-          <span>{{ kpi.label }} <small v-if="kpi.sample" class="sample-label">样例</small></span
-          ><strong>{{ kpi.value }}</strong>
-          <small
-            v-if="comparisonLabel(comparison, kpi.label)"
-            class="kpi-comparison"
-            :title="comparisonPeriod"
-            >{{ comparisonLabel(comparison, kpi.label) }}</small
+          <span
+            >{{ kpi.label }} <small v-if="kpi.sample" class="sample-label">样例</small>
+            <button
+              class="metric-info"
+              type="button"
+              :aria-label="`${kpi.label}口径说明`"
+              title="口径说明"
+              @click="openGovernance(`kpi:${kpi.label}`)"
+            >
+              <el-icon><InfoFilled /></el-icon>
+            </button>
+          </span>
+          <component
+            :is="kpi.section ? 'button' : 'div'"
+            :type="kpi.section ? 'button' : undefined"
+            class="cockpit-kpi__value"
+            :class="{ 'cockpit-kpi--link': kpi.section }"
+            @click="kpi.section && openSection(kpi.section)"
           >
-        </component>
+            <strong>{{ kpi.value }}</strong>
+            <small
+              v-if="
+                comparison &&
+                comparison.previous.orderCount > 0 &&
+                comparisonLabel(comparison, kpi.label)
+              "
+              class="kpi-comparison"
+              :title="comparisonPeriod"
+              >{{ comparisonLabel(comparison, kpi.label) }}</small
+            >
+          </component>
+        </div>
       </div>
-      <div class="chart-toolbar">
-        <div class="chart-toolbar__left">
-          <el-tabs
+      <div class="workspace-navigation">
+        <div
+          class="workspace-tabs"
+          role="tablist"
+          aria-label="经营分析"
+          aria-orientation="horizontal"
+          @keydown="onAnalysisKeydown"
+        >
+          <button
+            v-for="view in workspaceTabs"
+            :id="`${workspaceId}-tab-${view.id}`"
+            :key="view.id"
+            type="button"
+            role="tab"
+            :aria-selected="activeAnalysis === view.id"
+            :aria-controls="`${workspaceId}-panel`"
+            :tabindex="activeAnalysis === view.id ? 0 : -1"
+            @click="activeAnalysis = view.id"
+          >
+            {{ view.label }}
+          </button>
+        </div>
+        <div class="workspace-navigation__tools">
+          <el-button
+            v-if="section === 'customer'"
+            size="small"
+            @click="customerAttributesVisible = true"
+            >客户属性</el-button
+          >
+          <el-select
+            v-if="isInventory"
+            v-model="chartOptions.inventoryUnit"
+            size="small"
+            aria-label="库存计量单位"
+            class="inventory-unit"
+          >
+            <el-option
+              v-for="unit in inventoryUnits"
+              :key="unit"
+              :value="unit"
+              :label="unitName(unit)"
+            />
+          </el-select>
+          <el-radio-group
             v-if="['sales', 'sales-collection'].includes(section)"
             :model-value="section"
-            class="sales-view-tabs"
+            size="small"
             aria-label="销售分析视图"
-            @tab-change="openSection($event === 'sales' ? 'sales' : 'sales-collection')"
-            ><el-tab-pane label="销售" name="sales" /><el-tab-pane
-              label="回款"
-              name="sales-collection"
-          /></el-tabs>
-          <el-radio-group
-            v-if="['overview', 'sales-collection', 'city-operating'].includes(section)"
-            v-model="chartOptions.period"
-            size="small"
-            aria-label="趋势粒度"
-            ><el-radio-button value="month">月趋势</el-radio-button
-            ><el-radio-button value="day">日趋势</el-radio-button></el-radio-group
+            @change="openSection($event === 'sales' ? 'sales' : 'sales-collection')"
+            ><el-radio-button value="sales">销售</el-radio-button
+            ><el-radio-button value="sales-collection">回款</el-radio-button></el-radio-group
           >
-          <el-radio-group
-            v-if="['overview', 'sales', 'city-operating'].includes(section)"
-            v-model="chartOptions.rankingMetric"
+          <el-button
+            v-if="['overview', 'city-operating', 'product-sales'].includes(section)"
             size="small"
-            aria-label="业绩排名指标"
+            :icon="Download"
+            @click="openCityProductReport()"
+            >城市商品报表</el-button
           >
-            <el-radio-button value="salesAmount">销售额排名</el-radio-button>
-            <el-radio-button value="paidAmount">订单累计回款排名</el-radio-button>
-          </el-radio-group>
-          <el-radio-group
-            v-if="['product-sales', 'gross-profit'].includes(section)"
-            v-model="chartOptions.productDimension"
-            size="small"
-            aria-label="商品分析维度"
-            ><el-radio-button value="PRODUCT">商品</el-radio-button
-            ><el-radio-button value="SKU">SKU</el-radio-button
-            ><el-radio-button value="CATEGORY">分类</el-radio-button
-            ><el-radio-button value="BRAND">品牌</el-radio-button></el-radio-group
+          <el-button
+            v-if="appliedFilters.regionCode && section === 'city-operating'"
+            link
+            type="primary"
+            @click="clearDimension('regionCode')"
+            >返回全部城市</el-button
           >
-          <el-radio-group
-            v-if="section === 'city-cost'"
-            v-model="chartOptions.costGroup"
-            size="small"
-            aria-label="成本维度"
-            ><el-radio-button value="全部">全部</el-radio-button
-            ><el-radio-button value="货">货</el-radio-button
-            ><el-radio-button value="人">人</el-radio-button
-            ><el-radio-button value="场">场</el-radio-button></el-radio-group
-          >
-          <template v-if="isInventory"
-            ><span>计量单位</span
-            ><el-select
-              v-model="chartOptions.inventoryUnit"
-              size="small"
-              aria-label="库存计量单位"
-              style="width: 100px"
-              ><el-option
-                v-for="unit in inventoryUnits"
-                :key="unit"
-                :value="unit"
-                :label="unitName(unit)" /></el-select
-          ></template>
         </div>
-        <el-button
-          v-if="['overview', 'city-operating', 'product-sales'].includes(section)"
-          size="small"
-          :icon="Download"
-          @click="openCityProductReport()"
-          >城市商品报表</el-button
-        >
-        <el-button
-          v-if="appliedFilters.regionCode && section === 'city-operating'"
-          link
-          type="primary"
-          @click="clearDimension('regionCode')"
-          >返回全部城市</el-button
-        >
       </div>
       <div v-if="inventoryFilterConflict" class="inventory-scope-notice">
         库存快照尚不支持城市／销售／客户类型／订单来源筛选，已暂停展示库存汇总。<el-button
@@ -332,51 +350,79 @@
         前期比较暂不可用，当前期间指标不受影响。
         <el-button link type="primary" @click="refreshDashboard">重试</el-button>
       </div>
-      <section class="cockpit-canvas" :aria-busy="loading" v-loading="loading">
-        <CockpitFigure
-          v-for="figure in primaryFigures"
-          :key="`${section}-${figure.id}`"
-          :figure="figure"
-          @inspect="inspectFigure"
-          @resolve-empty="resolveEmpty"
-        />
-      </section>
-      <aside
-        v-if="model.actions.length && section !== 'activity'"
-        class="cockpit-actions"
-        aria-label="优先跟进"
+      <section
+        :id="`${workspaceId}-panel`"
+        role="tabpanel"
+        :aria-labelledby="`${workspaceId}-tab-${activeAnalysis}`"
+        tabindex="0"
       >
-        <strong>优先跟进</strong>
-        <button
-          v-for="action in model.actions"
-          :key="action.label"
-          type="button"
-          @click="inspectAction(action)"
-        >
-          <span>{{ action.label }}</span
-          ><b>{{ action.value }}</b
-          ><el-icon><ArrowRight /></el-icon>
-        </button>
-      </aside>
-      <el-tabs v-if="analysisViews.length" v-model="activeAnalysis" class="overview-analysis">
-        <el-tab-pane
-          v-for="view in analysisViews"
-          :key="view.id"
-          :label="view.label"
-          :name="view.id"
-          lazy
-        >
-          <section v-if="activeAnalysis === view.id" class="cockpit-canvas">
-            <CockpitFigure
-              v-for="figure in view.figures"
-              :key="figure.id"
-              :figure="figure"
-              @inspect="inspectFigure"
-              @resolve-empty="resolveEmpty"
-            />
-          </section>
-        </el-tab-pane>
-      </el-tabs>
+        <KeepAlive :key="workspaceCacheKey" :max="6">
+          <CockpitWorkspace
+            :key="`${section}-${activeAnalysis}`"
+            :main="workspace.main"
+            :aside="workspace.aside"
+            :actions="section === 'activity' ? [] : model.actions"
+            :aria-busy="loading"
+            v-loading="loading"
+            @inspect="inspectFigure"
+            @explain="openMetricExplanation"
+            @resolve-empty="resolveEmpty"
+            @action="inspectAction"
+          >
+            <template #figure-tools="{ figure }">
+              <el-radio-group
+                v-if="['trend', 'city-trend', 'receipt-trend'].includes(figure.id)"
+                v-model="chartOptions.period"
+                size="small"
+                aria-label="趋势粒度"
+                ><el-radio-button value="month">月</el-radio-button
+                ><el-radio-button value="day">日</el-radio-button></el-radio-group
+              >
+              <el-radio-group
+                v-if="figure.id === 'performance-ranking'"
+                v-model="chartOptions.rankingMetric"
+                size="small"
+                aria-label="业绩排名指标"
+                ><el-radio-button value="salesAmount">销售额</el-radio-button
+                ><el-radio-button value="paidAmount">累计回款</el-radio-button></el-radio-group
+              >
+              <el-radio-group
+                v-if="
+                  ['product-sales', 'gross-profit'].includes(section) &&
+                  ['products', 'product-profit'].includes(figure.id)
+                "
+                v-model="chartOptions.productDimension"
+                size="small"
+                aria-label="商品分析维度"
+                ><el-radio-button value="PRODUCT">商品</el-radio-button
+                ><el-radio-button value="SKU">规格/型号</el-radio-button
+                ><el-radio-button value="CATEGORY">分类</el-radio-button
+                ><el-radio-button value="BRAND">品牌</el-radio-button></el-radio-group
+              >
+            </template>
+            <template #figure-summary="{ figure }">
+              <div
+                v-if="section === 'overview' && figure.id === 'cost-bridge'"
+                class="cost-readings"
+              >
+                <button
+                  v-for="kpi in costKpis"
+                  :key="kpi.label"
+                  type="button"
+                  :title="kpi.definition"
+                  @click="openSection('city-cost')"
+                >
+                  <span
+                    >{{ kpi.label }}
+                    <small v-if="kpi.sample" class="sample-label">样例</small></span
+                  >
+                  <strong :style="{ color: kpi.color }">{{ kpi.value }}</strong>
+                </button>
+              </div>
+            </template>
+          </CockpitWorkspace>
+        </KeepAlive>
+      </section>
     </template>
     <div
       v-else-if="loading"
@@ -388,6 +434,12 @@
       ><el-button @click="refreshDashboard">重新加载</el-button></el-empty
     >
 
+
+    <CustomerAttributeAnalyticsDialog
+      v-model="customerAttributesVisible"
+      :query="employeeAnalyticsQuery"
+      :scope-label="employeeAnalyticsScope"
+    />
     <BiScopeSettings v-model="scopeSettingsVisible" @changed="refreshDashboard" />
     <CityProductReport
       v-model="cityProductReportVisible"
@@ -547,9 +599,21 @@
       />
     </el-drawer>
 
-    <el-drawer v-model="governanceVisible" title="指标口径与数据同步" size="min(780px, 96vw)">
+    <el-drawer
+      v-model="governanceVisible"
+      title="指标口径与数据同步"
+      size="min(780px, 96vw)"
+      destroy-on-close
+    >
       <el-tabs v-model="governanceTab">
-        <el-tab-pane label="指标口径" name="definitions">
+        <el-tab-pane label="业务口径" name="definitions">
+          <CockpitMetricGuide
+            :entries="metricExplanations"
+            :scope="methodologyScope"
+            :focus="governanceFocus"
+          />
+        </el-tab-pane>
+        <el-tab-pane label="源指标定义" name="source-definitions">
           <dl class="definition-list">
             <template v-for="item in overview?.definitions || []" :key="item.metricCode"
               ><dt>{{ item.metricName }}</dt>
@@ -657,18 +721,19 @@ import {
 } from '@/utils/business-date'
 import {
   computed,
+  nextTick,
   onActivated,
   onBeforeUnmount,
   onDeactivated,
   onMounted,
   reactive,
   ref,
+  useId,
   watch,
 } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowRight,
   Aim,
   Close,
   Connection,
@@ -704,7 +769,9 @@ import type { ErpProductCategoryView } from '@/api/core/erp-internal'
 import { useAuthStore } from '@/stores/auth'
 import { useNavigationStore } from '@/stores/navigation'
 import ProductCategorySelect from '@/components/supply/ProductCategorySelect.vue'
-import CockpitFigure from './components/CockpitFigure.vue'
+import CockpitWorkspace from './components/CockpitWorkspace.vue'
+import CockpitMetricGuide from './components/CockpitMetricGuide.vue'
+import { buildMetricExplanations } from './cockpit-methodology'
 import CityProductReport from './components/CityProductReport.vue'
 import BiOperationsWorkbench from './components/BiOperationsWorkbench.vue'
 import { biErrorMessage as errorText, biNeedsLogin } from './bi-error'
@@ -715,6 +782,9 @@ import type { BiAction, BiActionSeed } from '@/api/core/bi-operations'
 import type { CityProductReportQuery } from '@/api/core/bi-city-product-report'
 import { buildCockpitDetailExcel } from './cockpit-export'
 import { loadReportDictionaries, reportSourceName } from './report-format'
+import CustomerAttributeAnalyticsDialog from './components/CustomerAttributeAnalyticsDialog.vue'
+import { getCityContactAnalytics, type CityContactAnalytics } from '@/api/core/bi-city-contacts'
+import { cityContactFigure } from './cockpit-city-contacts'
 import {
   buildCockpit,
   cockpitSections,
@@ -761,6 +831,17 @@ const emptyFilters = (): Filters => ({
   sourceSystemCode: '',
 })
 const filters = reactive<Filters>(emptyFilters())
+const customerAttributesVisible = ref(false)
+const cityContacts = ref<CityContactAnalytics | null>(null)
+const cityContactError = ref('')
+const employeeAnalyticsQuery = computed(() => {
+  const { from, to, regionCode, ownerStaffCode } = queryFor(appliedFilters.value)
+  return { from, to, regionCode, ownerStaffCode }
+})
+const employeeAnalyticsScope = computed(() => `${rangeLabel.value} · ${
+  appliedFilters.value.regionCode ? filterDisplayValue('regionCode') : '全部城市'
+} · ${appliedFilters.value.ownerStaffCode ? filterDisplayValue('ownerStaffCode') : '全部员工'}`)
+
 const appliedFilters = ref<Filters>(emptyFilters())
 const quickPeriod = ref('year')
 const moreFilters = ref(false)
@@ -995,20 +1076,77 @@ const model = computed(() =>
       })
     : { figures: [], kpis: [], actions: [] },
 )
-const activeAnalysis = ref('')
-const layout = computed(() => cockpitLayout(section.value, model.value.figures))
-const primaryFigures = computed(() => layout.value.primary)
+const activeAnalysis = ref('monitor')
+const workspaceId = `bi-workspace-${useId()}`
+const workspaceDataVersion = ref(0)
+watch(overview, () => {
+  workspaceDataVersion.value += 1
+})
+// Inactive tabs retain UI state only within the same data and authorization scope.
+const workspaceCacheKey = computed(() =>
+  JSON.stringify([
+    section.value,
+    appliedFilters.value,
+    effectiveScope.value,
+    authStore.user?.id,
+    authStore.user?.tenantId,
+    authStore.user?.roles,
+    authStore.user?.permissions,
+    chartOptions,
+    workspaceDataVersion.value,
+  ]),
+)
+const layout = computed(() => cockpitLayout(section.value, [
+  ...model.value.figures,
+  ...(section.value === 'city-operating' ? [cityContactFigure(cityContacts.value, cityContactError.value)] : []),
+]))
+const headlineKpis = computed(() =>
+  section.value === 'overview' ? model.value.kpis.slice(0, 4) : model.value.kpis,
+)
+const costKpis = computed(() => (section.value === 'overview' ? model.value.kpis.slice(4) : []))
+const workspace = computed(() => {
+  if (activeAnalysis.value === 'monitor') return layout.value
+  const figures =
+    analysisViews.value.find((view) => view.id === activeAnalysis.value)?.figures || []
+  return {
+    main: figures.filter((figure, index) => index === 0 || (!figure.compact && figure.span !== 4)),
+    aside: figures.filter((figure, index) => index > 0 && (figure.compact || figure.span === 4)),
+  }
+})
 const analysisViews = computed(() => [
   ...layout.value.groups,
   ...(comparison.value && comparison.value.previous.orderCount > 0
     ? [{ id: 'growth', label: '增长来源', figures: [growthFigure(comparison.value)] }]
     : []),
 ])
+const workspaceTabs = computed(() => [
+  { id: 'monitor', label: layout.value.label },
+  ...analysisViews.value.map(({ id, label }) => ({ id, label })),
+])
+async function onAnalysisKeydown(event: KeyboardEvent) {
+  const index = workspaceTabs.value.findIndex((tab) => tab.id === activeAnalysis.value)
+  const count = workspaceTabs.value.length
+  const next = {
+    ArrowRight: (index + 1) % count,
+    ArrowLeft: (index + count - 1) % count,
+    Home: 0,
+    End: count - 1,
+  }[event.key]
+  if (next == null) return
+  event.preventDefault()
+  const tablist = event.currentTarget as HTMLElement
+  activeAnalysis.value = workspaceTabs.value[next].id
+  await nextTick()
+  tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+}
 watch(
   [section, analysisViews],
   ([, views]) => {
-    if (!views.some((view) => view.id === activeAnalysis.value))
-      activeAnalysis.value = views[0]?.id || ''
+    if (
+      activeAnalysis.value !== 'monitor' &&
+      !views.some((view) => view.id === activeAnalysis.value)
+    )
+      activeAnalysis.value = 'monitor'
   },
   { immediate: true },
 )
@@ -1163,6 +1301,26 @@ function inspectAction(action: CockpitAction) {
 
 const governanceVisible = ref(false)
 const governanceTab = ref('definitions')
+const governanceFocus = ref('')
+const metricExplanations = computed(() =>
+  overview.value
+    ? buildMetricExplanations(
+        overview.value,
+        model.value.kpis,
+        [
+          ...layout.value.primary,
+          ...analysisViews.value
+            .flatMap((view) => view.figures)
+            .filter((figure) => !model.value.figures.some((item) => item.id === figure.id)),
+        ],
+        { ...chartOptions, ownerStaffCode: appliedFilters.value.ownerStaffCode },
+      )
+    : [],
+)
+const methodologyScope = computed(
+  () =>
+    `${rangeLabel.value} · ${scopeTags.value.map((tag) => tag.label).join(' · ') || '当前账号授权范围'}`,
+)
 const reconciliation = ref<SupplyDashboardReconciliation | null>(null)
 const reconciliationLoading = ref(false)
 const reconciliationError = ref('')
@@ -1188,6 +1346,8 @@ const refreshModes: { key: string; label: string; sources: SupplyDashboardRefres
         'ERP_STOCK_BALANCE',
         'ERP_INVENTORY_OPERATION',
         'BI_RECONCILIATION_CURRENT',
+        'HR_EMPLOYEE',
+        'SALES_SUBMITTED_VISIT',
       ],
     },
     {
@@ -1201,6 +1361,7 @@ const refreshModes: { key: string; label: string; sources: SupplyDashboardRefres
       ],
     },
     { key: 'customer', label: '客户', sources: ['CRM_CUSTOMER'] },
+    { key: 'people-contacts', label: '员工与建联', sources: ['HR_EMPLOYEE', 'SALES_SUBMITTED_VISIT'] },
     {
       key: 'inventory',
       label: '商品与库存',
@@ -1222,9 +1383,14 @@ const refreshModes: { key: string; label: string; sources: SupplyDashboardRefres
       ],
     },
   ]
-function openGovernance() {
+function openGovernance(focus = '') {
+  governanceFocus.value = focus
+  governanceTab.value = 'definitions'
   governanceVisible.value = true
   if (effectiveScope.value?.globalGovernance) void loadDataTrust()
+}
+function openMetricExplanation(figure: Figure) {
+  openGovernance(`figure:${figure.id}`)
 }
 async function loadDataTrust() {
   trustError.value = ''
@@ -1285,6 +1451,8 @@ async function loadDashboard(source: Filters = filters) {
   authenticationRequired.value = false
   operatingAnalysis.value = undefined
   analysisError.value = ''
+  cityContacts.value = null
+  cityContactError.value = '正在加载 Sales 城市建联数据'
   comparison.value = undefined
   comparisonError.value = ''
   try {
@@ -1320,6 +1488,20 @@ async function loadDashboard(source: Filters = filters) {
     }
     appliedFilters.value = snapshot
     reconciliation.value = null
+    if (section.value === 'city-operating') {
+      if (snapshot.customerTypeCode || snapshot.sourceSystemCode || snapshot.productCategoryId) {
+        cityContactError.value = 'Sales 建联统计暂不支持客户类型、商品分类或订单来源筛选，请清除这些条件'
+      } else {
+        void getCityContactAnalytics(queryFor(snapshot))
+          .then((result) => {
+            if (sequence === requestSequence) { cityContacts.value = result; cityContactError.value = '' }
+          })
+          .catch((reason: unknown) => {
+            if (sequence === requestSequence) cityContactError.value = errorText(reason, 'Sales 城市建联数据加载失败，请刷新重试')
+          })
+      }
+    }
+
     if (comparisonSections.includes(section.value)) {
       void getBiComparison(queryFor(snapshot))
         .then((data) => {
@@ -1761,7 +1943,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #203049;
   min-width: 0;
-  border-top: 3px solid #2864e8;
+  padding: 0 24px 20px;
   letter-spacing: 0;
 }
 .bi-cockpit--expanded {
@@ -1776,7 +1958,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 15px 22px 10px;
+  padding: 18px 0 12px;
 }
 .cockpit-heading {
   display: flex;
@@ -1785,7 +1967,7 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 h1 {
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.5;
   font-weight: 650;
   margin: 0;
@@ -1807,6 +1989,7 @@ h1 {
 .cockpit-tools {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
 }
 .cockpit-tools :deep(.el-button + .el-button) {
@@ -1817,12 +2000,17 @@ h1 {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 0 22px 14px;
+  padding: 0 0 14px;
   border-bottom: 1px solid #e4eaf2;
 }
 .date-filter {
-  flex: 0 1 248px !important;
-  max-width: 280px;
+  flex: 0 0 280px;
+  width: 280px;
+  min-width: 0;
+}
+.date-filter :deep(.el-date-editor) {
+  width: 100%;
+  box-sizing: border-box;
 }
 .dimension-filter {
   width: 145px;
@@ -1847,7 +2035,7 @@ h1 {
 .cockpit-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  padding: 19px 14px;
+  padding: 18px 0;
   gap: 0;
 }
 .cockpit-kpi {
@@ -1856,9 +2044,12 @@ h1 {
   background: transparent;
   border: 0;
   border-right: 1px solid #e4eaf2;
-  padding: 0 20px;
+  padding: 0 24px;
   min-width: 0;
   color: inherit;
+}
+.cockpit-kpi:first-child {
+  padding-left: 0;
 }
 .cockpit-kpi:last-child {
   border-right: 0;
@@ -1880,7 +2071,7 @@ h1 {
 }
 .cockpit-kpi strong {
   display: block;
-  font-size: 28px;
+  font-size: 32px;
   line-height: 1.5;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -1890,6 +2081,30 @@ h1 {
 .cockpit-kpi--link {
   cursor: pointer;
 }
+.cockpit-kpi__value {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  max-width: 100%;
+}
+.metric-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: #667085;
+  cursor: pointer;
+}
+.metric-info:focus-visible,
+.cockpit-kpi__value:focus-visible {
+  outline: 2px solid #2864e8;
+  outline-offset: 2px;
+}
 .sample-label {
   color: #a86c15;
   background: #fff5df;
@@ -1897,78 +2112,68 @@ h1 {
   padding: 1px 4px;
   font-weight: 500;
 }
-.chart-toolbar {
-  padding: 6px 22px 10px;
+.workspace-navigation {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  min-height: 18px;
+  gap: 12px;
+  min-width: 0;
 }
-.chart-toolbar__left {
+.workspace-tabs {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: #637085;
+  overflow-x: auto;
 }
-.sales-view-tabs :deep(.el-tabs__header) {
-  margin: 0;
-}
-.sales-view-tabs :deep(.el-tabs__item) {
-  height: 28px;
-  font-size: 12px;
-}
-.cockpit-canvas {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-}
-.overview-analysis {
-  margin-top: 12px;
-}
-.overview-analysis :deep(.el-tabs__header) {
-  margin: 0;
-  padding: 0 22px;
-}
-.overview-analysis :deep(.el-tabs__item) {
-  height: 46px;
-  font-size: 15px;
-}
-.cockpit-actions {
-  border-top: 1px solid #e4eaf2;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 14px 22px;
-  flex-wrap: wrap;
-  font-size: 12px;
-}
-.cockpit-actions > strong {
-  white-space: nowrap;
-  color: #a96c13;
-}
-.cockpit-actions button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font: inherit;
-  background: transparent;
-  color: #45566e;
+.workspace-tabs [role='tab'] {
+  min-height: 48px;
+  flex: 0 0 auto;
+  font-size: 14px;
+  padding: 0 18px;
+  font-family: inherit;
   border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #637085;
   cursor: pointer;
-  text-align: left;
-  max-width: 100%;
 }
-.cockpit-actions button span {
-  max-width: 220px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.workspace-tabs [role='tab'][aria-selected='true'] {
+  color: #2864e8;
+  border-bottom-color: #2864e8;
 }
-.cockpit-actions b {
-  color: #bd7118;
-  white-space: nowrap;
+.workspace-navigation__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.inventory-unit {
+  width: 100px;
+}
+.cost-readings {
+  display: flex;
+  align-items: baseline;
+  gap: 38px;
+  margin: 2px 0 6px;
+}
+.cost-readings button {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.cost-readings span {
+  font-size: 12px;
+  color: #627185;
+}
+.cost-readings strong {
+  font-size: 23px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
 }
 .load-error {
   margin: 12px 0;
@@ -2035,7 +2240,7 @@ button:focus-visible {
 }
 @media (max-width: 1100px) {
   .cockpit-kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
     gap: 14px 0;
   }
   .cockpit-kpi strong {
@@ -2046,19 +2251,22 @@ button:focus-visible {
   }
 }
 @media (max-width: 720px) {
+  .bi-cockpit {
+    padding: 0 12px 12px;
+  }
   .cockpit-header {
-    padding: 12px;
+    padding: 12px 0;
   }
   h1 {
     font-size: 18px;
   }
   .cockpit-filters {
-    padding: 0 12px 12px;
+    padding: 0 0 12px;
     gap: 8px;
   }
   .date-filter {
     max-width: 100%;
-    flex-basis: 100% !important;
+    flex-basis: 100%;
   }
   .dimension-filter {
     flex: 1 1 120px;
@@ -2074,18 +2282,28 @@ button:focus-visible {
   .cockpit-kpi strong {
     font-size: 20px;
   }
-  .chart-toolbar {
-    padding: 4px 12px 10px;
+  .workspace-navigation {
+    flex-wrap: wrap;
+    gap: 0;
+  }
+  .workspace-tabs {
+    flex-basis: 100%;
+  }
+  .workspace-navigation__tools {
+    padding-bottom: 10px;
+  }
+  .cost-readings {
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .cost-readings button {
+    gap: 8px;
+  }
+  .cost-readings strong {
+    font-size: 19px;
   }
   .scope-date {
     flex-basis: 100%;
-  }
-  .cockpit-actions {
-    padding: 12px;
-    gap: 12px;
-  }
-  .cockpit-actions button {
-    flex-wrap: wrap;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -6,93 +6,123 @@ interface AnalysisGroup {
   figures: string[]
 }
 interface Layout {
-  primary: string[]
+  label: string
+  main: string[]
+  aside: string[]
   groups: AnalysisGroup[]
 }
+
 const layouts: Record<CockpitSection, Layout> = {
   overview: {
-    primary: ['trend', 'collection-progress', 'cost-bridge', 'cost-structure'],
+    label: '经营监测',
+    main: ['trend', 'cost-bridge'],
+    aside: ['collection-progress', 'cities'],
     groups: [
-      { id: 'cities', label: '城市与商品', figures: ['cities', 'products', 'city-products'] },
+      { id: 'cities', label: '城市与商品', figures: ['city-products', 'products'] },
       { id: 'sales', label: '全国销售业绩', figures: ['performance-ranking'] },
+      { id: 'costs', label: '费用构成', figures: ['cost-structure'] },
     ],
   },
   sales: {
-    primary: ['performance-ranking', 'monthly-sales', 'collection-progress', 'targets'],
+    label: '业绩监测',
+    main: ['performance-ranking', 'monthly-sales'],
+    aside: ['collection-progress', 'targets'],
     groups: [
       { id: 'collection', label: '销售回款比较', figures: ['sales-ranking'] },
       { id: 'movement', label: '业绩变化', figures: ['sales-movement'] },
     ],
   },
   'sales-collection': {
-    primary: ['trend', 'collection-progress', 'receipt-trend', 'aging'],
+    label: '回款监测',
+    main: ['receipt-trend', 'trend'],
+    aside: ['collection-progress', 'aging'],
     groups: [{ id: 'receipts', label: '到账责任人', figures: ['receipt-ranking'] }],
   },
   'city-operating': {
-    primary: [
-      'city-trend',
-      'city-collection-progress',
-      'cities',
-      'aging',
-      'cost-bridge',
-      'city-costs',
-    ],
+    label: '城市经营',
+    main: ['city-trend', 'cities', 'city-contacts', 'cost-bridge', 'city-costs'],
+    aside: ['city-collection-progress', 'aging', 'products'],
     groups: [
       {
         id: 'team',
         label: '团队与目标',
         figures: ['performance-ranking', 'targets', 'city-sellers'],
       },
-      {
-        id: 'products',
-        label: '商品与客户',
-        figures: ['products', 'city-products', 'city-repeat'],
-      },
+      { id: 'products', label: '商品与客户', figures: ['city-products', 'city-repeat'] },
     ],
   },
   customer: {
-    primary: ['segments', 'segment-value', 'city-repeat'],
-    groups: [{ id: 'followup', label: '客户价值与待唤醒', figures: ['customer-value', 'churn'] }],
-  },
-  'product-sales': {
-    primary: ['products', 'categories', 'city-products'],
-    groups: [{ id: 'coverage', label: '品牌与客户覆盖', figures: ['brands', 'product-customers'] }],
-  },
-  'gross-profit': {
-    primary: ['product-profit', 'cost-coverage'],
-    groups: [{ id: 'drivers', label: '毛利与退货', figures: ['margins', 'refunds'] }],
-  },
-  'payment-risk': {
-    primary: ['overdue-cities', 'aging'],
+    label: '客户监测',
+    main: ['customer-risk', 'city-repeat'],
+    aside: ['segments'],
     groups: [
-      {
-        id: 'responsibility',
-        label: '销售责任与回款',
-        figures: ['overdue-sales', 'city-paid-rate'],
-      },
+      { id: 'followup', label: '待跟进客户', figures: ['churn'] },
+      { id: 'value', label: '客户贡献', figures: ['customer-value', 'segment-value'] },
     ],
   },
+  'product-sales': {
+    label: '商品动销',
+    main: ['city-products', 'products'],
+    aside: ['categories', 'brands'],
+    groups: [{ id: 'coverage', label: '客户覆盖', figures: ['product-customers'] }],
+  },
+  'gross-profit': {
+    label: '毛利监测',
+    main: ['product-profit', 'margins'],
+    aside: ['cost-coverage'],
+    groups: [{ id: 'refunds', label: '退款影响', figures: ['refunds'] }],
+  },
+  'payment-risk': {
+    label: '逾期监测',
+    main: ['overdue-cities', 'overdue-sales'],
+    aside: ['aging'],
+    groups: [{ id: 'collection', label: '城市回款', figures: ['city-paid-rate'] }],
+  },
   'city-cost': {
-    primary: ['cost-bridge', 'cost-structure', 'city-costs'],
+    label: '成本监测',
+    main: ['cost-bridge', 'city-costs'],
+    aside: ['cost-structure'],
     groups: [
       { id: 'goods', label: '货品与损耗', figures: ['sku-reference-cost', 'sku-costs'] },
       { id: 'people', label: '人力成本', figures: ['human-cost'] },
     ],
   },
   'product-inventory': {
-    primary: ['inventory-flow', 'coverage'],
-    groups: [{ id: 'stock', label: '补货与滞销', figures: ['replenishment', 'inactive-stock'] }],
+    label: '供需监测',
+    main: ['replenishment', 'inventory-flow'],
+    aside: ['coverage'],
+    groups: [{ id: 'stock', label: '历史留存', figures: ['inactive-stock'] }],
   },
   'inventory-risk': {
-    primary: ['risk-levels', 'risk-types'],
-    groups: [{ id: 'replenishment', label: '补货优先级', figures: ['risk-replenishment'] }],
+    label: '库存预警',
+    main: ['risk-replenishment'],
+    aside: ['risk-levels', 'risk-types'],
+    groups: [],
   },
   activity: {
-    primary: ['campaigns', 'conversion'],
-    groups: [
-      { id: 'returns', label: '预算与投入产出', figures: ['campaign-budget', 'campaign-return'] },
-    ],
+    label: '活动监测',
+    main: ['conversion', 'campaigns'],
+    aside: ['campaign-budget'],
+    groups: [{ id: 'returns', label: '投入产出', figures: ['campaign-return'] }],
   },
+}
+
+const heights: Record<string, number> = {
+  trend: 220,
+  'city-trend': 220,
+  'cost-bridge': 230,
+  'collection-progress': 205,
+  'city-collection-progress': 205,
+  'performance-ranking': 280,
+  'monthly-sales': 310,
+  'city-products': 280,
+  'city-costs': 260,
+  'customer-risk': 260,
+  'city-repeat': 240,
+  'cost-structure': 285,
+  replenishment: 310,
+  coverage: 300,
+  'inventory-flow': 240,
 }
 
 export function cockpitLayout(section: CockpitSection, figures: Figure[]) {
@@ -106,35 +136,24 @@ export function cockpitLayout(section: CockpitSection, figures: Figure[]) {
       assigned.add(id)
       return [figure]
     })
-  const primary = take(layout.primary)
+  const main = take(layout.main).map((figure) => ({
+    ...figure,
+    span: 12 as const,
+    height:
+      section === 'city-operating' && ['cities', 'city-contacts'].includes(figure.id) && !figure.comparison
+        ? Math.max(280, figure.rows.length * 26 + 80)
+        : heights[figure.id] || figure.height || 270,
+  }))
+  const aside = take(layout.aside).map((figure) => ({
+    ...figure,
+    span: 12 as const,
+    height: heights[figure.id] || 230,
+  }))
   const groups = layout.groups
     .map((group) => ({ ...group, figures: take(group.figures) }))
     .filter((group) => group.figures.length)
-  // New business figures remain reachable until a dedicated analysis group is assigned.
+  // Keep new source-backed analyses reachable without silently adding another main row.
   const remainder = figures.filter((figure) => !assigned.has(figure.id))
   if (remainder.length) groups.push({ id: 'details', label: '补充分析', figures: remainder })
-  return {
-    primary: fillRows(primary),
-    groups: groups.map((group) => ({ ...group, figures: fillRows(group.figures) })),
-  }
-}
-
-function fillRows(figures: Figure[]): Figure[] {
-  const result: Figure[] = []
-  let row: Figure[] = []
-  let width = 0
-  const flush = () => {
-    result.push(...(row.length === 1 ? [{ ...row[0], span: 12 as const }] : row))
-    row = []
-    width = 0
-  }
-  for (const figure of figures) {
-    const span = figure.compact ? 12 : figure.span
-    if (width + span > 12) flush()
-    row.push(figure)
-    width += span
-    if (width === 12) flush()
-  }
-  flush()
-  return result
+  return { label: layout.label, main, aside, primary: [...main, ...aside], groups }
 }

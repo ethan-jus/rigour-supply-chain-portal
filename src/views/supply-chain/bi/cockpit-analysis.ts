@@ -49,7 +49,12 @@ export function operatingAnalysisFigures(
       categoryTotals.set(row.categoryCode, category)
     }
     const cities = [...cityTotals].sort((a, b) => b[1].amount - a[1].amount).slice(0, 8)
-    const categories = [...categoryTotals].sort((a, b) => b[1].amount - a[1].amount).slice(0, 5)
+    const rankedCategories = [...categoryTotals].sort((a, b) => b[1].amount - a[1].amount)
+    const categories = rankedCategories.slice(0, 5)
+    const unlinkedCategory = rankedCategories.find(([code]) => code === 'UNKNOWN')
+    if (unlinkedCategory && !categories.some(([code]) => code === 'UNKNOWN')) {
+      categories.push(unlinkedCategory)
+    }
     const plot = cities.map(([code, city]) => ({
       key: code,
       name: city.name,
@@ -59,7 +64,10 @@ export function operatingAnalysisFigures(
       key: key(row.regionCode, row.categoryCode),
       name: `${row.regionName || '未归属城市'} · ${row.categoryName || '未分类'}`,
       kind:
-        concreteDimension(row.regionCode) && /^\d+$/.test(row.categoryCode) ? 'product' : undefined,
+        concreteDimension(row.regionCode) &&
+        (/^\d+$/.test(row.categoryCode) || row.categoryCode === 'UNKNOWN')
+          ? 'product'
+          : undefined,
       dimension: 'CATEGORY',
       code: row.categoryCode,
       regionCode: row.regionCode,
@@ -82,7 +90,7 @@ export function operatingAnalysisFigures(
         { money: true, cellKey: (row, x) => key(row.key || null, categories[x][0]) },
       ),
       rows,
-      note: '已归属城市及分类的订单行销售额；前8城市、前5品类，明细保留完整返回记录',
+      note: '订单行销售额；前8城市、前5品类，分类关联待核对另行保留；明细含完整返回记录',
       empty: '当前范围没有城市品类销售记录',
     })
   }
@@ -160,7 +168,6 @@ export function operatingAnalysisFigures(
       return {
         key: row.ownerStaffCode,
         name: row.ownerStaffName || row.ownerStaffCode,
-        region: '',
         value: row.paidAmount,
         rank,
       }

@@ -3,7 +3,14 @@
 </template>
 
 <script setup lang="ts">
-import { BarChart, FunnelChart, GaugeChart, HeatmapChart, LineChart, PieChart, ScatterChart, SunburstChart } from 'echarts/charts'
+import {
+  BarChart,
+  FunnelChart,
+  GaugeChart,
+  HeatmapChart,
+  LineChart,
+  PieChart,
+} from 'echarts/charts'
 import {
   DataZoomComponent,
   GridComponent,
@@ -24,8 +31,6 @@ use([
   HeatmapChart,
   LineChart,
   PieChart,
-  ScatterChart,
-  SunburstChart,
   GridComponent,
   GraphicComponent,
   TooltipComponent,
@@ -36,14 +41,17 @@ use([
   CanvasRenderer,
 ])
 
-const props = withDefaults(defineProps<{
-  option: EChartsCoreOption
-  loading?: boolean
-  height?: number | string
-}>(), {
-  loading: false,
-  height: 280,
-})
+const props = withDefaults(
+  defineProps<{
+    option: EChartsCoreOption
+    loading?: boolean
+    height?: number | string
+  }>(),
+  {
+    loading: false,
+    height: 280,
+  },
+)
 
 const emit = defineEmits<{
   (event: 'chart-click', params: unknown): void
@@ -68,12 +76,19 @@ onMounted(() => {
   })
 })
 
-watch(() => props.option, () => renderChart(), { deep: true })
-watch(() => props.loading, (loading) => {
-  if (!chart.value) return
-  if (loading) chart.value.showLoading('default', { text: '加载中' })
-  else chart.value.hideLoading()
-})
+watch(
+  () => props.option,
+  () => renderChart(),
+  { deep: true },
+)
+watch(
+  () => props.loading,
+  (loading) => {
+    if (!chart.value) return
+    if (loading) chart.value.showLoading('default', { text: '加载中' })
+    else chart.value.hideLoading()
+  },
+)
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeChart)

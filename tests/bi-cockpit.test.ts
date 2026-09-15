@@ -188,6 +188,110 @@ describe('BI驾驶舱数据口径', () => {
       ),
     ).toBe(false)
   })
+  it('月度人员小图不把缺失月补零，Top6之外的原始行仍完整可查', () => {
+    const source = data()
+    source.salesRanking = Array.from({ length: 7 }, (_, i) => ({
+      ...city(`S${i}`, 1000 - i),
+      rankType: 'SALES',
+    }))
+    source.salesMonthlyPerformance = [
+      ...source.salesRanking.map((row) => ({
+        period: '2026-06',
+        ownerStaffCode: row.dimensionCode,
+        ownerStaffName: row.dimensionName,
+        regionCode: 'SH',
+        regionName: '上海',
+        salesAmount: row.salesAmount,
+        paidAmount: 12.34,
+        unpaidAmount: row.salesAmount - 12.34,
+        rate: (12.34 / row.salesAmount) * 100,
+        customerCount: 1,
+        orderCount: 1,
+      })),
+    ]
+    source.salesMonthlyPerformance.push(
+      {
+        ...source.salesMonthlyPerformance[0],
+        regionCode: 'BJ',
+        regionName: '北京',
+        salesAmount: 25.5,
+      },
+      { ...source.salesMonthlyPerformance[0], period: '2026-08', salesAmount: 0 },
+      { ...source.salesMonthlyPerformance[1], period: '2026-08', salesAmount: -12.34 },
+    )
+    const before = structuredClone(source)
+    const figure = buildCockpit(source, 'sales', options).figures.find(
+      (row) => row.id === 'monthly-sales',
+    )!
+    expect(figure.smallMultiples?.series).toHaveLength(6)
+    expect(figure.smallMultiples?.rows).toMatchObject([
+      { key: '2026-06', values: [1025.5, 999, 998, 997, 996, 995] },
+      { key: '2026-07', values: [null, null, null, null, null, null] },
+      { key: '2026-08', values: [0, -12.34, null, null, null, null] },
+    ])
+    expect(figure.rows).toHaveLength(source.salesMonthlyPerformance.length)
+    expect(figure.rows.filter((row) => row.groupKey === '2026-06:S0')).toHaveLength(2)
+    expect(figure.rows.find((row) => row.ownerStaffCode === 'S6')).toBeDefined()
+    expect(figure.rows.find((row) => row.groupKey === '2026-08:S1')?.cells.销售额).toBe('¥-12.34')
+    expect(source).toEqual(before)
+  })
+  it('商品页分类和品牌用有限构成图，商品SKU保留排序贡献且空数据不产生样例', () => {
+    const source = data()
+    const products = Array.from({ length: 9 }, (_, i) => ({
+      rankType: 'PRODUCT',
+      dimensionCode: `P${i}`,
+      dimensionName: `商品${i}`,
+      categoryCode: '',
+      categoryName: '',
+      salesQuantity: 1,
+      salesAmount: i + 0.25,
+      discountAmount: 0,
+      refundAmount: 0,
+      salesNetAmount: i + 0.25,
+      estimatedCostAmount: 0,
+      estimatedGrossProfit: 0,
+      estimatedGrossProfitRate: 0,
+      costCoverageRate: 0,
+      orderCount: 1,
+      customerCount: 1,
+    }))
+    source.productSalesRanking =
+      source.skuSalesRanking =
+      source.categorySalesRanking =
+      source.brandSalesRanking =
+        products
+    const before = structuredClone(source)
+    const figures = buildCockpit(source, 'product-sales', options).figures
+    for (const id of ['categories', 'brands']) {
+      const figure = figures.find((row) => row.id === id)!
+      expect(figure.rows).toHaveLength(9)
+      const series = figure.option.series as {
+        type: string
+        data: { rowKey: string; value: number }[]
+      }[]
+      expect(series[0].type).toBe('pie')
+      expect(series[0].data).toHaveLength(6)
+      const grouped = figure.rows.filter((row) => row.groupKey === series[0].data[5].rowKey)
+      expect(grouped).toHaveLength(4)
+      expect(grouped.map((row) => row.code)).toEqual(['P3', 'P2', 'P1', 'P0'])
+    }
+    for (const productDimension of ['PRODUCT', 'SKU'] as const) {
+      const figure = buildCockpit(source, 'product-sales', {
+        ...options,
+        productDimension,
+      }).figures.find((row) => row.id === 'products')!
+      expect(figure.option.series).toMatchObject([{ type: 'bar' }, { type: 'line' }])
+      expect(figure.rows.map((row) => row.key)).toEqual(
+        [...products].reverse().map((row) => row.dimensionCode),
+      )
+    }
+    const empty = buildCockpit(data(), 'product-sales', options).figures.filter((row) =>
+      ['products', 'categories', 'brands'].includes(row.id),
+    )
+    expect(empty).toHaveLength(3)
+    expect(empty.every((row) => !row.rows.length && !row.sample)).toBe(true)
+    expect(source).toEqual(before)
+  })
   it('单人销售页直接看趋势和回款，不把筛选后的唯一销售误标为全国第一', () => {
     const source = data()
     source.salesRanking = [{ ...city('S1', 10000), rankType: 'SALES', dimensionName: '销售甲' }]
@@ -326,7 +430,7 @@ describe('BI驾驶舱数据口径', () => {
         ?.rate,
     ).toBeNull()
   })
-  it('销售和城市用纵向金额对比，不重复堆仪表和横向回款率排行', () => {
+  it('销售仅保留一个整体仪表，对象比较不重复堆仪表或横向回款率排行', () => {
     const source = data()
     source.salesRanking = source.citySalesRanking = [
       { ...city('A', 12000), paidAmount: 11000, unpaidAmount: 1000 },
@@ -334,7 +438,24 @@ describe('BI驾驶舱数据口径', () => {
     ]
     for (const section of ['sales', 'city-operating', 'payment-risk'] as const) {
       const result = buildCockpit(source, section, options)
-      expect(result.figures.some((row) => row.collection)).toBe(false)
+      expect(result.figures.filter((row) => row.collection)).toHaveLength(
+        section === 'sales' ? 1 : 0,
+      )
+      if (section === 'city-operating') {
+        const matrix = result.figures.find((row) => row.id === 'cities')!
+        expect(matrix.comparison).toBeUndefined()
+        expect(matrix.option.series).toMatchObject([
+          { type: 'heatmap' },
+          { type: 'heatmap' },
+          { type: 'heatmap' },
+        ])
+        expect(matrix.rows.map((row) => row.code)).toEqual(['A', 'B'])
+        expect(matrix.rows[1]).toMatchObject({
+          kind: 'city',
+          regionCode: 'B',
+          cells: { 回款率: '0.0%', 待回款: '¥6,000.00' },
+        })
+      }
       const figure = result.figures.find((row) => row.comparison)!
       expect(figure.comparison?.map((row) => row.key)).toEqual(['B', 'A'])
       expect(figure.option.xAxis).toMatchObject({ type: 'category' })
@@ -534,6 +655,21 @@ describe('BI驾驶舱数据口径', () => {
       buildCockpit(source, 'product-inventory', { ...options, inventoryUnit: 'BOTTLE' }).kpis[0]
         .value,
     ).toBe('100瓶')
+    const flow = buildCockpit(source, 'product-inventory', options).figures.find(
+      (row) => row.id === 'inventory-flow',
+    )!
+    expect(flow.option.yAxis).toMatchObject({ name: '箱' })
+    expect(flow.option.series).toMatchObject([
+      { type: 'bar', stack: undefined, data: [{ value: 10 }] },
+      { type: 'bar', stack: undefined, data: [{ value: 0 }] },
+      { type: 'bar', stack: undefined, data: [{ value: 0 }] },
+    ])
+    expect(flow.rows).toHaveLength(1)
+    expect(
+      buildCockpit(source, 'product-inventory', { ...options, inventoryUnit: '' }).figures.find(
+        (row) => row.id === 'inventory-flow',
+      ),
+    ).toMatchObject({ rows: [], empty: '请选择同一计量单位后比较' })
   })
   it('月度趋势汇总金额，不补造缺失月份', () => {
     expect(

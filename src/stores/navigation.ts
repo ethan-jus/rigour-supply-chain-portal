@@ -37,6 +37,8 @@ export const useNavigationStore = defineStore('navigation', () => {
     'supply.hr.positions': '岗位职位',
     'supply.bi.menu': '数据看板',
     'supply.bi.index': '供应链经营总览',
+    'supply.bi.hr': 'HR 人事看板',
+    'supply.bi.sales-visits': '销售拜访看板',
     'supply.bi.sales': '销售看板',
     'supply.bi.city-operating': '城市经营看板',
     'supply.bi.activity': '活动看板',

@@ -12,6 +12,53 @@ export interface PlotSeries {
   color?: string
   unit?: string
 }
+export interface CostSlice extends PlotRow {
+  group: string
+  sample?: boolean
+}
+
+export function costComposition(rows: CostSlice[], group = ''): EChartsCoreOption {
+  const selected = group ? rows.filter((row) => row.group === group) : rows
+  const plot = group
+    ? selected
+    : [...new Set(rows.map((row) => row.group))].map((name) => ({
+        key: name,
+        name,
+        values: [
+          rows
+            .filter((row) => row.group === name)
+            .reduce((sum, row) => sum + Math.round(numeric(row.values[0]) * 100), 0) / 100,
+        ],
+      }))
+  // Negative adjustments cannot be represented faithfully as shares of a circle.
+  if (selected.some((row) => numeric(row.values[0]) < 0))
+    return bars(selected, [{ name: '成本' }], { vertical: true })
+  const total = plot.reduce((sum, row) => sum + Math.round(numeric(row.values[0]) * 100), 0) / 100
+  const option = ring(plot, amount(total), group ? `${group}成本` : '经营成本')
+  return {
+    ...option,
+    legend: {
+      type: 'scroll',
+      selectedMode: false,
+      bottom: 0,
+      left: 'center',
+      itemWidth: 8,
+      itemHeight: 8,
+      textStyle: { fontSize: 12, color: '#45566e' },
+      formatter: (name: string) =>
+        `${name}  ${amount(plot.find((row) => row.name === name)?.values[0])}`,
+    },
+    tooltip: {
+      trigger: 'item',
+      confine: true,
+      renderMode: 'richText',
+      formatter: (raw: unknown) => {
+        const item = raw as { data: { name: string; value: number } }
+        return `${item.data.name}\n成本 ${amount(item.data.value)}\n占当前范围 ${percent(ratio(item.data.value, total))}`
+      },
+    },
+  }
+}
 export interface CollectionGaugeData {
   rate: number | null
   salesAmount: number | null
@@ -28,7 +75,8 @@ export interface CollectionColumn {
 export interface PerformanceColumn {
   key: string
   name: string
-  region: string
+  currentRegionName?: string
+  orderRegionNames?: string[]
   value: number
   rank: number
   previousRank?: number
@@ -53,11 +101,11 @@ export function performanceColumns(
       axisLine: { lineStyle: { color: '#dce4ed' } },
       axisLabel: {
         interval: 0,
-        width: 80,
+        width: 112,
         overflow: 'truncate',
         lineHeight: 17,
         formatter: (_: string, i: number) =>
-          `第${rows[i].rank}名\n${rows[i].name}\n${rows[i].region}`,
+          `第${rows[i].rank}名\n${rows[i].name}${rows[i].currentRegionName ? `\n当前归属：${rows[i].currentRegionName}` : ''}`,
       },
     },
     yAxis: {
@@ -74,8 +122,11 @@ export function performanceColumns(
       renderMode: 'richText',
       formatter: (raw: unknown) => {
         const row = rows[(raw as { dataIndex: number }).dataIndex]
+        const cities = row?.currentRegionName
+          ? `\n当前归属：${row.currentRegionName}\n历史订单涉及：${row.orderRegionNames?.join('、') || '城市明细待同步'}（所选期间）`
+          : ''
         return row
-          ? `第${row.rank}名 ${row.name}\n${row.region}\n${metricName} ${amount(row.value)}${row.previousRank ? `\n前等长期间 第${row.previousRank}名` : ''}`
+          ? `第${row.rank}名 ${row.name}${cities}\n${metricName} ${amount(row.value)}${row.previousRank ? `\n前等长期间 第${row.previousRank}名` : ''}`
           : ''
       },
     },
@@ -265,7 +316,104 @@ export function lines(rows: PlotRow[], series: PlotSeries[], unit = '元'): ECha
   }
 }
 
-export function collectionGauge(data: CollectionGaugeData): EChartsCoreOption {
+const smallMultipleColumns = (count: number, width: number) =>
+  Math.max(1, Math.min(count, width >= 850 ? 3 : width >= 560 ? 2 : 1))
+
+export function smallMultipleHeight(count: number, width = 800): number {
+  return Math.max(1, Math.ceil(count / smallMultipleColumns(count, width))) * 160
+}
+
+export function smallMultipleLines(
+  rows: PlotRow[],
+  series: PlotSeries[],
+  width = 800,
+): EChartsCoreOption {
+  const columns = smallMultipleColumns(series.length, width)
+  const cellWidth = width / columns
+  const values = rows.flatMap((row) => row.values.filter((v): v is number => v != null))
+  const min = Math.min(0, ...values) * 1.1
+  const max = Math.max(1, ...values) * 1.1
+  return {
+    ...base(),
+    animation: false,
+    legend: { show: false },
+    graphic: series.map((item, index) => ({
+      type: 'text',
+      left: (index % columns) * cellWidth + 48,
+      top: Math.floor(index / columns) * 160 + 4,
+      style: {
+        text: item.name,
+        width: cellWidth - 70,
+        overflow: 'truncate',
+        fill: '#23344b',
+        fontSize: 12,
+        fontWeight: 600,
+      },
+    })),
+    grid: series.map((_, index) => ({
+      left: (index % columns) * cellWidth + 48,
+      top: Math.floor(index / columns) * 160 + 34,
+      width: cellWidth - 70,
+      height: 96,
+    })),
+    xAxis: series.map((_, index) => ({
+      gridIndex: index,
+      type: 'category',
+      boundaryGap: false,
+      data: rows.map((row) => row.name),
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: '#dce4ed' } },
+      axisLabel: { hideOverlap: true, fontSize: 10 },
+    })),
+    yAxis: series.map((_, index) => ({
+      gridIndex: index,
+      type: 'value',
+      min,
+      max,
+      splitNumber: 3,
+      axisLabel: { formatter: (value: number) => `${axisNumber(value)}元`, fontSize: 10 },
+      splitLine: { lineStyle: { color: '#e9eef4', type: 'dashed' } },
+    })),
+    tooltip: {
+      trigger: 'item',
+      confine: true,
+      renderMode: 'richText',
+      formatter: (raw: unknown) => {
+        const item = raw as { seriesIndex: number; dataIndex: number }
+        const row = rows[item.dataIndex]
+        return row
+          ? `${series[item.seriesIndex]?.name}\n${row.name}\n销售额 ${exactAmount(row.values[item.seriesIndex])}`
+          : ''
+      },
+    },
+    series: series.map((item, index) => ({
+      name: item.name,
+      type: 'line',
+      xAxisIndex: index,
+      yAxisIndex: index,
+      smooth: false,
+      connectNulls: false,
+      showSymbol: true,
+      symbolSize: 5,
+      itemStyle: { color: item.color || chartColors[index % chartColors.length] },
+      lineStyle: { width: 2 },
+      data: rows.map((row) => ({
+        value: row.values[index],
+        rowKey: row.seriesKeys?.[index] || row.key,
+      })),
+    })),
+  }
+}
+
+export function collectionGauge(
+  data: CollectionGaugeData,
+  size: { width: number; height: number } = { width: 320, height: 180 },
+): EChartsCoreOption {
+  const radius = Math.max(1, Math.min(size.width, size.height) * 0.47)
+  const label = percent(data.rate)
+  // Fit the complete readout inside the arc, including negative or >100% values.
+  const readoutWidth = Math.max(1, 2 * (radius - 24))
+  const fontSize = Math.max(1, Math.min(34, Math.floor(readoutWidth / (label.length * 0.7))))
   return {
     ...base(),
     legend: { show: false },
@@ -281,24 +429,24 @@ export function collectionGauge(data: CollectionGaugeData): EChartsCoreOption {
         type: 'gauge',
         startAngle: 210,
         endAngle: -30,
-        center: ['50%', '65%'],
-        radius: '96%',
+        center: ['50%', '60%'],
+        radius,
         min: 0,
         max: 100,
         pointer: { show: false },
-        progress: { show: data.rate != null, width: 14, roundCap: true },
-        axisLine: { roundCap: true, lineStyle: { width: 14, color: [[1, '#edf1f5']] } },
+        progress: { show: data.rate != null, width: 12, roundCap: true },
+        axisLine: { roundCap: true, lineStyle: { width: 12, color: [[1, '#edf1f5']] } },
         axisTick: { show: false },
         splitLine: { show: false },
         axisLabel: { show: false },
         itemStyle: {
           color: data.rate != null && (data.rate > 100 || data.rate < 0) ? '#d9952b' : '#18a999',
         },
-        title: { show: true, offsetCenter: [0, '21%'], color: '#68758a', fontSize: 12 },
+        title: { show: true, offsetCenter: [0, '30%'], color: '#68758a', fontSize: 12 },
         detail: {
           show: true,
-          offsetCenter: [0, '-12%'],
-          fontSize: 42,
+          offsetCenter: [0, '-8%'],
+          fontSize,
           fontWeight: 650,
           color: '#23344b',
           formatter: () => percent(data.rate),
@@ -422,7 +570,12 @@ export function waterfall(rows: PlotRow[]): EChartsCoreOption {
       data: rows.map((row) => row.name),
       axisTick: { show: false },
       axisLine: { lineStyle: { color: '#dce4ed' } },
-      axisLabel: { interval: 0, fontSize: 11 },
+      axisLabel: {
+        interval: 0,
+        fontSize: 11,
+        formatter: (name: string) =>
+          name.length > 3 ? `${name.slice(0, 2)}\n${name.slice(2)}` : name,
+      },
     },
     yAxis: {
       type: 'value',
@@ -457,11 +610,13 @@ export function waterfall(rows: PlotRow[]): EChartsCoreOption {
           rowKey: rows[rowIndex].key,
           itemStyle: {
             color:
-              rowIndex === 0
-                ? '#2864e8'
-                : numeric(rows[rowIndex].values[0]) < 0
-                  ? '#efa534'
-                  : '#18a999',
+              rowIndex === rows.length - 1 && numeric(rows[rowIndex].values[0]) < 0
+                ? chartColors[3]
+                : rowIndex === 0
+                  ? '#2864e8'
+                  : numeric(rows[rowIndex].values[0]) < 0
+                    ? '#efa534'
+                    : '#18a999',
           },
         })),
       },
@@ -469,56 +624,12 @@ export function waterfall(rows: PlotRow[]): EChartsCoreOption {
   }
 }
 
-export function scatter(
+export function ring(
   rows: PlotRow[],
-  xName: string,
-  yName: string,
-  xMoney = true,
+  center: string,
+  caption: string,
+  colors: readonly string[] = chartColors,
 ): EChartsCoreOption {
-  return {
-    ...base(),
-    legend: { show: false },
-    tooltip: {
-      trigger: 'item',
-      confine: true,
-      renderMode: 'richText',
-      formatter: (raw: unknown) => {
-        const data = (raw as { data: { name: string; value: number[] } }).data
-        return `${data.name}\n${xName} ${xMoney ? amount(data.value[0]) : axisNumber(data.value[0])}\n${yName} ${axisNumber(data.value[1])}`
-      },
-    },
-    grid: { left: 60, right: 30, top: 38, bottom: 40 },
-    xAxis: {
-      type: 'value',
-      name: xName,
-      nameLocation: 'middle',
-      nameGap: 28,
-      axisLabel: { formatter: axisNumber },
-      splitLine: { lineStyle: { color: '#edf1f5', type: 'dashed' } },
-    },
-    yAxis: {
-      type: 'value',
-      name: yName,
-      axisLabel: { formatter: axisNumber },
-      splitLine: { lineStyle: { color: '#edf1f5', type: 'dashed' } },
-    },
-    series: [
-      {
-        type: 'scatter',
-        symbolSize: 14,
-        data: rows.map((row) => ({
-          name: row.name,
-          value: row.values,
-          rowKey: row.key,
-          itemStyle: { color: numeric(row.values[1]) < 50 ? '#efa534' : '#18a999', opacity: 0.8 },
-        })),
-        emphasis: { label: { show: true, formatter: '{b}', position: 'top' } },
-      },
-    ],
-  }
-}
-
-export function ring(rows: PlotRow[], center: string, caption: string): EChartsCoreOption {
   return {
     ...base(),
     tooltip: { trigger: 'item', confine: true, renderMode: 'richText' },
@@ -547,7 +658,7 @@ export function ring(rows: PlotRow[], center: string, caption: string): EChartsC
           name: row.name,
           value: row.values[0],
           rowKey: row.key,
-          itemStyle: { color: chartColors[i % chartColors.length] },
+          itemStyle: { color: colors[i % colors.length] },
         })),
       },
     ],
@@ -564,7 +675,7 @@ export function heatmap(
     missingLabel?: string
     cellKey?: (row: PlotRow, x: number) => string
   },
-): EChartsCoreOption {
+) {
   const maximum =
     options?.money || options?.unit
       ? Math.max(1, ...rows.flatMap((row) => row.values.map((v) => v ?? 0)))
@@ -692,103 +803,132 @@ export function heatmap(
         },
       },
     ],
-  }
+  } satisfies EChartsCoreOption
 }
 
-export interface CompositionRow extends PlotRow {
-  group?: string
-  groupName?: string
-}
-
-export function costSunburst(
-  rows: CompositionRow[],
-  metric = '金额',
-  unit = '元',
-): EChartsCoreOption {
-  // Area cannot represent signed adjustments. Keep the signed values on a zero-based axis.
-  if (rows.some((row) => numeric(row.values[0]) < 0))
-    return bars(rows, [{ name: metric }], { unit, vertical: true })
-  const total = rows.reduce((sum, row) => sum + numeric(row.values[0]), 0)
-  const format = (value: number) => (unit === '元' ? amount(value) : `${axisNumber(value)}${unit}`)
-  const groups = new Map<string, { name: string; value: number; children: object[] }>()
-  const nodes: object[] = []
-  for (const row of rows) {
-    const node = { name: row.name, value: numeric(row.values[0]), rowKey: row.key }
-    if (row.group) {
-      const group = groups.get(row.group) || {
-        name: row.groupName || row.group,
-        value: 0,
-        children: [],
-      }
-      group.value += node.value
-      group.children.push(node)
-      groups.set(row.group, group)
-    } else nodes.push(node)
-  }
-  nodes.push(...groups.values())
+export function cityOperatingMatrix(rows: CollectionColumn[]): EChartsCoreOption {
+  const columns = ['销售额', '累计回款', '待回款金额', '回款率']
+  const plot = rows.map((row) => ({
+    key: row.key,
+    name: row.name,
+    values: [row.salesAmount, row.paidAmount, row.unpaidAmount],
+  }))
+  const option = heatmap(plot, columns, { money: true })
+  const rates = rows.map((row) => ratio(row.paidAmount, row.salesAmount))
   return {
+    ...option,
+    grid: { left: 90, right: 8, top: 32, bottom: 44 },
+    dataZoom: [],
+    xAxis: {
+      ...option.xAxis,
+      position: 'top',
+      axisLabel: { interval: 0, fontSize: 11 },
+    },
+    visualMap: [
+      ...option.visualMap,
+      // Rates are text in a neutral column, outside the amount color scale.
+      { show: false, seriesIndex: 2, min: 0, max: 1, inRange: { color: ['#f2f4f7', '#f2f4f7'] } },
+    ],
+    tooltip: {
+      trigger: 'item',
+      confine: true,
+      renderMode: 'richText',
+      formatter: (raw: unknown) => {
+        const item = raw as { data: { value: number[] } }
+        const row = rows[item.data.value[1]]
+        return row
+          ? `${row.name}\n销售额 ${exactAmount(row.salesAmount)}\n累计回款 ${exactAmount(row.paidAmount)}\n待回款金额 ${exactAmount(row.unpaidAmount)}\n回款率 ${percent(ratio(row.paidAmount, row.salesAmount))}`
+          : ''
+      },
+    },
+    series: [
+      ...option.series,
+      {
+        name: '回款率',
+        type: 'heatmap',
+        data: rows.map((row, y) => ({
+          value: [3, y, rates[y] ?? 0],
+          rawValue: rates[y],
+          missing: rates[y] == null,
+          rowKey: row.key,
+        })),
+        itemStyle: { borderColor: '#fff', borderWidth: 3 },
+        label: {
+          show: true,
+          color: '#23344b',
+          fontSize: 11,
+          formatter: (raw: unknown) =>
+            percent((raw as { data: { rawValue: number | null } }).data.rawValue),
+        },
+      },
+    ],
+  }
+}
+
+export function categoryComposition(rows: PlotRow[], metric = '销售额') {
+  const groupKeys = new Map<string, string>()
+  if (rows.some((row) => numeric(row.values[0]) < 0))
+    return { option: pareto(rows, metric), groupKeys }
+  const sorted = [...rows].sort((a, b) => numeric(b.values[0]) - numeric(a.values[0]))
+  const plot = sorted.slice(0, sorted.length > 6 ? 5 : 6)
+  if (sorted.length > 6) {
+    let key = 'composition:other'
+    while (rows.some((row) => row.key === key)) key += ':'
+    const rest = sorted.slice(5)
+    rest.forEach((row) => groupKeys.set(row.key, key))
+    plot.push({
+      key,
+      name: `其他（${rest.length}项）`,
+      values: [rest.reduce((sum, row) => sum + numeric(row.values[0]), 0)],
+    })
+  }
+  const total = rows.reduce((sum, row) => sum + numeric(row.values[0]), 0)
+  const option: EChartsCoreOption = {
     ...base(),
-    legend: { show: false },
+    legend: {
+      type: 'scroll',
+      orient: 'vertical',
+      selectedMode: false,
+      itemGap: 6,
+      bottom: 0,
+      left: 0,
+      itemWidth: 8,
+      itemHeight: 8,
+      textStyle: { fontSize: 11, width: 290, overflow: 'truncate', color: '#45566e' },
+      formatter: (name: string) => {
+        const value = plot.find((row) => row.name === name)?.values[0]
+        return `${name}  ${amount(value)}  ${percent(ratio(numeric(value), total))}`
+      },
+    },
     tooltip: {
       trigger: 'item',
       confine: true,
       renderMode: 'richText',
       formatter: (raw: unknown) => {
         const row = (raw as { data: { name: string; value: number } }).data
-        return `${row.name}\n${metric} ${format(row.value)}\n占当前范围 ${percent(ratio(row.value, total))}`
+        return `${row.name}\n${metric} ${exactAmount(row.value)}\n占已返回${metric} ${percent(ratio(row.value, total))}`
       },
     },
-    graphic:
-      total === 0
-        ? [
-            {
-              type: 'text',
-              left: 'center',
-              top: '40%',
-              style: { text: `${metric}合计 ${format(0)}`, fill: '#637085', fontSize: 18 },
-            },
-          ]
-        : [],
+    graphic: [
+      {
+        type: 'text',
+        left: 'center',
+        top: '24%',
+        style: { text: amount(total), fontSize: 16, fontWeight: 600, fill: '#23344b' },
+      },
+    ],
     series: [
       {
-        name: metric,
-        type: 'sunburst',
-        center: ['50%', '50%'],
-        radius: ['14%', '88%'],
-        nodeClick: false,
+        type: 'pie',
+        radius: ['32%', '45%'],
+        center: ['50%', '27%'],
         stillShowZeroSum: false,
-        sort: 'desc',
-        color: ['#3675bb', '#278f86', '#af7540', '#78739b', '#61859b'],
-        label: {
-          show: true,
-          rotate: 'tangential',
-          minAngle: 18,
-          fontSize: 12,
-          overflow: 'truncate',
-          formatter: '{b}',
-        },
-        emphasis: { focus: 'ancestor' },
-        itemStyle: { borderColor: '#fff', borderWidth: 2 },
-        levels: [
-          {},
-          {
-            radius: ['14%', '52%'],
-            label: {
-              rotate: 0,
-              minAngle: 10,
-              fontSize: 12,
-              formatter: (raw: unknown) => {
-                const row = (raw as { data: { name: string; value: number } }).data
-                return `${row.name}\n${format(row.value)}`
-              },
-            },
-          },
-          { radius: ['55%', '88%'] },
-        ],
-        data: nodes,
+        label: { show: false },
+        data: plot.map((row) => ({ name: row.name, value: row.values[0], rowKey: row.key })),
       },
     ],
   }
+  return { option, groupKeys }
 }
 
 export function pareto(rows: PlotRow[], metric = '金额', unit = '元'): EChartsCoreOption {

@@ -17,16 +17,21 @@ import {
   bars,
   chartColors,
   lines,
+  smallMultipleLines,
+  smallMultipleHeight,
+  cityOperatingMatrix,
+  categoryComposition,
   numeric,
   percent,
   ratio,
   ring,
-  scatter,
   waterfall,
-  costSunburst,
+  costComposition,
+  type CostSlice,
   pareto,
   heatmap,
   type PlotRow,
+  type PlotSeries,
   type CollectionGaugeData,
   type CollectionColumn,
   type PerformanceColumn,
@@ -83,13 +88,15 @@ export interface DetailRow {
 export interface Figure {
   id: string
   title: string
-  span: 4 | 6 | 8 | 12
+  span: 3 | 4 | 6 | 8 | 12
   option: EChartsCoreOption
   rows: DetailRow[]
   collection?: CollectionGaugeData
   comparison?: CollectionColumn[]
   performance?: PerformanceColumn[]
   performanceMetric?: string
+  breakdown?: CostSlice[]
+  smallMultiples?: { rows: PlotRow[]; series: PlotSeries[] }
   height?: number
   compact?: boolean
   sample?: boolean
@@ -108,6 +115,7 @@ export interface CockpitKpi {
 export interface CockpitAction {
   label: string
   value: string
+  context?: string
   section: CockpitSection
   row?: DetailRow
 }
@@ -305,7 +313,7 @@ export function buildCockpit(
   const sellers = [...(data.salesRanking || [])].sort((a, b) => b.salesAmount - a.salesAmount)
   const dimensionLabels: Record<ProductDimension, string> = {
     PRODUCT: '商品',
-    SKU: 'SKU',
+    SKU: '规格/型号',
     CATEGORY: '分类',
     BRAND: '品牌',
   }
@@ -410,7 +418,10 @@ export function buildCockpit(
       return {
         key: row.dimensionCode,
         name: row.dimensionName || row.dimensionCode,
-        region: row.regionName || (row.regionCode === 'MULTI' ? '跨城市' : '未归属城市'),
+        currentRegionName: row.currentRegionName?.trim() || '待完善',
+        orderRegionNames:
+          row.orderRegionNames ??
+          (concreteDimension(row.regionCode) && row.regionName ? [row.regionName] : []),
         value: numeric(row[field]),
         rank,
         previousRank: previousRanks.get(row.dimensionCode),
@@ -423,22 +434,28 @@ export function buildCockpit(
       performance,
       performanceMetric: label,
       option: performanceColumns(performance.slice(0, 8), performance, label),
-      rows: rankingRows(ranked, 'sales').map((row, i) => ({
-        ...row,
-        cells: {
-          名次: String(performance[i].rank),
-          ...(options.analysis
-            ? {
-                前期名次:
-                  performance[i].previousRank == null
-                    ? '前期无记录'
-                    : String(performance[i].previousRank),
-              }
-            : {}),
-          ...row.cells,
-        },
-      })),
-      note: `${label}降序；并列同名次${sellers.length > ranked.length ? '；未归属销售不参与排名' : ''}${options.analysis ? `；前期 ${businessDate(options.analysis.previousFrom)} 至 ${businessDate(options.analysis.previousTo)}（等长窗口）` : ''}`,
+      rows: rankingRows(ranked, 'sales').map((row, i) => {
+        const cells = { ...row.cells }
+        delete cells.城市
+        return {
+          ...row,
+          cells: {
+            名次: String(performance[i].rank),
+            当前归属: performance[i].currentRegionName,
+            历史订单涉及: performance[i].orderRegionNames.join('、') || '城市明细待同步',
+            ...(options.analysis
+              ? {
+                  前期名次:
+                    performance[i].previousRank == null
+                      ? '前期无记录'
+                      : String(performance[i].previousRank),
+                }
+              : {}),
+            ...cells,
+          },
+        }
+      }),
+      note: `${label}降序；并列同名次；当前归属取 HR；历史订单涉及城市见提示或明细，按所选期间及筛选范围统计${sellers.length > ranked.length ? '；未归属销售不参与排名' : ''}${options.analysis ? `；前期 ${businessDate(options.analysis.previousFrom)} 至 ${businessDate(options.analysis.previousTo)}（等长窗口）` : ''}`,
       empty: '当前范围没有已归属销售的业绩记录',
     })
   }
@@ -514,6 +531,7 @@ export function buildCockpit(
       key: line.name,
       name: line.name,
       group: line.group,
+      sample: line.sample,
       values: [line.amount],
     }))
     figures.push({
@@ -522,7 +540,8 @@ export function buildCockpit(
       span,
       sample: costLines.some((line) => line.sample),
       height: 290,
-      option: costSunburst(plot, '成本'),
+      option: costComposition(plot),
+      breakdown: plot,
       rows: costLines.map((line) => ({
         key: line.name,
         groupKey: line.group,
@@ -532,7 +551,7 @@ export function buildCockpit(
           维度: line.group,
           成本类别: line.category,
           金额: exactAmount(line.amount),
-          占比: percent(ratio(line.amount, costs.cost)),
+          占总成本比重: percent(ratio(line.amount, costs.cost)),
           备注:
             line.group === '未分项'
               ? '接口仅提供已入账总额，未提供费用分项'
@@ -606,22 +625,25 @@ export function buildCockpit(
     const plot = source.map((row) => ({
       key: row.dimensionCode,
       name: row.dimensionName,
-      ...(['PRODUCT', 'SKU'].includes(dimension)
-        ? { group: row.categoryCode, groupName: row.categoryName || '未分类' }
-        : {}),
       values: [numeric(row.salesAmount)],
     }))
+    const composition =
+      section === 'product-sales' && ['CATEGORY', 'BRAND'].includes(dimension)
+        ? categoryComposition(plot)
+        : undefined
     figures.push({
       id,
       title: `${dimensionLabels[dimension]}销售贡献`,
       span,
       option:
-        dimension === 'CATEGORY' && plot.length <= 6 && plot.every((row) => row.values[0] >= 0)
+        composition?.option ||
+        (dimension === 'CATEGORY' && plot.length <= 6 && plot.every((row) => row.values[0] >= 0)
           ? ring(plot, amount(plot.reduce((sum, row) => sum + row.values[0], 0)), '分类销售额')
-          : pareto(plot, '销售额'),
+          : pareto(plot, '销售额')),
       height: span === 12 ? 310 : 290,
       rows: source.map((row) => ({
         key: row.dimensionCode,
+        groupKey: composition?.groupKeys.get(row.dimensionCode),
         name: row.dimensionName,
         kind: 'product',
         code: row.dimensionCode,
@@ -642,7 +664,9 @@ export function buildCockpit(
           ? `已关联${source.filter((row) => row.dimensionCode?.toUpperCase() !== 'UNKNOWN').length}个商品；商品关联待核对单列；数量按原单位在城市商品报表核对`
           : dimension === 'BRAND'
             ? '按订单行品牌归属；同一品牌可跨分类，未归属品牌单列'
-            : '订单行销售额；数量按原单位在城市商品报表核对',
+            : dimension === 'SKU'
+              ? '按订单记录的SKU及规格统计；未区分的型号不拆分，销量与回款在城市商品报表按原单位核对'
+              : '订单行销售额；数量按原单位在城市商品报表核对',
     })
   }
   function addAging(span: Figure['span'] = 4) {
@@ -684,20 +708,20 @@ export function buildCockpit(
           : '账龄明细暂不可用，请核对待回款订单',
     })
   }
-  function addCustomerScatter(span: Figure['span'] = 8) {
+  function addCustomerValue(span: Figure['span'] = 8) {
     const source = data.customerActivityRanking || []
     const plot = source.map((row) => ({
       key: row.customerCode,
       name: row.customerName,
-      values: [row.salesAmount, row.activityScore],
+      values: [row.salesAmount],
     }))
     figures.push({
       id: 'customer-value',
-      title: '客户价值与活跃度',
+      title: '客户销售贡献',
       span,
-      option: scatter(plot, '销售额（元）', '活跃度'),
+      option: pareto(plot, '销售额'),
       rows: customerDetails(source),
-      note: '当前接口返回的客户样本；点击客户查看责任销售',
+      note: `本次返回${source.length}位客户的贡献；累计占比仅以这些客户为分母`,
       empty: '所选范围没有客户活跃数据',
     })
   }
@@ -705,20 +729,28 @@ export function buildCockpit(
     const summary = (data.inventoryItemSummary || []).filter(
       (row) => !options.inventoryUnit || row.unitCode === options.inventoryUnit,
     )
-    const plot = summary.map((row, i) => ({
-      key: `${row.categoryCode}-${row.unitCode}-${i}`,
-      name: row.categoryName,
-      values: [row.procurementQuantity, row.shippedQuantity, row.remainingQuantity],
-    }))
+    const units = [...new Set(summary.map((row) => row.unitCode))]
+    const flowUnit = options.inventoryUnit || (units.length === 1 ? units[0] : '')
+    const plot = summary
+      .filter((row) => row.unitCode === flowUnit)
+      .map((row, i) => ({
+        key: `${row.categoryCode}-${row.unitCode}-${i}`,
+        name: row.categoryName,
+        values: [row.procurementQuantity, row.shippedQuantity, row.remainingQuantity],
+      }))
     figures.push({
       id: 'inventory-flow',
       title: '采购 · 发货 · 留存',
       span: 8,
-      option: heatmap(plot, ['采购', '发货', '留存'], { unit: unitName(options.inventoryUnit) }),
+      option: bars(plot, [{ name: '采购' }, { name: '发货' }, { name: '留存' }], {
+        unit: unitName(flowUnit),
+        vertical: true,
+      }),
       rows: details(plot, ['采购', '发货', '留存'], (v) => count(v ?? 0)),
-      empty: '所选范围无采购、发货记录',
+      compact: !plot.length,
+      empty: !flowUnit && summary.length ? '请选择同一计量单位后比较' : '所选范围无采购、发货记录',
       emptyAction: 'inventory',
-      note: `按${unitName(options.inventoryUnit)}分别统计`,
+      note: flowUnit ? `按${unitName(flowUnit)}分别统计` : undefined,
     })
     const demand = (data.inventoryReplenishment || [])
       .filter((row) => !options.inventoryUnit || row.unitCode === options.inventoryUnit)
@@ -735,6 +767,7 @@ export function buildCockpit(
       span: 4,
       option: heatmap(cover, ['可售天数'], { unit: '天', reverse: true, missingLabel: '未计算' }),
       rows: replenishmentDetails(replenishment),
+      compact: !replenishment.length,
       empty: stockUnavailable ? '库存快照暂无记录，无法判断可售天数' : '当前筛选无库存覆盖记录',
       emptyAction: 'inventory',
       note: '无日销时不计算覆盖天数',
@@ -754,8 +787,14 @@ export function buildCockpit(
       title: stockUnavailable ? '商品日均销售需求' : '可用库存与补货建议',
       span: 8,
       option: stockUnavailable
-        ? heatmap(demandPlot, ['日均销量'], { unit: `${unitName(options.inventoryUnit)}/天` })
+        ? bars(demandPlot, [{ name: '日均销量' }], {
+            unit: `${unitName(options.inventoryUnit)}/天`,
+          })
         : heatmap(supply, ['可用', '在途', '建议补货'], { unit: unitName(options.inventoryUnit) }),
+      height: Math.max(
+        160,
+        Math.min(stockUnavailable ? demand.length : replenishment.length, 8) * 30 + 90,
+      ),
       rows: stockUnavailable
         ? details(demandPlot, ['日均销量'], (v) => count(v ?? 0))
         : replenishmentDetails(replenishment),
@@ -811,31 +850,51 @@ export function buildCockpit(
       addCollectionGauge('collection-progress', '个人回款进度', 4)
     } else {
       addPerformanceRanking(12)
+      addCollectionGauge(
+        'collection-progress',
+        options.regionCode ? '本城市团队回款进度' : '全国销售回款进度',
+        4,
+      )
       const monthly = data.salesMonthlyPerformance || []
-      const owners = sellers.slice(0, 6)
-      const periods = [...new Set(monthly.map((row) => row.period))].sort()
+      const owners = [...sellers]
+        .filter((row) => concreteDimension(row.dimensionCode))
+        .sort(
+          (a, b) => b.salesAmount - a.salesAmount || a.dimensionCode.localeCompare(b.dimensionCode),
+        )
+        .slice(0, 6)
+      const periods = aggregatePeriods(
+        monthly.map((row) => ({
+          metricCode: 'sales_amount',
+          period: row.period,
+          value: row.salesAmount,
+          secondaryValue: row.paidAmount,
+        })),
+        'month',
+      ).map((row) => row.key)
+      const amounts = new Map<string, number>()
+      monthly.forEach((row) => {
+        const key = `${row.period.slice(0, 7)}:${row.ownerStaffCode}`
+        if (row.salesAmount != null && Number.isFinite(Number(row.salesAmount)))
+          amounts.set(key, (amounts.get(key) ?? 0) + Number(row.salesAmount))
+      })
       const plot = periods.map((period) => ({
         key: period,
         name: period,
         seriesKeys: owners.map((owner) => `${period}:${owner.dimensionCode}`),
-        values: owners.map((owner) =>
-          monthly
-            .filter((row) => row.period === period && row.ownerStaffCode === owner.dimensionCode)
-            .reduce((sum, row) => sum + numeric(row.salesAmount), 0),
-        ),
+        values: owners.map((owner) => amounts.get(`${period}:${owner.dimensionCode}`) ?? null),
       }))
-      if (periods.length > 1)
+      const series = owners.map((row) => ({ name: row.dimensionName || row.dimensionCode }))
+      if (periods.length > 1 && owners.length)
         figures.push({
           id: 'monthly-sales',
-          title: '销售月度对比 · Top6',
+          title: `销售额前${owners.length}位 · 月度趋势`,
           span: 8,
-          option: lines(
-            plot,
-            owners.map((row) => ({ name: row.dimensionName })),
-          ),
+          smallMultiples: { rows: plot, series },
+          option: smallMultipleLines(plot, series),
+          height: smallMultipleHeight(series.length),
           rows: monthly.map((row, i) => ({
             key: `${row.period}-${i}`,
-            groupKey: `${row.period}:${row.ownerStaffCode}`,
+            groupKey: `${row.period.slice(0, 7)}:${row.ownerStaffCode}`,
             name: row.ownerStaffName,
             kind: 'sales',
             ownerStaffCode: row.ownerStaffCode,
@@ -850,6 +909,7 @@ export function buildCockpit(
             },
           })),
           empty: '当前筛选无月度销售记录',
+          note: '按当前范围销售额选人；不是综合绩效排名',
         })
     }
     addTargets(false, 4)
@@ -894,7 +954,23 @@ export function buildCockpit(
       addCostBridge(6)
       addAging(6)
     } else {
-      addCollectionComparison('cities', '城市回款对比', cities, 'city', 8)
+      figures.push({
+        id: 'cities',
+        title: '城市经营指标',
+        span: 8,
+        option: cityOperatingMatrix(
+          cities.map((row) => ({
+            key: row.dimensionCode,
+            name: row.dimensionName || row.dimensionCode,
+            salesAmount: row.salesAmount,
+            paidAmount: row.paidAmount,
+            unpaidAmount: row.unpaidAmount,
+          })),
+        ),
+        rows: rankingRows(cities, 'city'),
+        empty: '所选范围没有销售记录',
+        note: '同批订单累计已收 / 应收；待回款不等同于逾期',
+      })
       addAging(4)
       addCityCosts(6)
       addTargets(true, 6)
@@ -907,13 +983,45 @@ export function buildCockpit(
       countKpi('active_customer_count', '可用客户'),
       countKpi('cooperated_customer_count', '合作客户'),
       countKpi('repeat_customer_count', '复购客户'),
-      countKpi('customer_churn_risk_count', '流失预警客户'),
+      {
+        ...countKpi('customer_churn_risk_count', '待跟进客户'),
+        definition: '从未下单或距最近下单已满30天；不等同于已流失',
+      },
     ]
     const segments = (data.customerSegments || []).map((row) => ({
       key: row.segmentCode,
       name: row.segmentName,
       values: [row.customerCount],
     }))
+    figures.push({
+      id: 'customer-risk',
+      title: '客户分层与跟进压力',
+      span: 8,
+      option: bars(
+        (data.customerSegments || []).map((row) => ({
+          key: row.segmentCode,
+          name: row.segmentName,
+          values: [row.customerCount - row.churnRiskCustomerCount, row.churnRiskCustomerCount],
+        })),
+        [
+          { name: '近30天有下单', color: chartColors[1] },
+          { name: '待跟进', color: chartColors[2] },
+        ],
+        { stacked: true, vertical: true, unit: '位' },
+      ),
+      rows: (data.customerSegments || []).map((row) => ({
+        key: row.segmentCode,
+        name: row.segmentName,
+        cells: {
+          客户数: count(row.customerCount),
+          待跟进客户: count(row.churnRiskCustomerCount),
+          待跟进占比: percent(ratio(row.churnRiskCustomerCount, row.customerCount)),
+          待回款: exactAmount(row.unpaidAmount),
+        },
+      })),
+      empty: '客户分层汇总暂不可用',
+      note: '当前范围全部分层客户；待跟进包含从未下单、满30天未再下单',
+    })
     figures.push({
       id: 'segments',
       title: '客户分层',
@@ -937,22 +1045,30 @@ export function buildCockpit(
       option: bars(value, [{ name: '销售额' }, { name: '待回款', color: chartColors[2] }]),
       rows: details(value, ['销售额', '待回款']),
     })
-    addCustomerScatter(8)
+    addCustomerValue(8)
     const churn = [...(data.customerChurnRiskRanking || [])]
-      .filter((row) => row.lastOrderTime)
-      .sort((a, b) => b.inactiveDays - a.inactiveDays)
-    const plot = churn.map((row) => ({
-      key: row.customerCode,
-      name: row.customerName,
-      values: [row.lastOrderTime ? row.inactiveDays : null],
+    const cohort = (row: (typeof churn)[number]) =>
+      !row.lastOrderTime ? '待首单' : row.inactiveDays >= 60 ? '60天及以上未下单' : '30–59天未下单'
+    const plot = ['待首单', '30–59天未下单', '60天及以上未下单'].map((name) => ({
+      key: name,
+      name,
+      values: [churn.filter((row) => cohort(row) === name).length],
     }))
     figures.push({
       id: 'churn',
-      title: '客户未下单天数',
-      span: 4,
-      option: bars(plot, [{ name: '未下单天数', color: chartColors[2] }], { unit: '天' }),
-      rows: customerDetails(churn),
-      empty: '当前筛选无流失预警客户',
+      title: '优先跟进名单分布',
+      span: 12,
+      option: bars(plot, [{ name: '客户数', color: chartColors[2] }], {
+        unit: '位',
+        vertical: true,
+      }),
+      rows: customerDetails(churn).map((row, i) => ({ ...row, groupKey: cohort(churn[i]) })),
+      compact: !churn.length,
+      empty:
+        metricValue(data, 'customer_churn_risk_count') === 0
+          ? '当前范围无待跟进客户'
+          : '待跟进名单暂未返回，请重试查询',
+      note: `${metricValue(data, 'customer_churn_risk_count') == null ? '风险汇总暂不可用' : `风险汇总 ${count(metric(data, 'customer_churn_risk_count'))} 位`}；本次返回 ${churn.length} 位优先名单，不代表全部客户`,
     })
   } else if (section === 'product-sales') {
     kpis = [
@@ -1031,8 +1147,13 @@ export function buildCockpit(
       id: 'cost-coverage',
       title: '采购参考价覆盖',
       span: 4,
-      option: ring(coveragePlot, percent(coverage), '按订单行金额'),
-      rows: source.map((row) => ({
+      option:
+        coverage == null
+          ? { series: [] }
+          : ring(coveragePlot, percent(coverage), '按订单行金额', [chartColors[1], '#dce3ea']),
+      compact: coverage == null,
+      empty: '采购参考价覆盖率暂不可用',
+      rows: (coverage == null ? [] : source).map((row) => ({
         key: row.dimensionCode,
         name: row.dimensionName,
         kind: 'product',
@@ -1058,6 +1179,8 @@ export function buildCockpit(
       span: 6,
       option: bars(margins, [{ name: '估算毛利率', color: chartColors[2] }], { unit: '%' }),
       rows: details(margins, ['估算毛利率'], percent),
+      empty: '当前范围没有采购参考价完整的商品，暂不比较毛利率',
+      emptyAction: 'product',
     })
     const refunds = source
       .filter((row) => row.refundAmount > 0)
@@ -1111,7 +1234,7 @@ export function buildCockpit(
       {
         label: '经营结余',
         value: amount(costs.profit),
-        color: chartColors[1],
+        color: costs.profit < 0 ? chartColors[3] : chartColors[1],
         sample: costs.sample,
       },
       {
@@ -1429,6 +1552,7 @@ export function buildCockpit(
         figure.option = { series: [] }
         figure.compact = true
         figure.sample = false
+        figure.breakdown = undefined
         figure.note = undefined
         figure.empty = '城市成本不按销售人员、客户类型或订单来源分摊'
         figure.emptyAction = 'cost'
@@ -1461,7 +1585,7 @@ export function buildCockpit(
     ['LEGACY_TARGETS', ['targets'], '当前数据范围暂不支持目标完成率汇总'],
     [
       'LEGACY_CUSTOMER_ACTIVITY',
-      ['segments', 'segment-value', 'customer-value', 'churn'],
+      ['customer-risk', 'segments', 'segment-value', 'customer-value', 'churn'],
       '当前数据范围暂不支持客户分层与活跃度汇总',
     ],
     ['LEGACY_PERIOD_RECEIPTS', ['receipt-trend'], '当前数据范围暂不支持按到账时间汇总'],
@@ -1496,6 +1620,8 @@ export function buildCockpit(
         option: { series: [] },
         compact: true,
         sample: false,
+        breakdown: undefined,
+        smallMultiples: undefined,
         note: undefined,
         empty: message,
         emptyAction: undefined,
@@ -1514,13 +1640,27 @@ export function buildCockpit(
       section: 'payment-risk',
       row: rankingRows([riskCity], 'city')[0],
     })
-  const churn = [...(data.customerChurnRiskRanking || [])].sort(
-    (a, b) => b.salesAmount - a.salesAmount,
-  )[0]
-  if (churn && churn.inactiveDays >= 30)
+  const followups = unavailable.has('LEGACY_CUSTOMER_ACTIVITY')
+    ? []
+    : [...(data.customerChurnRiskRanking || [])]
+        .filter((row) => !row.lastOrderTime || row.inactiveDays >= 30)
+        .sort(
+          (a, b) =>
+            b.unpaidAmount - a.unpaidAmount ||
+            b.salesAmount - a.salesAmount ||
+            a.customerCode.localeCompare(b.customerCode),
+        )
+        .slice(0, section === 'customer' ? 3 : 1)
+  for (const churn of followups)
     actions.push({
       label: `客户「${churn.customerName}」${churn.lastOrderTime ? '回访' : '首单跟进'}`,
       value: churn.lastOrderTime ? `${churn.inactiveDays}天未下单` : '尚未下单',
+      context: [
+        churn.regionName,
+        churn.ownerStaffName ? `责任销售 ${churn.ownerStaffName}` : '责任销售待分配',
+      ]
+        .filter(Boolean)
+        .join(' · '),
       section: 'customer',
       row: customerDetails([churn])[0],
     })

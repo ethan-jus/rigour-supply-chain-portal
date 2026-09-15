@@ -5,7 +5,7 @@ import { exactAmount, heatmap, percent, ratio } from './cockpit-charts'
 const metricNames: Record<string, string> = {
   SALES_AMOUNT: '销售额',
   PAID_AMOUNT: '回款额',
-  CONTACTED_CUSTOMER: '建联客户',
+  CONTACTED_CUSTOMER: '留资客户',
   COOPERATED_CUSTOMER: '合作客户',
 }
 
@@ -122,7 +122,7 @@ export function targetCompletionFigure(
                 : '未提供月份覆盖',
               统计口径:
                 metric === 'CONTACTED_CUSTOMER'
-                  ? '当前有效建联客户存量，仅单月比较'
+                  ? '当前有效留资客户存量，仅单月比较'
                   : metric === 'COOPERATED_CUSTOMER'
                     ? '已配置月份内去重下单客户'
                     : metric === 'PAID_AMOUNT'
@@ -142,7 +142,7 @@ export function targetCompletionFigure(
     empty: '当前期间尚无目标配置',
     emptyAction: 'target',
     note: configured
-      ? `达成率按已配置月份计算${partial ? '；* 部分月份未配置' : ''}；建联为当前存量，合作为期间去重下单客户`
+      ? `达成率按已配置月份计算${partial ? '；* 部分月份未配置' : ''}；留资为当前存量，合作为期间去重下单客户`
       : undefined,
   }
 }

@@ -44,7 +44,8 @@
         <el-form-item label="员工状态">
           <el-select v-model="filters.employmentStatus" clearable placeholder="全部状态" style="width: 140px">
             <el-option label="在职" value="ACTIVE" />
-            <el-option label="离职" value="INACTIVE" />
+            <el-option label="离职" value="LEFT" />
+            <el-option label="停用" value="INACTIVE" />
           </el-select>
         </el-form-item>
         <el-form-item label="岗位">
@@ -356,7 +357,8 @@ async function openDetail(row: HrEmployeeRecord) {
 
 function statusLabel(value: string | null | undefined) {
   if (value === 'ACTIVE') return '在职'
-  if (value === 'INACTIVE') return '离职'
+  if (value === 'LEFT') return '离职'
+  if (value === 'INACTIVE') return '停用'
   if (value === 'PENDING') return '待确认'
   return value || '-'
 }

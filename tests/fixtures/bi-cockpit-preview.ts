@@ -1,7 +1,7 @@
 import { createApp, computed, h, ref } from 'vue'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
-import CockpitFigure from '@/views/supply-chain/bi/components/CockpitFigure.vue'
+import CockpitWorkspace from '@/views/supply-chain/bi/components/CockpitWorkspace.vue'
 import CityProductReport from '@/views/supply-chain/bi/components/CityProductReport.vue'
 import { buildCockpit, type CockpitSection } from '@/views/supply-chain/bi/cockpit-model'
 import { cockpitLayout } from '@/views/supply-chain/bi/cockpit-layout'
@@ -160,6 +160,43 @@ data.risks = Array.from({ length: 9 }, (_, i) => ({
   description: '固定测试风险',
   observedAt: data.to,
 })) as SupplyDashboardOverview['risks']
+data.customerSegments = ['A类', 'B类', 'C类', 'D类'].map((segmentName, i) => ({
+  segmentCode: String(i),
+  segmentName,
+  customerCount: [120, 280, 500, 1300][i],
+  churnRiskCustomerCount: [10, 80, 140, 940][i],
+  salesAmount: (4 - i) * 30000,
+  paidAmount: (4 - i) * 18000,
+  unpaidAmount: (4 - i) * 12000,
+  averageActivityScore: 90 - i * 20,
+}))
+data.customerChurnRiskRanking = Array.from({ length: 80 }, (_, i) => ({
+  customerCode: `C${i}`,
+  customerName: `测试门店${i + 1}`,
+  regionCode: 'SH',
+  regionName: '上海',
+  ownerStaffCode: 'S1',
+  ownerStaffName: '测试销售1',
+  customerTypeCode: null,
+  customerTypeName: null,
+  segmentCode: '3',
+  segmentName: 'D类',
+  salesAmount: 0,
+  paidAmount: 0,
+  unpaidAmount: 0,
+  orderCount: 0,
+  paymentCount: 0,
+  lastOrderTime: null,
+  lastPaymentTime: null,
+  inactiveDays: 9999,
+  activityScore: 0,
+  churnRiskLevel: 'HIGH',
+}))
+data.customerActivityRanking = []
+data.metrics.push({
+  metricCode: 'customer_churn_risk_count',
+  value: 1170,
+} as SupplyDashboardOverview['metrics'][number])
 const extra: SupplyDashboardOperatingAnalysis = {
   from: data.from,
   to: data.to,
@@ -243,38 +280,39 @@ createApp({
             ].map((key) => h('option', { value: key }, key)),
           ),
         ]),
-        h(
-          'section',
-          { class: 'canvas' },
-          layout.value.primary.map((figure) =>
-            h(CockpitFigure, { key: `${section.value}-${figure.id}`, figure }),
+        h('nav', [
+          h(
+            'button',
+            {
+              onClick: () => {
+                analysis.value = ''
+              },
+              'aria-pressed': !analysis.value,
+            },
+            layout.value.label,
           ),
-        ),
-        h(
-          'nav',
-          layout.value.groups.map((group) =>
+          ...layout.value.groups.map((group) =>
             h(
               'button',
               {
                 type: 'button',
+                'aria-pressed': analysis.value === group.id,
                 onClick: () => {
                   analysis.value = group.id
                 },
-                'aria-pressed': (analysis.value || layout.value.groups[0]?.id) === group.id,
               },
               group.label,
             ),
           ),
-        ),
-        h(
-          'section',
-          { class: 'canvas' },
-          (
-            layout.value.groups.find(
-              (group) => group.id === (analysis.value || layout.value.groups[0]?.id),
-            )?.figures || []
-          ).map((figure) => h(CockpitFigure, { key: figure.id, figure })),
-        ),
+        ]),
+        h(CockpitWorkspace, {
+          key: `${section.value}-${analysis.value}`,
+          main: analysis.value
+            ? layout.value.groups.find((group) => group.id === analysis.value)?.figures || []
+            : layout.value.main,
+          aside: analysis.value ? [] : layout.value.aside,
+          actions: model.value.actions,
+        }),
         h(CityProductReport, {
           modelValue: reportVisible.value,
           'onUpdate:modelValue': (value: boolean) => {
@@ -290,5 +328,5 @@ createApp({
   .mount('#app')
 const style = document.createElement('style')
 style.textContent =
-  'body{margin:0;background:#f5f7fa;color:#1e293b;font-family:Arial,sans-serif}header{display:flex;gap:20px;padding:16px;flex-wrap:wrap}main{max-width:1440px;margin:auto;padding:16px}.canvas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr))}@media(max-width:760px){main{padding:4px}.canvas{display:block}}'
+  'body{margin:0;background:#f5f7fa;color:#1e293b;font-family:Arial,sans-serif}main>header{display:flex;gap:20px;padding:16px;flex-wrap:wrap}main{max-width:1440px;margin:auto;padding:16px;background:white}nav{display:flex;gap:16px;padding:16px 0;flex-wrap:wrap}nav button{border:0;background:none;color:#344559;cursor:pointer;padding:8px}nav button[aria-pressed=true]{color:#2864e8;border-bottom:2px solid} @media(max-width:760px){main{padding:12px}}'
 document.head.append(style)

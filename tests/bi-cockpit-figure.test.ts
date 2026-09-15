@@ -44,6 +44,91 @@ const render = (input: Figure) =>
   })
 
 describe('BI驾驶舱回款图交互', () => {
+  it('说明按钮传递原始图对象，样例标记与明细下钻互不改写', async () => {
+    const input = { ...figure, sample: true }
+    const wrapper = render(input)
+    await wrapper.get(`[aria-label="${input.title}口径说明"]`).trigger('click')
+    expect(wrapper.emitted('explain')?.[0]).toEqual([input])
+    expect(wrapper.emitted('inspect')).toBeUndefined()
+    expect(input.sample).toBe(true)
+    wrapper.unmount()
+  })
+  it('离屏零宽不清空分页或改变已测量图形尺寸', async () => {
+    let resize!: (entries: unknown[]) => void
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: (entries: unknown[]) => void) {
+          resize = callback
+        }
+        observe() {
+          resize([{ contentRect: { width: 800 } }])
+        }
+        disconnect() {}
+      },
+    )
+    try {
+      const wrapper = render(figure)
+      await wrapper.get(`[aria-label="${figure.title}下一页"]`).trigger('click')
+      const page = wrapper.get('.figure-page').text()
+      const chart = wrapper.findComponent(chartStub)
+      const option = chart.props('option')
+      resize([{ contentRect: { width: 0 } }])
+      await nextTick()
+      expect(wrapper.get('.figure-page').text()).toBe(page)
+      expect(chart.props('option')).toBe(option)
+      wrapper.unmount()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+  it('成本维度点击展开费用，费用点击进入明细，切换范围重置且真实分项不标样例', async () => {
+    const wrapper = render({
+      ...figure,
+      comparison: undefined,
+      sample: true,
+      rows: [
+        { key: '货品', name: '货品', groupKey: '货', sample: true, cells: { 金额: '¥100.00' } },
+        {
+          key: '已入账',
+          name: '已入账',
+          groupKey: '未分项',
+          sample: false,
+          cells: { 金额: '¥40.00' },
+        },
+      ],
+      breakdown: [
+        { key: '货品', name: '货品', group: '货', values: [100], sample: true },
+        { key: '已入账', name: '已入账', group: '未分项', values: [40], sample: false },
+      ],
+    })
+    const chart = wrapper.findComponent(chartStub)
+    chart.vm.$emit('chart-click', { data: { rowKey: '货' } })
+    await nextTick()
+    expect(chart.props('option').series[0].data[0].rowKey).toBe('货品')
+    expect(wrapper.emitted('inspect')).toBeUndefined()
+    chart.vm.$emit('chart-click', { data: { rowKey: '货品' } })
+    expect(wrapper.emitted('inspect')?.[0]?.[1]).toBe('货品')
+    await wrapper.findAll('.cost-scope button')[2].trigger('click')
+    expect(wrapper.find('.sample-label').exists()).toBe(false)
+    await wrapper.get('[title="查看数据明细"]').trigger('click')
+    expect(wrapper.emitted('inspect')?.[1]?.[0]).toMatchObject({
+      sample: false,
+      rows: [{ key: '已入账' }],
+    })
+    expect((wrapper.emitted('inspect')?.[1]?.[0] as Figure).rows).toHaveLength(1)
+    expect(wrapper.find('[role="img"]').attributes('aria-label')).toContain('共1条数据')
+    await wrapper.setProps({
+      figure: {
+        ...figure,
+        comparison: undefined,
+        breakdown: [{ key: '工资', name: '工资', group: '人', values: [20], sample: true }],
+      },
+    })
+    expect(wrapper.findAll('.cost-scope button')[0].attributes('aria-pressed')).toBe('true')
+    expect(chart.props('option').series[0].data[0].rowKey).toBe('人')
+    wrapper.unmount()
+  })
   it('窄屏目标矩阵保留四项指标名与单元格数值', async () => {
     vi.stubGlobal(
       'ResizeObserver',
@@ -93,7 +178,8 @@ describe('BI驾驶舱回款图交互', () => {
       performance: Array.from({ length: 12 }, (_, i) => ({
         key: `S${i}`,
         name: `销售${i}`,
-        region: i === 11 ? '上海' : '北京',
+        currentRegionName: i === 11 ? '金华' : '北京',
+        orderRegionNames: i === 11 ? ['上海', '杭州'] : ['北京'],
         rank: i + 1,
         value: 1200 - i * 100,
       })),
@@ -106,6 +192,10 @@ describe('BI驾驶舱回款图交互', () => {
     expect(chart.props('option').xAxis.data).toEqual(['S11'])
     expect(chart.props('option').xAxis.axisLabel.formatter('S11', 0)).toContain('第12名')
     expect(chart.props('option').yAxis.max).toBe(scale)
+    await wrapper.get('input').setValue('金华')
+    expect(chart.props('option').xAxis.data).toEqual(['S11'])
+    await wrapper.get('input').setValue('杭州')
+    expect(chart.props('option').xAxis.data).toEqual(['S11'])
     await wrapper.get('input').setValue('不存在')
     expect(wrapper.text()).toContain('没有匹配的销售人员')
     wrapper.unmount()
@@ -120,9 +210,30 @@ describe('BI驾驶舱回款图交互', () => {
     expect(wrapper.text()).toContain('待回款¥7,500')
     expect(wrapper.find('.cockpit-figure__empty').exists()).toBe(false)
     expect(wrapper.find('[role="img"]').attributes('aria-label')).toContain('回款率25.0%')
+    expect(wrapper.findComponent(chartStub).props('height')).toBeGreaterThanOrEqual(180)
     await wrapper.findAll('.collection-amounts button')[1].trigger('click')
     expect(wrapper.emitted('inspect')?.[0]?.[1]).toBe('unpaid')
     wrapper.unmount()
+  })
+  it('紧凑侧栏仪表保持足够高度，长百分比不越过内弧，未改变真实值', async () => {
+    for (const rate of [55.9, 100, 1250.5, -123.4, null]) {
+      const wrapper = render({
+        ...figure,
+        comparison: undefined,
+        height: 205,
+        collection: { rate, salesAmount: 100, paidAmount: rate, unpaidAmount: 44.1 },
+      })
+      const chart = wrapper.findComponent(chartStub)
+      const series = chart.props('option').series[0]
+      const readout = series.detail.formatter()
+      expect(chart.props('height')).toBe(180)
+      expect(readout.length * series.detail.fontSize * 0.7).toBeLessThanOrEqual(
+        2 * (series.radius - 24),
+      )
+      expect(series.data[0].actualRate).toBe(rate)
+      expect(series.detail.offsetCenter[1]).not.toBe(series.title.offsetCenter[1])
+      wrapper.unmount()
+    }
   })
   it('图表分页保留全部对象明细，柱子点击携带对象与回款部分', async () => {
     const wrapper = render(figure)

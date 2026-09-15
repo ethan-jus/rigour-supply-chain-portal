@@ -68,6 +68,8 @@ const ROUTES: Record<string, string | null> = {
   'supply.erp.menu': null, 'supply.erp.index': '/supply-chain/erp', 'supply.hr.menu': null,
   'supply.hr.index': '/supply-chain/hr', 'supply.channel.menu': null, 'supply.channel.index': '/supply-chain/channel',
   'supply.bi.menu': null, 'supply.bi.index': '/supply-chain/bi',
+  'supply.bi.hr': '/supply-chain/bi/hr',
+  'supply.bi.sales-visits': '/supply-chain/bi/sales-visits',
   'supply.bi.sales': '/supply-chain/bi/sales',
   'supply.bi.city-operating': '/supply-chain/bi/city-operating',
   'supply.bi.activity': '/supply-chain/bi/activity',

@@ -6,8 +6,9 @@
     :aria-label="figure.title"
   >
     <figcaption>
-      <h2>{{ figure.title }} <span v-if="figure.sample" class="sample-label">样例</span></h2>
+      <h2>{{ figure.title }} <span v-if="visibleSample" class="sample-label">样例</span></h2>
       <div class="figure-tools">
+        <slot name="tools" />
         <el-input
           v-if="figure.performance && figure.performance.length > 8"
           v-model="search"
@@ -46,14 +47,40 @@
         <button
           type="button"
           class="figure-icon"
+          title="口径说明"
+          :aria-label="`${figure.title}口径说明`"
+          @click="$emit('explain', figure)"
+        >
+          <el-icon><InfoFilled /></el-icon>
+        </button>
+        <button
+          type="button"
+          class="figure-icon"
           title="查看数据明细"
           :aria-label="`${figure.title}明细`"
-          @click="$emit('inspect', figure)"
+          @click="$emit('inspect', inspectedFigure)"
         >
           <el-icon><Grid /></el-icon>
         </button>
       </div>
     </figcaption>
+    <slot name="summary" />
+    <div
+      v-if="figure.breakdown && !figure.compact"
+      class="cost-scope"
+      role="group"
+      aria-label="成本分项"
+    >
+      <button
+        v-for="group in ['', ...costGroups]"
+        :key="group"
+        type="button"
+        :aria-pressed="costGroup === group"
+        @click="costGroup = group"
+      >
+        {{ group || '合计' }}
+      </button>
+    </div>
     <div
       v-if="!figure.compact && figure.rows.length && (!figure.performance || rowCount)"
       class="cockpit-figure__plot"
@@ -62,7 +89,9 @@
     >
       <EchartsChart
         :option="chartOption"
-        :height="figure.collection ? plotHeight - 72 : plotHeight"
+        :height="
+          figure.collection ? collectionHeight : figure.breakdown ? plotHeight - 32 : plotHeight
+        "
         @chart-click="onChartClick"
       />
     </div>
@@ -87,7 +116,9 @@
     <div
       v-if="figure.compact || !figure.rows.length || (figure.performance && !rowCount)"
       class="cockpit-figure__empty"
-      :style="{ height: `${figure.compact ? 72 : plotHeight}px` }"
+      :style="{
+        height: `${figure.compact ? 72 : figure.performance?.length ? plotHeight : Math.min(plotHeight, 132)}px`,
+      }"
     >
       <el-icon :size="28"><DataLine /></el-icon>
       <span>{{ search ? '没有匹配的销售人员' : figure.empty || '当前筛选暂无记录' }}</span>
@@ -106,21 +137,31 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, DataLine, Grid } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, DataLine, Grid, InfoFilled } from '@element-plus/icons-vue'
 import {
   amount,
   collectionColumns,
+  collectionGauge,
   performanceColumns,
   exactAmount,
   percent,
+  costComposition,
+  smallMultipleLines,
+  smallMultipleHeight,
 } from '../cockpit-charts'
 import type { Figure } from '../cockpit-model'
 import EchartsChart from './EchartsChart.vue'
 
 const props = withDefaults(defineProps<{ figure: Figure; height?: number }>(), { height: 270 })
-const plotHeight = computed(() => props.figure.height || props.height)
+const plotHeight = computed(() =>
+  props.figure.smallMultiples
+    ? smallMultipleHeight(props.figure.smallMultiples.series.length, chartWidth.value)
+    : props.figure.height || props.height,
+)
+const collectionHeight = computed(() => Math.max(180, plotHeight.value - 72))
 const emit = defineEmits<{
   inspect: [figure: Figure, rowKey?: string, collectionPart?: 'paid' | 'unpaid']
+  explain: [figure: Figure]
   'resolve-empty': [action: NonNullable<Figure['emptyAction']>]
 }>()
 const figureElement = ref<HTMLElement | null>(null)
@@ -128,10 +169,37 @@ const page = ref(0)
 const search = ref('')
 const pageSize = ref(8)
 const chartWidth = ref(800)
+const costGroup = ref('')
+const costGroups = computed(() => [
+  ...new Set(props.figure.breakdown?.map((row) => row.group) || []),
+])
+const visibleSample = computed(() =>
+  props.figure.breakdown
+    ? props.figure.breakdown.some(
+        (row) => (!costGroup.value || row.group === costGroup.value) && row.sample,
+      )
+    : props.figure.sample,
+)
+const inspectedFigure = computed<Figure>(() =>
+  props.figure.breakdown && costGroup.value
+    ? {
+        ...props.figure,
+        title: `${props.figure.title} · ${costGroup.value}`,
+        sample: visibleSample.value,
+        rows: props.figure.rows.filter((row) => row.groupKey === costGroup.value),
+      }
+    : props.figure,
+)
+watch(
+  () => props.figure.breakdown,
+  () => {
+    costGroup.value = ''
+  },
+)
 const performanceRows = computed(
   () =>
     props.figure.performance?.filter((row) =>
-      `${row.name} ${row.region} ${row.key}`
+      `${row.name} ${row.currentRegionName || ''} ${row.orderRegionNames?.join(' ') || ''} ${row.key}`
         .toLocaleLowerCase()
         .includes(search.value.trim().toLocaleLowerCase()),
     ) || [],
@@ -141,25 +209,66 @@ const rowCount = computed(() =>
 )
 const pageCount = computed(() => Math.ceil(rowCount.value / pageSize.value))
 const rawChartOption = computed(() =>
-  props.figure.performance
-    ? performanceColumns(
-        performanceRows.value.slice(page.value * pageSize.value, (page.value + 1) * pageSize.value),
-        props.figure.performance,
-        props.figure.performanceMetric || '销售额',
-      )
-    : props.figure.comparison
-      ? collectionColumns(
-          props.figure.comparison.slice(
-            page.value * pageSize.value,
-            (page.value + 1) * pageSize.value,
-          ),
-          props.figure.comparison,
+  props.figure.collection
+    ? collectionGauge(props.figure.collection, {
+        width: chartWidth.value,
+        height: collectionHeight.value,
+      })
+    : props.figure.smallMultiples
+      ? smallMultipleLines(
+          props.figure.smallMultiples.rows,
+          props.figure.smallMultiples.series,
+          chartWidth.value,
         )
-      : props.figure.option,
+      : props.figure.performance
+        ? performanceColumns(
+            performanceRows.value.slice(
+              page.value * pageSize.value,
+              (page.value + 1) * pageSize.value,
+            ),
+            props.figure.performance,
+            props.figure.performanceMetric || '销售额',
+          )
+        : props.figure.comparison
+          ? collectionColumns(
+              props.figure.comparison.slice(
+                page.value * pageSize.value,
+                (page.value + 1) * pageSize.value,
+              ),
+              props.figure.comparison,
+            )
+          : props.figure.option,
 )
 const chartOption = computed(() => {
-  const option = rawChartOption.value
+  const option = props.figure.breakdown
+    ? costComposition(props.figure.breakdown, costGroup.value)
+    : rawChartOption.value
   const series = Array.isArray(option.series) ? option.series : []
+  if (props.figure.id === 'cost-bridge' && chartWidth.value < 440) {
+    return {
+      ...option,
+      series: series.map((item, index) =>
+        index === 1
+          ? {
+              ...item,
+              label: {
+                show: true,
+                position: 'top',
+                fontSize: 11,
+                formatter: (raw: unknown) => {
+                  const { dataIndex } = raw as { dataIndex: number }
+                  const original = item.label?.formatter
+                  return (dataIndex === 0 || dataIndex === props.figure.rows.length - 1) &&
+                    typeof original === 'function'
+                    ? original(raw)
+                    : ''
+                },
+              },
+            }
+          : item,
+      ),
+    }
+  }
   if (!series.some((item) => item.type === 'heatmap')) return option
   const axis = Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis
   const columns = Array.isArray(axis?.data) ? axis.data.length : 1
@@ -185,7 +294,11 @@ const chartOption = computed(() => {
       item.type === 'heatmap'
         ? {
             ...item,
-            label: { ...item.label, show: showLabels, ...(compactTargets ? { fontSize: 10 } : {}) },
+            label: {
+              ...item.label,
+              show: item.name === '回款率' || showLabels,
+              ...(compactTargets ? { fontSize: 10 } : {}),
+            },
           }
         : item,
     ),
@@ -195,7 +308,7 @@ const plotLabel = computed(() => {
   const data = props.figure.collection
   return data
     ? `${props.figure.title}，回款率${percent(data.rate)}，已回款${exactAmount(data.paidAmount)}，待回款${exactAmount(data.unpaidAmount)}`
-    : `${props.figure.title}，共${props.figure.rows.length}条数据，可通过明细按钮查看`
+    : `${inspectedFigure.value.title}，共${inspectedFigure.value.rows.length}条数据，可通过明细按钮查看`
 })
 let resizeObserver: ResizeObserver | undefined
 watch([() => props.figure.comparison, () => props.figure.performance, search], () => {
@@ -204,14 +317,14 @@ watch([() => props.figure.comparison, () => props.figure.performance, search], (
 onMounted(() => {
   if (!figureElement.value || typeof ResizeObserver === 'undefined') return
   resizeObserver = new ResizeObserver(([entry]) => {
+    if (entry.contentRect.width <= 0) return
     chartWidth.value = entry.contentRect.width
-    const size = Math.max(
-      2,
-      Math.min(
-        8,
-        Math.floor((entry.contentRect.width - 66) / (props.figure.performance ? 96 : 74)),
-      ),
-    )
+    const columnWidth = props.figure.performance?.some((row) => row.currentRegionName)
+      ? 128
+      : props.figure.performance
+        ? 96
+        : 74
+    const size = Math.max(2, Math.min(8, Math.floor((entry.contentRect.width - 66) / columnWidth)))
     if (size !== pageSize.value) {
       pageSize.value = size
       page.value = 0
@@ -236,11 +349,20 @@ function onChartClick(raw: unknown) {
       collectionPart?: 'paid' | 'unpaid'
     }
   }
-  if (params.data?.children?.length) {
-    emit('inspect', props.figure, params.data.name)
+  if (
+    props.figure.breakdown &&
+    !costGroup.value &&
+    params.data?.rowKey &&
+    costGroups.value.includes(params.data.rowKey)
+  ) {
+    costGroup.value = params.data.rowKey
     return
   }
-  emit('inspect', props.figure, params.data?.rowKey, params.data?.collectionPart)
+  if (params.data?.children?.length) {
+    emit('inspect', inspectedFigure.value, params.data.name)
+    return
+  }
+  emit('inspect', inspectedFigure.value, params.data?.rowKey, params.data?.collectionPart)
 }
 </script>
 
@@ -249,14 +371,36 @@ function onChartClick(raw: unknown) {
   margin: 0;
   min-width: 0;
   padding: 18px 20px 12px;
-  border-top: 1px solid #e4eaf2;
-  border-right: 1px solid #e4eaf2;
+  border-bottom: 1px solid #e4eaf2;
   background: #fff;
   display: flex;
   flex-direction: column;
 }
 .cockpit-figure--4 {
   grid-column: span 4;
+}
+.cockpit-figure--3 {
+  grid-column: span 3;
+}
+.cost-scope {
+  display: flex;
+  gap: 16px;
+  min-height: 32px;
+  flex-wrap: wrap;
+}
+.cost-scope button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 2px 0 5px;
+  background: transparent;
+  color: #637085;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cost-scope button[aria-pressed='true'] {
+  color: #2864e8;
+  border-bottom-color: #2864e8;
 }
 .cockpit-figure--6 {
   grid-column: span 6;
@@ -273,7 +417,8 @@ figcaption {
   justify-content: space-between;
   gap: 8px;
   min-height: 30px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 .figure-tools {
   display: flex;
@@ -402,6 +547,9 @@ footer {
   }
   .cockpit-figure--12 {
     grid-column: span 12;
+  }
+  .cockpit-figure--8 {
+    grid-column: span 6;
   }
 }
 @media (max-width: 720px) {

@@ -228,6 +228,8 @@ describe('数据库导航注册表', () => {
       menuNode('supply.bi.menu'),
       node('supply.bi.index', '/supply-chain/bi'),
       node('supply.bi.sales', '/supply-chain/bi/sales'),
+      node('supply.bi.hr', '/supply-chain/bi/hr'),
+      node('supply.bi.sales-visits', '/supply-chain/bi/sales-visits'),
       node('supply.bi.city-operating', '/supply-chain/bi/city-operating'),
       node('supply.bi.activity', '/supply-chain/bi/activity'),
       node('supply.bi.product-inventory', '/supply-chain/bi/product-inventory'),
@@ -237,7 +239,7 @@ describe('数据库导航注册表', () => {
       node('supply.bi.payment-risk', '/supply-chain/bi/payment-risk'),
       node('supply.bi.city-cost', '/supply-chain/bi/city-cost'),
       node('supply.bi.inventory-risk', '/supply-chain/bi/inventory-risk'),
-    ])).toHaveLength(12)
+    ])).toHaveLength(14)
 
     expect(() => validateNavigation([
       node('supply.bi.sync-quality', '/supply-chain/bi/sync-quality'),
