@@ -14,6 +14,8 @@ vi.mock('@/api/core/erp-product', () => ({
   getErpManagedProduct: vi.fn(),
   createErpManagedProduct: vi.fn(),
   updateErpManagedProduct: vi.fn(),
+  updateErpProductShelfStatus: vi.fn(),
+  updateErpProductOrdinal: vi.fn(),
   deleteErpManagedProduct: vi.fn(),
 }))
 vi.mock('@/api/core/erp-internal', () => ({
@@ -22,6 +24,9 @@ vi.mock('@/api/core/erp-internal', () => ({
   getErpInventoryWarehouses: async () => ({ items: [] }),
 }))
 vi.mock('@/utils/product-categories', () => ({ loadAllErpProductCategories: async () => [] }))
+vi.mock('@/composables/useSupplyPermissions', () => ({
+  useSupplyPermissions: () => ({ can: () => true }),
+}))
 vi.mock('@/utils/business-dictionary', () => ({
   loadBusinessDictionaries: async () => {},
   businessDictionaryOptions: () => [],

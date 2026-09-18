@@ -49,6 +49,21 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="售卖类型">
+          <el-select
+            v-model="filters.saleTypeCode"
+            clearable
+            placeholder="全部售卖类型"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="item in saleTypeOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="上架状态">
           <el-select
             v-model="filters.shelfStatusCode"
@@ -103,126 +118,218 @@
           v-loading="loading"
           class="business-table product-management-table supply-scroll-table"
           height="100%"
-          :data="pageData.items"
-          row-key="id"
-          @row-click="openDetail"
+          :data="displayRows"
+          row-key="key"
+          :row-class-name="tableRowClassName"
         >
-          <el-table-column
-            type="index"
-            label="序号"
-            width="80"
-            fixed="left"
-            :index="tableRowIndex"
-          />
-          <el-table-column prop="productCode" label="商品编码" width="150" show-overflow-tooltip>
-            <template #default="scope">{{ scope.row.productCode || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="商品图片" width="104" align="center">
+          <el-table-column label="序号" width="68" fixed="left" align="center">
             <template #default="scope">
-              <div class="product-thumb-wrap product-thumb-wrap--standalone" @click.stop>
+              <span v-if="scope.row.rowKind === 'product'">{{
+                productRowIndex(scope.row.product)
+              }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="商品编码" width="196" fixed="left" show-overflow-tooltip>
+            <template #default="scope">
+              <span v-if="scope.row.rowKind === 'product'">{{
+                scope.row.product.productCode || '-'
+              }}</span>
+              <span v-else class="variant-code">{{ scope.row.variant?.variantCode || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="图片" width="84" align="center">
+            <template #default="scope">
+              <button
+                v-if="scope.row.rowKind === 'product'"
+                type="button"
+                class="product-thumb-wrap product-thumb-wrap--list"
+                :aria-label="`查看 ${scope.row.product.productName || '商品'} 详情`"
+                @click="openDetail(scope.row.product)"
+              >
                 <el-image
-                  v-if="scope.row.mainImageUrl"
+                  v-if="scope.row.product.mainImageUrl"
                   class="product-thumb"
-                  :src="scope.row.mainImageUrl"
+                  :src="scope.row.product.mainImageUrl"
                   fit="cover"
-                  preview-teleported
-                  :preview-src-list="[scope.row.mainImageUrl]"
                 />
-                <span v-else class="product-thumb-placeholder">暂无图片</span>
-              </div>
+                <span v-else class="product-thumb-placeholder">暂无</span>
+              </button>
+              <span v-else class="variant-branch" aria-hidden="true">└</span>
             </template>
           </el-table-column>
-          <el-table-column label="商品名称" min-width="260">
+          <el-table-column label="商品名称" min-width="220" show-overflow-tooltip>
             <template #default="scope">
-              <div class="product-identity">
-                <div class="product-identity-content">
-                  <strong :title="scope.row.productName">{{ scope.row.productName }}</strong>
-                  <div class="status-tags status-tags--compact">
-                    <el-tag effect="plain" :type="saleTypeTag(scope.row.saleTypeCode)">
-                      {{ productSaleTypeLabel(scope.row.saleTypeCode) }}
-                    </el-tag>
-                    <el-tag effect="plain" :type="shelfStatusTag(scope.row.shelfStatusCode)">
-                      {{ productShelfStatusLabel(scope.row.shelfStatusCode) }}
-                    </el-tag>
-                  </div>
-                </div>
-              </div>
+              <el-button
+                v-if="scope.row.rowKind === 'product'"
+                class="product-name-link"
+                link
+                type="primary"
+                @click="openDetail(scope.row.product)"
+              >
+                {{ scope.row.product.productName || '-' }}
+              </el-button>
             </template>
           </el-table-column>
-          <el-table-column prop="brandName" label="商品品牌" min-width="180" show-overflow-tooltip>
-            <template #default="scope">{{ scope.row.brandName || '-' }}</template>
-          </el-table-column>
-          <el-table-column
-            prop="categoryName"
-            label="商品分类"
-            min-width="180"
-            show-overflow-tooltip
-          >
-            <template #default="scope">{{ scope.row.categoryName || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="规格数" width="110" align="center">
-            <template #default="scope">{{ scope.row.variantCount || 0 }} 种</template>
-          </el-table-column>
-          <el-table-column label="基础单位" width="110">
-            <template #default="scope">{{ unitLabel(scope.row.unitCode) }}</template>
-          </el-table-column>
-          <el-table-column label="默认售价" width="130" align="right" header-align="right" sortable>
-            <template #default="scope">{{ money(scope.row.defaultSalePrice) }}</template>
-          </el-table-column>
-          <!-- @vue-generic {ErpManagedProductSummary} -->
-          <el-table-column label="推荐商品" width="110" align="center">
-            <template #default="scope">{{ recommendProductText(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column label="起订量" width="110" align="right" header-align="right">
+          <!-- @vue-generic {DisplayRow} -->
+          <el-table-column label="品牌" min-width="140" show-overflow-tooltip>
             <template #default="scope">{{
-              quantityWithUnit(scope.row.minOrderQuantity, unitLabel(scope.row.unitCode))
+              productText(scope.row, scope.row.product.brandName)
             }}</template>
           </el-table-column>
-          <!-- @vue-generic {ErpManagedProductSummary} -->
-          <el-table-column label="整倍订货量" width="120" align="right" header-align="right">
-            <template #default="scope">{{ orderMultipleText(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column label="限购量" width="110" align="right" header-align="right">
+          <!-- @vue-generic {DisplayRow} -->
+          <el-table-column label="分类" min-width="140" show-overflow-tooltip>
             <template #default="scope">{{
-              quantityWithUnit(scope.row.limitQuantity, unitLabel(scope.row.unitCode))
+              productText(scope.row, scope.row.product.categoryName)
             }}</template>
           </el-table-column>
-          <!-- @vue-generic {ErpManagedProductSummary} -->
-          <el-table-column label="商品标签" min-width="160" show-overflow-tooltip>
-            <template #default="scope">{{ productTagText(scope.row) }}</template>
-          </el-table-column>
-          <el-table-column label="归属仓库" min-width="180">
-            <template #default="scope">{{ scope.row.defaultWarehouseName || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="售卖类型" width="120">
-            <template #default="scope">{{ productSaleTypeLabel(scope.row.saleTypeCode) }}</template>
-          </el-table-column>
-          <el-table-column label="上架状态" width="120">
+          <el-table-column label="规格" width="132">
             <template #default="scope">
-              <el-tag effect="light" :type="shelfStatusTag(scope.row.shelfStatusCode)">
-                {{ productShelfStatusLabel(scope.row.shelfStatusCode) }}
+              <template v-if="scope.row.rowKind === 'product'">
+                <el-button
+                  v-if="isExpandable(scope.row.product)"
+                  class="spec-toggle"
+                  link
+                  type="primary"
+                  :aria-expanded="isExpanded(scope.row.product)"
+                  @click.stop="toggleVariants(scope.row.product)"
+                >
+                  <el-icon class="spec-toggle__icon">
+                    <Minus v-if="isExpanded(scope.row.product)" />
+                    <Plus v-else />
+                  </el-icon>
+                  {{ specCount(scope.row.product) }} 种
+                </el-button>
+                <span v-else class="spec-static">{{ specCount(scope.row.product) }} 种</span>
+                <span
+                  v-if="scope.row.product.productSpecification"
+                  class="spec-note"
+                  :title="scope.row.product.productSpecification"
+                >
+                  {{ scope.row.product.productSpecification }}
+                </span>
+              </template>
+              <span v-else class="variant-spec">
+                {{ scope.row.variant?.specificationSnapshot || '-' }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="单位" width="96">
+            <template #default="scope">
+              <span v-if="scope.row.rowKind === 'product'">{{
+                unitLabel(scope.row.product.unitCode)
+              }}</span>
+              <span v-else>{{
+                unitLabel(scope.row.variant?.unitCode || scope.row.product.unitCode)
+              }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="订货价" width="150" align="right" header-align="right">
+            <template #default="scope">
+              <span v-if="scope.row.rowKind === 'product'" class="order-price">
+                {{ orderPriceText(scope.row.product) }}
+              </span>
+              <span v-else class="variant-price">{{ money(scope.row.variant?.salePrice) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="排序" width="128" align="center">
+            <template #default="scope">
+              <el-input-number
+                v-if="scope.row.rowKind === 'product'"
+                class="ordinal-editor"
+                size="small"
+                :model-value="scope.row.product.ordinal ?? 0"
+                :min="0"
+                :max="999999"
+                :step="10"
+                :disabled="!canWrite || ordinalSavingId === String(scope.row.product.id)"
+                controls-position="right"
+                @change="(value: number | undefined) => changeOrdinal(scope.row.product, value)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="上架状态" width="132" align="center">
+            <template #default="scope">
+              <template v-if="scope.row.rowKind === 'product'">
+                <el-switch
+                  v-if="shelfSwitchEnabled"
+                  class="shelf-switch"
+                  :model-value="scope.row.product.shelfStatusCode === SHELF_ON_CODE"
+                  :loading="shelfSavingId === String(scope.row.product.id)"
+                  :disabled="!canWrite"
+                  inline-prompt
+                  :active-text="shelfOnLabel"
+                  :inactive-text="shelfOffLabel"
+                  :width="60"
+                  @change="
+                    (value: string | number | boolean) =>
+                      changeShelfStatus(scope.row.product, Boolean(value))
+                  "
+                />
+                <!-- 字典不正好是上架/下架两态时，开关承载不了多态，回退为字典下拉 -->
+                <el-select
+                  v-else
+                  :model-value="scope.row.product.shelfStatusCode"
+                  size="small"
+                  :disabled="!canWrite || shelfSavingId === String(scope.row.product.id)"
+                  style="width: 100%"
+                  @change="
+                    (value: string) => changeShelfStatusTo(scope.row.product, String(value))
+                  "
+                >
+                  <el-option
+                    v-for="item in shelfStatusOptions"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
+              </template>
+              <el-tag v-else-if="scope.row.variant?.defaultFlag" size="small" effect="plain">
+                默认规格
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="提交状态" width="120">
+          <el-table-column label="售卖类型" width="110">
             <template #default="scope">
-              <el-tag effect="light" :type="submitStatusTag(scope.row.submitStatusCode)">
-                {{ productSubmitStatusLabel(scope.row.submitStatusCode) }}
+              <el-tag
+                v-if="scope.row.rowKind === 'product'"
+                effect="light"
+                :type="saleTypeTag(scope.row.product.saleTypeCode)"
+              >
+                {{ productSaleTypeLabel(scope.row.product.saleTypeCode) }}
               </el-tag>
             </template>
           </el-table-column>
+          <!-- @vue-generic {DisplayRow} -->
           <el-table-column label="创建人" width="120">
-            <template #default="scope">{{ auditActorLabel(scope.row.createdBy) }}</template>
+            <template #default="scope">{{
+              productText(scope.row, auditActorLabel(scope.row.product.createdBy))
+            }}</template>
           </el-table-column>
-          <el-table-column label="更新时间" width="170">
-            <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
+          <!-- @vue-generic {DisplayRow} -->
+          <el-table-column label="创建时间" width="170">
+            <template #default="scope">{{
+              productText(scope.row, formatTime(scope.row.product.createdTime))
+            }}</template>
           </el-table-column>
-          <!-- @vue-generic {ErpManagedProductSummary} -->
-          <el-table-column label="操作" width="190" fixed="right" align="center">
+          <el-table-column label="修改人/时间" width="200">
             <template #default="scope">
-              <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
-              <el-button link type="danger" @click.stop="deleteProduct(scope.row)">删除</el-button>
+              <div v-if="scope.row.rowKind === 'product'" class="audit-cell">
+                <span>{{ auditActorLabel(scope.row.product.updatedBy) }}</span>
+                <span class="audit-cell__time">{{ formatTime(scope.row.product.updatedTime) }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="132" fixed="right" align="center">
+            <template #default="scope">
+              <template v-if="scope.row.rowKind === 'product'">
+                <el-button link type="primary" @click.stop="openEdit(scope.row.product)">
+                  编辑
+                </el-button>
+                <el-button link type="danger" @click.stop="deleteProduct(scope.row.product)">
+                  删除
+                </el-button>
+              </template>
             </template>
           </el-table-column>
           <template #empty>
@@ -579,6 +686,18 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
+            <el-form-item label="排序">
+              <el-input-number
+                v-model="form.ordinal"
+                :min="0"
+                :max="999999"
+                :step="10"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
             <el-form-item label="起订量">
               <el-input-number
                 v-model="form.minOrderQuantity"
@@ -823,12 +942,15 @@ import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Minus, Plus } from '@element-plus/icons-vue'
 import {
   createErpManagedProduct,
   deleteErpManagedProduct,
   getErpManagedProduct,
   getErpManagedProducts,
   updateErpManagedProduct,
+  updateErpProductOrdinal,
+  updateErpProductShelfStatus,
   type ErpManagedProductCommand,
   type ErpManagedProductDetail,
   type ErpManagedProductImage,
@@ -854,11 +976,13 @@ import {
 } from '@/utils/business-dictionary'
 import ProductCategorySelect from '@/components/supply/ProductCategorySelect.vue'
 import { loadAllErpProductCategories } from '@/utils/product-categories'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 
 interface ProductFilters {
   productCode: string
   productName: string
   brandId: string
+  saleTypeCode: string
   shelfStatusCode: string
   submitStatusCode: string
 }
@@ -894,6 +1018,7 @@ interface ProductForm {
   orderMultipleQuantity: number | null
   saleTypeCode: string
   shelfStatusCode: string
+  ordinal: number | null
   tagCodes: string[]
   limitQuantity: number | null
   defaultWarehouseId: string | null
@@ -902,6 +1027,23 @@ interface ProductForm {
   remark: string
   revision: number | null
 }
+
+/** 列表展示行：商品行与就地展开出的规格子行共用同一张表格。 */
+interface ProductDisplayRow {
+  key: string
+  rowKind: 'product'
+  product: ErpManagedProductSummary
+  variant: null
+}
+
+interface VariantDisplayRow {
+  key: string
+  rowKind: 'variant'
+  product: ErpManagedProductSummary
+  variant: ErpManagedProductVariant
+}
+
+type DisplayRow = ProductDisplayRow | VariantDisplayRow
 
 interface DetailField {
   label: string
@@ -946,10 +1088,162 @@ const filters = reactive<ProductFilters>({
   productCode: '',
   productName: '',
   brandId: '',
+  saleTypeCode: '',
   shelfStatusCode: '',
   submitStatusCode: '',
 })
 const form = reactive<ProductForm>(emptyForm())
+
+const { can } = useSupplyPermissions()
+const canWrite = computed(() => can('erp:product:write'))
+
+/**
+ * 上架状态在列表用开关展示，前提是字典就是"上架/下架"两态。
+ *
+ * <p>这里不按字典顺序猜方向：只有两个约定编码都在字典里才启用开关，
+ * 否则退回字典下拉。字典改了名字或加了第三态时，页面退回成"能选对但少一点便捷"，
+ * 而不是开关猜错方向把商品上下架搞反。</p>
+ */
+const SHELF_ON_CODE = 'ON_SHELF'
+const SHELF_OFF_CODE = 'OFF_SHELF'
+const shelfSwitchEnabled = computed(() => {
+  const codes = shelfStatusOptions.value.map((item) => String(item.value))
+  return codes.length === 2 && codes.includes(SHELF_ON_CODE) && codes.includes(SHELF_OFF_CODE)
+})
+const shelfOnLabel = computed(() => productShelfStatusLabel(SHELF_ON_CODE))
+const shelfOffLabel = computed(() => productShelfStatusLabel(SHELF_OFF_CODE))
+
+/** 已展开规格的商品 ID；跨分页、跨查询保留，避免翻页后又要重新点开。 */
+const expandedProductIds = ref<Set<string>>(new Set())
+/** 正在提交上架状态/排序的商品 ID，用于按钮 loading 与并发保护。 */
+const shelfSavingId = ref<string | null>(null)
+const ordinalSavingId = ref<string | null>(null)
+
+const specCount = (product: ErpManagedProductSummary) =>
+  product.variants?.length || product.variantCount || 0
+
+/** 只有多规格商品才给展开按钮，单规格给了也是无意义点击。 */
+function isExpandable(product: ErpManagedProductSummary) {
+  return specCount(product) > 1
+}
+
+function isExpanded(product: ErpManagedProductSummary) {
+  return expandedProductIds.value.has(String(product.id))
+}
+
+function toggleVariants(product: ErpManagedProductSummary) {
+  const id = String(product.id)
+  const next = new Set(expandedProductIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedProductIds.value = next
+}
+
+/** 商品行 + 展开出来的规格子行，压平后交给同一张表格渲染。 */
+const displayRows = computed<DisplayRow[]>(() => {
+  const rows: DisplayRow[] = []
+  for (const product of pageData.value.items) {
+    rows.push({ key: `product-${product.id}`, rowKind: 'product', product, variant: null })
+    if (!isExpandable(product) || !expandedProductIds.value.has(String(product.id))) continue
+    for (const variant of product.variants ?? []) {
+      rows.push({
+        key: `variant-${variant.id}`,
+        rowKind: 'variant',
+        product,
+        variant,
+      })
+    }
+  }
+  return rows
+})
+
+const productRowIndexMap = computed(() => {
+  const map = new Map<string, number>()
+  pageData.value.items.forEach((product, index) => {
+    map.set(String(product.id), (currentPage.value - 1) * pageSize.value + index + 1)
+  })
+  return map
+})
+
+function productRowIndex(product: ErpManagedProductSummary) {
+  return productRowIndexMap.value.get(String(product.id)) ?? ''
+}
+
+function tableRowClassName({ row }: { row: DisplayRow }) {
+  return row.rowKind === 'variant' ? 'product-variant-row' : ''
+}
+
+/** 规格子行只占少数几列，其余列留空；商品行才渲染文本。 */
+function productText(row: DisplayRow, value: string | null | undefined) {
+  return row.rowKind === 'product' ? value || '' : ''
+}
+
+/** 列表订货价：多规格价格不一致时给区间，避免只看到默认规格而误判。 */
+function orderPriceText(product: ErpManagedProductSummary) {
+  const prices = (product.variants ?? [])
+    .map((variant) => variant.salePrice)
+    .filter((price): price is number => price !== null && price !== undefined)
+  if (!prices.length) return money(product.defaultSalePrice)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  return min === max ? money(min) : `${money(min)} ~ ${money(max)}`
+}
+
+function applyUpdatedProduct(product: ErpManagedProductSummary, updated: ErpManagedProductDetail) {
+  product.shelfStatusCode = updated.shelfStatusCode
+  product.ordinal = updated.ordinal
+  product.revision = updated.revision
+  product.updatedBy = updated.updatedBy
+  product.updatedTime = updated.updatedTime
+}
+
+async function changeShelfStatus(product: ErpManagedProductSummary, onShelf: boolean) {
+  await changeShelfStatusTo(product, onShelf ? SHELF_ON_CODE : SHELF_OFF_CODE)
+}
+
+async function changeShelfStatusTo(product: ErpManagedProductSummary, next: string) {
+  if (product.shelfStatusCode === next) return
+  const previous = product.shelfStatusCode
+  shelfSavingId.value = String(product.id)
+  product.shelfStatusCode = next
+  try {
+    const updated = await updateErpProductShelfStatus(
+      product.id,
+      next,
+      Number(product.revision ?? 0),
+    )
+    applyUpdatedProduct(product, updated)
+    ElMessage.success(`商品已${productShelfStatusLabel(next)}`)
+  } catch (reason) {
+    product.shelfStatusCode = previous
+    ElMessage.error(errorMessage(reason, '上架状态修改失败'))
+    await loadRows()
+  } finally {
+    shelfSavingId.value = null
+  }
+}
+
+async function changeOrdinal(product: ErpManagedProductSummary, value: number | undefined) {
+  const next = Number(value)
+  if (!Number.isFinite(next) || next < 0 || next === product.ordinal) return
+  ordinalSavingId.value = String(product.id)
+  try {
+    const updated = await updateErpProductOrdinal(
+      product.id,
+      next,
+      Number(product.revision ?? 0),
+    )
+    applyUpdatedProduct(product, updated)
+    ElMessage.success('排序已更新')
+    // 排序值决定列表顺序，改完重新拉一次才能看到它落到新位置。
+    await loadRows()
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason, '排序修改失败'))
+    await loadRows()
+  } finally {
+    ordinalSavingId.value = null
+  }
+}
 
 const categoryOptions = ref<ErpProductCategoryView[]>([])
 const brandOptions = ref<ErpProductBrandView[]>([])
@@ -1175,10 +1469,6 @@ const productDescription = computed(
     '暂无图文描述',
 )
 
-function tableRowIndex(index: number): number {
-  return (currentPage.value - 1) * pageSize.value + index + 1
-}
-
 onMounted(() => {
   void loadBusinessDictionaries([
     { moduleCode: 'COMMON', code: 'PRODUCT_UNIT' },
@@ -1214,8 +1504,10 @@ async function loadRows() {
       productCode: empty(filters.productCode),
       productName: empty(filters.productName),
       brandId: empty(filters.brandId),
+      saleTypeCode: empty(filters.saleTypeCode),
       shelfStatusCode: empty(filters.shelfStatusCode),
       submitStatusCode: empty(filters.submitStatusCode),
+      withVariants: true,
     })
   } catch (reason) {
     pageData.value = { total: 0, begin: 0, step: pageSize.value, items: [] }
@@ -1283,6 +1575,7 @@ async function resetFilters() {
   filters.productCode = ''
   filters.productName = ''
   filters.brandId = ''
+  filters.saleTypeCode = ''
   filters.shelfStatusCode = ''
   filters.submitStatusCode = ''
   currentPage.value = 1
@@ -1294,6 +1587,7 @@ function applyRouteQuery() {
   changed = setFilterValue('productCode', routeText(route.query.productCode)) || changed
   changed = setFilterValue('productName', routeText(route.query.productName)) || changed
   changed = setFilterValue('brandId', routeText(route.query.brandId)) || changed
+  changed = setFilterValue('saleTypeCode', routeText(route.query.saleTypeCode)) || changed
   changed = setFilterValue('shelfStatusCode', routeText(route.query.shelfStatusCode)) || changed
   changed = setFilterValue('submitStatusCode', routeText(route.query.submitStatusCode)) || changed
   return changed
@@ -1400,6 +1694,7 @@ function emptyForm(): ProductForm {
     orderMultipleQuantity: null,
     saleTypeCode: '',
     shelfStatusCode: '',
+    ordinal: 0,
     tagCodes: [],
     limitQuantity: null,
     defaultWarehouseId: null,
@@ -1438,6 +1733,7 @@ function applyDetailToForm(product: ErpManagedProductDetail) {
     orderMultipleQuantity: product.orderMultipleQuantity ?? null,
     saleTypeCode: product.saleTypeCode || '',
     shelfStatusCode: product.shelfStatusCode || '',
+    ordinal: product.ordinal ?? 0,
     tagCodes: [...(product.tagCodes ?? [])],
     limitQuantity: product.limitQuantity ?? null,
     defaultWarehouseId: product.defaultWarehouseId ? String(product.defaultWarehouseId) : null,
@@ -1515,6 +1811,7 @@ function toCommand(submit: boolean): ErpManagedProductCommand {
     orderMultipleQuantity: numberOrNull(form.orderMultipleQuantity),
     saleTypeCode: empty(form.saleTypeCode),
     shelfStatusCode: empty(form.shelfStatusCode),
+    ordinal: form.ordinal ?? 0,
     tagCodes: [...form.tagCodes],
     limitQuantity: numberOrNull(form.limitQuantity),
     defaultWarehouseId: form.defaultWarehouseId,
@@ -1577,6 +1874,11 @@ function dictLabel(
   return businessDictionaryLabel(moduleCode, dictionaryCode, value, subject)
 }
 
+/*
+ * 下面三个只决定标签配色，不是字典的权威映射：文案一律取字典项名称，
+ * 编码认不出来就退回中性色。字典增删项不会让页面显示错误的业务含义。
+ * 提交状态是领域状态机（草稿/已提交），只借字典做展示，不由字典驱动取值。
+ */
 function submitStatusTag(value: string | null | undefined) {
   if (value === 'SUBMITTED') return 'success'
   return 'warning'
@@ -1770,20 +2072,6 @@ function money(value: number | null | undefined) {
   return value === null || value === undefined ? '-' : `¥${Number(value).toFixed(2)}`
 }
 
-function recommendProductText(row: ErpManagedProductSummary) {
-  const count = row.recommendProductIds?.length || 0
-  return count ? `${count} 个` : '-'
-}
-
-function orderMultipleText(row: ErpManagedProductSummary) {
-  if (row.orderMultipleFlag === false) return '否'
-  return quantityWithUnit(row.orderMultipleQuantity, unitLabel(row.unitCode))
-}
-
-function productTagText(row: ErpManagedProductSummary) {
-  return row.tagCodes?.length ? row.tagCodes.join('、') : '-'
-}
-
 const formatTime = displayDateTime
 
 function errorMessage(reason: unknown, fallback: string) {
@@ -1847,6 +2135,98 @@ function errorMessage(reason: unknown, fallback: string) {
   justify-content: center;
   color: $color-text-placeholder;
   font-size: 10px;
+}
+
+/* ---- 商品列表：就地展开规格 ---- */
+
+.product-thumb-wrap--list {
+  display: block;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  padding: 0;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.product-thumb-wrap--list:hover,
+.product-thumb-wrap--list:focus-visible {
+  border-color: $color-primary;
+}
+
+.product-name-link {
+  font-weight: 600;
+}
+
+.spec-toggle {
+  gap: 2px;
+  font-weight: 600;
+}
+
+.spec-toggle__icon {
+  margin-right: 2px;
+}
+
+.spec-static {
+  color: $color-text-regular;
+}
+
+.spec-note {
+  display: block;
+  overflow: hidden;
+  color: $color-text-placeholder;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.variant-code {
+  padding-left: 14px;
+  color: $color-text-regular;
+}
+
+.variant-branch {
+  color: $color-text-placeholder;
+}
+
+.variant-spec {
+  color: $color-text-regular;
+}
+
+.variant-price {
+  color: $color-text-regular;
+}
+
+.order-price {
+  font-weight: 600;
+}
+
+.ordinal-editor {
+  width: 96px;
+}
+
+.audit-cell {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.audit-cell__time {
+  color: $color-text-secondary;
+  font-size: 12px;
+}
+
+:deep(.product-variant-row) {
+  background: $color-bg-page;
+
+  td {
+    border-bottom-style: dashed;
+  }
+}
+
+:deep(.product-variant-row:hover > td) {
+  background: $color-bg-page;
 }
 
 .product-image-gallery {
