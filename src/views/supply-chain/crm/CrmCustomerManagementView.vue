@@ -1,11 +1,5 @@
 <template>
   <div class="customer-management-page supply-page supply-page--business-main">
-    <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">CRM · 客户管理</span>
-        <h1>客户管理</h1>
-      </div>
-    </div>
     <el-card class="filter-card customer-query-card" shadow="never">
       <form
         ref="queryContainer"
@@ -194,7 +188,7 @@
           <el-table-column
             type="index"
             label="序号"
-            width="80"
+            width="70"
             fixed="left"
             :index="tableRowIndex"
           />
@@ -203,6 +197,7 @@
             prop="customerName"
             label="客户名称"
             width="240"
+            fixed="left"
             show-overflow-tooltip
           >
             <template #default="{ row }">
@@ -297,7 +292,7 @@
               row.businessCreatedAt ? formatTime(row.businessCreatedAt) : '待核实'
             }}</template></el-table-column
           >
-          <el-table-column label="更新人" width="140"
+          <el-table-column label="修改人" width="140"
             ><template #default="{ row }">{{
               actorLabel(row.updatedBy)
             }}</template></el-table-column
