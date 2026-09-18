@@ -1,30 +1,17 @@
 import type { NavigationNode } from '@/types/management'
+import { devWarn } from '@/utils/dev-log'
+import { CUSTOM_PAGE_ROUTE_PREFIX, isCustomPage, resolveView } from '@/utils/dynamic-pages'
 import { SUPPLY_DOMAIN_ROUTE_MAP } from '@/views/supply-chain/domain/catalog'
 
-/** 数据库routeKey到已编译路由的唯一允许映射；未知或路径不一致时失败关闭。 */
+/** 数据库 routeKey 到已编译页面的映射；可见未知节点及路径不一致时失败关闭。 */
 const ROUTES: Record<string, string | null> = {
-  'platform.dashboard': '/platform-admin', 'platform.tenant.menu': null,
-  'platform.tenant.list': '/platform-admin/tenants', 'platform.package.menu': null,
-  'platform.package.list': '/platform-admin/packages', 'platform.application.menu': null,
-  'platform.application.list': '/platform-admin/applications', 'platform.resource.menu': null,
-  'platform.resource.list': '/platform-admin/resources', 'platform.audit.menu': null,
-  'platform.audit.list': '/platform-admin/audit', 'platform.dictionary.menu': null,
-  'platform.dictionary.list': '/platform-admin/dictionaries',
-  'system.dashboard': '/system-admin', 'system.organization.menu': null,
-  'system.organization.list': '/system-admin/organizations', 'system.user.menu': null,
-  'system.staff.list': '/system-admin/staff', 'system.position.list': '/system-admin/positions',
-  'system.user.list': '/system-admin/users', 'system.role.menu': null,
-  'system.role.list': '/system-admin/roles', 'system.data-scope.menu': null,
-  'system.data-scope.list': '/system-admin/data-scopes', 'system.setting.menu': null,
-  'system.setting.list': '/system-admin/settings', 'system.menu-config.list': '/system-admin/menus',
-  'system.dictionary.menu': null,
-  'system.dictionary.list': '/system-admin/dictionaries', 'system.audit.menu': null,
-  'system.audit.list': '/system-admin/audit',
-  'supply.dashboard': '/supply-chain', 'supply.city.menu': null, 'supply.city.index': '/supply-chain/city',
+  'supply.dashboard': '/supply-chain',
   'supply.crm.menu': null, 'supply.crm.index': '/supply-chain/crm', 'supply.order.menu': null,
   'supply.order.sales-orders': '/supply-chain/order/sales-orders',
   'supply.order.shipments': '/supply-chain/order/shipments',
   'supply.order.sales-payments': '/supply-chain/order/sales-payments',
+  'supply.order.lines': '/supply-chain/order/lines',
+  'supply.order.statistics': '/supply-chain/order/statistics',
   'supply.order.fund-documents': '/supply-chain/order/fund-documents',
   'supply.order.sales-refunds': '/supply-chain/order/sales-refunds',
   'supply.sales.menu': null, 'supply.sales.dashboard': '/supply-chain/sales',
@@ -66,7 +53,6 @@ const ROUTES: Record<string, string | null> = {
   'supply.sales.policies.scopes': '/supply-chain/sales/policies/scopes',
   'supply.sales.policies.releases': '/supply-chain/sales/policies/releases',
   'supply.erp.menu': null, 'supply.erp.index': '/supply-chain/erp', 'supply.hr.menu': null,
-  'supply.hr.index': '/supply-chain/hr', 'supply.channel.menu': null, 'supply.channel.index': '/supply-chain/channel',
   'supply.bi.menu': null, 'supply.bi.index': '/supply-chain/bi',
   'supply.bi.hr': '/supply-chain/bi/hr',
   'supply.bi.sales-visits': '/supply-chain/bi/sales-visits',
@@ -80,6 +66,11 @@ const ROUTES: Record<string, string | null> = {
   'supply.bi.payment-risk': '/supply-chain/bi/payment-risk',
   'supply.bi.city-cost': '/supply-chain/bi/city-cost',
   'supply.bi.inventory-risk': '/supply-chain/bi/inventory-risk',
+  'supply.settings.users': '/supply-chain/settings/users',
+  'supply.settings.roles': '/supply-chain/settings/roles',
+  'supply.settings.menus': '/supply-chain/settings/menus',
+  'supply.settings.parameters': '/supply-chain/settings/parameters',
+  'supply.settings.audits': '/supply-chain/settings/audits',
   'supply.setting.menu': null,
   'supply.setting.index': '/supply-chain/settings', 'supply.integration.menu': null,
   'supply.integration.overview': '/supply-chain/integration',
@@ -87,14 +78,41 @@ const ROUTES: Record<string, string | null> = {
 }
 
 export function validateNavigation(nodes: NavigationNode[]): NavigationNode[] {
-  return nodes.map((node) => {
+  return nodes.flatMap((node) => {
+    // 自定义页面（数据库 componentPath 驱动）走宽松校验：类型、路径前缀、组件是否已编译。
+    // 任一条不满足只跳过该节点并告警，绝不抛错打挂整棵菜单树。
+    if (isCustomPage(node)) {
+      const routePath = node.routePath
+      const routePathLength = typeof routePath === 'string' ? routePath.length : 0
+      const valid = node.type === 'PAGE'
+        && typeof routePath === 'string'
+        && routePath.startsWith(CUSTOM_PAGE_ROUTE_PREFIX)
+        && routePathLength > CUSTOM_PAGE_ROUTE_PREFIX.length
+        && resolveView(node.componentPath) !== null
+      if (!valid) {
+        devWarn('忽略无效的自定义页面菜单节点', {
+          id: node.id,
+          displayName: node.displayName,
+          type: node.type,
+          routeKey: node.routeKey,
+          routePath,
+          componentPath: node.componentPath,
+        })
+        return []
+      }
+      return [{ ...node, children: validateNavigation(node.children) }]
+    }
+    const customGroupKey = node.routeKey.startsWith('tenant.menu.group.')
     const tenantGroup = node.type === 'MENU'
-      && node.routeKey.startsWith('tenant.menu.group.')
+      && customGroupKey
       && node.routePath === null
+    // IAM 保留隐藏的历史资源；未编译的隐藏分支不进入导航和可访问路径集合。
+    // 已注册的隐藏页面仍需校验，保留其授权直达能力；隐藏不等于撤销权限。
+    if (node.visible === false && !customGroupKey && !(node.routeKey in ROUTES)) return []
     if (!tenantGroup && (!(node.routeKey in ROUTES) || ROUTES[node.routeKey] !== node.routePath)) {
       const expectedPath = node.routeKey in ROUTES ? ROUTES[node.routeKey] : '未注册'
       throw new Error(`IAM返回未注册或路径不一致的routeKey: ${node.routeKey}; routePath=${node.routePath}; expected=${expectedPath}`)
     }
-    return { ...node, children: validateNavigation(node.children) }
+    return [{ ...node, children: validateNavigation(node.children) }]
   })
 }

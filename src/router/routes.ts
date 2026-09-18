@@ -69,6 +69,7 @@ const procurementPaymentPlaceholderRouteKeys = new Set([
 /** 订单域已有独立业务页面，不能再生成同路径的通用Capability路由。 */
 const dedicatedOrderRouteKeys = new Set([
   'supply.order.sales-orders',
+  'supply.order.fulfillments',
   'supply.order.shipments',
   'supply.order.sales-payments',
   'supply.order.fund-documents',
@@ -97,7 +98,9 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
                 ? () => import('@/views/supply-chain/crm/CrmShippingAddressView.vue')
                 : crmCustomerDictionaryRouteKeys.has(page.routeKey)
                   ? () => import('@/views/supply-chain/crm/CrmCustomerDictionaryView.vue')
-                  : hrEmployeeRouteKeys.has(page.routeKey)
+                  : page.routeKey === 'supply.hr.departments'
+                    ? () => import('@/views/supply-chain/hr/HrDepartmentManagementView.vue')
+                    : hrEmployeeRouteKeys.has(page.routeKey)
                     ? () => import('@/views/supply-chain/hr/HrEmployeeManagementView.vue')
                     : hrPositionRouteKeys.has(page.routeKey)
                       ? () => import('@/views/supply-chain/hr/HrPositionManagementView.vue')
@@ -115,7 +118,7 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
     requiresAuth: true,
     applicationCode: 'SUPPLY_CHAIN',
     routeKey: page.routeKey,
-    permission: page.domainKey === 'crm'
+    permission: page.routeKey === 'supply.hr.departments' ? 'hr:department:read' : page.domainKey === 'crm'
       ? 'crm:customer:read'
       : hrEmployeeRouteKeys.has(page.routeKey)
         ? 'hr:employee:read'
@@ -144,7 +147,7 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'RootRedirect',
-    redirect: '/apps',
+    redirect: '/supply-chain',
     meta: {
       title: '首页',
       hidden: true,
@@ -182,62 +185,22 @@ export const constantRoutes: RouteRecordRaw[] = [
     },
   },
   {
-    path: '/sales-workbench',
-    name: 'SalesWorkbenchLaunch',
-    component: () => import('@/views/apps/SalesWorkbenchLaunchView.vue'),
-    meta: {
-      title: '飞书销售工作台',
-      hidden: true,
-      requiresAuth: true,
-      requiredApplicationCode: 'FEISHU_SALES',
-    },
-  },
-  {
-    path: '/platform-admin',
-    component: () => import('@/layouts/ConsoleShell.vue'),
-    meta: { title: '平台管理中心', hidden: true, requiresAuth: true, applicationCode: 'PLATFORM_ADMIN' },
-    children: [
-      { path: '', name: 'PlatformAdminDashboard', component: () => import('@/views/admin/dashboard/IndexView.vue'), meta: { title: '平台管理', requiresAuth: true, applicationCode: 'PLATFORM_ADMIN' } },
-      { path: 'tenants', name: 'PlatformTenants', component: () => import('@/views/admin/tenants/IndexView.vue'), meta: { title: '租户管理', requiresAuth: true, applicationCode: 'PLATFORM_ADMIN' } },
-      { path: 'packages', name: 'PlatformPackages', component: () => import('@/views/admin/packages/IndexView.vue'), meta: { title: '套餐管理', requiresAuth: true, applicationCode: 'PLATFORM_ADMIN' } },
-      { path: 'applications', name: 'PlatformApplications', component: () => import('@/views/admin/applications/IndexView.vue'), meta: { title: '应用目录', requiresAuth: true, applicationCode: 'PLATFORM_ADMIN' } },
-      { path: 'resources', name: 'PlatformResources', component: () => import('@/views/admin/resources/IndexView.vue'), meta: { title: '菜单与资源', requiresAuth: true, applicationCode: 'PLATFORM_ADMIN' } },
-      { path: 'dictionaries', name: 'PlatformDictionaries', component: () => import('@/views/admin/dictionaries/DictionaryManagementPage.vue'), meta: { title: '数据字典', requiresAuth: true, applicationCode: 'PLATFORM_ADMIN', dictionaryScope: 'platform' } },
-      { path: 'audit', name: 'PlatformAudit', component: () => import('@/views/admin/audit-logs/IndexView.vue'), meta: { title: '平台审计', requiresAuth: true, applicationCode: 'PLATFORM_ADMIN' } },
-    ],
-  },
-  {
-    path: '/system-admin',
-    component: () => import('@/layouts/ConsoleShell.vue'),
-    meta: { title: '系统管理', hidden: true, requiresAuth: true, applicationCode: 'SYSTEM_ADMIN' },
-    children: [
-      { path: '', name: 'SystemAdminDashboard', component: () => import('@/views/admin/dashboard/IndexView.vue'), meta: { title: '系统管理', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN' } },
-      { path: 'organizations', name: 'SystemOrganizations', component: () => import('@/views/admin/organizations/IndexView.vue'), meta: { title: '组织管理', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN' } },
-      { path: 'staff', name: 'SystemStaff', component: () => import('@/views/admin/staff/IndexView.vue'), meta: { title: '人员管理', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN', routeKey: 'system.staff.list', permission: 'iam:staff:read' } },
-      { path: 'positions', name: 'SystemPositions', component: () => import('@/views/admin/positions/IndexView.vue'), meta: { title: '岗位管理', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN', routeKey: 'system.position.list', permission: 'iam:position:read' } },
-      { path: 'users', name: 'SystemUsers', component: () => import('@/views/admin/users/IndexView.vue'), meta: { title: '用户管理', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN' } },
-      { path: 'roles', name: 'SystemRoles', component: () => import('@/views/admin/roles/IndexView.vue'), meta: { title: '角色与资源授权', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN' } },
-      { path: 'data-scopes', name: 'SystemDataScopes', component: () => import('@/views/admin/data-scopes/IndexView.vue'), meta: { title: '数据范围', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN' } },
-      { path: 'menus', name: 'SystemMenus', component: () => import('@/views/admin/menus/IndexView.vue'), meta: { title: '菜单管理', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN' } },
-      { path: 'settings', name: 'SystemSettings', component: () => import('@/views/admin/settings/IndexView.vue'), meta: { title: '系统设置', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN' } },
-      { path: 'dictionaries', name: 'SystemDictionaries', component: () => import('@/views/admin/dictionaries/DictionaryManagementPage.vue'), meta: { title: '数据字典', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN', dictionaryScope: 'tenant' } },
-      { path: 'audit', name: 'SystemAudit', component: () => import('@/views/admin/audit-logs/IndexView.vue'), meta: { title: '租户审计', requiresAuth: true, applicationCode: 'SYSTEM_ADMIN' } },
-    ],
-  },
-  {
     path: '/supply-chain',
+    name: 'SupplyChainConsole',
     component: () => import('@/layouts/ConsoleShell.vue'),
     meta: { title: '供应链系统', hidden: true, requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' },
     children: [
       { path: '', name: 'SupplyChainDashboard', component: () => import('@/views/supply-chain/dashboard/IndexView.vue'), meta: { title: '供应链系统', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
-      { path: 'city', name: 'SupplyCity', component: () => import('@/views/supply-chain/city/IndexView.vue'), meta: { title: '城市运营', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
       { path: 'crm', name: 'SupplyCrm', component: () => import('@/views/supply-chain/crm/IndexView.vue'), meta: { title: 'CRM', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'crm:customer:read' } },
       { path: 'order', name: 'SupplyOrder', redirect: '/supply-chain/order/sales-orders', meta: { title: '订单管理', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.menu' } },
-      { path: 'order/sales-orders', name: 'SupplyOrderSalesOrders', component: () => import('@/views/supply-chain/order/SalesOrderView.vue'), meta: { title: '销售订单', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.sales-orders', pageKey: 'sales-orders', permission: 'order:read' } },
+      { path: 'order/fulfillments', name: 'SupplyOrderFulfillments', component: () => import('@/views/supply-chain/order/FulfillmentView.vue'), meta: { title: '订单出库', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.fulfillments', pageKey: 'fulfillments', permission: 'order:outbound:read' } },
+      { path: 'order/sales-orders', name: 'SupplyOrderSalesOrders', component: () => import('@/views/supply-chain/order/OrderListView.vue'), meta: { title: '订单列表', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.sales-orders', pageKey: 'sales-orders', permission: 'order:read' } },
       { path: 'order/shipments', name: 'SupplyOrderShipments', component: () => import('@/views/supply-chain/order/SalesShipmentView.vue'), meta: { title: '发货单', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.shipments', pageKey: 'shipments', permission: 'order:read' } },
-      { path: 'order/sales-payments', name: 'SupplyOrderSalesPayments', component: () => import('@/views/supply-chain/order/SalesPaymentRecordView.vue'), meta: { title: '销售回款', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.sales-payments', pageKey: 'sales-payments', permission: 'order:read' } },
+      { path: 'order/sales-payments', name: 'SupplyOrderSalesPayments', component: () => import('@/views/supply-chain/order/PaymentRecordListView.vue'), meta: { title: '收款列表', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.sales-payments', pageKey: 'sales-payments', permission: 'order:read' } },
       { path: 'order/fund-documents', name: 'SupplyOrderFundDocuments', component: () => import('@/views/supply-chain/order/FundDocumentView.vue'), meta: { title: '客户资金流水', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.fund-documents', pageKey: 'fund-documents', permission: 'order:read' } },
       { path: 'order/sales-refunds', name: 'SupplyOrderSalesRefunds', component: () => import('@/views/supply-chain/order/SalesRefundRecordView.vue'), meta: { title: '销售退款', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.sales-refunds', pageKey: 'sales-refunds', permission: 'order:read' } },
+      { path: 'order/lines', name: 'SupplyOrderLines', component: () => import('@/views/supply-chain/order/OrderLineListView.vue'), meta: { title: '订单明细', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.lines', pageKey: 'order-lines', permission: 'order:read' } },
+      { path: 'order/statistics', name: 'SupplyOrderStatistics', component: () => import('@/views/supply-chain/order/OrderStatisticsView.vue'), meta: { title: '订单与回款统计', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.statistics', pageKey: 'order-statistics', permission: 'order:read' } },
       { path: 'sales', name: 'SupplySalesDashboard', component: () => import('@/views/supply-chain/sales/IndexView.vue'), meta: { title: '销售管控台', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'dashboard', permission: 'sales:dashboard:read' } },
       { path: 'sales/attendance/today', name: 'SupplySalesAttendanceToday', component: () => import('@/views/supply-chain/sales/IndexView.vue'), meta: { title: '今日状态', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'attendance-today' } },
       { path: 'sales/attendance/punches', name: 'SupplySalesAttendancePunches', component: () => import('@/views/supply-chain/sales/IndexView.vue'), meta: { title: '打卡明细', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'attendance-punches' } },
@@ -270,8 +233,6 @@ export const constantRoutes: RouteRecordRaw[] = [
       { path: 'sales/policies/scopes', name: 'SupplySalesPolicyScopes', component: () => import('@/views/supply-chain/sales/IndexView.vue'), meta: { title: '适用范围', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'policies-scopes' } },
       { path: 'sales/policies/releases', name: 'SupplySalesPolicyReleases', component: () => import('@/views/supply-chain/sales/IndexView.vue'), meta: { title: '发布与历史版本', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'policies-releases' } },
       { path: 'erp', name: 'SupplyErp', component: () => import('@/views/supply-chain/erp/IndexView.vue'), meta: { title: 'ERP', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
-      { path: 'hr', name: 'SupplyHr', component: () => import('@/views/supply-chain/hr/IndexView.vue'), meta: { title: '人事与绩效', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
-      { path: 'channel', name: 'SupplyChannel', component: () => import('@/views/supply-chain/channel/IndexView.vue'), meta: { title: '渠道代理', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
       { path: 'bi', name: 'SupplyBi', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '供应链经营总览', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.index', dashboardSection: 'overview', permission: 'analytics:dashboard:read' } },
       { path: 'bi/hr', name: 'SupplyBiHr', component: () => import('@/views/supply-chain/bi/HrDashboardView.vue'), meta: { title: 'HR 人事看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.hr', permission: 'analytics:dashboard:read' } },
       { path: 'bi/sales-visits', name: 'SupplyBiSalesVisits', component: () => import('@/views/supply-chain/bi/VisitDashboardView.vue'), meta: { title: '销售拜访看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.sales-visits', permission: 'analytics:dashboard:read' } },
@@ -286,29 +247,18 @@ export const constantRoutes: RouteRecordRaw[] = [
       { path: 'bi/payment-risk', name: 'SupplyBiPaymentRisk', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '回款风险看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.payment-risk', dashboardSection: 'payment-risk', permission: 'analytics:dashboard:read' } },
       { path: 'bi/city-cost', name: 'SupplyBiCityCost', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '城市成本看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.city-cost', dashboardSection: 'city-cost', permission: 'analytics:dashboard:read' } },
       { path: 'bi/inventory-risk', name: 'SupplyBiInventoryRisk', component: () => import('@/views/supply-chain/bi/IndexView.vue'), meta: { title: '库存风险看板', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.bi.inventory-risk', dashboardSection: 'inventory-risk', permission: 'analytics:dashboard:read' } },
-      { path: 'settings', name: 'SupplySettings', component: () => import('@/views/supply-chain/settings/IndexView.vue'), meta: { title: '业务设置', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
+      { path: 'settings', name: 'SupplySettings', component: () => import('@/views/supply-chain/settings/IndexView.vue'), meta: { title: '系统设置', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN' } },
+      { path: 'settings/users', name: 'SupplySettingsUsers', component: () => import('@/views/supply-chain/settings/UserView.vue'), meta: { title: '用户管理', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'supply:user:read' } },
+      { path: 'settings/roles', name: 'SupplySettingsRoles', component: () => import('@/views/supply-chain/settings/RoleView.vue'), meta: { title: '角色管理', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'supply:role:read' } },
+      { path: 'settings/menus', name: 'SupplySettingsMenus', component: () => import('@/views/supply-chain/settings/MenuView.vue'), meta: { title: '菜单管理', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'supply:menu:read' } },
+      { path: 'settings/parameters', name: 'SupplySettingsParameters', component: () => import('@/views/supply-chain/settings/ParameterView.vue'), meta: { title: '业务参数', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'supply:parameter:read' } },
+      { path: 'settings/audits', name: 'SupplySettingsAudits', component: () => import('@/views/supply-chain/settings/AuditView.vue'), meta: { title: '操作日志', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'supply:audit:read' } },
       ...supplyDomainRoutes,
     ],
   },
 ]
 
 /** 动态路由（需要认证，按权限过滤后动态添加） */
-export const asyncRoutes: RouteRecordRaw[] = [
-  {
-    path: '/apps',
-    component: () => import('@/layouts/AppPortalLayout.vue'),
-    meta: { title: '我的应用', hidden: true, requiresAuth: true },
-    children: [
-      {
-        path: '',
-        name: 'MyApplications',
-        component: () => import('@/views/apps/MyApplicationsView.vue'),
-        meta: { title: '我的应用', hidden: true, requiresAuth: true },
-      },
-    ],
-  },
-]
-
 /** 兜底路由（404） */
 export const notFoundRoute: RouteRecordRaw = {
   path: '/:pathMatch(.*)*',

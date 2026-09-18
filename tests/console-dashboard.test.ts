@@ -110,33 +110,18 @@ describe('console dashboard authorized navigation', () => {
       '/supply-chain/order/sales-orders',
       '/supply-chain/order/sales-refunds',
     ])
+    expect(wrapper.get('h1').text()).toBe('供应链首页')
     expect(wrapper.text()).toContain('订单管理')
     expect(wrapper.text()).toContain('售后业务')
     expect(wrapper.text()).not.toMatch(
-      /供应链首页|隐藏|秘密页面|空分组|新业务主流程|当前落地范围|下一步|接口未接入|今日订单金额|待办/,
+      /隐藏|秘密页面|空分组|新业务主流程|当前落地范围|下一步|接口未接入|今日订单金额|待办/,
     )
     expect(get).not.toHaveBeenCalled()
     await wrapper.get('a[href="/supply-chain/order/sales-orders"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/supply-chain/order/sales-orders')
   })
-  it.each([
-    ['PLATFORM_ADMIN', '平台管理', '/platform-admin', '租户管理', '/platform-admin/tenants'],
-    ['SYSTEM_ADMIN', '系统管理', '/system-admin', '角色管理', '/system-admin/roles'],
-  ])(
-    'uses only %s application navigation on management home',
-    async (code, title, path, name, destination) => {
-      const { wrapper, navigation } = await render(code, [
-        node('home', '当前首页', path),
-        node('entry', name, destination),
-      ])
-      navigation.navigationByApplication.SUPPLY_CHAIN = [order()]
-      await flushPromises()
-      expect(wrapper.get('h1').text()).toBe(title)
-      expect(wrapper.findAll('a').map((link) => link.attributes('href'))).toEqual([destination])
-      expect(wrapper.text()).not.toMatch(/当前首页|销售订单|未接入|等待接入/)
-    },
-  )
+
   it('searches entry names and group names without exposing hidden entries or requesting navigation', async () => {
     const { wrapper } = await render('SUPPLY_CHAIN', [
       node('erp', '商品中心', null, [node('products', '商品管理', '/supply-chain/erp/products')]),
@@ -207,23 +192,7 @@ describe('console dashboard authorized navigation', () => {
     await flushPromises()
     expect(wrapper.get('nav').text()).toContain('销售订单')
   })
-  it('clears search on application change and hides links after navigation is reset', async () => {
-    const { wrapper, navigation, router } = await render()
-    navigation.navigationByApplication.PLATFORM_ADMIN = [
-      node('platform.tenant.list', '租户管理', '/platform-admin/tenants'),
-    ]
-    navigation.loadedApplications.push('PLATFORM_ADMIN')
-    await wrapper.get('input[aria-label="搜索业务入口"]').setValue('销售订单')
-    await router.push('/platform-admin')
-    await flushPromises()
-    expect(wrapper.get('nav').text()).toContain('租户管理')
-    expect(wrapper.text()).not.toContain('销售订单')
-    navigation.reset()
-    await flushPromises()
-    expect(wrapper.find('a').exists()).toBe(false)
-    expect(wrapper.text()).toContain('业务入口尚未加载')
-    expect(get).not.toHaveBeenCalled()
-  })
+
   it('keeps the existing route registry validation on manual retries', async () => {
     const { wrapper } = await render('SUPPLY_CHAIN', null)
     get.mockResolvedValueOnce([node('unknown-route', '不应出现', '/unregistered')])

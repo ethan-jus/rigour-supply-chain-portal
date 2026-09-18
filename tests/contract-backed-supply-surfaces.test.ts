@@ -43,7 +43,8 @@ const messages = vi.hoisted(() => ({
   warning: vi.fn(),
 }))
 
-vi.mock('vue-router', () => ({ useRoute: () => ({ meta: routeMeta }) }))
+vi.mock('vue-router', async (importOriginal) => ({
+  ...await importOriginal<typeof import('vue-router')>(), useRoute: () => ({ meta: routeMeta }) }))
 vi.mock('@/stores', () => ({
   useAuthStore: () => ({
     user: authState.user,
@@ -191,7 +192,7 @@ describe('合同驱动的供应链页面', () => {
     expect(erpDocumentManagementSource).toContain('supply-page--business-main')
     expect(crmCustomerManagementSource).toContain('supply-page--business-main')
     expect(crmShippingAddressSource).toContain('supply-page--business-main')
-    expect(salesOrderSource).toContain('supply-page--business-main')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('supply-page--business-main')
     expect(fundDocumentSource).toContain('supply-page--business-main')
     expect(businessDictionarySource).toContain('supply-page--business-main')
 
@@ -204,7 +205,7 @@ describe('合同驱动的供应链页面', () => {
     expect(crmCustomerManagementSource).toContain('客户管理')
     expect(crmShippingAddressSource).toContain('客户地址')
     expect(crmShippingAddressSource).toContain('getCrmShippingAddresses')
-    expect(salesOrderSource).toContain('销售订单')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('销售订单')
     expect(fundDocumentSource).toContain('客户资金流水')
     expect(fundDocumentSource).toContain('按收支明细口径查看客户资金来源、关联单据、支付流水和账户信息')
     expect(businessDictionarySource).toContain('维护业务使用的单位、类型、状态和支付方式')
@@ -240,83 +241,20 @@ describe('合同驱动的供应链页面', () => {
     expect(crmCustomerManagementSource).toContain('statusCode: empty(filters.statusCode)')
   })
 
-  it('订货宝同步中心只承载后台来源接入方案，并支持按范围手动同步', async () => {
-    const wrapper = mount(DhbPage, { global: globalMountOptions })
+  it('订货宝同步中心按单一业务对象提供按钮并保留异常工作台', async () => {
+    const wrapper=mount(DhbPage,{global:globalMountOptions})
     await flushPromises()
-
-    const state = wrapper.vm as unknown as {
-      activeSectionDetail: { title: string }
-      boundaryRules: Array<{ label: string; value: string }>
-      sections: Array<{ title: string }>
-      selectSyncMode: (key: string) => void
-      syncModes: Array<{ key: string; label: string }>
-      runUnifiedSync: () => Promise<void>
-    }
-
-    expect(wrapper.text()).toContain('订货宝同步中心')
-    expect(wrapper.text()).toContain('ERP、CRM、Order 主流程不承载同步运维动作')
-    expect(wrapper.text()).toContain('选择同步范围后执行订货宝同步')
-    expect(wrapper.text()).toContain('ERP商品')
-    expect(wrapper.text()).not.toContain('ERP 全部')
-    expect(wrapper.text()).toContain('payload hash 跳过')
-    expect(wrapper.text()).toContain('对象已存在跳过')
-    expect(wrapper.text()).toContain('来源总数、Raw 落库数、目标业务表写入数分别记录')
+    const buttons=wrapper.findAllComponents({name:'DhbPageSyncButton'})
+    expect(buttons.map(b=>b.props('scope'))).toContain('SALES_ORDER')
+    expect(buttons.map(b=>b.props('scope'))).toContain('RECEIPT')
+    expect(buttons.map(b=>b.props('scope'))).toContain('CUSTOMER')
+    expect(buttons.every(b=>b.props('scope') && b.props('scope')!=='ALL')).toBe(true)
     expect(wrapper.text()).toContain('OPEN 异常按统一规则处理')
-    expect(state.activeSectionDetail.title).toBe('同步概览')
-    expect(state.sections.map((section) => section.title)).toEqual([
-      '同步概览',
-      '映射规则',
-      '运行记录',
-      '异常处理',
-      '图片附件',
-      '对账校验',
-    ])
-    expect(state.boundaryRules).toContainEqual({
-      label: '业务入口',
-      value: 'ERP、CRM、Order 只展示我方业务表结果',
-    })
-    expect(state.boundaryRules).toContainEqual({
-      label: '页面动作',
-      value: '手动同步可指定范围；单对象修复放在运维排障链路中逐步补齐',
-    })
-    expect(state.syncModes.map((mode) => mode.key)).toEqual([
-      'all',
-      'erp',
-      'dictionary-iam',
-      'crm',
-      'erp-supply',
-      'order',
-    ])
-    expect(state.syncModes.filter((mode) => mode.label === 'ERP商品')).toHaveLength(1)
+    expect(wrapper.text()).toContain('各业务页面分别同步对应对象')
     expect(getDhbOpenIssues).toHaveBeenCalledWith(500)
-    expect(getDhbSyncTasks).toHaveBeenCalled()
+    expect(syncDhbOrchestration).not.toHaveBeenCalled()
     expect(apiClient.post).not.toHaveBeenCalled()
-
-    syncDhbOrchestration.mockResolvedValue({
-      batchId: 'batch-erp',
-      status: 'SUCCEEDED',
-      triggerType: 'MANUAL',
-      startedAt: '2026-09-08T07:00:00Z',
-      finishedAt: '2026-09-08T07:00:01Z',
-      tenants: [],
-    })
-    state.selectSyncMode('erp')
-    await state.runUnifiedSync()
-
-    expect(syncDhbOrchestration).toHaveBeenCalledWith({
-      includeDictionary: false,
-      includeIam: false,
-      includeErp: true,
-      includeErpProduct: true,
-      includeErpSupply: false,
-      includeCrm: false,
-      includeOrder: false,
-      maxPages: 100,
-    })
-    expect(dhbPageSource).not.toContain('/orders/dhb/sync')
-    expect(dhbPageSource).not.toContain('新增连接')
-    expect(dhbPageSource).not.toContain('新增映射')
-    expect(dhbPageSource).not.toContain('订单镜像')
+    expect(dhbPageSource).not.toContain('runUnifiedSync')
   })
 
   it('BI 专题通过驾驶舱呈现，明细和数据治理按需打开', () => {
@@ -346,7 +284,7 @@ describe('合同驱动的供应链页面', () => {
     expect(globalStyleSource).not.toContain('td.el-table__cell:first-child')
 
     expect(erpProductManagementSource).toContain('class="business-table product-management-table supply-scroll-table"')
-    expect(erpProductManagementSource).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
+    expect(erpProductManagementSource.replace(/\s+/g, ' ')).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
     expect(erpProductManagementSource).toMatch(/label="操作"[^>]*fixed="right"/)
     expect(erpProductManagementSource).toContain('label="商品图片"')
     expect(erpProductManagementSource).toContain('scope.row.mainImageUrl')
@@ -358,14 +296,14 @@ describe('合同驱动的供应链页面', () => {
     expect(erpProductManagementSource).toContain('label="限购量"')
     expect(erpProductManagementSource).toContain('label="创建人"')
 
-    expect(erpBasicDataManagementSource).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
+    expect(erpBasicDataManagementSource.replace(/\s+/g, ' ')).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
     expect(erpBasicDataManagementSource).toMatch(/:label="`\$\{pageConfig\.shortTitle\}名称`"[^>]*show-overflow-tooltip/)
     expect(erpBasicDataManagementSource).not.toMatch(/:label="`\$\{pageConfig\.shortTitle\}名称`"[^>]*fixed="left"/)
     expect(erpBasicDataManagementSource).toMatch(/label="操作"[^>]*fixed="right"/)
     expect(erpBasicDataManagementSource).toContain("{ label: '创建人'")
     expect(erpBasicDataManagementSource).toContain("{ label: '更新人'")
 
-    expect(erpDocumentManagementSource).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
+    expect(erpDocumentManagementSource.replace(/\s+/g, ' ')).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
     expect(erpDocumentManagementSource).toMatch(/label="操作"[^>]*fixed="right"/)
     expect(erpDocumentManagementSource).toContain('label="已入库数量"')
     expect(erpDocumentManagementSource).toContain('function isExternalSource')
@@ -377,41 +315,41 @@ describe('合同驱动的供应链页面', () => {
     expect(erpDocumentsApiSource).toContain('sourceSystemCode: string | null')
     expect(erpDocumentsApiSource).toContain('sourceDocumentNo: string | null')
 
-    expect(crmCustomerManagementSource).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
+    expect(crmCustomerManagementSource.replace(/\s+/g, ' ')).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
     expect(crmCustomerManagementSource).toMatch(/label="客户名称"[^>]*show-overflow-tooltip/)
     expect(crmCustomerManagementSource).not.toMatch(/label="客户名称"[^>]*fixed="left"/)
     expect(crmCustomerManagementSource).toMatch(/label="操作"[^>]*fixed="right"/)
     expect(crmCustomerManagementSource).toContain('label="创建人"')
     expect(crmCustomerManagementSource).toContain('label="更新人"')
-    expect(crmShippingAddressSource).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
+    expect(crmShippingAddressSource.replace(/\s+/g, ' ')).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
     expect(crmShippingAddressSource).toMatch(/label="客户名称"[^>]*show-overflow-tooltip/)
     expect(crmShippingAddressSource).not.toMatch(/label="客户名称"[^>]*fixed="left"/)
     expect(crmShippingAddressSource).toMatch(/label="操作"[^>]*fixed="right"/)
     expect(crmShippingAddressSource).toContain('label="详细地址"')
 
-    expect(salesOrderSource).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
     expect(salesOrderSource).toMatch(/label="操作"[^>]*fixed="right"/)
-    expect(salesOrderSource).toContain('function isExternalSource')
-    expect(salesOrderSource).toContain('function isFeishuSource')
-    expect(salesOrderSource).toContain('if (isExternalSource(row) && !isFeishuSource(row)) return false')
-    expect(salesOrderSource).toContain('label="来源状态"')
-    expect(salesOrderSource).toContain('DHB_ORDER_STATUS')
-    expect(salesOrderSource).toContain('sourceStatusCode: empty(filters.sourceStatusCode)')
-    expect(salesOrderSource).toContain('label="收款状态"')
-    expect(salesOrderSource).toContain('label="发货状态"')
-    expect(salesOrderSource).toContain('SALES_SHIPMENT_STATUS')
-    expect(salesOrderSource).toContain('prop="customerCodeSnapshot" label="客户编号"')
-    expect(salesOrderSource).toContain('客户名称')
-    expect(salesOrderSource).toContain('<span>订单类型</span>')
-    expect(salesOrderSource).toContain('label="折扣金额"')
-    expect(salesOrderSource).toContain('label="商品编码"')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('function isExternalSource')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('function isFeishuSource')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('if (isExternalSource(row) && !isFeishuSource(row)) return false')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('label="来源状态"')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('DHB_ORDER_STATUS')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('sourceStatusCode: empty(filters.sourceStatusCode)')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('label="收款状态"')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('label="发货状态"')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('SALES_SHIPMENT_STATUS')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('prop="customerCodeSnapshot" label="客户编号"')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('客户名称')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('<span>订单类型</span>')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('label="折扣金额"')
+    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('label="商品编码"')
     expect(orderSalesApiSource).toContain('sourceSystemCode: string | null')
     expect(orderSalesApiSource).toContain('sourceOrderNo: string | null')
     expect(orderSalesApiSource).toContain('sourceStatusCode?: string')
     expect(orderSalesApiSource).toContain('sourceStatusCode: string | null')
     expect(orderSalesApiSource).toContain('shipmentStatusCode: string | null')
 
-    expect(fundDocumentSource).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
+    expect(fundDocumentSource.replace(/\s+/g, ' ')).toContain('type=\"index\" label="序号" width="80" fixed="left" :index="tableRowIndex"')
     expect(fundDocumentSource).toMatch(/label="操作"[^>]*fixed="right"/)
     expect(fundDocumentSource).toContain('label="收付款单号"')
     expect(fundDocumentSource).toContain('label="关联单号"')
@@ -433,7 +371,7 @@ describe('合同驱动的供应链页面', () => {
     expect(fundDocumentSource).toContain('FUND_DOCUMENT_BUSINESS_TYPE')
     expect(fundDocumentSource).toContain('FUND_DOCUMENT_STATUS')
 
-    expect(erpProductSpecificationSource).toContain('type="index" label="序号" width="80" fixed="left" :index="tableRowIndex"')
+    expect(erpProductSpecificationSource.replace(/\s+/g, ' ')).toContain('type=\"index\" label="序号" width="80" fixed="left" :index="tableRowIndex"')
     expect(erpProductSpecificationSource).toMatch(/label="操作"[^>]*fixed="right"/)
     expect(erpProductSpecificationSource).toContain('子规格编号')
     expect(erpProductSpecificationSource).toContain('创建人')

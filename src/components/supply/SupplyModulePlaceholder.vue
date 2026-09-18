@@ -1,6 +1,6 @@
 <template>
   <section class="unavailable-page" :aria-label="title">
-    <h1>{{ title }}</h1>
+    <SupplyPageTitle>{{ title }}</SupplyPageTitle>
     <el-empty description="当前页面尚未开放">
       <router-link to="/supply-chain">返回供应链首页</router-link>
     </el-empty>
@@ -8,6 +8,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 defineProps<{ title: string; description?: string; note?: string }>()
 </script>
 

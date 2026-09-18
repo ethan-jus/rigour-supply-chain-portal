@@ -154,8 +154,12 @@
             @click="capture()"
             >{{
               busy
-                ? capturePhase === 'SOURCE' ? '采集飞书中' : '正在复核'
-                : sourceMode === 'ONLINE' ? '采集并复核' : '生成复核'
+                ? capturePhase === 'SOURCE'
+                  ? '采集飞书中'
+                  : '正在复核'
+                : sourceMode === 'ONLINE'
+                  ? '采集并复核'
+                  : '生成复核'
             }}</el-button
           >
         </div>
@@ -163,7 +167,9 @@
           >当前账号仅可查看复核记录；生成复核需管理员授予相应权限。</small
         >
         <small v-if="retryCapture" role="status">
-          飞书版本已保存（{{ time(retryCapture.completedAt) }}），{{ busy ? '正在复核。' : '复核结果尚未确认，可先刷新复核记录查看。' }}
+          飞书版本已保存（{{ time(retryCapture.completedAt) }}），{{
+            busy ? '正在复核。' : '复核结果尚未确认，可先刷新复核记录查看。'
+          }}
         </small>
         <small v-else-if="sourceMode === 'ONLINE' && !canCaptureOnline" role="status"
           >在线采集还需要飞书来源读取权限。</small
@@ -306,7 +312,9 @@
         <el-table-column prop="sales" label="责任销售" width="110" />
         <el-table-column label="客户 / 商品" min-width="190"
           ><template #default="{ row }">{{
-            displayFact(row as ReconciliationRow)?.[row.kind === 'ORDER' ? 'customer' : 'product'] || '未关联'
+            displayFact(row as ReconciliationRow)?.[
+              row.kind === 'ORDER' ? 'customer' : 'product'
+            ] || '未关联'
           }}</template></el-table-column
         >
         <el-table-column label="来源金额（元）" align="right" min-width="140"
@@ -344,7 +352,11 @@
         >
         <el-table-column v-if="canReadOrders" label="订单核查" fixed="right" width="120">
           <template #default="{ row }">
-            <el-button v-if="row.orderNo" link :icon="View" @click="openBusinessOrder(row as ReconciliationRow)"
+            <el-button
+              v-if="row.orderNo"
+              link
+              :icon="View"
+              @click="openBusinessOrder(row as ReconciliationRow)"
               >查看订单</el-button
             >
             <span v-else>关联待核验</span>
@@ -443,6 +455,7 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import {
   Connection,
@@ -571,10 +584,7 @@ const versionName = (value: string) =>
     UNCHANGED: '无变化',
     CHANGED: '字段有变化',
   })[value] || '待核验'
-const time = (value?: string | null) =>
-  value
-    ? new Date(value).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' })
-    : '未提供'
+const time = (value?: string | null) => (value ? displayDateTime(value) : '未提供')
 const onlineStatusText = computed(() =>
   result.value?.sourceVersion.onlineEvidence
     ? '在线版本已采集，非实时一致性保证'

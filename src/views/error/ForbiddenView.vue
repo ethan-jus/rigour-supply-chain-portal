@@ -6,15 +6,16 @@
     <p class="error-desc">
       您没有权限访问此页面
     </p>
-    <el-button type="primary" @click="$router.push('/apps')">
-      返回应用门户
+    <el-button type="primary" @click="$router.push('/supply-chain')">
+      返回首页
     </el-button>
+    <el-button @click="auth.logout()">退出登录</el-button>
   </div>
 </template>
 
 <script setup lang="ts">
-// 403 Forbidden — 独立于 404 的错误页面
-// 当用户已登录但权限不足时跳转至此
+import { useAuthStore } from '@/stores'
+const auth = useAuthStore()
 </script>
 
 <style lang="scss" scoped>

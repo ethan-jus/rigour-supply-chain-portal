@@ -17,6 +17,7 @@ import {
 } from 'vue-router'
 import { beforeEach, describe, expect, it } from 'vitest'
 import ConsoleShell from '@/layouts/ConsoleShell.vue'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNavigationStore } from '@/stores/navigation'
 import type { NavigationNode } from '@/types/management'
@@ -28,6 +29,7 @@ const lifecycle = {
 
 const SharedStatePage = defineComponent({
   name: 'SharedStatePage',
+  components: { SupplyPageTitle },
   setup() {
     const route = useRoute()
     const pageKey = computed(() => String(route.meta.pageKey || 'unknown'))
@@ -49,6 +51,7 @@ const SharedStatePage = defineComponent({
   },
   template: `
     <article class="sentinel-page" :data-page="pageKey">
+      <SupplyPageTitle>静态回退标题</SupplyPageTitle>
       <input v-model="state" class="sentinel-input">
       <span class="sentinel-route">{{ route.fullPath }}</span>
     </article>
@@ -76,7 +79,7 @@ function navigationNode(path: string, title: string, routeKey: string): Navigati
 function createTestRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/apps', component: defineComponent({ template: '<div>应用门户</div>' }) }, {
+    routes: [{
       path: '/supply-chain',
       component: ConsoleShell,
       meta: { title: '供应链系统', applicationCode: 'SUPPLY_CHAIN' },
@@ -106,7 +109,7 @@ function createTestRouter(): Router {
   })
 }
 
-async function mountConsole(initialPath = '/supply-chain/alpha') {
+async function mountConsole(initialPath = '/supply-chain/alpha', realNavigation = false) {
   const pinia = createPinia()
   setActivePinia(pinia)
   const authStore = useAuthStore()
@@ -142,7 +145,7 @@ async function mountConsole(initialPath = '/supply-chain/alpha') {
     global: {
       plugins: [pinia, router],
       stubs: {
-        ConsoleNavTree: true,
+        ConsoleNavTree: !realNavigation,
         ElButton: defineComponent({ template: '<button><slot /></button>' }),
       },
     },
@@ -162,6 +165,46 @@ describe('ConsoleShell 工作页签', () => {
     lifecycle.mounted = {}
     lifecycle.unmounted = {}
     document.body.innerHTML = ''
+  })
+
+  it('连续点击真实菜单链接只切换右侧页面，保留外壳、已打开页签和表单状态', async () => {
+    const { wrapper, router } = await mountConsole('/supply-chain/alpha', true)
+    const shell = wrapper.findComponent(ConsoleShell).element
+    await wrapper.get('.sentinel-input').setValue('未提交筛选条件')
+    for (const page of ['beta', 'gamma', 'alpha']) {
+      await wrapper.get(`a.nav-item[href="/supply-chain/${page}"]`).trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.path).toBe(`/supply-chain/${page}`)
+      expect(wrapper.findComponent(ConsoleShell).element).toBe(shell)
+    }
+    expect(wrapper.findAll('.workspace-tab')).toHaveLength(3)
+    expect(lifecycle.mounted.alpha).toBe(1)
+    expect(lifecycle.unmounted.alpha).toBeUndefined()
+    expect((wrapper.findAll('.sentinel-input').find(input => input.isVisible())!.element as HTMLInputElement).value).toBe('未提交筛选条件')
+    wrapper.unmount()
+  })
+
+
+  it('菜单移动及改名同步页面、浏览器与非激活页签，并保留隐藏页面名称', async () => {
+    const { wrapper, router } = await mountConsole()
+    await router.push('/supply-chain/beta')
+    await flushPromises()
+    const nav = useNavigationStore()
+    const hiddenAlpha = { ...navigationNode('/supply-chain/alpha', '自定义甲', 'alpha'), visible: false }
+    nav.navigationByApplication.SUPPLY_CHAIN = [
+      { ...navigationNode('', '新目录', 'group'), type: 'MENU', children: [hiddenAlpha] },
+      navigationNode('/supply-chain/beta', '自定义乙', 'beta'),
+    ]
+    await flushPromises()
+    expect(tabByTitle(wrapper, '自定义甲').exists()).toBe(true)
+    expect(tabByTitle(wrapper, '自定义乙').exists()).toBe(true)
+    expect(wrapper.findAll('h1').find(h => h.isVisible())?.text()).toBe('自定义乙')
+    expect(document.title).toBe('自定义乙 - 瑞盖供应链数字化平台')
+    await tabByTitle(wrapper, '自定义甲').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('h1').find(h => h.isVisible())?.text()).toBe('自定义甲')
+    expect(document.title).toBe('自定义甲 - 瑞盖供应链数字化平台')
+    wrapper.unmount()
   })
 
   it('用页签替代系统面包屑，并在共享组件路由之间保留独立页面状态', async () => {

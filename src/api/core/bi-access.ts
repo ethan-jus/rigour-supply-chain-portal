@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 export interface BiEffectiveScope {
-  accessLevel: 'TENANT' | 'CITY' | 'SELF' | 'DENIED'
+  accessLevel: 'TENANT' | 'CITY' | 'SELF' | 'SCOPED' | 'DENIED'
   reasonCode: string
   reason: string | null
   regionCodes: string[]

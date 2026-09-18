@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DictItemView } from '@/api/core/business-settings'
 const api = vi.hoisted(() => ({ resolveBizDict: vi.fn() }))
 vi.mock('@/api/core/business-settings', () => api)
-import { businessDictionaryLabel, businessDictionaryOptions, clearBusinessDictionariesForTest, loadBusinessDictionaries, refreshBusinessDictionaries } from '@/utils/business-dictionary'
+import { businessDictionaryLabel, businessDictionaryOptions, clearBusinessDictionariesForTest, loadBusinessDictionaries, refreshBusinessDictionaries, setBusinessDictionaryTenant } from '@/utils/business-dictionary'
 const standard: DictItemView = { id: '1', dictionaryCode: 'STORE_STATUS', dictionaryItemCode: 'ACTIVE', dictionaryItemName: '营业中', dictionaryItemLevel: 1, parentDictionaryItemCode: null, ordinal: 1, revision: 1, remark: null }
 const legacy: DictItemView = { ...standard, id: '2', dictionaryItemCode: 'LEGACY', canonicalDictionaryCode: 'STORE_STATUS', canonicalItemCode: 'ACTIVE' }
 beforeEach(() => { clearBusinessDictionariesForTest(); vi.clearAllMocks() })
@@ -19,5 +19,19 @@ describe('字典治理业务兼容', () => {
     await refreshBusinessDictionaries()
     expect(businessDictionaryLabel('CRM', 'STORE_STATUS', 'LEGACY')).toBe('正常营业')
     expect(businessDictionaryOptions('CRM', 'STORE_STATUS')).toEqual([{ label: '正常营业', value: 'ACTIVE' }])
+  })
+})
+
+describe('租户字典与远程治理组合', () => {
+  it('停用祖先、历史别名不会在刷新后重新成为可选项', async () => {
+    setBusinessDictionaryTenant('tenant-A')
+    api.resolveBizDict.mockResolvedValue({ dictionary: {}, items: [{ ...standard, enabled: false }, { ...standard, id: '3', dictionaryItemCode: 'CHILD', parentDictionaryItemCode: 'ACTIVE' }, legacy] })
+    await loadBusinessDictionaries([{ moduleCode: '', code: 'STORE_STATUS' }])
+    await refreshBusinessDictionaries()
+    expect(api.resolveBizDict).toHaveBeenLastCalledWith('STORE_STATUS')
+    expect(businessDictionaryOptions('', 'STORE_STATUS')).toEqual([])
+    expect(businessDictionaryLabel('', 'STORE_STATUS', 'LEGACY')).toBe('营业中')
+    setBusinessDictionaryTenant('tenant-B')
+    expect(businessDictionaryLabel('', 'STORE_STATUS', 'LEGACY')).toBe('LEGACY')
   })
 })

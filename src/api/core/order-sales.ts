@@ -402,21 +402,36 @@ export const createSalesOrder = (command: SalesOrderCommand) =>
   apiClient.post<SalesOrderDetail>(ORDER_BASE_PATH, command, options)
 
 export const updateSalesOrder = (id: string | number, command: SalesOrderCommand) =>
-  apiClient.put<SalesOrderDetail>(`${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}`, command, options)
+  apiClient.put<SalesOrderDetail>(
+    `${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}`,
+    command,
+    options,
+  )
 
 export const submitSalesOrder = (id: string | number, revision: number) =>
-  apiClient.post<SalesOrderDetail>(`${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}/submissions`, null, {
-    params: { revision },
-    ...options,
-  })
+  apiClient.post<SalesOrderDetail>(
+    `${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}/submissions`,
+    null,
+    {
+      params: { revision },
+      ...options,
+    },
+  )
 
 export const cancelSalesOrder = (id: string | number, revision: number) =>
-  apiClient.post<SalesOrderDetail>(`${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}/cancellations`, null, {
-    params: { revision },
-    ...options,
-  })
+  apiClient.post<SalesOrderDetail>(
+    `${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}/cancellations`,
+    null,
+    {
+      params: { revision },
+      ...options,
+    },
+  )
 
-export const confirmSalesOrderStockOut = (id: string | number, command: SalesOrderStockOutCommand) =>
+export const confirmSalesOrderStockOut = (
+  id: string | number,
+  command: SalesOrderStockOutCommand,
+) =>
   apiClient.post<SalesOrderStockOutResult>(
     `${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}/stock-out-confirmations`,
     command,
@@ -433,7 +448,10 @@ export const getSalesShipments = (params: SalesShipmentQuery) =>
   apiClient.get<OrderPage<SalesShipmentSummary>>(ORDER_SHIPMENT_BASE_PATH, { params, ...options })
 
 export const getSalesShipment = (id: string | number) =>
-  apiClient.get<SalesShipmentDetail>(`${ORDER_SHIPMENT_BASE_PATH}/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<SalesShipmentDetail>(
+    `${ORDER_SHIPMENT_BASE_PATH}/${encodeURIComponent(String(id))}`,
+    options,
+  )
 
 export const deleteSalesShipment = (id: string | number, revision: number) =>
   apiClient.delete<void>(`${ORDER_SHIPMENT_BASE_PATH}/${encodeURIComponent(String(id))}`, {
@@ -445,7 +463,10 @@ export const getSalesPayments = (params: SalesPaymentQuery) =>
   apiClient.get<OrderPage<SalesPaymentSummary>>(ORDER_PAYMENT_BASE_PATH, { params, ...options })
 
 export const getSalesPayment = (id: string | number) =>
-  apiClient.get<SalesPaymentDetail>(`${ORDER_PAYMENT_BASE_PATH}/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<SalesPaymentDetail>(
+    `${ORDER_PAYMENT_BASE_PATH}/${encodeURIComponent(String(id))}`,
+    options,
+  )
 
 export const deleteSalesPayment = (id: string | number, revision: number) =>
   apiClient.delete<void>(`${ORDER_PAYMENT_BASE_PATH}/${encodeURIComponent(String(id))}`, {
@@ -457,7 +478,10 @@ export const getSalesRefunds = (params: SalesRefundQuery) =>
   apiClient.get<OrderPage<SalesRefundSummary>>(ORDER_REFUND_BASE_PATH, { params, ...options })
 
 export const getSalesRefund = (id: string | number) =>
-  apiClient.get<SalesRefundDetail>(`${ORDER_REFUND_BASE_PATH}/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<SalesRefundDetail>(
+    `${ORDER_REFUND_BASE_PATH}/${encodeURIComponent(String(id))}`,
+    options,
+  )
 
 export const deleteSalesRefund = (id: string | number, revision: number) =>
   apiClient.delete<void>(`${ORDER_REFUND_BASE_PATH}/${encodeURIComponent(String(id))}`, {
@@ -466,13 +490,85 @@ export const deleteSalesRefund = (id: string | number, revision: number) =>
   })
 
 export const getFundDocuments = (params: FundDocumentQuery) =>
-  apiClient.get<OrderPage<FundDocumentSummary>>(ORDER_FUND_DOCUMENT_BASE_PATH, { params, ...options })
+  apiClient.get<OrderPage<FundDocumentSummary>>(ORDER_FUND_DOCUMENT_BASE_PATH, {
+    params,
+    ...options,
+  })
 
 export const getFundDocument = (id: string | number) =>
-  apiClient.get<FundDocumentDetail>(`${ORDER_FUND_DOCUMENT_BASE_PATH}/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<FundDocumentDetail>(
+    `${ORDER_FUND_DOCUMENT_BASE_PATH}/${encodeURIComponent(String(id))}`,
+    options,
+  )
 
 export const deleteFundDocument = (id: string | number, revision: number) =>
   apiClient.delete<void>(`${ORDER_FUND_DOCUMENT_BASE_PATH}/${encodeURIComponent(String(id))}`, {
     params: { revision },
     ...options,
   })
+
+export interface OrderFulfillmentStatus {
+  orderId: string | number
+  orderRevision: number
+  warehouseId: string | number | null
+  executionId: string | null
+  status: 'NOT_STARTED' | 'PREPARED' | 'EXECUTING' | 'ERP_CONFIRMED' | 'COMPLETED' | 'REVIEW'
+  stockOutId: string | number | null
+  stockOutNo: string | null
+  stockOutTime: string | null
+  lastError: string | null
+}
+export interface OrderWarehouseOption {
+  id: string | number
+  warehouseName: string
+}
+export const getOrderFulfillment = (id: string | number) =>
+  apiClient.get<OrderFulfillmentStatus>(
+    `${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}/fulfillment`,
+  )
+export const getOrderWarehouseOptions = (id: string | number) =>
+  apiClient.get<OrderWarehouseOption[]>(
+    `${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}/warehouse-options`,
+  )
+export const selectOrderWarehouse = (
+  id: string | number,
+  warehouseId: string | number,
+  revision: number,
+) =>
+  apiClient.put<OrderFulfillmentStatus>(
+    `${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}/warehouse-selection`,
+    { warehouseId, revision },
+  )
+export const executeOrderFulfillment = (id: string | number, command: SalesOrderStockOutCommand) =>
+  apiClient.post<OrderFulfillmentStatus>(
+    `${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}/fulfillment/execute`,
+    command,
+  )
+
+export interface FulfillmentQueueItem {
+  orderId: string
+  orderNo: string
+  warehouseId: string
+  warehouseName: string | null
+  outboundStatus: string
+  revision: number
+}
+export interface FulfillmentQueueDetail {
+  order: FulfillmentQueueItem
+  execution: OrderFulfillmentStatus
+  lines: {
+    productCode: string | null
+    skuCode: string | null
+    productName: string | null
+    unitCode: string | null
+    quantity: number
+  }[]
+}
+export const listFulfillmentQueue = (params: {
+  begin: number
+  step: number
+  keyword?: string
+  outboundStatus?: string
+}) => apiClient.get<OrderPage<FulfillmentQueueItem>>('/api/v1/orders/fulfillments', { params })
+export const getFulfillmentQueueDetail = (id: string) =>
+  apiClient.get<FulfillmentQueueDetail>(`/api/v1/orders/fulfillments/${encodeURIComponent(id)}`)

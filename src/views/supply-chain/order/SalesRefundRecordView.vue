@@ -3,7 +3,7 @@
     <div class="page-heading">
       <div>
         <span class="supply-page__eyebrow">Order · 退款中心</span>
-        <h1>销售退款</h1>
+        <SupplyPageTitle>销售退款</SupplyPageTitle>
         <p>查看销售订单对应的退款记录、退款方式、退款状态、退款人和金额。</p>
       </div>
     </div>
@@ -11,25 +11,65 @@
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="loadRows">
         <el-form-item label="退款单号">
-          <el-input v-model="filters.refundNo" clearable placeholder="退款单号" style="width: 170px" />
+          <el-input
+            v-model="filters.refundNo"
+            clearable
+            placeholder="退款单号"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="销售订单号">
-          <el-input v-model="filters.salesOrderNo" clearable placeholder="销售订单号" style="width: 170px" />
+          <el-input
+            v-model="filters.salesOrderNo"
+            clearable
+            placeholder="销售订单号"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="客户名称">
-          <el-input v-model="filters.customerName" clearable placeholder="客户名称" style="width: 200px" />
+          <el-input
+            v-model="filters.customerName"
+            clearable
+            placeholder="客户名称"
+            style="width: 200px"
+          />
         </el-form-item>
         <el-form-item label="退款人员">
-          <el-input v-model="filters.refundStaffCode" clearable placeholder="员工编码" style="width: 160px" />
+          <el-input
+            v-model="filters.refundStaffCode"
+            clearable
+            placeholder="员工编码"
+            style="width: 160px"
+          />
         </el-form-item>
         <el-form-item label="退款状态">
-          <el-select v-model="filters.refundStatusCode" clearable placeholder="全部状态" style="width: 140px">
-            <el-option v-for="item in refundStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.refundStatusCode"
+            clearable
+            placeholder="全部状态"
+            style="width: 140px"
+          >
+            <el-option
+              v-for="item in refundStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="退款方式">
-          <el-select v-model="filters.refundMethodCode" clearable placeholder="全部方式" style="width: 140px">
-            <el-option v-for="item in paymentMethodOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.refundMethodCode"
+            clearable
+            placeholder="全部方式"
+            style="width: 140px"
+          >
+            <el-option
+              v-for="item in paymentMethodOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item class="filter-actions">
@@ -42,7 +82,9 @@
     <div class="result-heading">
       <div class="result-title-line">
         <h2>退款列表</h2>
-        <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+        <span class="result-count"
+          ><strong>{{ pageData.total }}</strong> 条</span
+        >
       </div>
     </div>
 
@@ -56,14 +98,30 @@
           row-key="id"
           @row-click="openDetail"
         >
-          <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <el-table-column
+            type="index"
+            label="序号"
+            width="80"
+            fixed="left"
+            :index="tableRowIndex"
+          />
           <el-table-column prop="refundNo" label="退款单号" width="170" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.refundNo || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="salesOrderNoSnapshot" label="销售订单号" width="170" show-overflow-tooltip>
+          <el-table-column
+            prop="salesOrderNoSnapshot"
+            label="销售订单号"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ scope.row.salesOrderNoSnapshot || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip>
+          <el-table-column
+            prop="customerNameSnapshot"
+            label="客户名称"
+            min-width="220"
+            show-overflow-tooltip
+          >
             <template #default="scope">
               <span class="record-name">{{ scope.row.customerNameSnapshot || '-' }}</span>
             </template>
@@ -72,12 +130,21 @@
             <template #default="scope">¥{{ formatAmount(scope.row.refundAmount) }}</template>
           </el-table-column>
           <el-table-column prop="refundStatusCode" label="退款状态" width="120">
-            <template #default="scope">{{ refundStatusLabel(scope.row.refundStatusCode) }}</template>
+            <template #default="scope">{{
+              refundStatusLabel(scope.row.refundStatusCode)
+            }}</template>
           </el-table-column>
           <el-table-column prop="refundMethodCode" label="退款方式" width="130">
-            <template #default="scope">{{ paymentMethodLabel(scope.row.refundMethodCode) }}</template>
+            <template #default="scope">{{
+              paymentMethodLabel(scope.row.refundMethodCode)
+            }}</template>
           </el-table-column>
-          <el-table-column prop="refundStaffCode" label="退款人员" width="160" show-overflow-tooltip>
+          <el-table-column
+            prop="refundStaffCode"
+            label="退款人员"
+            width="160"
+            show-overflow-tooltip
+          >
             <template #default="scope">
               {{ scope.row.refundStaffNameSnapshot || scope.row.refundStaffCode || '-' }}
             </template>
@@ -89,7 +156,13 @@
           <el-table-column label="操作" width="150" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
+              <el-button
+                v-if="can('order:refund:delete', 'order:write')"
+                link
+                type="danger"
+                @click.stop="deleteRow(scope.row)"
+                >删除</el-button
+              >
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无销售退款" /></template>
@@ -108,32 +181,61 @@
       </div>
     </el-card>
 
-    <el-drawer v-model="detailVisible" class="sales-refund-detail-drawer" size="min(760px, 94vw)" :with-header="false">
+    <el-drawer
+      v-model="detailVisible"
+      class="sales-refund-detail-drawer"
+      size="min(760px, 94vw)"
+      :with-header="false"
+    >
       <div v-if="detail" class="detail-shell">
         <header class="detail-hero">
           <div>
             <span>退款详情</span>
             <h2>{{ detail.refundNo }}</h2>
-            <p>{{ detail.salesOrderNoSnapshot || '-' }} · ¥{{ formatAmount(detail.refundAmount) }}</p>
+            <p>
+              {{ detail.salesOrderNoSnapshot || '-' }} · ¥{{ formatAmount(detail.refundAmount) }}
+            </p>
           </div>
-          <el-button circle plain aria-label="关闭退款详情" @click="detailVisible = false">×</el-button>
+          <el-button circle plain aria-label="关闭退款详情" @click="detailVisible = false"
+            >×</el-button
+          >
         </header>
         <div class="detail-content">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="退款单号">{{ detail.refundNo }}</el-descriptions-item>
-            <el-descriptions-item label="销售订单号">{{ detail.salesOrderNoSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户名称">{{ detail.customerNameSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户编码">{{ detail.customerCodeSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="退款金额">¥{{ formatAmount(detail.refundAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="退款状态">{{ refundStatusLabel(detail.refundStatusCode) }}</el-descriptions-item>
-            <el-descriptions-item label="退款方式">{{ paymentMethodLabel(detail.refundMethodCode) }}</el-descriptions-item>
+            <el-descriptions-item label="销售订单号">{{
+              detail.salesOrderNoSnapshot || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="客户名称">{{
+              detail.customerNameSnapshot || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="客户编码">{{
+              detail.customerCodeSnapshot || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="退款金额"
+              >¥{{ formatAmount(detail.refundAmount) }}</el-descriptions-item
+            >
+            <el-descriptions-item label="退款状态">{{
+              refundStatusLabel(detail.refundStatusCode)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="退款方式">{{
+              paymentMethodLabel(detail.refundMethodCode)
+            }}</el-descriptions-item>
             <el-descriptions-item label="退款人员">
               {{ detail.refundStaffNameSnapshot || detail.refundStaffCode || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="员工编码">{{ detail.refundStaffCode || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="退款时间">{{ formatTime(detail.refundTime) }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ formatTime(detail.updatedTime) }}</el-descriptions-item>
-            <el-descriptions-item label="备注" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="员工编码">{{
+              detail.refundStaffCode || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="退款时间">{{
+              formatTime(detail.refundTime)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{
+              formatTime(detail.updatedTime)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="备注" :span="2">{{
+              detail.remark || '-'
+            }}</el-descriptions-item>
           </el-descriptions>
         </div>
       </div>
@@ -143,6 +245,10 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
+const { can } = useSupplyPermissions()
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -160,7 +266,9 @@ import {
 } from '@/utils/business-dictionary'
 
 const paymentMethodOptions = computed(() => businessDictionaryOptions('ORDER', 'PAYMENT_METHOD'))
-const refundStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_REFUND_STATUS'))
+const refundStatusOptions = computed(() =>
+  businessDictionaryOptions('ORDER', 'SALES_REFUND_STATUS'),
+)
 
 const loading = ref(false)
 const detailVisible = ref(false)
@@ -238,11 +346,15 @@ async function openDetail(row: SalesRefundSummary) {
 
 async function deleteRow(row: SalesRefundSummary) {
   try {
-    await ElMessageBox.confirm(`确认删除退款记录「${row.refundNo}」？删除后会重新汇总销售订单收款状态。`, '删除退款记录', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      `确认删除退款记录「${row.refundNo}」？删除后会重新汇总销售订单收款状态。`,
+      '删除退款记录',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
     await deleteSalesRefund(row.id, row.revision)
     ElMessage.success('退款记录已删除')
     await loadRows()
@@ -266,12 +378,7 @@ function formatAmount(value: number | null | undefined): string {
   })
 }
 
-function formatTime(value: string | null | undefined): string {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
+const formatTime = displayDateTime
 
 function empty(value: string): string | undefined {
   const trimmed = value.trim()

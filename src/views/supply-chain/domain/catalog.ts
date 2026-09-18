@@ -80,9 +80,6 @@ export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
   'supply.crm.credit-policy.menu',
   'supply.order.menu',
   'supply.hr.menu',
-  'supply.city.scope.menu',
-  'supply.city.tasks.menu',
-  'supply.city.configuration.menu',
   'supply.integration.sync-control.menu',
 ]
 
@@ -127,24 +124,11 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
   ]),
   ...directPages('order', 'Order', 'order-center-service', [
     { key: 'sales-orders', title: '销售订单' },
+    { key: 'fulfillments', title: '订单出库' },
     { key: 'shipments', title: '发货单' },
     { key: 'sales-payments', title: '销售回款' },
     { key: 'fund-documents', title: '客户资金流水' },
     { key: 'sales-refunds', title: '销售退款' },
-  ]),
-  ...groupPages('city', '城市运营', 'city-operations-service', [
-    { key: 'scope', title: '城市与服务范围', pages: [
-      { key: 'profiles', title: '城市运营档案' }, { key: 'service-areas', title: '服务区域' },
-      { key: 'fulfillment-nodes', title: '履约节点' }, { key: 'owners', title: '城市责任人' },
-    ] },
-    { key: 'tasks', title: '运营任务', pages: [
-      { key: 'todos', title: '城市待办' }, { key: 'fulfillment-exceptions', title: '履约异常' },
-      { key: 'customer-exceptions', title: '客户经营异常' }, { key: 'activities', title: '城市活动与复盘' },
-    ] },
-    { key: 'configuration', title: '城市配置', pages: [
-      { key: 'targets', title: '城市目标' }, { key: 'budgets', title: '预算与成本配置' },
-      { key: 'partners', title: '合作方配置' },
-    ] },
   ]),
   ...directPages('bi', '数据看板', 'analytics-bi-service', [
     { key: 'sales', title: '销售看板' },
@@ -159,17 +143,14 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'inventory-risk', title: '库存风险看板' },
   ]),
   ...directPages('hr', '人事与绩效', 'hr-payroll-service', [
-    { key: 'employees', title: '员工主档' },
+    { key: 'departments', title: '部门管理' },
+    { key: 'employees', title: '员工档案' },
     { key: 'positions', title: '岗位职位' },
     { key: 'assignments', title: '任职与调动' }, { key: 'calendar-policies', title: '工作日历与考勤政策' },
     { key: 'attendance-appeals', title: '正式考勤与申诉' }, { key: 'payroll-commission', title: '薪酬与提成' },
     { key: 'performance', title: '绩效核算' }, { key: 'monthly-close', title: '月结与冲回' },
   ]),
-  ...directPages('channel', '渠道代理', 'channel-agent-service', [
-    { key: 'relationships', title: '代理关系树' }, { key: 'levels', title: '代理等级' },
-    { key: 'quotas', title: '额度与占用' }, { key: 'approvals', title: '审批与释放' },
-  ]),
-  ...directPages('settings', '业务设置', '各领域服务', [
+  ...directPages('settings', '系统设置', '各领域服务', [
     { key: 'product-inventory', title: '商品与库存参数' }, { key: 'procurement', title: '采购规则' },
     { key: 'customer-levels-tags', title: '客户等级与标签' },
     { key: 'credit-policy-templates', title: '信用与结算政策模板' },

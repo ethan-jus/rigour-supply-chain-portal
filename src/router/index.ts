@@ -1,23 +1,25 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
-import { constantRoutes, asyncRoutes, notFoundRoute } from './routes'
+import { createRouter, createWebHashHistory, type Router } from 'vue-router'
+import { constantRoutes, notFoundRoute } from './routes'
 import { setupPermissionGuard } from './permissionGuard'
 
-/**
- * 在OIDC callback恢复returnPath后创建Router。
- *
- * createWebHashHistory会在创建时缓存当前Hash位置；若模块加载阶段就创建
- * 单例Router，callback之后仅改history地址并不会更新这份缓存，首次导航仍
- * 可能按旧的“/”进入/apps。因此这里必须保留为启动期工厂，而不是模块单例。
- */
-export function createPortalRouter() {
+let scdpRouter: Router | null = null
+
+/** 菜单数据里的自定义页面需要在同一个 Router 实例上注册动态路由。 */
+export function getScdpRouter(): Router | null {
+  return scdpRouter
+}
+
+/** 回调处理完成后创建路由，首次导航使用已恢复的登录状态。 */
+export function createScdpRouter() {
   const router = createRouter({
     history: createWebHashHistory(),
-    routes: [...constantRoutes, ...asyncRoutes, notFoundRoute],
+    routes: [...constantRoutes, notFoundRoute],
     scrollBehavior: () => ({ top: 0 }),
   })
 
   setupPermissionGuard(router)
+  scdpRouter = router
   return router
 }
 
-export { constantRoutes, asyncRoutes }
+export { constantRoutes }

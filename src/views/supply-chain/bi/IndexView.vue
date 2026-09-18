@@ -7,7 +7,7 @@
     <header class="cockpit-header">
       <div class="cockpit-heading">
         <span class="live-dot" :class="{ 'live-dot--error': errorMessage }" />
-        <h1>{{ dashboardTitle }}</h1>
+        <SupplyPageTitle>{{ dashboardTitle }}</SupplyPageTitle>
         <span class="scope-date">{{ rangeLabel }}</span>
       </div>
       <div class="cockpit-tools">
@@ -42,7 +42,10 @@
           />
         </el-tooltip>
         <el-tooltip
-          v-if="effectiveScope?.globalGovernance && authStore.hasPermission('iam:data-scope:write')"
+          v-if="
+            authStore.hasPermission('supply:role:read') ||
+            authStore.hasPermission('supply:user:read')
+          "
           content="看板数据权限"
           placement="bottom"
         >
@@ -117,7 +120,7 @@
         filterable
         placeholder="全部城市"
         aria-label="城市"
-        :clearable="effectiveScope?.accessLevel === 'TENANT'"
+        :clearable="['TENANT', 'SCOPED'].includes(effectiveScope?.accessLevel || '')"
         class="dimension-filter"
         size="small"
         ><el-option
@@ -434,13 +437,12 @@
       ><el-button @click="refreshDashboard">重新加载</el-button></el-empty
     >
 
-
     <CustomerAttributeAnalyticsDialog
       v-model="customerAttributesVisible"
       :query="employeeAnalyticsQuery"
       :scope-label="employeeAnalyticsScope"
     />
-    <BiScopeSettings v-model="scopeSettingsVisible" @changed="refreshDashboard" />
+    <BiScopeSettings v-model="scopeSettingsVisible" />
     <CityProductReport
       v-model="cityProductReportVisible"
       :query="cityProductReportQuery"
@@ -712,12 +714,13 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import {
   businessDate,
   businessDateRange,
   businessMonthRange,
   businessPeriodRange,
-  BUSINESS_TIME_ZONE,
 } from '@/utils/business-date'
 import {
   computed,
@@ -838,9 +841,12 @@ const employeeAnalyticsQuery = computed(() => {
   const { from, to, regionCode, ownerStaffCode } = queryFor(appliedFilters.value)
   return { from, to, regionCode, ownerStaffCode }
 })
-const employeeAnalyticsScope = computed(() => `${rangeLabel.value} · ${
-  appliedFilters.value.regionCode ? filterDisplayValue('regionCode') : '全部城市'
-} · ${appliedFilters.value.ownerStaffCode ? filterDisplayValue('ownerStaffCode') : '全部员工'}`)
+const employeeAnalyticsScope = computed(
+  () =>
+    `${rangeLabel.value} · ${
+      appliedFilters.value.regionCode ? filterDisplayValue('regionCode') : '全部城市'
+    } · ${appliedFilters.value.ownerStaffCode ? filterDisplayValue('ownerStaffCode') : '全部员工'}`,
+)
 
 const appliedFilters = ref<Filters>(emptyFilters())
 const quickPeriod = ref('year')
@@ -853,7 +859,8 @@ const errorMessage = ref('')
 const authenticationRequired = ref(false)
 async function restoreLogin() {
   try {
-    await authStore.login(route.fullPath)
+    authStore.clearLocalSession()
+    await router.replace({ path: '/login', query: { reason: 'session_expired' } })
   } catch (error) {
     errorMessage.value = errorText(error, '登录暂不可用，请稍后重试')
   }
@@ -1096,10 +1103,14 @@ const workspaceCacheKey = computed(() =>
     workspaceDataVersion.value,
   ]),
 )
-const layout = computed(() => cockpitLayout(section.value, [
-  ...model.value.figures,
-  ...(section.value === 'city-operating' ? [cityContactFigure(cityContacts.value, cityContactError.value)] : []),
-]))
+const layout = computed(() =>
+  cockpitLayout(section.value, [
+    ...model.value.figures,
+    ...(section.value === 'city-operating'
+      ? [cityContactFigure(cityContacts.value, cityContactError.value)]
+      : []),
+  ]),
+)
 const headlineKpis = computed(() =>
   section.value === 'overview' ? model.value.kpis.slice(0, 4) : model.value.kpis,
 )
@@ -1157,16 +1168,7 @@ const rangeLabel = computed(() => {
 })
 const lastUpdated = computed(() => {
   const time = overview.value?.generatedAt
-  return time
-    ? new Date(time).toLocaleString('zh-CN', {
-        timeZone: BUSINESS_TIME_ZONE,
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      })
-    : ''
+  return time ? displayDateTime(time) : ''
 })
 const productCategories = computed<ErpProductCategoryView[]>(() =>
   filterOptions.value.productCategories.map((item, index) => ({
@@ -1361,7 +1363,11 @@ const refreshModes: { key: string; label: string; sources: SupplyDashboardRefres
       ],
     },
     { key: 'customer', label: '客户', sources: ['CRM_CUSTOMER'] },
-    { key: 'people-contacts', label: '员工与建联', sources: ['HR_EMPLOYEE', 'SALES_SUBMITTED_VISIT'] },
+    {
+      key: 'people-contacts',
+      label: '员工与建联',
+      sources: ['HR_EMPLOYEE', 'SALES_SUBMITTED_VISIT'],
+    },
     {
       key: 'inventory',
       label: '商品与库存',
@@ -1461,7 +1467,7 @@ async function loadDashboard(source: Filters = filters) {
     effectiveScope.value = access
     if (access.accessLevel === 'DENIED')
       throw new Error(access.reason || '当前账号尚未具备可验证的经营数据范围')
-    if (access.accessLevel !== 'TENANT') {
+    if (access.accessLevel === 'CITY' || access.accessLevel === 'SELF') {
       snapshot.regionCode ||= access.defaultRegionCode || ''
       snapshot.ownerStaffCode ||= access.defaultOwnerStaffCode || ''
       if (
@@ -1490,14 +1496,19 @@ async function loadDashboard(source: Filters = filters) {
     reconciliation.value = null
     if (section.value === 'city-operating') {
       if (snapshot.customerTypeCode || snapshot.sourceSystemCode || snapshot.productCategoryId) {
-        cityContactError.value = 'Sales 建联统计暂不支持客户类型、商品分类或订单来源筛选，请清除这些条件'
+        cityContactError.value =
+          'Sales 建联统计暂不支持客户类型、商品分类或订单来源筛选，请清除这些条件'
       } else {
         void getCityContactAnalytics(queryFor(snapshot))
           .then((result) => {
-            if (sequence === requestSequence) { cityContacts.value = result; cityContactError.value = '' }
+            if (sequence === requestSequence) {
+              cityContacts.value = result
+              cityContactError.value = ''
+            }
           })
           .catch((reason: unknown) => {
-            if (sequence === requestSequence) cityContactError.value = errorText(reason, 'Sales 城市建联数据加载失败，请刷新重试')
+            if (sequence === requestSequence)
+              cityContactError.value = errorText(reason, 'Sales 城市建联数据加载失败，请刷新重试')
           })
       }
     }

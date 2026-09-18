@@ -2,7 +2,7 @@
   <section class="sales-page supply-page supply-page--sales">
     <header class="page-header">
       <div>
-        <h1>{{ definition.title }}</h1>
+        <SupplyPageTitle>{{ definition.title }}</SupplyPageTitle>
       </div>
     </header>
 
@@ -17,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { SALES_PAGES } from './catalog'

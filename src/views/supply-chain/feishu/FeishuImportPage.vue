@@ -3,14 +3,18 @@
     <section class="import-heading">
       <div>
         <span class="eyebrow">外部同步 · 飞书</span>
-        <h1>飞书导入中心</h1>
+        <SupplyPageTitle>飞书导入中心</SupplyPageTitle>
         <p>飞书导出文件先进入统一批次，预检通过后可直接正式导入；历史预检批次可继续执行。</p>
       </div>
       <el-tag type="info" effect="plain">统一导入口</el-tag>
     </section>
 
     <section class="flow-strip" aria-label="飞书导入流程">
-      <div v-for="step in flowSteps" :key="step.key" :class="['flow-step', { 'flow-step--active': activeFlowStep === step.key }]">
+      <div
+        v-for="step in flowSteps"
+        :key="step.key"
+        :class="['flow-step', { 'flow-step--active': activeFlowStep === step.key }]"
+      >
         <el-icon><component :is="step.icon" /></el-icon>
         <span>{{ step.label }}</span>
       </div>
@@ -23,10 +27,18 @@
           <strong>{{ importTemplates.length }} 个</strong>
           <em>按模板识别表、字段、依赖和重复策略。</em>
         </div>
-        <el-button :icon="Refresh" :loading="templateLoading" @click="loadTemplates()">刷新</el-button>
+        <el-button :icon="Refresh" :loading="templateLoading" @click="loadTemplates()"
+          >刷新</el-button
+        >
       </div>
       <el-table :data="importTemplates" border max-height="220" empty-text="暂无导入模板">
-        <el-table-column prop="templateName" label="模板" min-width="150" fixed show-overflow-tooltip />
+        <el-table-column
+          prop="templateName"
+          label="模板"
+          min-width="150"
+          fixed
+          show-overflow-tooltip
+        />
         <el-table-column prop="templateCode" label="编码" min-width="190" show-overflow-tooltip />
         <el-table-column prop="domainCode" label="目标域" width="90" />
         <el-table-column prop="objectType" label="对象" min-width="130" show-overflow-tooltip />
@@ -50,7 +62,13 @@
       <div class="outcome-state">
         <el-tag :type="importOutcome.tagType" effect="dark">{{ importOutcome.tagLabel }}</el-tag>
         <span>{{ importOutcome.nextAction }}</span>
-        <el-button v-if="hasImportProgress" link type="primary" :icon="Upload" @click="scrollToUpload">
+        <el-button
+          v-if="hasImportProgress"
+          link
+          type="primary"
+          :icon="Upload"
+          @click="scrollToUpload"
+        >
           返回导入入口
         </el-button>
       </div>
@@ -125,9 +143,16 @@
         <el-table-column prop="totalSheets" label="工作表" width="90" align="right" />
         <el-table-column prop="totalRows" label="数据行" width="100" align="right" />
         <el-table-column prop="duplicateRows" label="重复行" width="100" align="right" />
-        <el-table-column prop="attachmentReferenceCount" label="附件引用" width="110" align="right" />
+        <el-table-column
+          prop="attachmentReferenceCount"
+          label="附件引用"
+          width="110"
+          align="right"
+        />
         <el-table-column label="错误/提醒" width="110" align="right">
-          <template #default="scope">{{ scope.row.issueErrors }} / {{ scope.row.issueWarnings }}</template>
+          <template #default="scope"
+            >{{ scope.row.issueErrors }} / {{ scope.row.issueWarnings }}</template
+          >
         </el-table-column>
         <el-table-column prop="message" label="说明" min-width="260" show-overflow-tooltip />
         <!-- @vue-generic {ImportFileRow} -->
@@ -183,7 +208,9 @@
         </div>
         <div>
           <span>状态</span>
-          <el-tag :type="statusTag(result.status)" effect="light">{{ statusLabel(result.status) }}</el-tag>
+          <el-tag :type="statusTag(result.status)" effect="light">{{
+            statusLabel(result.status)
+          }}</el-tag>
         </div>
         <div>
           <span>工作表</span>
@@ -275,7 +302,13 @@
       </div>
 
       <el-table :data="result.tables" border class="table-preview" max-height="420">
-        <el-table-column prop="sheetName" label="工作表" min-width="180" fixed show-overflow-tooltip />
+        <el-table-column
+          prop="sheetName"
+          label="工作表"
+          min-width="180"
+          fixed
+          show-overflow-tooltip
+        />
         <el-table-column label="目标域" width="110">
           <template #default="scope">
             <el-tag v-if="scope.row.domainCode" effect="plain">{{ scope.row.domainCode }}</el-tag>
@@ -297,7 +330,12 @@
         <el-table-column label="附件字段" min-width="200" show-overflow-tooltip>
           <template #default="scope">
             <div v-if="scope.row.attachmentFields.length" class="tag-list">
-              <el-tag v-for="field in scope.row.attachmentFields" :key="field" type="warning" effect="plain">
+              <el-tag
+                v-for="field in scope.row.attachmentFields"
+                :key="field"
+                type="warning"
+                effect="plain"
+              >
                 {{ field }}
               </el-tag>
             </div>
@@ -313,7 +351,11 @@
             <span>{{ table.headers.length }} 个字段</span>
           </div>
           <div class="field-list">
-            <el-tag v-for="header in table.headers" :key="`${table.sheetName}-${header}`" effect="plain">
+            <el-tag
+              v-for="header in table.headers"
+              :key="`${table.sheetName}-${header}`"
+              effect="plain"
+            >
               {{ header }}
             </el-tag>
           </div>
@@ -400,9 +442,20 @@
         </div>
       </div>
       <el-table :data="runResult.rows" border max-height="420">
-        <el-table-column prop="sheetName" label="工作表" min-width="150" fixed show-overflow-tooltip />
+        <el-table-column
+          prop="sheetName"
+          label="工作表"
+          min-width="150"
+          fixed
+          show-overflow-tooltip
+        />
         <el-table-column prop="rowNumber" label="行号" width="90" align="right" />
-        <el-table-column prop="sourceDocumentNo" label="来源单号" min-width="170" show-overflow-tooltip />
+        <el-table-column
+          prop="sourceDocumentNo"
+          label="来源单号"
+          min-width="170"
+          show-overflow-tooltip
+        />
         <el-table-column label="投影状态" width="130">
           <template #default="scope">
             <el-tag :type="projectionTag(scope.row.projectionStatus)" effect="light">
@@ -411,7 +464,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="targetDomain" label="目标域" width="110" />
-        <el-table-column prop="targetObjectType" label="目标对象" min-width="140" show-overflow-tooltip />
+        <el-table-column
+          prop="targetObjectType"
+          label="目标对象"
+          min-width="140"
+          show-overflow-tooltip
+        />
         <el-table-column prop="targetId" label="目标ID" min-width="120" show-overflow-tooltip />
         <el-table-column prop="message" label="说明" min-width="280" show-overflow-tooltip />
       </el-table>
@@ -431,7 +489,9 @@
       <el-table :data="result.issues" border max-height="340">
         <el-table-column label="级别" width="90">
           <template #default="scope">
-            <el-tag :type="issueTag(scope.row.severity)" effect="light">{{ scope.row.severity }}</el-tag>
+            <el-tag :type="issueTag(scope.row.severity)" effect="light">{{
+              scope.row.severity
+            }}</el-tag>
           </template>
         </el-table-column>
         <!-- @vue-generic {FeishuImportIssue} -->
@@ -466,12 +526,7 @@
         </div>
         <el-button :icon="Refresh" :loading="historyLoading" @click="loadHistory()">刷新</el-button>
       </div>
-      <el-table
-        :data="importBatches"
-        border
-        max-height="320"
-        empty-text="暂无飞书导入批次"
-      >
+      <el-table :data="importBatches" border max-height="320" empty-text="暂无飞书导入批次">
         <el-table-column label="上传时间" width="170">
           <template #default="scope">{{ formatTime(scope.row.createdAt) }}</template>
         </el-table-column>
@@ -482,11 +537,21 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="originalFileName" label="原始文件" min-width="210" show-overflow-tooltip />
+        <el-table-column
+          prop="originalFileName"
+          label="原始文件"
+          min-width="210"
+          show-overflow-tooltip
+        />
         <el-table-column prop="totalSheets" label="表" width="80" align="right" />
         <el-table-column prop="totalRows" label="行" width="100" align="right" />
         <el-table-column prop="duplicateRows" label="重复行" width="100" align="right" />
-        <el-table-column prop="attachmentReferenceCount" label="附件引用" width="110" align="right" />
+        <el-table-column
+          prop="attachmentReferenceCount"
+          label="附件引用"
+          width="110"
+          align="right"
+        />
         <el-table-column label="文件大小" width="110" align="right">
           <template #default="scope">{{ formatBytes(scope.row.fileSizeBytes) }}</template>
         </el-table-column>
@@ -499,7 +564,8 @@
               :icon="View"
               :disabled="running || preflighting || historyResultLoading"
               @click="viewHistoryResult(scope.row)"
-            >查看结果</el-button>
+              >查看结果</el-button
+            >
             <el-button
               v-if="canRunHistoryBatch(scope.row)"
               link
@@ -521,7 +587,12 @@
     <el-drawer v-model="historyResultVisible" title="历史导入结果" size="min(1080px, 100vw)">
       <div v-loading="historyResultLoading">
         <p v-if="historyResultBatch">{{ historyResultBatch.originalFileName }}</p>
-        <el-alert v-if="historyResultError" type="error" :closable="false" :title="historyResultError" />
+        <el-alert
+          v-if="historyResultError"
+          type="error"
+          :closable="false"
+          :title="historyResultError"
+        />
         <template v-if="historyResult">
           <p>
             {{ runStatusLabel(historyResult.status, historyResult.dryRun) }} ·
@@ -529,39 +600,78 @@
           </p>
           <p>
             共 {{ historyResult.totalRows }} 行，已投影 {{ historyResult.projectedRows }} 行，
-            已跳过 {{ historyResult.skippedRows }} 行，待映射 {{ historyResult.waitingMappingRows }} 行，
-            失败 {{ historyResult.failedRows }} 行
+            已跳过 {{ historyResult.skippedRows }} 行，待映射
+            {{ historyResult.waitingMappingRows }} 行， 失败 {{ historyResult.failedRows }} 行
           </p>
-          <el-table v-if="historyResult.issueSummaries?.length" :data="historyResult.issueSummaries" max-height="240">
-            <el-table-column prop="targetObjectType" label="目标对象" min-width="180" show-overflow-tooltip />
+          <el-table
+            v-if="historyResult.issueSummaries?.length"
+            :data="historyResult.issueSummaries"
+            max-height="240"
+          >
+            <el-table-column
+              prop="targetObjectType"
+              label="目标对象"
+              min-width="180"
+              show-overflow-tooltip
+            />
             <el-table-column prop="projectionStatus" label="状态" width="120">
-              <template #default="scope">{{ projectionLabel(scope.row.projectionStatus, historyResult.dryRun) }}</template>
+              <template #default="scope">{{
+                projectionLabel(scope.row.projectionStatus, historyResult.dryRun)
+              }}</template>
             </el-table-column>
             <el-table-column prop="rowCount" label="行数" width="80" />
             <el-table-column prop="message" label="原因" min-width="300" />
           </el-table>
           <p class="muted-text">
             已读取明细 {{ historyResult.rows.length }} / {{ historyResult.totalRows }} 行。
-            <span v-if="historyResult.rows.length < historyResult.totalRows">当前为部分明细，筛选和搜索仅针对已读取记录。</span>
+            <span v-if="historyResult.rows.length < historyResult.totalRows"
+              >当前为部分明细，筛选和搜索仅针对已读取记录。</span
+            >
           </p>
-          <el-input v-model="historyResultSearch" aria-label="搜索历史导入明细" placeholder="来源单号 / 处理结果" clearable @input="historyResultPage = 1" />
-          <el-radio-group v-model="historyResultFilter" aria-label="历史导入结果状态" @change="historyResultPage = 1">
+          <el-input
+            v-model="historyResultSearch"
+            aria-label="搜索历史导入明细"
+            placeholder="来源单号 / 处理结果"
+            clearable
+            @input="historyResultPage = 1"
+          />
+          <el-radio-group
+            v-model="historyResultFilter"
+            aria-label="历史导入结果状态"
+            @change="historyResultPage = 1"
+          >
             <el-radio-button value="ALL">全部</el-radio-button>
             <el-radio-button value="WAITING_MAPPING">待处理</el-radio-button>
             <el-radio-button value="FAILED">失败</el-radio-button>
             <el-radio-button value="SKIPPED">已跳过</el-radio-button>
             <el-radio-button value="PROJECTED">已投影</el-radio-button>
           </el-radio-group>
-          <el-table :data="historyResultRows.slice((historyResultPage - 1) * 50, historyResultPage * 50)" max-height="520" empty-text="暂无匹配明细">
-            <el-table-column prop="sheetName" label="工作表" min-width="140" show-overflow-tooltip />
+          <el-table
+            :data="historyResultRows.slice((historyResultPage - 1) * 50, historyResultPage * 50)"
+            max-height="520"
+            empty-text="暂无匹配明细"
+          >
+            <el-table-column
+              prop="sheetName"
+              label="工作表"
+              min-width="140"
+              show-overflow-tooltip
+            />
             <el-table-column prop="rowNumber" label="原始行号" width="90" />
             <el-table-column prop="sourceDocumentNo" label="来源单号" min-width="180" />
             <el-table-column label="状态" width="120">
-              <template #default="scope">{{ projectionLabel(scope.row.projectionStatus, historyResult.dryRun) }}</template>
+              <template #default="scope">{{
+                projectionLabel(scope.row.projectionStatus, historyResult.dryRun)
+              }}</template>
             </el-table-column>
             <el-table-column prop="message" label="处理结果" min-width="320" />
           </el-table>
-          <el-pagination v-model:current-page="historyResultPage" :page-size="50" :total="historyResultRows.length" layout="total, prev, pager, next" />
+          <el-pagination
+            v-model:current-page="historyResultPage"
+            :page-size="50"
+            :total="historyResultRows.length"
+            layout="total, prev, pager, next"
+          />
         </template>
       </div>
     </el-drawer>
@@ -573,9 +683,18 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, type TagProps, type UploadFile, type UploadFiles } from 'element-plus'
-import { CircleCheck, DocumentChecked, Refresh, Upload, UploadFilled, View } from '@element-plus/icons-vue'
+import {
+  CircleCheck,
+  DocumentChecked,
+  Refresh,
+  Upload,
+  UploadFilled,
+  View,
+} from '@element-plus/icons-vue'
 import {
   getFeishuImportBatches,
   getFeishuImportRunStatus,
@@ -636,10 +755,13 @@ const historyResultFilter = ref('ALL')
 const historyResultPage = ref(1)
 const historyResultRows = computed(() => {
   const search = historyResultSearch.value.trim().toLowerCase()
-  return (historyResult.value?.rows || []).filter((row) =>
-    (historyResultFilter.value === 'ALL' || row.projectionStatus === historyResultFilter.value ||
-      (historyResultFilter.value === 'WAITING_MAPPING' && row.projectionStatus === 'PENDING')) &&
-    (!search || `${row.sourceDocumentNo || ''} ${row.message || ''}`.toLowerCase().includes(search)),
+  return (historyResult.value?.rows || []).filter(
+    (row) =>
+      (historyResultFilter.value === 'ALL' ||
+        row.projectionStatus === historyResultFilter.value ||
+        (historyResultFilter.value === 'WAITING_MAPPING' && row.projectionStatus === 'PENDING')) &&
+      (!search ||
+        `${row.sourceDocumentNo || ''} ${row.message || ''}`.toLowerCase().includes(search)),
   )
 })
 const uploadPanelRef = ref<HTMLElement | null>(null)
@@ -711,15 +833,22 @@ const activeFlowStep = computed(() => {
   return 'upload'
 })
 
-const runnableRows = computed(() => batchRows.value.filter((row) =>
-  Boolean(row.batchId)
-  && row.preflightResult
-  && row.status !== 'REJECTED'
-  && row.status !== 'RUNNING',
-))
+const runnableRows = computed(() =>
+  batchRows.value.filter(
+    (row) =>
+      Boolean(row.batchId) &&
+      row.preflightResult &&
+      row.status !== 'REJECTED' &&
+      row.status !== 'RUNNING',
+  ),
+)
 
-const hasImportProgress = computed(() =>
-  selectedFiles.value.length > 0 || batchRows.value.length > 0 || Boolean(result.value) || Boolean(runResult.value),
+const hasImportProgress = computed(
+  () =>
+    selectedFiles.value.length > 0 ||
+    batchRows.value.length > 0 ||
+    Boolean(result.value) ||
+    Boolean(runResult.value),
 )
 
 const issueSummary = computed(() => {
@@ -730,25 +859,29 @@ const issueSummary = computed(() => {
   }
 })
 
-const blockingIssueCount = computed(() =>
-  (result.value?.issues ?? []).filter((issue) => issueBlocking(issue)).length,
+const blockingIssueCount = computed(
+  () => (result.value?.issues ?? []).filter((issue) => issueBlocking(issue)).length,
 )
 
-const nonBlockingIssueCount = computed(() =>
-  (result.value?.issues ?? []).filter((issue) => !issueBlocking(issue)).length,
+const nonBlockingIssueCount = computed(
+  () => (result.value?.issues ?? []).filter((issue) => !issueBlocking(issue)).length,
 )
 
-const issueActionGroups = computed(() => issueGroupDefinitions
-  .map((definition) => {
-    const issues = (result.value?.issues ?? []).filter((issue) => issueCategory(issue) === definition.key)
-    const blockingCount = issues.filter((issue) => issueBlocking(issue)).length
-    return {
-      ...definition,
-      count: issues.length,
-      blockingCount,
-    }
-  })
-  .filter((group) => group.count > 0))
+const issueActionGroups = computed(() =>
+  issueGroupDefinitions
+    .map((definition) => {
+      const issues = (result.value?.issues ?? []).filter(
+        (issue) => issueCategory(issue) === definition.key,
+      )
+      const blockingCount = issues.filter((issue) => issueBlocking(issue)).length
+      return {
+        ...definition,
+        count: issues.length,
+        blockingCount,
+      }
+    })
+    .filter((group) => group.count > 0),
+)
 
 const runIssueSummaries = computed(() => {
   const summaries = runResult.value?.issueSummaries ?? []
@@ -760,24 +893,34 @@ const runIssueTotal = computed(() =>
   runIssueSummaries.value.reduce((sum, item) => sum + (item.rowCount || 0), 0),
 )
 
-const runIssueGroups = computed(() => runIssueSummaries.value
-  .map((item, index) => {
-    const status = item.projectionStatus || 'PENDING'
-    const tagType: TagProps['type'] = status === 'FAILED'
-      ? 'danger'
-      : (status === 'WAITING_MAPPING' || status === 'PENDING' ? 'warning' : 'info')
-    return {
-      key: `${item.issueCategory}-${status}-${item.targetDomain ?? '-'}-${item.targetObjectType ?? '-'}-${index}`,
-      label: issueCategoryLabel(item.issueCategory),
-      count: item.rowCount || 0,
-      message: item.message || projectionLabel(status),
-      projectionStatus: status,
-      statusLabel: projectionLabel(status),
-      tagType,
-      tone: tagType === 'danger' ? 'danger' : (item.issueCategory === 'ATTACHMENT' ? 'info' : 'warning'),
-    }
-  })
-  .filter((group) => group.count > 0))
+const runIssueGroups = computed(() =>
+  runIssueSummaries.value
+    .map((item, index) => {
+      const status = item.projectionStatus || 'PENDING'
+      const tagType: TagProps['type'] =
+        status === 'FAILED'
+          ? 'danger'
+          : status === 'WAITING_MAPPING' || status === 'PENDING'
+            ? 'warning'
+            : 'info'
+      return {
+        key: `${item.issueCategory}-${status}-${item.targetDomain ?? '-'}-${item.targetObjectType ?? '-'}-${index}`,
+        label: issueCategoryLabel(item.issueCategory),
+        count: item.rowCount || 0,
+        message: item.message || projectionLabel(status),
+        projectionStatus: status,
+        statusLabel: projectionLabel(status),
+        tagType,
+        tone:
+          tagType === 'danger'
+            ? 'danger'
+            : item.issueCategory === 'ATTACHMENT'
+              ? 'info'
+              : 'warning',
+      }
+    })
+    .filter((group) => group.count > 0),
+)
 
 const selectedFileTitle = computed(() => {
   if (!selectedFiles.value.length) return '未选择飞书导出的 xlsx 文件'
@@ -810,8 +953,12 @@ const runButtonText = computed(() => {
   const count = runnableRows.value.length
   if (!count) return dryRun.value ? '开始试跑' : '正式导入'
   return count === 1
-    ? (dryRun.value ? '开始试跑' : '正式导入')
-    : (dryRun.value ? `开始试跑 ${count} 个批次` : `正式导入 ${count} 个批次`)
+    ? dryRun.value
+      ? '开始试跑'
+      : '正式导入'
+    : dryRun.value
+      ? `开始试跑 ${count} 个批次`
+      : `正式导入 ${count} 个批次`
 })
 
 const importOutcome = computed<{
@@ -838,7 +985,9 @@ const importOutcome = computed<{
       tagType: 'primary',
       tagLabel: dryRun.value ? '试跑中' : '写入中',
       title: dryRun.value ? '正在试跑导入规则' : '正在正式导入系统',
-      description: dryRun.value ? '当前只校验映射和投影链路，不会写入业务表。' : '当前正在把预检批次写入业务表。',
+      description: dryRun.value
+        ? '当前只校验映射和投影链路，不会写入业务表。'
+        : '当前正在把预检批次写入业务表。',
       nextAction: '等待执行结果返回。',
     }
   }
@@ -860,10 +1009,11 @@ const importOutcome = computed<{
     const preflighted = rows.filter((row) => row.preflightResult).length
     const runRows = rows.filter((row) => row.runResult)
     const runFailed = runRows.filter((row) => row.runResult?.status === 'FAILED').length
-    const runPartial = runRows.filter((row) =>
-      row.runResult?.status === 'PARTIAL'
-      || (row.runResult?.failedRows ?? 0) > 0
-      || (row.runResult?.waitingMappingRows ?? 0) > 0,
+    const runPartial = runRows.filter(
+      (row) =>
+        row.runResult?.status === 'PARTIAL' ||
+        (row.runResult?.failedRows ?? 0) > 0 ||
+        (row.runResult?.waitingMappingRows ?? 0) > 0,
     ).length
     const totalRows = rows.reduce((sum, row) => sum + row.totalRows, 0)
     const totalDuplicates = rows.reduce((sum, row) => sum + row.duplicateRows, 0)
@@ -871,7 +1021,12 @@ const importOutcome = computed<{
 
     if (runRows.length > 0) {
       const dryRunMode = runRows.every((row) => row.runResult?.dryRun)
-      if (failed > 0 || runFailed > 0 || runPartial > 0 || runRows.length < rows.filter((row) => row.batchId).length) {
+      if (
+        failed > 0 ||
+        runFailed > 0 ||
+        runPartial > 0 ||
+        runRows.length < rows.filter((row) => row.batchId).length
+      ) {
         return {
           tone: 'warning',
           tagType: 'warning',
@@ -945,18 +1100,25 @@ const importOutcome = computed<{
         nextAction: '查看下方失败行说明后修正映射或源文件。',
       }
     }
-    if (runResult.value.status === 'PARTIAL' || runResult.value.waitingMappingRows > 0 || runResult.value.failedRows > 0) {
+    if (
+      runResult.value.status === 'PARTIAL' ||
+      runResult.value.waitingMappingRows > 0 ||
+      runResult.value.failedRows > 0
+    ) {
       const attachmentPending = (runResult.value.failedAttachmentRows ?? 0) > 0
-      const onlyAttachmentPending = attachmentPending
-        && runResult.value.failedRows === 0
-        && runResult.value.waitingMappingRows === 0
+      const onlyAttachmentPending =
+        attachmentPending &&
+        runResult.value.failedRows === 0 &&
+        runResult.value.waitingMappingRows === 0
       return {
         tone: 'warning',
         tagType: 'warning',
         tagLabel: runResult.value.dryRun ? '试跑部分通过' : '部分写入',
         title: onlyAttachmentPending
           ? '业务数据已写入，附件等待补偿'
-          : (runResult.value.dryRun ? '试跑存在待处理行' : '导入只完成了一部分'),
+          : runResult.value.dryRun
+            ? '试跑存在待处理行'
+            : '导入只完成了一部分',
         description: `本次处理 ${runResult.value.totalRows} 行，已投影 ${runResult.value.projectedRows} 行，待映射 ${runResult.value.waitingMappingRows} 行，失败 ${runResult.value.failedRows} 行，附件待补偿 ${runResult.value.failedAttachmentRows ?? 0} 行。`,
         nextAction: onlyAttachmentPending
           ? '进入业务页面复核数据；附件权限恢复或补偿后再回填 COS。'
@@ -971,7 +1133,9 @@ const importOutcome = computed<{
       description: runResult.value.dryRun
         ? `本次试跑 ${runResult.value.totalRows} 行，可写入 ${runResult.value.skippedRows} 行，未写入数据库。`
         : `本次处理 ${runResult.value.totalRows} 行，已投影 ${runResult.value.projectedRows} 行，失败 0 行。`,
-      nextAction: runResult.value.dryRun ? '确认无误后执行正式导入。' : '进入业务页面复核数据闭环。',
+      nextAction: runResult.value.dryRun
+        ? '确认无误后执行正式导入。'
+        : '进入业务页面复核数据闭环。',
     }
   }
   if (result.value) {
@@ -1098,9 +1262,13 @@ async function runPreflight() {
       row.issueErrors = 0
       row.issueWarnings = 0
       try {
-        const preflight = selectedFiles.value.length > 1
-          ? await preflightFeishuImportBundleFiles(selectedFiles.value, sourceUrl.value.trim() || null)
-          : await preflightFeishuImportBundle(row.file, sourceUrl.value.trim() || null)
+        const preflight =
+          selectedFiles.value.length > 1
+            ? await preflightFeishuImportBundleFiles(
+                selectedFiles.value,
+                sourceUrl.value.trim() || null,
+              )
+            : await preflightFeishuImportBundle(row.file, sourceUrl.value.trim() || null)
         applyPreflightResult(row, preflight)
         result.value = preflight
         success += preflight.status === 'REJECTED' ? 0 : 1
@@ -1112,7 +1280,9 @@ async function runPreflight() {
       }
     }
     if (success && failed) {
-      ElMessage.warning(`飞书导入预检部分完成：成功 ${success} 个${unitText}，失败 ${failed} 个${unitText}`)
+      ElMessage.warning(
+        `飞书导入预检部分完成：成功 ${success} 个${unitText}，失败 ${failed} 个${unitText}`,
+      )
     } else if (failed) {
       ElMessage.error(`飞书导入预检失败：${failed} 个${unitText}未通过`)
       lastOperationError.value = rows[0]?.message || '飞书导入预检失败'
@@ -1171,7 +1341,9 @@ async function runImport() {
       ElMessage.error(`飞书导入执行失败：${failed} 个批次未通过`)
       lastOperationError.value = rows[0]?.message || '飞书导入执行失败'
     } else {
-      ElMessage.success(dryRun.value ? `飞书导入试跑完成：${success} 个批次` : `飞书导入完成：${success} 个批次`)
+      ElMessage.success(
+        dryRun.value ? `飞书导入试跑完成：${success} 个批次` : `飞书导入完成：${success} 个批次`,
+      )
     }
     await loadHistory(false)
     await nextTick()
@@ -1197,7 +1369,10 @@ async function viewHistoryResult(batch: FeishuImportBatchSummary) {
   historyResultError.value = ''
   historyResultLoading.value = true
   try {
-    historyResult.value = await getFeishuImportRunStatus(batch.batchId, Math.max(1, Math.min(batch.totalRows, 10000)))
+    historyResult.value = await getFeishuImportRunStatus(
+      batch.batchId,
+      Math.max(1, Math.min(batch.totalRows, 10000)),
+    )
   } catch (reason) {
     historyResultError.value = errorMessage(reason, '历史导入结果读取失败')
   } finally {
@@ -1218,7 +1393,9 @@ async function runHistoryBatch(batch: FeishuImportBatchSummary) {
     runResult.value = null
     const run = await runAndTrackBatch(
       batch.batchId,
-      shouldReplayCurrentRun() || shouldReplayHistoryBatch(batch.status) || batch.status === 'RUNNING',
+      shouldReplayCurrentRun() ||
+        shouldReplayHistoryBatch(batch.status) ||
+        batch.status === 'RUNNING',
     )
     runResult.value = run
     if (run.status === 'FAILED') {
@@ -1267,13 +1444,14 @@ async function pollImportRun(
   let current = runResult.value
   for (let attempt = 0; attempt < IMPORT_POLL_MAX_ATTEMPTS; attempt += 1) {
     await delay(IMPORT_POLL_INTERVAL_MS)
-    if (sequence !== importPollSequence) return current ?? await getFeishuImportRunStatus(batchId, runStatusRowLimit())
+    if (sequence !== importPollSequence)
+      return current ?? (await getFeishuImportRunStatus(batchId, runStatusRowLimit()))
     current = await getFeishuImportRunStatus(batchId, runStatusRowLimit())
     runResult.value = current
     onProgress?.(current)
     if (isTerminalRunStatus(current.status)) return current
   }
-  return current ?? await getFeishuImportRunStatus(batchId, runStatusRowLimit())
+  return current ?? (await getFeishuImportRunStatus(batchId, runStatusRowLimit()))
 }
 
 function isTerminalRunStatus(status: string) {
@@ -1348,7 +1526,9 @@ function syncSelectedFiles(uploadFiles: UploadFiles) {
     return
   }
   const existingRows = new Map(batchRows.value.map((row) => [fileKey(row.file), row]))
-  batchRows.value = validFiles.map((file) => existingRows.get(fileKey(file)) ?? createBatchRow(file))
+  batchRows.value = validFiles.map(
+    (file) => existingRows.get(fileKey(file)) ?? createBatchRow(file),
+  )
 }
 
 function ensureBatchRows() {
@@ -1359,7 +1539,9 @@ function ensureBatchRows() {
     return batchRows.value
   }
   const existingRows = new Map(batchRows.value.map((row) => [fileKey(row.file), row]))
-  batchRows.value = selectedFiles.value.map((file) => existingRows.get(fileKey(file)) ?? createBatchRow(file))
+  batchRows.value = selectedFiles.value.map(
+    (file) => existingRows.get(fileKey(file)) ?? createBatchRow(file),
+  )
   return batchRows.value
 }
 
@@ -1428,9 +1610,10 @@ function applyPreflightResult(row: ImportFileRow, preflight: FeishuImportPreflig
 }
 
 function runSummary(run: FeishuImportRunResult) {
-  const attachmentText = run.uploadedAttachmentCount || run.failedAttachmentRows
-    ? `，附件已上传 ${run.uploadedAttachmentCount || 0} 个，附件待补偿 ${run.failedAttachmentRows || 0} 行`
-    : ''
+  const attachmentText =
+    run.uploadedAttachmentCount || run.failedAttachmentRows
+      ? `，附件已上传 ${run.uploadedAttachmentCount || 0} 个，附件待补偿 ${run.failedAttachmentRows || 0} 行`
+      : ''
   if (run.status === 'RUNNING') {
     return `${run.dryRun ? '试跑' : '后台导入'}进行中：已投影 ${run.projectedRows} 行，失败 ${run.failedRows} 行，待映射 ${run.waitingMappingRows} 行${attachmentText}`
   }
@@ -1510,7 +1693,14 @@ function statusLabel(status: string) {
 }
 
 function canRunHistoryBatch(batch: FeishuImportBatchSummary) {
-  return ['PREFLIGHTED', 'PREFLIGHTED_WITH_WARNINGS', 'RUNNING', 'FAILED', 'PARTIAL', 'SUCCEEDED'].includes(batch.status)
+  return [
+    'PREFLIGHTED',
+    'PREFLIGHTED_WITH_WARNINGS',
+    'RUNNING',
+    'FAILED',
+    'PARTIAL',
+    'SUCCEEDED',
+  ].includes(batch.status)
 }
 
 function shouldReplayHistoryBatch(status: string) {
@@ -1570,19 +1760,31 @@ function issueCategory(issue: FeishuImportIssue) {
   if (issue.issueType === 'FEISHU_ATTACHMENT_SOURCE_REQUIRED') return 'ATTACHMENT'
   if (issue.issueType === 'FEISHU_FIELD_MAPPING_REQUIRED') return 'FIELD_MAPPING'
   if (issue.issueType === 'FEISHU_TABLE_UNMAPPED') return 'TABLE_MAPPING'
-  if (issue.issueType === 'FEISHU_SOURCE_DOCUMENT_NO_MISSING'
-    || issue.issueType === 'FEISHU_SOURCE_CREATED_AT_MISSING') return 'DATA_QUALITY'
+  if (
+    issue.issueType === 'FEISHU_SOURCE_DOCUMENT_NO_MISSING' ||
+    issue.issueType === 'FEISHU_SOURCE_CREATED_AT_MISSING'
+  )
+    return 'DATA_QUALITY'
   if (issue.issueType.startsWith('FEISHU_DUPLICATE_')) return 'DUPLICATE'
-  if (issue.issueType === 'FEISHU_REQUIRED_FIELD_MISSING'
-    || issue.issueType === 'FEISHU_SHEET_ROW_LIMIT_EXCEEDED') return 'SOURCE_FILE'
+  if (
+    issue.issueType === 'FEISHU_REQUIRED_FIELD_MISSING' ||
+    issue.issueType === 'FEISHU_SHEET_ROW_LIMIT_EXCEEDED'
+  )
+    return 'SOURCE_FILE'
   return 'OTHER'
 }
 
 function issueBlocking(issue: FeishuImportIssue) {
   if (typeof issue.blocking === 'boolean') return issue.blocking
-  return issue.severity === 'ERROR'
-    || ['FEISHU_FIELD_MAPPING_REQUIRED', 'FEISHU_TABLE_UNMAPPED',
-      'FEISHU_SOURCE_DOCUMENT_NO_MISSING', 'FEISHU_SOURCE_CREATED_AT_MISSING'].includes(issue.issueType)
+  return (
+    issue.severity === 'ERROR' ||
+    [
+      'FEISHU_FIELD_MAPPING_REQUIRED',
+      'FEISHU_TABLE_UNMAPPED',
+      'FEISHU_SOURCE_DOCUMENT_NO_MISSING',
+      'FEISHU_SOURCE_CREATED_AT_MISSING',
+    ].includes(issue.issueType)
+  )
 }
 
 function issueResolutionHint(issue: FeishuImportIssue) {
@@ -1617,34 +1819,72 @@ function fallbackRunIssueSummaries(rows: FeishuImportRunRow[]): FeishuImportRunI
 function runIssueMessage(row: FeishuImportRunRow) {
   const message = row.message?.trim()
   if (!message) return projectionLabel(row.projectionStatus)
-  if (message.includes('Order销售订单创建 failed status=400')
-    || message.includes('Order销售订单更新 failed status=400')) {
+  if (
+    message.includes('Order销售订单创建 failed status=400') ||
+    message.includes('Order销售订单更新 failed status=400')
+  ) {
     return 'Order销售订单写入失败，业务字段未通过校验'
   }
-  if (message.includes('Order销售回款创建 failed status=400')
-    || message.includes('Order销售回款更新 failed status=400')) {
+  if (
+    message.includes('Order销售回款创建 failed status=400') ||
+    message.includes('Order销售回款更新 failed status=400')
+  ) {
     return 'Order销售回款写入失败，业务字段未通过校验'
   }
   return message.length > 220 ? message.slice(0, 220) : message
 }
 
 function runIssueCategory(row: FeishuImportRunRow) {
-  const text = `${row.message ?? ''} ${row.targetDomain ?? ''} ${row.targetObjectType ?? ''}`.toLowerCase()
-  if (text.includes('attachment') || text.includes('附件') || text.includes('凭证')
-    || text.includes('file_token') || text.includes('cos')) return 'ATTACHMENT'
-  if (text.includes('商品') || text.includes('规格') || text.includes('单位')
-    || text.includes('product') || text.includes('sku')) return 'PRODUCT_MAPPING'
-  if (text.includes('客户') || text.includes('门店') || text.includes('商家')
-    || text.includes('customer') || row.targetDomain === 'CRM') return 'CUSTOMER_MAPPING'
-  if (text.includes('回款') || text.includes('收款') || text.includes('付款')
-    || text.includes('payment') || row.targetObjectType === 'PAYMENT_RECORD') return 'PAYMENT_MAPPING'
-  if (text.includes('订单明细') || text.includes('order_line')
-    || row.targetObjectType === 'SALES_ORDER_LINE') return 'ORDER_LINE'
-  if (text.includes('field_mapping') || text.includes('table_mapping') || text.includes('字段映射')) {
+  const text =
+    `${row.message ?? ''} ${row.targetDomain ?? ''} ${row.targetObjectType ?? ''}`.toLowerCase()
+  if (
+    text.includes('attachment') ||
+    text.includes('附件') ||
+    text.includes('凭证') ||
+    text.includes('file_token') ||
+    text.includes('cos')
+  )
+    return 'ATTACHMENT'
+  if (
+    text.includes('商品') ||
+    text.includes('规格') ||
+    text.includes('单位') ||
+    text.includes('product') ||
+    text.includes('sku')
+  )
+    return 'PRODUCT_MAPPING'
+  if (
+    text.includes('客户') ||
+    text.includes('门店') ||
+    text.includes('商家') ||
+    text.includes('customer') ||
+    row.targetDomain === 'CRM'
+  )
+    return 'CUSTOMER_MAPPING'
+  if (
+    text.includes('回款') ||
+    text.includes('收款') ||
+    text.includes('付款') ||
+    text.includes('payment') ||
+    row.targetObjectType === 'PAYMENT_RECORD'
+  )
+    return 'PAYMENT_MAPPING'
+  if (
+    text.includes('订单明细') ||
+    text.includes('order_line') ||
+    row.targetObjectType === 'SALES_ORDER_LINE'
+  )
+    return 'ORDER_LINE'
+  if (
+    text.includes('field_mapping') ||
+    text.includes('table_mapping') ||
+    text.includes('字段映射')
+  ) {
     return 'FIELD_MAPPING'
   }
   if (row.projectionStatus === 'FAILED') return 'ORDER_VALIDATION'
-  if (row.projectionStatus === 'PENDING' || row.projectionStatus === 'WAITING_MAPPING') return 'DEPENDENCY'
+  if (row.projectionStatus === 'PENDING' || row.projectionStatus === 'WAITING_MAPPING')
+    return 'DEPENDENCY'
   return 'OTHER'
 }
 
@@ -1682,11 +1922,11 @@ function runStatusTag(status: string) {
 function runStatusLabel(status: string, dryRunMode = false) {
   if (dryRunMode) {
     const dryRunLabels: Record<string, string> = {
-    SUCCEEDED: '试跑通过',
-    PARTIAL: '试跑部分通过',
-    FAILED: '试跑失败',
-    DRY_RUN: '试跑',
-    RUNNING: '试跑中',
+      SUCCEEDED: '试跑通过',
+      PARTIAL: '试跑部分通过',
+      FAILED: '试跑失败',
+      DRY_RUN: '试跑',
+      RUNNING: '试跑中',
     }
     return dryRunLabels[status] ?? status
   }
@@ -1724,17 +1964,7 @@ function formatBytes(value: number) {
   return `${value} B`
 }
 
-function formatTime(value: string | null | undefined) {
-  if (!value) return '-'
-  const timestamp = new Date(value)
-  if (Number.isNaN(timestamp.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(timestamp)
-}
+const formatTime = displayDateTime
 
 function errorMessage(reason: unknown, fallback: string) {
   if (typeof reason === 'object' && reason && 'code' in reason) {

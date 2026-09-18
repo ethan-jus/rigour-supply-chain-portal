@@ -3,11 +3,18 @@
     <div class="page-heading">
       <div>
         <span class="supply-page__eyebrow">ERP · 基础资料</span>
-        <h1>{{ pageConfig.title }}</h1>
+        <SupplyPageTitle>{{ pageConfig.title }}</SupplyPageTitle>
         <p>{{ pageConfig.description }}</p>
       </div>
       <div class="heading-actions">
-        <el-button type="primary" :icon="Plus" @click="openCreate">{{ createButtonLabel }}</el-button>
+        <DhbPageSyncButton
+          :scope="pageSyncScope"
+          :label="pageConfig.shortTitle"
+          @completed="loadRows"
+        />
+        <el-button v-if="canChange('create')" type="primary" :icon="Plus" @click="openCreate">{{
+          createButtonLabel
+        }}</el-button>
       </div>
     </div>
 
@@ -72,9 +79,22 @@
                 <p>{{ categoryPath(selectedCategory) }}</p>
               </div>
               <div class="category-detail-actions">
-                <el-button :icon="Plus" @click="openCreateCategoryChild(selectedCategory)">新增子分类</el-button>
-                <el-button type="primary" @click="openEdit(selectedCategory)">编辑</el-button>
-                <el-button type="danger" plain @click="deleteRow(selectedCategory)">删除</el-button>
+                <el-button :icon="Plus" @click="openCreateCategoryChild(selectedCategory)"
+                  >新增子分类</el-button
+                >
+                <el-button
+                  v-if="canChange('update')"
+                  type="primary"
+                  @click="openEdit(selectedCategory)"
+                  >编辑</el-button
+                >
+                <el-button
+                  v-if="canChange('delete')"
+                  type="danger"
+                  plain
+                  @click="deleteRow(selectedCategory)"
+                  >删除</el-button
+                >
               </div>
             </header>
             <div class="category-summary">
@@ -106,7 +126,9 @@
                   @click="selectCategory(child)"
                 >
                   <span>{{ child.categoryName }}</span>
-                  <small>{{ child.children?.length || directCategoryChildCount(child) }} 个子类</small>
+                  <small
+                    >{{ child.children?.length || directCategoryChildCount(child) }} 个子类</small
+                  >
                 </button>
               </div>
               <el-empty v-else description="暂无子分类" :image-size="56" />
@@ -114,11 +136,21 @@
             <section class="category-section">
               <h3>系统信息</h3>
               <el-descriptions :column="2" border>
-                <el-descriptions-item label="分类编码">{{ selectedCategory.categoryCode || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="层级">{{ selectedCategory.categoryLevel || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="创建时间">{{ formatTime(selectedCategory.createdTime) }}</el-descriptions-item>
-                <el-descriptions-item label="更新时间">{{ formatTime(selectedCategory.updatedTime) }}</el-descriptions-item>
-                <el-descriptions-item label="备注" :span="2">{{ selectedCategory.remark || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="分类编码">{{
+                  selectedCategory.categoryCode || '-'
+                }}</el-descriptions-item>
+                <el-descriptions-item label="层级">{{
+                  selectedCategory.categoryLevel || '-'
+                }}</el-descriptions-item>
+                <el-descriptions-item label="创建时间">{{
+                  formatTime(selectedCategory.createdTime)
+                }}</el-descriptions-item>
+                <el-descriptions-item label="更新时间">{{
+                  formatTime(selectedCategory.updatedTime)
+                }}</el-descriptions-item>
+                <el-descriptions-item label="备注" :span="2">{{
+                  selectedCategory.remark || '-'
+                }}</el-descriptions-item>
               </el-descriptions>
             </section>
           </template>
@@ -150,27 +182,64 @@
       <el-card class="filter-card" shadow="never">
         <el-form :model="filters" inline @submit.prevent="loadRows">
           <el-form-item :label="`${pageConfig.shortTitle}编号`">
-            <el-input v-model="filters.code" clearable placeholder="后端自动生成的编号" style="width: 180px" />
+            <el-input
+              v-model="filters.code"
+              clearable
+              placeholder="后端自动生成的编号"
+              style="width: 180px"
+            />
           </el-form-item>
           <el-form-item :label="`${pageConfig.shortTitle}名称`">
-            <el-input v-model="filters.name" clearable placeholder="按名称查询" style="width: 220px" />
+            <el-input
+              v-model="filters.name"
+              clearable
+              placeholder="按名称查询"
+              style="width: 220px"
+            />
           </el-form-item>
           <el-form-item v-if="pageKind === 'supplier'" label="联系电话">
-            <el-input v-model="filters.contactPhone" clearable placeholder="供应商联系电话" style="width: 180px" />
+            <el-input
+              v-model="filters.contactPhone"
+              clearable
+              placeholder="供应商联系电话"
+              style="width: 180px"
+            />
           </el-form-item>
           <el-form-item v-if="pageKind === 'warehouse'" label="归属地区">
-            <el-input v-model="filters.regionCode" clearable placeholder="地区编码" style="width: 150px" />
+            <el-input
+              v-model="filters.regionCode"
+              clearable
+              placeholder="地区编码"
+              style="width: 150px"
+            />
           </el-form-item>
           <el-form-item v-if="pageKind === 'tag'" label="标签类型">
-            <el-input v-model="filters.tagTypeCode" clearable placeholder="标签类型编码" style="width: 150px" />
+            <el-input
+              v-model="filters.tagTypeCode"
+              clearable
+              placeholder="标签类型编码"
+              style="width: 150px"
+            />
           </el-form-item>
           <el-form-item v-if="hasStatus" label="状态">
-            <el-select v-model="filters.statusCode" clearable placeholder="全部状态" style="width: 130px">
-              <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <el-select
+              v-model="filters.statusCode"
+              clearable
+              placeholder="全部状态"
+              style="width: 130px"
+            >
+              <el-option
+                v-for="item in statusOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
             </el-select>
           </el-form-item>
           <el-form-item class="filter-actions">
-            <el-button type="primary" :icon="Search" :loading="loading" native-type="submit">查询</el-button>
+            <el-button type="primary" :icon="Search" :loading="loading" native-type="submit"
+              >查询</el-button
+            >
             <el-button :icon="Refresh" @click="resetFilters">重置</el-button>
           </el-form-item>
         </el-form>
@@ -180,7 +249,9 @@
         <div>
           <div class="result-title-line">
             <h2>{{ pageConfig.title }}列表</h2>
-            <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+            <span class="result-count"
+              ><strong>{{ pageData.total }}</strong> 条</span
+            >
           </div>
         </div>
       </div>
@@ -195,64 +266,134 @@
             row-key="id"
             @row-click="openDetail"
           >
-            <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+            <el-table-column
+              type="index"
+              label="序号"
+              width="80"
+              fixed="left"
+              :index="tableRowIndex"
+            />
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column :label="`${pageConfig.shortTitle}编号`" width="170" show-overflow-tooltip>
+            <el-table-column
+              :label="`${pageConfig.shortTitle}编号`"
+              width="170"
+              show-overflow-tooltip
+            >
               <template #default="scope">{{ rowCode(scope.row) || '-' }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column :label="`${pageConfig.shortTitle}名称`" min-width="240" show-overflow-tooltip>
+            <el-table-column
+              :label="`${pageConfig.shortTitle}名称`"
+              min-width="240"
+              show-overflow-tooltip
+            >
               <template #default="scope">
                 <span class="record-name">{{ rowName(scope.row) || '-' }}</span>
               </template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'tag'" label="标签类型" min-width="160" show-overflow-tooltip>
+            <el-table-column
+              v-if="pageKind === 'tag'"
+              label="标签类型"
+              min-width="160"
+              show-overflow-tooltip
+            >
               <template #default="scope">{{ tagTypeLabel(scope.row) }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'warehouse'" label="归属地区" min-width="150" show-overflow-tooltip>
+            <el-table-column
+              v-if="pageKind === 'warehouse'"
+              label="归属地区"
+              min-width="150"
+              show-overflow-tooltip
+            >
               <template #default="scope">{{ regionLabel(scope.row) }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'warehouse'" label="仓库类型" min-width="150" show-overflow-tooltip>
+            <el-table-column
+              v-if="pageKind === 'warehouse'"
+              label="仓库类型"
+              min-width="150"
+              show-overflow-tooltip
+            >
               <template #default="scope">{{ warehouseTypeLabel(scope.row) }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'warehouse'" label="默认仓库" width="120" align="center">
+            <el-table-column
+              v-if="pageKind === 'warehouse'"
+              label="默认仓库"
+              width="120"
+              align="center"
+            >
               <template #default="scope">
-                <el-tag v-if="isDefaultWarehouse(scope.row)" type="success" effect="light">默认</el-tag>
+                <el-tag v-if="isDefaultWarehouse(scope.row)" type="success" effect="light"
+                  >默认</el-tag
+                >
                 <span v-else>-</span>
               </template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="联系人" min-width="130" show-overflow-tooltip>
+            <el-table-column
+              v-if="pageKind === 'supplier' || pageKind === 'warehouse'"
+              label="联系人"
+              min-width="130"
+              show-overflow-tooltip
+            >
               <template #default="scope">{{ contactName(scope.row) }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="联系电话" min-width="150" show-overflow-tooltip>
+            <el-table-column
+              v-if="pageKind === 'supplier' || pageKind === 'warehouse'"
+              label="联系电话"
+              min-width="150"
+              show-overflow-tooltip
+            >
               <template #default="scope">{{ contactPhone(scope.row) }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'supplier'" label="开户银行" min-width="160" show-overflow-tooltip>
+            <el-table-column
+              v-if="pageKind === 'supplier'"
+              label="开户银行"
+              min-width="160"
+              show-overflow-tooltip
+            >
               <template #default="scope">{{ bankName(scope.row) }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'supplier'" label="银行账号" min-width="150" show-overflow-tooltip>
-              <template #default="scope">{{ bankAccountDisplay(bankAccountNo(scope.row)) }}</template>
+            <el-table-column
+              v-if="pageKind === 'supplier'"
+              label="银行账号"
+              min-width="150"
+              show-overflow-tooltip
+            >
+              <template #default="scope">{{
+                bankAccountDisplay(bankAccountNo(scope.row))
+              }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'supplier' || pageKind === 'warehouse'" label="地址" min-width="240" show-overflow-tooltip>
+            <el-table-column
+              v-if="pageKind === 'supplier' || pageKind === 'warehouse'"
+              label="地址"
+              min-width="240"
+              show-overflow-tooltip
+            >
               <template #default="scope">{{ address(scope.row) }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
-            <el-table-column v-if="pageKind === 'brand' || pageKind === 'tag'" label="备注" min-width="180" show-overflow-tooltip>
+            <el-table-column
+              v-if="pageKind === 'brand' || pageKind === 'tag'"
+              label="备注"
+              min-width="180"
+              show-overflow-tooltip
+            >
               <template #default="scope">{{ remark(scope.row) }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
             <el-table-column v-if="hasStatus" label="状态" width="110">
               <template #default="scope">
-                <el-tag :type="statusTag(rowStatus(scope.row))" effect="light">{{ statusLabel(rowStatus(scope.row)) }}</el-tag>
+                <el-tag :type="statusTag(rowStatus(scope.row))" effect="light">{{
+                  statusLabel(rowStatus(scope.row))
+                }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="更新时间" width="170">
@@ -262,8 +403,20 @@
             <el-table-column label="操作" width="190" fixed="right" align="center">
               <template #default="scope">
                 <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-                <el-button link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
-                <el-button link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
+                <el-button
+                  v-if="canChange('update')"
+                  link
+                  type="primary"
+                  @click.stop="openEdit(scope.row)"
+                  >编辑</el-button
+                >
+                <el-button
+                  v-if="canChange('delete')"
+                  link
+                  type="danger"
+                  @click.stop="deleteRow(scope.row)"
+                  >删除</el-button
+                >
               </template>
             </el-table-column>
             <template #empty><el-empty :description="`暂无${pageConfig.shortTitle}`" /></template>
@@ -297,11 +450,22 @@
             <h2>{{ rowName(detail) }}</h2>
             <p>{{ rowCode(detail) || '-' }}</p>
           </div>
-          <el-button circle plain :aria-label="`关闭${pageConfig.shortTitle}详情`" @click="detailVisible = false">×</el-button>
+          <el-button
+            circle
+            plain
+            :aria-label="`关闭${pageConfig.shortTitle}详情`"
+            @click="detailVisible = false"
+            >×</el-button
+          >
         </header>
         <div class="detail-content">
           <el-descriptions :column="2" border>
-            <el-descriptions-item v-for="item in detailItems(detail)" :key="item.label" :label="item.label" :span="item.span || 1">
+            <el-descriptions-item
+              v-for="item in detailItems(detail)"
+              :key="item.label"
+              :label="item.label"
+              :span="item.span || 1"
+            >
               {{ item.value || '-' }}
             </el-descriptions-item>
           </el-descriptions>
@@ -310,12 +474,21 @@
       <el-skeleton v-else :rows="8" animated />
     </el-drawer>
 
-    <el-dialog v-model="editorVisible" :title="editingId ? `编辑${pageConfig.shortTitle}` : `新增${pageConfig.shortTitle}`" width="min(760px, 92vw)" destroy-on-close>
+    <el-dialog
+      v-model="editorVisible"
+      :title="editingId ? `编辑${pageConfig.shortTitle}` : `新增${pageConfig.shortTitle}`"
+      width="min(760px, 92vw)"
+      destroy-on-close
+    >
       <el-form :model="form" label-width="110px">
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item :label="`${pageConfig.shortTitle}名称`">
-              <el-input v-model="form.name" clearable :placeholder="`请输入${pageConfig.shortTitle}名称`" />
+              <el-input
+                v-model="form.name"
+                clearable
+                :placeholder="`请输入${pageConfig.shortTitle}名称`"
+              />
             </el-form-item>
           </el-col>
           <el-col v-if="pageKind === 'category'" :span="12">
@@ -359,7 +532,12 @@
           <el-col v-if="hasStatus" :span="12">
             <el-form-item label="状态">
               <el-select v-model="form.statusCode" style="width: 100%">
-                <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+                <el-option
+                  v-for="item in statusOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
               </el-select>
             </el-form-item>
           </el-col>
@@ -390,7 +568,13 @@
           </el-col>
           <el-col :span="24">
             <el-form-item label="备注">
-              <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="1000" show-word-limit />
+              <el-input
+                v-model="form.remark"
+                type="textarea"
+                :rows="3"
+                maxlength="1000"
+                show-word-limit
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -404,6 +588,11 @@
 </template>
 
 <script setup lang="ts">
+import { auditActorLabel } from '@/utils/audit-actor'
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
+import type { DhbPageScope } from '@/api/core/dhb-page-sync'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -450,21 +639,54 @@ import {
   businessDictionaryOptions,
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import ProductCategorySelect from '@/components/supply/ProductCategorySelect.vue'
 import { loadAllErpProductCategories } from '@/utils/product-categories'
 
 type PageKind = 'category' | 'brand' | 'tag' | 'warehouse' | 'supplier'
-type BasicRow = ErpProductCategoryView | ErpProductBrandView | ErpProductTagView | ErpInternalWarehouseView | ErpSupplierProfileView
+type BasicRow =
+  | ErpProductCategoryView
+  | ErpProductBrandView
+  | ErpProductTagView
+  | ErpInternalWarehouseView
+  | ErpSupplierProfileView
 type CategoryTreeRow = ErpProductCategoryView & { children?: CategoryTreeRow[]; depth?: number }
 
 const route = useRoute()
+const { can } = useSupplyPermissions()
+function canChange(action: 'create' | 'update' | 'delete') {
+  return can(
+    pageKind.value === 'warehouse' ? `erp:warehouse:${action}` : 'erp:product:write',
+    'erp:product:write',
+  )
+}
 
 const pageConfigs: Record<PageKind, { title: string; shortTitle: string; description: string }> = {
-  category: { title: '商品分类', shortTitle: '分类', description: '维护商品分类，用于商品建档、筛选和后续订货展示。' },
-  brand: { title: '商品品牌', shortTitle: '品牌', description: '维护商品所属品牌，商品新增和编辑时从这里选择。' },
-  tag: { title: '商品标签', shortTitle: '标签', description: '维护新品、推荐、热销等商品标签，商品页只引用标签编码。' },
-  warehouse: { title: '仓库信息', shortTitle: '仓库', description: '维护自研 ERP 仓库，销售出库、采购入库和库存调拨都从这里选择仓库。' },
-  supplier: { title: '供应商档案', shortTitle: '供应商', description: '维护采购业务使用的供应商档案。' },
+  category: {
+    title: '商品分类',
+    shortTitle: '分类',
+    description: '维护商品分类，用于商品建档、筛选和后续订货展示。',
+  },
+  brand: {
+    title: '商品品牌',
+    shortTitle: '品牌',
+    description: '维护商品所属品牌，商品新增和编辑时从这里选择。',
+  },
+  tag: {
+    title: '商品标签',
+    shortTitle: '标签',
+    description: '维护新品、推荐、热销等商品标签，商品页只引用标签编码。',
+  },
+  warehouse: {
+    title: '仓库信息',
+    shortTitle: '仓库',
+    description: '维护自研 ERP 仓库，销售出库、采购入库和库存调拨都从这里选择仓库。',
+  },
+  supplier: {
+    title: '供应商档案',
+    shortTitle: '供应商',
+    description: '维护采购业务使用的供应商档案。',
+  },
 }
 
 const pageKind = computed<PageKind>(() => {
@@ -476,10 +698,26 @@ const pageKind = computed<PageKind>(() => {
   if (routeKey.includes('suppliers.profiles')) return 'supplier'
   return 'category'
 })
+const pageSyncScope = computed<DhbPageScope>(
+  () =>
+    (
+      ({
+        category: 'CATEGORY',
+        brand: 'BRAND',
+        tag: 'TAG',
+        warehouse: 'WAREHOUSE',
+        supplier: 'SUPPLIER',
+      }) as const
+    )[pageKind.value],
+)
 const pageConfig = computed(() => pageConfigs[pageKind.value])
-const createButtonLabel = computed(() => pageKind.value === 'category' ? '新增一级分类' : `新增${pageConfig.value.shortTitle}`)
+const createButtonLabel = computed(() =>
+  pageKind.value === 'category' ? '新增一级分类' : `新增${pageConfig.value.shortTitle}`,
+)
 const hasStatus = computed(() => pageKind.value === 'warehouse' || pageKind.value === 'supplier')
-const statusDictionaryCode = computed(() => pageKind.value === 'supplier' ? 'SUPPLIER_STATUS' : 'WAREHOUSE_STATUS')
+const statusDictionaryCode = computed(() =>
+  pageKind.value === 'supplier' ? 'SUPPLIER_STATUS' : 'WAREHOUSE_STATUS',
+)
 const statusOptions = computed(() => businessDictionaryOptions('ERP', statusDictionaryCode.value))
 
 const loading = ref(false)
@@ -501,20 +739,30 @@ const tableRows = computed<BasicRow[]>(() => {
 const categoryRows = computed(() =>
   pageData.value.items.filter((row): row is ErpProductCategoryView => 'categoryCode' in row),
 )
-const filteredCategoryRows = computed(() => filterCategoryRows(categoryRows.value, categoryKeyword.value))
+const filteredCategoryRows = computed(() =>
+  filterCategoryRows(categoryRows.value, categoryKeyword.value),
+)
 const allCategoryTreeRows = computed(() => buildCategoryTree(categoryRows.value))
 const categoryTreeRows = computed(() => buildCategoryTree(filteredCategoryRows.value))
-const categoryParentDisabledValues = computed(() => disabledCategoryValues(categorySelectRows.value, editingId.value))
+const categoryParentDisabledValues = computed(() =>
+  disabledCategoryValues(categorySelectRows.value, editingId.value),
+)
 const categoryRowMap = computed(() => new Map(categoryRows.value.map((row) => [rowId(row), row])))
 const selectedCategory = computed<CategoryTreeRow | null>(() => {
   if (!selectedCategoryId.value) return null
   return findCategoryTreeRow(allCategoryTreeRows.value, selectedCategoryId.value)
 })
-const selectedCategoryChildren = computed<CategoryTreeRow[]>(() => selectedCategory.value?.children || [])
+const selectedCategoryChildren = computed<CategoryTreeRow[]>(
+  () => selectedCategory.value?.children || [],
+)
 const selectedCategoryChildCount = computed(() => selectedCategoryChildren.value.length)
-const selectedCategoryDescendantCount = computed(() => selectedCategory.value ? categoryDescendantCount(selectedCategory.value) : 0)
+const selectedCategoryDescendantCount = computed(() =>
+  selectedCategory.value ? categoryDescendantCount(selectedCategory.value) : 0,
+)
 const rootCategoryCount = computed(() => categoryRows.value.filter((row) => !row.parentId).length)
-const leafCategoryCount = computed(() => categoryRows.value.filter((row) => directCategoryChildCount(row) === 0).length)
+const leafCategoryCount = computed(
+  () => categoryRows.value.filter((row) => directCategoryChildCount(row) === 0).length,
+)
 
 const filters = reactive({
   code: '',
@@ -574,9 +822,18 @@ async function loadRows() {
       pageData.value = { total: items.length, begin: 0, step: Math.max(items.length, 1), items }
       ensureCategorySelection()
     } else if (pageKind.value === 'brand') {
-      pageData.value = await getErpProductBrands({ ...common, brandCode: empty(filters.code), brandName: empty(filters.name) })
+      pageData.value = await getErpProductBrands({
+        ...common,
+        brandCode: empty(filters.code),
+        brandName: empty(filters.name),
+      })
     } else if (pageKind.value === 'tag') {
-      pageData.value = await getErpProductTags({ ...common, tagCode: empty(filters.code), tagName: empty(filters.name), tagTypeCode: empty(filters.tagTypeCode) })
+      pageData.value = await getErpProductTags({
+        ...common,
+        tagCode: empty(filters.code),
+        tagName: empty(filters.name),
+        tagTypeCode: empty(filters.tagTypeCode),
+      })
     } else if (pageKind.value === 'warehouse') {
       pageData.value = await getErpInventoryWarehouses({
         ...common,
@@ -614,7 +871,12 @@ async function loadCategorySelectRows() {
 }
 
 function handleCategorySelectVisibleChange(visible: boolean) {
-  if (visible && pageKind.value === 'category' && !categorySelectRows.value.length && !categorySelectLoading.value) {
+  if (
+    visible &&
+    pageKind.value === 'category' &&
+    !categorySelectRows.value.length &&
+    !categorySelectLoading.value
+  ) {
     void loadCategorySelectRows()
   }
 }
@@ -699,11 +961,15 @@ async function deleteRow(row: BasicRow) {
     return
   }
   try {
-    await ElMessageBox.confirm(`确认删除${pageConfig.value.shortTitle}「${rowName(row)}」？后端会按规则做逻辑删除。`, `删除${pageConfig.value.shortTitle}`, {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      `确认删除${pageConfig.value.shortTitle}「${rowName(row)}」？后端会按规则做逻辑删除。`,
+      `删除${pageConfig.value.shortTitle}`,
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
     if (pageKind.value === 'category') await deleteErpProductCategory(row.id, row.revision)
     else if (pageKind.value === 'brand') await deleteErpProductBrand(row.id, row.revision)
     else if (pageKind.value === 'tag') await deleteErpProductTag(row.id, row.revision)
@@ -742,7 +1008,13 @@ async function updateCurrent(id: string) {
 }
 
 function categoryCommand(): ErpProductCategoryCommand {
-  return { parentId: numberOrNull(form.parentId), categoryName: form.name.trim(), ordinal: form.ordinal, remark: empty(form.remark), revision: form.revision }
+  return {
+    parentId: numberOrNull(form.parentId),
+    categoryName: form.name.trim(),
+    ordinal: form.ordinal,
+    remark: empty(form.remark),
+    revision: form.revision,
+  }
 }
 
 function brandCommand(): ErpProductBrandCommand {
@@ -750,7 +1022,12 @@ function brandCommand(): ErpProductBrandCommand {
 }
 
 function tagCommand(): ErpProductTagCommand {
-  return { tagName: form.name.trim(), tagTypeCode: empty(form.tagTypeCode), remark: empty(form.remark), revision: form.revision }
+  return {
+    tagName: form.name.trim(),
+    tagTypeCode: empty(form.tagTypeCode),
+    remark: empty(form.remark),
+    revision: form.revision,
+  }
 }
 
 function warehouseCommand(): ErpInternalWarehouseCommand {
@@ -851,15 +1128,21 @@ function rowStatus(row: BasicRow) {
 }
 
 function tagTypeLabel(row: BasicRow) {
-  return 'tagTypeCode' in row ? businessDictionaryLabel('ERP', 'PRODUCT_TAG_TYPE', row.tagTypeCode, '标签类型') : '-'
+  return 'tagTypeCode' in row
+    ? businessDictionaryLabel('ERP', 'PRODUCT_TAG_TYPE', row.tagTypeCode, '标签类型')
+    : '-'
 }
 
 function regionLabel(row: BasicRow) {
-  return 'regionCode' in row ? businessDictionaryLabel('COMMON', 'REGION', row.regionCode, '地区') : '-'
+  return 'regionCode' in row
+    ? businessDictionaryLabel('COMMON', 'REGION', row.regionCode, '地区')
+    : '-'
 }
 
 function warehouseTypeLabel(row: BasicRow) {
-  return 'warehouseTypeCode' in row ? businessDictionaryLabel('ERP', 'WAREHOUSE_TYPE', row.warehouseTypeCode, '仓库类型') : '-'
+  return 'warehouseTypeCode' in row
+    ? businessDictionaryLabel('ERP', 'WAREHOUSE_TYPE', row.warehouseTypeCode, '仓库类型')
+    : '-'
 }
 
 function isDefaultWarehouse(row: BasicRow) {
@@ -902,34 +1185,47 @@ function detailItems(row: BasicRow) {
     { label: `${pageConfig.value.shortTitle}编号`, value: rowCode(row) },
     { label: `${pageConfig.value.shortTitle}名称`, value: rowName(row) },
   ]
-  if ('parentId' in row) base.push(
-    { label: '上级分类', value: categoryParentName(row) },
-    { label: '分类层级', value: row.categoryLevel ? String(row.categoryLevel) : '-' },
-    { label: '排序', value: row.ordinal !== null ? String(row.ordinal) : '-' },
-  )
-  if ('tagTypeCode' in row) base.push({ label: '标签类型', value: businessDictionaryLabel('ERP', 'PRODUCT_TAG_TYPE', row.tagTypeCode, '标签类型') })
-  if ('warehouseTypeCode' in row) base.push(
-    { label: '归属地区', value: businessDictionaryLabel('COMMON', 'REGION', row.regionCode, '地区') },
-    { label: '仓库类型', value: businessDictionaryLabel('ERP', 'WAREHOUSE_TYPE', row.warehouseTypeCode, '仓库类型') },
-    { label: '默认仓库', value: row.defaultFlag ? '是' : '否' },
-    { label: '联系人', value: row.contactName || '-' },
-    { label: '联系电话', value: row.contactPhone || '-' },
-    { label: '状态', value: statusLabel(row.statusCode) },
-    { label: '地址', value: row.address || '-', span: 2 },
-  )
-  if ('supplierName' in row) base.push(
-    { label: '联系人', value: row.contactName || '-' },
-    { label: '联系电话', value: row.contactPhone || '-' },
-    { label: '开户银行', value: row.bankName || '-' },
-    { label: '银行账号', value: row.bankAccountNo || '-' },
-    { label: '状态', value: statusLabel(row.statusCode) },
-    { label: '地址', value: row.address || '-', span: 2 },
-  )
+  if ('parentId' in row)
+    base.push(
+      { label: '上级分类', value: categoryParentName(row) },
+      { label: '分类层级', value: row.categoryLevel ? String(row.categoryLevel) : '-' },
+      { label: '排序', value: row.ordinal !== null ? String(row.ordinal) : '-' },
+    )
+  if ('tagTypeCode' in row)
+    base.push({
+      label: '标签类型',
+      value: businessDictionaryLabel('ERP', 'PRODUCT_TAG_TYPE', row.tagTypeCode, '标签类型'),
+    })
+  if ('warehouseTypeCode' in row)
+    base.push(
+      {
+        label: '归属地区',
+        value: businessDictionaryLabel('COMMON', 'REGION', row.regionCode, '地区'),
+      },
+      {
+        label: '仓库类型',
+        value: businessDictionaryLabel('ERP', 'WAREHOUSE_TYPE', row.warehouseTypeCode, '仓库类型'),
+      },
+      { label: '默认仓库', value: row.defaultFlag ? '是' : '否' },
+      { label: '联系人', value: row.contactName || '-' },
+      { label: '联系电话', value: row.contactPhone || '-' },
+      { label: '状态', value: statusLabel(row.statusCode) },
+      { label: '地址', value: row.address || '-', span: 2 },
+    )
+  if ('supplierName' in row)
+    base.push(
+      { label: '联系人', value: row.contactName || '-' },
+      { label: '联系电话', value: row.contactPhone || '-' },
+      { label: '开户银行', value: row.bankName || '-' },
+      { label: '银行账号', value: row.bankAccountNo || '-' },
+      { label: '状态', value: statusLabel(row.statusCode) },
+      { label: '地址', value: row.address || '-', span: 2 },
+    )
   base.push(
     { label: '备注', value: row.remark || '-', span: 2 },
-    { label: '创建人', value: row.createdBy || '-' },
+    { label: '创建人', value: auditActorLabel(row.createdBy) },
     { label: '创建时间', value: formatTime(row.createdTime) },
-    { label: '更新人', value: row.updatedBy || '-' },
+    { label: '更新人', value: auditActorLabel(row.updatedBy) },
     { label: '更新时间', value: formatTime(row.updatedTime) },
   )
   return base
@@ -1004,12 +1300,16 @@ function filterCategoryRows(rows: ErpProductCategoryView[], keyword: string) {
 }
 
 function categoryMatches(row: ErpProductCategoryView, keyword: string) {
-  return normalizeKeyword(row.categoryName).includes(keyword)
-    || normalizeKeyword(row.categoryCode).includes(keyword)
+  return (
+    normalizeKeyword(row.categoryName).includes(keyword) ||
+    normalizeKeyword(row.categoryCode).includes(keyword)
+  )
 }
 
 function normalizeKeyword(value: string | null | undefined) {
-  return String(value || '').trim().toLocaleLowerCase('zh-CN')
+  return String(value || '')
+    .trim()
+    .toLocaleLowerCase('zh-CN')
 }
 
 function buildCategoryTree(rows: ErpProductCategoryView[]): CategoryTreeRow[] {
@@ -1047,10 +1347,11 @@ function assignCategoryDepth(rows: CategoryTreeRow[], depth: number) {
 }
 
 function sortCategoryTree(rows: CategoryTreeRow[]): CategoryTreeRow[] {
-  rows.sort((left, right) =>
-    Number(left.ordinal ?? 0) - Number(right.ordinal ?? 0)
-    || String(left.categoryCode).localeCompare(String(right.categoryCode), 'zh-CN')
-    || Number(left.id) - Number(right.id),
+  rows.sort(
+    (left, right) =>
+      Number(left.ordinal ?? 0) - Number(right.ordinal ?? 0) ||
+      String(left.categoryCode).localeCompare(String(right.categoryCode), 'zh-CN') ||
+      Number(left.id) - Number(right.id),
   )
   for (const row of rows) {
     if (row.children?.length) sortCategoryTree(row.children)
@@ -1081,7 +1382,8 @@ function categoryPath(row: ErpProductCategoryView) {
 
 function directCategoryChildCount(row: ErpProductCategoryView) {
   const id = rowId(row)
-  return categoryRows.value.filter((item) => item.parentId != null && String(item.parentId) === id).length
+  return categoryRows.value.filter((item) => item.parentId != null && String(item.parentId) === id)
+    .length
 }
 
 function categoryDescendantCount(row: ErpProductCategoryView) {
@@ -1142,12 +1444,7 @@ function rowId(row: { id: string | number }) {
   return String(row.id)
 }
 
-function formatTime(value: string | null | undefined) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
+const formatTime = displayDateTime
 
 function errorMessage(reason: unknown, fallback: string) {
   if (reason && typeof reason === 'object' && 'message' in reason) {

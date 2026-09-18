@@ -4,87 +4,69 @@ import { apiClient } from '@/api'
 import type { NavigationNode } from '@/types/management'
 import { validateNavigation } from '@/utils/route-registry'
 import { devInfo, devWarn } from '@/utils/dev-log'
+import { isCustomPage, registerCustomRoutes } from '@/utils/dynamic-pages'
 
-/** 数据库驱动导航；routeKey只映射前端已注册路由，不创建任意组件。 */
+function hasCustomPages(nodes: NavigationNode[]): boolean {
+  return nodes.some((node) => isCustomPage(node) || hasCustomPages(node.children ?? []))
+}
+
+/** 数据库驱动导航；静态路由只走 routeKey 白名单，自定义页面只注册已编译的 src/views 组件。 */
 export const useNavigationStore = defineStore('navigation', () => {
-  /** IAM迁移尚未刷新或浏览器保留旧菜单缓存时，保证已发布的菜单文案即时生效。 */
-  const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
-    'supply.order.menu': '订单管理',
-    'supply.order.sales-orders': '销售订单',
-    'supply.erp.master-data.menu': '商品中心',
-    'supply.erp.master-data.products': '商品管理',
-    'supply.erp.master-data.attributes.categories': '商品分类',
-    'supply.erp.master-data.attributes.brands': '商品品牌',
-    'supply.erp.master-data.attributes.tags': '商品标签',
-    'supply.erp.inventory.menu': '库存管理',
-    'supply.crm.customers.menu': '客户管理',
-    'supply.crm.customers.profiles': '客户管理',
-    'supply.crm.customers.shipping-addresses': '客户地址',
-    'supply.crm.customers.levels-tags': '客户类型',
-    'supply.crm.customers.areas': '归属地区',
-    'supply.integration.menu': '外部同步',
-    'supply.integration.sync-control.menu': '同步控制',
-    'supply.integration.overview': '订货宝同步中心',
-    'supply.integration.feishu-import': '飞书导入中心',
-    'supply.erp.master-data.attributes.specifications': '商品规格',
-    'supply.settings.numbering-dictionaries': '数据字典',
-    'supply.order.shipments': '发货单',
-    'supply.order.sales-payments': '销售回款',
-    'supply.order.fund-documents': '客户资金流水',
-    'supply.order.sales-refunds': '销售退款',
-    'supply.hr.menu': '人事与绩效',
-    'supply.hr.employees': '员工主档',
-    'supply.hr.positions': '岗位职位',
-    'supply.bi.menu': '数据看板',
-    'supply.bi.index': '供应链经营总览',
-    'supply.bi.hr': 'HR 人事看板',
-    'supply.bi.sales-visits': '销售拜访看板',
-    'supply.bi.sales': '销售看板',
-    'supply.bi.city-operating': '城市经营看板',
-    'supply.bi.activity': '活动看板',
-    'supply.bi.product-inventory': '商品/库存看板',
-    'supply.bi.sales-collection': '销售与回款看板',
-    'supply.bi.product-sales': '商品销售统计',
-    'supply.bi.gross-profit': '销售毛利分析',
-    'supply.bi.payment-risk': '回款风险看板',
-    'supply.bi.city-cost': '城市成本看板',
-    'supply.bi.inventory-risk': '库存风险看板',
-  }
   const navigationByApplication = ref<Record<string, NavigationNode[]>>({})
   const loadedApplications = ref<string[]>([])
+
+  /**
+   * 自定义页面路由要等菜单数据返回后才存在，动态 import 避免 store ↔ router 循环依赖。
+   * 注册失败只告警，不影响菜单数据本身可用。
+   */
+  async function registerCustomPageRoutes(applicationCode: string, nodes: NavigationNode[]): Promise<void> {
+    if (!hasCustomPages(nodes)) return
+    try {
+      const { getScdpRouter } = await import('@/router')
+      const router = getScdpRouter()
+      if (!router) {
+        devWarn('路由器尚未创建，跳过自定义页面路由注册', { applicationCode })
+        return
+      }
+      registerCustomRoutes(router, nodes)
+    } catch (error) {
+      devWarn('自定义页面路由注册失败，已跳过', {
+        applicationCode,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
 
   async function fetchNavigation(
     applicationCode: string,
     options: { deferSessionRecovery?: boolean } = {},
   ): Promise<NavigationNode[]> {
-    devInfo('开始加载应用菜单', { applicationCode })
+    if (applicationCode !== 'SUPPLY_CHAIN') throw new Error('不支持的业务系统')
+    devInfo('开始加载供应链菜单', { applicationCode })
     try {
-      const response = (await apiClient.get(`/portal/navigation/${encodeURIComponent(applicationCode)}`, {
+      const response = (await apiClient.get('/scdp/navigation', {
         deferSessionRecovery: options.deferSessionRecovery,
       })) as NavigationNode[]
-      const nodes = applyDisplayNameOverrides(validateNavigation(response))
+      const nodes = validateNavigation(response)
+      await registerCustomPageRoutes(applicationCode, nodes)
       navigationByApplication.value[applicationCode] = nodes
       if (!loadedApplications.value.includes(applicationCode)) loadedApplications.value.push(applicationCode)
       devInfo('应用菜单加载成功', { applicationCode, rootCount: nodes.length })
       return nodes
     } catch (error) {
-      devWarn('应用菜单加载失败', {
+      const message = error instanceof Error ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error
+          ? String(error.message) : '未知错误'
+      devWarn(`应用菜单加载失败: ${message}`, {
         applicationCode,
         code: typeof error === 'object' && error !== null && 'code' in error
           ? (error as { code?: string }).code : undefined,
         status: typeof error === 'object' && error !== null && 'response' in error
           ? (error as { response?: { status?: number } }).response?.status : undefined,
-        message: error instanceof Error ? error.message : undefined,
+        message,
       })
       throw error
     }
-  }
-  function applyDisplayNameOverrides(nodes: NavigationNode[]): NavigationNode[] {
-    return nodes.map((node) => ({
-      ...node,
-      displayName: DISPLAY_NAME_OVERRIDES[node.routeKey] || node.displayName,
-      children: applyDisplayNameOverrides(node.children),
-    }))
   }
   function getNavigation(applicationCode: string): NavigationNode[] {
     return navigationByApplication.value[applicationCode] || []
@@ -95,6 +77,10 @@ export const useNavigationStore = defineStore('navigation', () => {
     return visit(getNavigation(applicationCode))
   }
   function isLoaded(applicationCode: string) { return loadedApplications.value.includes(applicationCode) }
+  function invalidate(applicationCode: string) {
+    delete navigationByApplication.value[applicationCode]
+    loadedApplications.value = loadedApplications.value.filter(code => code !== applicationCode)
+  }
   function reset() { navigationByApplication.value = {}; loadedApplications.value = [] }
-  return { navigationByApplication, loadedApplications, fetchNavigation, getNavigation, hasPath, isLoaded, reset }
+  return { navigationByApplication, loadedApplications, fetchNavigation, getNavigation, hasPath, isLoaded, invalidate, reset }
 })

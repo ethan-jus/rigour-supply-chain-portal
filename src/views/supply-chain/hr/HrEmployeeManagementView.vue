@@ -1,511 +1,607 @@
 <template>
-  <div class="hr-employee-page supply-page supply-page--business-main">
-    <div class="page-heading">
+  <div class="supply-page employee-page">
+    <header class="heading">
       <div>
-        <span class="supply-page__eyebrow">HR · 员工主数据</span>
-        <h1>员工主档</h1>
-        <p>统一查看员工身份、岗位职位、区域城市、leader 和来源信息。</p>
+        <SupplyPageTitle>员工档案</SupplyPageTitle>
+        <p>按部门维护员工档案，选择部门包含其下级部门。</p>
       </div>
-      <div class="heading-actions">
-        <el-button :icon="Refresh" :loading="loading" @click="loadEmployees">刷新</el-button>
-      </div>
-    </div>
-
-    <section class="metric-grid" aria-label="员工主档概览">
-      <div class="metric-item">
-        <span>当前查询</span>
-        <strong>{{ pageData.total }}</strong>
-      </div>
-      <div class="metric-item">
-        <span>当前页在职</span>
-        <strong>{{ activeCount }}</strong>
-      </div>
-      <div class="metric-item">
-        <span>当前页飞书来源</span>
-        <strong>{{ feishuCount }}</strong>
-      </div>
-      <div class="metric-item">
-        <span>区域/城市</span>
-        <strong>{{ coverageCount }}</strong>
-      </div>
-    </section>
-
-    <el-card class="filter-card" shadow="never">
-      <el-form :model="filters" inline @submit.prevent="submitSearch">
-        <el-form-item label="关键字">
-          <el-input
-            v-model="filters.keyword"
-            clearable
-            placeholder="姓名/员工编码/手机号"
-            :prefix-icon="Search"
-            style="width: 220px"
-          />
-        </el-form-item>
-        <el-form-item label="员工状态">
-          <el-select v-model="filters.employmentStatus" clearable placeholder="全部状态" style="width: 140px">
-            <el-option label="在职" value="ACTIVE" />
-            <el-option label="离职" value="LEFT" />
-            <el-option label="停用" value="INACTIVE" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="岗位">
-          <el-select v-model="filters.jobCategory" clearable filterable placeholder="全部岗位" style="width: 140px">
-            <el-option
-              v-for="item in jobCategoryOptions"
-              :key="item.positionCode"
-              :label="item.positionName"
-              :value="item.positionName"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="职位">
-          <el-select v-model="filters.positionName" clearable filterable placeholder="全部职位" style="width: 160px">
-            <el-option
-              v-for="item in positionTitleOptions"
-              :key="item.positionCode"
-              :label="item.positionName"
-              :value="item.positionName"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="区域">
-          <el-select v-model="filters.regionName" clearable filterable placeholder="全部区域" style="width: 150px">
-            <el-option
-              v-for="item in regionOptions"
-              :key="item.code"
-              :label="item.name"
-              :value="item.name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="城市">
-          <el-select v-model="filters.cityName" clearable filterable placeholder="全部城市" style="width: 130px">
-            <el-option
-              v-for="item in cityOptions"
-              :key="item.code"
-              :label="areaOptionLabel(item)"
-              :value="item.name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="来源">
-          <el-select v-model="filters.sourceSystem" clearable placeholder="全部来源" style="width: 140px">
-            <el-option label="飞书" value="FEISHU" />
-            <el-option label="订货宝" value="DINGHUOBAO" />
-            <el-option label="人工维护" value="MANUAL" />
-          </el-select>
-        </el-form-item>
-        <el-form-item class="filter-actions">
-          <el-button type="primary" :icon="Search" :loading="loading" native-type="submit">查询</el-button>
-          <el-button :icon="Refresh" @click="resetFilters">重置</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <div class="result-heading">
       <div>
-        <div class="result-title-line">
-          <h2>员工列表</h2>
-          <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+        <el-button @click="refresh" :loading="loading">刷新</el-button
+        ><el-button v-if="can('hr:employee:create')" type="primary" @click="openEditor()"
+          >新增员工</el-button
+        >
+      </div>
+    </header>
+    <el-alert v-if="directoryError" :title="directoryError" type="error" :closable="false" />
+    <div class="directory-layout">
+      <DepartmentSidebar
+        :departments="departmentChoices"
+        :model-value="departmentId"
+        @update:model-value="selectDepartment"
+      />
+      <section class="employee-results">
+        <el-form class="employee-filters" label-position="top" @submit.prevent="search"
+          ><el-form-item label="关键词"
+            ><el-input v-model="keyword" clearable placeholder="员工编号 / 姓名 / 手机号"
+          /></el-form-item>
+          <el-form-item label="部门">
+            <el-tree-select
+              v-model="departmentId"
+              :data="departmentTree"
+              node-key="id"
+              :props="{ label: 'label', children: 'children' }"
+              check-strictly
+              filterable
+              clearable
+              placeholder="全部部门（含下级）"
+              @change="selectDepartment(departmentId ?? null)"
+            />
+          </el-form-item>
+          <el-form-item label="岗位">
+            <el-select v-model="positionCode" filterable clearable placeholder="全部岗位">
+              <el-option
+                v-for="p in positions"
+                :key="p.positionCode"
+                :label="p.positionName"
+                :value="p.positionCode"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="职级"
+            ><el-input v-model="jobGrade" clearable placeholder="例如 S1"
+          /></el-form-item>
+          <el-form-item label="在职状态"
+            ><el-select v-model="status" clearable placeholder="全部状态"
+              ><el-option label="在职" value="ACTIVE" /><el-option
+                label="离职"
+                value="LEFT" /><el-option label="停用" value="INACTIVE" /><el-option
+                label="待确认"
+                value="PENDING" /></el-select
+          ></el-form-item>
+          <div class="filter-actions">
+            <el-button type="primary" native-type="submit">查询</el-button
+            ><el-button @click="reset">重置</el-button>
+          </div></el-form
+        >
+        <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
+        <div class="employee-table-viewport">
+          <el-table
+            v-loading="loading"
+            :data="data.items"
+            row-key="id"
+            border
+            height="100%"
+            @row-click="openDetail"
+          >
+            <el-table-column
+              prop="employeeCode"
+              label="员工编号"
+              width="180"
+              fixed="left"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="employeeName"
+              label="姓名"
+              width="110"
+              fixed="left"
+              show-overflow-tooltip
+            />
+            <el-table-column prop="employmentStatus" label="在职状态" width="104" align="center">
+              <template #default="{ row }">
+                <el-tag
+                  :type="statusTagType(row.employmentStatus)"
+                  class="employment-status"
+                  :class="`employment-status--${row.employmentStatus.toLowerCase()}`"
+                  >{{ statusLabel(row.employmentStatus) }}</el-tag
+                >
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="departmentName"
+              label="部门"
+              min-width="170"
+              show-overflow-tooltip
+              ><template #default="{ row }">{{
+                row.departmentName || '未分配部门'
+              }}</template></el-table-column
+            >
+            <el-table-column prop="mobile" label="手机号" width="140" />
+            <el-table-column prop="positionName" label="岗位" min-width="130" />
+            <el-table-column prop="jobGrade" label="职级" width="100" />
+            <el-table-column prop="departmentLeaderName" label="部门负责人" width="130" />
+            <el-table-column label="创建人" min-width="140" show-overflow-tooltip
+              ><template #default="{ row }">{{
+                auditActor(row.createdByName, row.createdBy)
+              }}</template></el-table-column
+            >
+            <el-table-column label="创建时间" width="185"
+              ><template #default="{ row }">{{
+                auditTime(row.createdTime)
+              }}</template></el-table-column
+            >
+            <el-table-column label="修改人" min-width="140" show-overflow-tooltip
+              ><template #default="{ row }">{{
+                auditActor(row.updatedByName, row.updatedBy)
+              }}</template></el-table-column
+            >
+            <el-table-column label="修改时间" width="185"
+              ><template #default="{ row }">{{
+                auditTime(row.updatedTime)
+              }}</template></el-table-column
+            >
+            <!-- @vue-generic {HrEmployeeRecord} -->
+            <el-table-column label="操作" width="135" fixed="right"
+              ><template #default="{ row }"
+                ><el-button link type="primary" @click.stop="openDetail(row)">详情</el-button
+                ><el-button
+                  v-if="can('hr:employee:update')"
+                  link
+                  type="primary"
+                  @click.stop="openEditor(row)"
+                  >编辑</el-button
+                ></template
+              ></el-table-column
+            >
+          </el-table>
         </div>
-      </div>
-    </div>
-
-    <el-card class="list-card" shadow="never">
-      <el-table
-        class="business-table supply-scroll-table"
-        v-loading="loading"
-        :data="pageData.items"
-        row-key="id"
-        border
-        max-height="620"
-        @row-click="openDetail"
-      >
-        <el-table-column type="index" label="序号" width="76" fixed="left" :index="tableRowIndex" />
-        <el-table-column prop="employeeCode" label="员工编码" width="170" fixed="left" show-overflow-tooltip />
-        <el-table-column prop="employeeName" label="姓名" min-width="140" fixed="left" show-overflow-tooltip>
-          <template #default="scope">
-            <span class="record-name">{{ scope.row.employeeName || '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="mobile" label="手机号" min-width="140" show-overflow-tooltip>
-          <template #default="scope">{{ scope.row.mobile || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="employmentStatus" label="状态" width="110">
-          <template #default="scope">
-            <el-tag :type="statusTag(scope.row.employmentStatus)" effect="light">
-              {{ statusLabel(scope.row.employmentStatus) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="jobCategory" label="岗位" min-width="120" show-overflow-tooltip>
-          <template #default="scope">{{ scope.row.jobCategory || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="positionName" label="职位" min-width="140" show-overflow-tooltip>
-          <template #default="scope">{{ scope.row.positionName || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="regionName" label="区域" min-width="130" show-overflow-tooltip>
-          <template #default="scope">{{ scope.row.regionName || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="cityName" label="城市" min-width="110" show-overflow-tooltip>
-          <template #default="scope">{{ scope.row.cityName || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="leaderName" label="直属 leader" min-width="140" show-overflow-tooltip>
-          <template #default="scope">{{ scope.row.leaderName || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="sourceSystem" label="来源" width="110">
-          <template #default="scope">
-            <el-tag :type="sourceTag(scope.row.sourceSystem)" effect="plain">
-              {{ sourceLabel(scope.row.sourceSystem) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="来源创建时间" width="170">
-          <template #default="scope">{{ formatTime(scope.row.sourceCreatedAt) }}</template>
-        </el-table-column>
-        <el-table-column label="更新时间" width="170">
-          <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
-        </el-table-column>
-        <!-- @vue-generic {HrEmployeeRecord} -->
-        <el-table-column label="操作" width="96" fixed="right" align="center">
-          <template #default="scope">
-            <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-          </template>
-        </el-table-column>
-        <template #empty>
-          <el-empty description="暂无员工主档" />
-        </template>
-      </el-table>
-      <div class="pagination-row">
         <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          layout="total, sizes, prev, pager, next"
+          v-model:current-page="page"
+          v-model:page-size="size"
+          :total="data.total"
           :page-sizes="[20, 50, 100]"
-          :total="pageData.total"
-          @current-change="loadEmployees"
-          @size-change="handleSizeChange"
+          layout="total,sizes,prev,pager,next"
+          @current-change="load"
+          @size-change="search"
         />
-      </div>
-    </el-card>
-
-    <el-drawer v-model="detailVisible" class="employee-detail-drawer" size="min(760px, 92vw)" :with-header="false">
-      <div v-if="detail" class="detail-shell">
-        <header class="detail-hero">
-          <div>
-            <span>员工详情</span>
-            <h2>{{ detail.employeeName }}</h2>
-            <p>{{ detail.employeeCode }} · {{ statusLabel(detail.employmentStatus) }}</p>
-          </div>
-          <el-button :icon="Close" circle plain aria-label="关闭员工详情" @click="detailVisible = false" />
-        </header>
-        <div class="detail-content">
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="员工编码">{{ detail.employeeCode }}</el-descriptions-item>
-            <el-descriptions-item label="姓名">{{ detail.employeeName }}</el-descriptions-item>
-            <el-descriptions-item label="手机号">{{ detail.mobile || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="邮箱">{{ detail.email || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="岗位">{{ detail.jobCategory || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="职位">{{ detail.positionName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="部门">{{ detail.departmentName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="直属 leader">{{ detail.leaderName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="区域">{{ detail.regionName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="城市">{{ detail.cityName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="来源">{{ sourceLabel(detail.sourceSystem) }}</el-descriptions-item>
-            <el-descriptions-item label="来源单号">{{ detail.sourceDocumentNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="来源创建时间">{{ formatTime(detail.sourceCreatedAt) }}</el-descriptions-item>
-            <el-descriptions-item label="来源更新时间">{{ formatTime(detail.sourceUpdatedAt) }}</el-descriptions-item>
-            <el-descriptions-item label="入职时间">{{ formatTime(detail.entryDate) }}</el-descriptions-item>
-            <el-descriptions-item label="离职时间">{{ formatTime(detail.leaveDate) }}</el-descriptions-item>
-            <el-descriptions-item label="备注" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ formatTime(detail.updatedTime) }}</el-descriptions-item>
-            <el-descriptions-item label="版本">{{ detail.revision ?? '-' }}</el-descriptions-item>
-          </el-descriptions>
-        </div>
-      </div>
-      <el-skeleton v-else :rows="8" animated />
-    </el-drawer>
+      </section>
+    </div>
+    <HrEmployeeEditor
+      v-model="editorVisible"
+      :record="editing"
+      :department-id="departmentId"
+      @saved="load"
+    />
+    <el-dialog
+      v-model="detailVisible"
+      title="员工详情"
+      class="employee-detail"
+      width="min(1000px,calc(100vw - 32px))"
+      align-center
+    >
+      <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
+      <el-skeleton v-else-if="!detail" :rows="8" animated />
+      <template v-else>
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="员工编号">{{ detail.employeeCode }}</el-descriptions-item
+          ><el-descriptions-item label="姓名">{{ detail.employeeName }}</el-descriptions-item>
+          <el-descriptions-item label="部门">{{
+            detail.departmentName || '—'
+          }}</el-descriptions-item
+          ><el-descriptions-item label="岗位">{{
+            detail.positionName || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="职级">{{ detail.jobGrade || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="手机号">{{ detail.mobile || '—' }}</el-descriptions-item
+          ><el-descriptions-item label="部门负责人">{{
+            detail.departmentLeaderName || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="身份证号">{{
+            detail.profile?.idNumber || '—'
+          }}</el-descriptions-item
+          ><el-descriptions-item label="出生日期">{{
+            identity.birthDate || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="年龄">{{ identity.age || '—' }}</el-descriptions-item
+          ><el-descriptions-item label="性别">{{ identity.gender || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="入职日期">{{
+            dateOnly(detail.entryDate) || '—'
+          }}</el-descriptions-item
+          ><el-descriptions-item label="在职状态">{{
+            statusLabel(detail.employmentStatus)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="离职日期">{{
+            dateOnly(detail.leaveDate) || '—'
+          }}</el-descriptions-item
+          ><el-descriptions-item label="工龄">{{
+            serviceLength(
+              detail.entryDate,
+              detail.employmentStatus === 'LEFT' ? detail.leaveDate : null,
+            )
+          }}</el-descriptions-item>
+          <el-descriptions-item label="合同截止日期">{{
+            detail.profile?.contractEndDate || '—'
+          }}</el-descriptions-item
+          ><el-descriptions-item label="学历">{{
+            detail.profile?.education || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="毕业院校">{{
+            detail.profile?.graduationSchool || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="专业">{{
+            detail.profile?.major || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="转正薪资">{{
+            detail.profile?.regularSalary || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="试用期薪资">{{
+            detail.profile?.probationSalary || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="试用期" :span="2">{{
+            detail.profile?.probationPeriod || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="户籍地址">{{
+            detail.profile?.registeredAddress || '—'
+          }}</el-descriptions-item
+          ><el-descriptions-item label="户口性质">{{
+            detail.profile?.householdType || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="现居住地" :span="2">{{
+            detail.profile?.residentialAddress || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="银行卡号">{{
+            detail.profile?.bankAccount || '—'
+          }}</el-descriptions-item
+          ><el-descriptions-item label="开户行">{{
+            detail.profile?.bankName || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="参保状态">{{
+            detail.profile?.socialInsurance || '—'
+          }}</el-descriptions-item
+          ><el-descriptions-item label="邮箱">{{ detail.email || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="紧急联系人">{{
+            detail.profile?.emergencyContact || '—'
+          }}</el-descriptions-item
+          ><el-descriptions-item label="紧急联系方式">{{
+            detail.profile?.emergencyPhone || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="备注" :span="2">{{
+            detail.remark || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="创建人">{{
+            auditActor(detail.createdByName, detail.createdBy)
+          }}</el-descriptions-item
+          ><el-descriptions-item label="创建时间">{{
+            auditTime(detail.createdTime)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="修改人">{{
+            auditActor(detail.updatedByName, detail.updatedBy)
+          }}</el-descriptions-item
+          ><el-descriptions-item label="修改时间">{{
+            auditTime(detail.updatedTime)
+          }}</el-descriptions-item>
+        </el-descriptions>
+        <h3>任职历史</h3>
+        <el-table :data="assignments"
+          ><el-table-column prop="departmentName" label="部门" /><el-table-column
+            prop="positionName"
+            label="岗位"
+          /><el-table-column label="开始时间"
+            ><template #default="{ row }">{{
+              auditTime(row.effectiveFrom)
+            }}</template></el-table-column
+          ><el-table-column label="结束时间"
+            ><template #default="{ row }">{{
+              row.effectiveTo ? auditTime(row.effectiveTo) : '当前任职'
+            }}</template></el-table-column
+          ></el-table
+        >
+      </template>
+    </el-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Close, Refresh, Search } from '@element-plus/icons-vue'
+import { computed, onMounted, ref } from 'vue'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
+import HrEmployeeEditor from './HrEmployeeEditor.vue'
 import {
   getHrEmployee,
-  getHrEmployees,
   getHrPositions,
-  type HrEmployeeRecord,
-  type HrPage,
   type HrPositionRecord,
+  getHrEmployees,
+  hrOrganizationApi,
+  type HrEmployeeRecord,
+  type HrDepartmentOption,
+  type HrPage,
+  type HrAssignment,
 } from '@/api/core/hr'
-import { getCrmCustomerAreas, type CrmDictionaryView } from '@/api/core/crm'
-
-const loading = ref(false)
-const detailVisible = ref(false)
-const detail = ref<HrEmployeeRecord | null>(null)
-const currentPage = ref(1)
-const pageSize = ref(20)
-const pageData = ref<HrPage<HrEmployeeRecord>>({ total: 0, begin: 0, step: 20, items: [] })
-const positionOptions = ref<HrPositionRecord[]>([])
-const crmAreaOptions = ref<CrmDictionaryView[]>([])
-
-const filters = reactive({
-  keyword: '',
-  employmentStatus: '',
-  jobCategory: '',
-  positionName: '',
-  regionName: '',
-  cityName: '',
-  sourceSystem: '',
-})
-
-const activeCount = computed(() => pageData.value.items.filter((item) => item.employmentStatus === 'ACTIVE').length)
-const feishuCount = computed(() => pageData.value.items.filter((item) => item.sourceSystem === 'FEISHU').length)
-const jobCategoryOptions = computed(() => positionOptions.value.filter((item) => (
-  item.positionType === 'JOB_CATEGORY' && item.statusCode === 'ACTIVE'
-)))
-const positionTitleOptions = computed(() => positionOptions.value.filter((item) => (
-  item.positionType === 'JOB_TITLE' && item.statusCode === 'ACTIVE'
-)))
-const regionOptions = computed(() => crmAreaOptions.value.filter((item) => (
-  item.status === 'ACTIVE' && !item.parentCode
-)))
-const cityOptions = computed(() => crmAreaOptions.value.filter((item) => item.status === 'ACTIVE'))
-const coverageCount = computed(() => {
-  const values = new Set<string>()
-  for (const item of pageData.value.items) {
-    if (item.regionName || item.cityName) values.add(`${item.regionName || '-'}:${item.cityName || '-'}`)
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
+import {
+  auditActor,
+  auditTime,
+  dateOnly,
+  identityDetails,
+  serviceLength,
+} from '@/utils/hr-employee-profile'
+const { can } = useSupplyPermissions()
+const departmentId = ref<number | null>(null),
+  departments = ref<HrDepartmentOption[]>([]),
+  directoryError = ref('')
+const departmentChoices = computed(() =>
+  departments.value.map((d) => ({ id: d.id, parentId: d.parentId, label: d.departmentName })),
+)
+type DepartmentNode = { id: number; label: string; children: DepartmentNode[] }
+const departmentTree = computed(() => {
+  const map = new Map(
+    departmentChoices.value.map((d) => [d.id, { ...d, children: [] as DepartmentNode[] }]),
+  )
+  const roots: DepartmentNode[] = []
+  for (const d of departmentChoices.value) {
+    const node = map.get(d.id)!
+    const parent = d.parentId == null ? null : map.get(d.parentId)
+    if (parent) parent.children.push(node)
+    else roots.push(node)
   }
-  return values.size
+  return roots
 })
-
-onMounted(() => {
-  void Promise.all([loadEmployees(), loadMasterOptions()])
-})
-
-async function loadEmployees() {
+const positions = ref<HrPositionRecord[]>([])
+const positionCode = ref(''),
+  jobGrade = ref('')
+const keyword = ref(''),
+  status = ref(''),
+  page = ref(1),
+  size = ref(20),
+  loading = ref(false),
+  loadError = ref('')
+const data = ref<HrPage<HrEmployeeRecord>>({ items: [], total: 0, begin: 0, step: 20 })
+const editorVisible = ref(false),
+  editing = ref<HrEmployeeRecord | null>(null),
+  detailVisible = ref(false),
+  detail = ref<HrEmployeeRecord | null>(null),
+  detailError = ref(''),
+  assignments = ref<HrAssignment[]>([])
+const identity = computed(() => identityDetails(detail.value?.profile?.idNumber))
+let requestId = 0,
+  detailRequest = 0
+async function load() {
+  const request = ++requestId
   loading.value = true
+  loadError.value = ''
   try {
-    pageData.value = await getHrEmployees({
-      begin: (currentPage.value - 1) * pageSize.value,
-      step: pageSize.value,
-      keyword: empty(filters.keyword),
-      employmentStatus: empty(filters.employmentStatus),
-      jobCategory: empty(filters.jobCategory),
-      positionName: empty(filters.positionName),
-      regionName: empty(filters.regionName),
-      cityName: empty(filters.cityName),
-      sourceSystem: empty(filters.sourceSystem),
+    const result = await getHrEmployees({
+      begin: (page.value - 1) * size.value,
+      step: size.value,
+      keyword: keyword.value || undefined,
+      employmentStatus: status.value || undefined,
+      departmentId: departmentId.value ?? undefined,
+      positionCode: positionCode.value || undefined,
+      jobGrade: jobGrade.value.trim() || undefined,
     })
-  } catch (reason) {
-    ElMessage.error(errorMessage(reason, '员工主档加载失败'))
+    if (request === requestId) data.value = result
+  } catch (e) {
+    if (request === requestId) {
+      data.value = { items: [], total: 0, begin: 0, step: size.value }
+      loadError.value = e instanceof Error ? e.message : '员工加载失败'
+    }
   } finally {
-    loading.value = false
+    if (request === requestId) loading.value = false
   }
 }
-
-async function loadMasterOptions() {
+function search() {
+  page.value = 1
+  void load()
+}
+function selectDepartment(id: number | null) {
+  departmentId.value = id
+  search()
+}
+function reset() {
+  keyword.value = ''
+  status.value = ''
+  positionCode.value = ''
+  jobGrade.value = ''
+  departmentId.value = null
+  search()
+}
+function openEditor(row?: HrEmployeeRecord) {
+  editing.value = row ?? null
+  editorVisible.value = true
+}
+async function refresh() {
+  await Promise.all([load(), loadDepartments()])
+}
+async function loadDepartments() {
+  directoryError.value = ''
   try {
-    const [positions, areas] = await Promise.all([
-      getHrPositions({ begin: 0, step: 200, statusCode: 'ACTIVE' }),
-      getCrmCustomerAreas({ begin: 0, step: 200 }),
-    ])
-    positionOptions.value = positions.items
-    crmAreaOptions.value = areas.items
-  } catch (reason) {
-    ElMessage.warning(errorMessage(reason, '岗位职位或区域城市下拉加载失败'))
+    departments.value = await hrOrganizationApi.employeeDepartments()
+    const items: HrPositionRecord[] = []
+    let begin = 0
+    while (true) {
+      const page = await getHrPositions({ begin, step: 200 })
+      items.push(...page.items)
+      begin += page.items.length
+      if (!page.items.length || begin >= page.total) break
+    }
+    positions.value = items
+  } catch (e) {
+    directoryError.value = e instanceof Error ? e.message : '部门树加载失败'
   }
 }
-
-function submitSearch() {
-  currentPage.value = 1
-  void loadEmployees()
-}
-
-function resetFilters() {
-  filters.keyword = ''
-  filters.employmentStatus = ''
-  filters.jobCategory = ''
-  filters.positionName = ''
-  filters.regionName = ''
-  filters.cityName = ''
-  filters.sourceSystem = ''
-  currentPage.value = 1
-  void loadEmployees()
-}
-
-function handleSizeChange() {
-  currentPage.value = 1
-  void loadEmployees()
-}
-
-function tableRowIndex(index: number): number {
-  return (currentPage.value - 1) * pageSize.value + index + 1
-}
-
 async function openDetail(row: HrEmployeeRecord) {
+  const request = ++detailRequest
   detailVisible.value = true
   detail.value = null
+  detailError.value = ''
+  assignments.value = []
   try {
-    detail.value = await getHrEmployee(row.id)
-  } catch (reason) {
-    ElMessage.error(errorMessage(reason, '员工详情加载失败'))
+    const [value, history] = await Promise.all([
+      getHrEmployee(row.id),
+      hrOrganizationApi.assignments(String(row.id)),
+    ])
+    if (request === detailRequest) {
+      detail.value = value
+      assignments.value = history
+    }
+  } catch (e) {
+    if (request === detailRequest)
+      detailError.value = e instanceof Error ? e.message : '员工详情加载失败'
   }
 }
-
-function statusLabel(value: string | null | undefined) {
-  if (value === 'ACTIVE') return '在职'
-  if (value === 'LEFT') return '离职'
-  if (value === 'INACTIVE') return '停用'
-  if (value === 'PENDING') return '待确认'
-  return value || '-'
-}
-
-function statusTag(value: string | null | undefined) {
-  if (value === 'ACTIVE') return 'success'
-  if (value === 'INACTIVE') return 'info'
-  return 'warning'
-}
-
-function sourceLabel(value: string | null | undefined) {
-  if (value === 'FEISHU') return '飞书'
-  if (value === 'DINGHUOBAO') return '订货宝'
-  if (value === 'MANUAL') return '人工维护'
-  return value || '-'
-}
-
-function sourceTag(value: string | null | undefined) {
-  if (value === 'FEISHU') return 'success'
-  if (value === 'DINGHUOBAO') return 'warning'
-  return 'info'
-}
-
-function areaOptionLabel(item: CrmDictionaryView) {
-  if (!item.parentCode) return item.name
-  const parent = crmAreaOptions.value.find((row) => row.code === item.parentCode)
-  return parent ? `${parent.name} / ${item.name}` : item.name
-}
-
-function empty(value: string | null | undefined) {
-  const normalized = value?.trim()
-  return normalized || undefined
-}
-
-function formatTime(value: string | null | undefined) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
-
-function errorMessage(reason: unknown, fallback: string) {
-  if (reason && typeof reason === 'object' && 'message' in reason) {
-    return String((reason as { message?: unknown }).message || fallback)
+function statusTagType(value: string) {
+  switch (value) {
+    case 'ACTIVE':
+      return 'success'
+    case 'LEFT':
+      return 'info'
+    case 'INACTIVE':
+      return 'danger'
+    default:
+      return 'warning'
   }
-  return fallback
 }
+function statusLabel(value: string) {
+  return (
+    (
+      { ACTIVE: '在职', LEFT: '离职', INACTIVE: '停用', PENDING: '待确认' } as Record<
+        string,
+        string
+      >
+    )[value] || value
+  )
+}
+onMounted(refresh)
 </script>
+<style scoped>
+.employment-status {
+  min-width: 56px;
+  font-weight: 600;
+}
+.employment-status--active {
+  --el-tag-bg-color: #f0fdf4;
+  --el-tag-border-color: #bbf7d0;
+  --el-tag-text-color: #15803d;
+}
+.employment-status--left {
+  --el-tag-bg-color: #f1f5f9;
+  --el-tag-border-color: #cbd5e1;
+  --el-tag-text-color: #475569;
+}
+:global(.employee-detail.el-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+  margin: 24px auto;
+}
+:global(.employee-detail .el-dialog__body) {
+  min-height: 0;
+  overflow-y: auto;
+}
+:global(.employee-detail .el-dialog__header) {
+  flex-shrink: 0;
+}
 
-<style scoped lang="scss">
-.hr-employee-page {
+.supply-page.employee-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  font-size: 14px;
+}
+.employee-filters {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.3fr) repeat(4, minmax(130px, 1fr)) auto;
+  gap: 12px 16px;
+  align-items: end;
+  flex: none;
+}
+.employee-filters :deep(.el-form-item) {
+  margin: 0;
+}
+.employee-page :deep(.el-form-item__label) {
+  font-size: 14px;
+}
+.employee-filters :deep(.el-select),
+.employee-filters :deep(.el-tree-select) {
+  width: 100%;
+}
+.filter-actions {
+  display: flex;
+  padding-bottom: 1px;
+}
+.employee-table-viewport {
+  flex: 1;
+  min-height: 0;
+  margin-top: 18px;
+}
+.employee-table-viewport :deep(.el-table) {
+  font-size: 14px;
+}
+.employee-table-viewport :deep(.el-table__cell) {
+  padding: 12px 0;
+}
+.directory-layout :deep(.department-sidebar) {
+  overflow: auto;
   min-height: 0;
 }
-
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
+@media (max-width: 1600px) {
+  .employee-filters {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+  }
 }
 
-.metric-item {
-  min-height: 88px;
-  padding: 18px 20px;
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+  flex: none;
+}
+.heading p {
+  color: #64748b;
+  font-size: 13px;
+  margin-top: 8px;
+}
+.directory-layout {
+  display: flex;
+  gap: 18px;
+  margin-top: 18px;
+  min-width: 0;
+  flex: 1;
+  min-height: 0;
+}
+.employee-results {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  min-width: 0;
+  padding: 18px;
+  background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  background: #fff;
-
-  span {
-    display: block;
-    color: #64748b;
-    font-size: 13px;
+}
+.el-pagination {
+  margin-top: 16px;
+  flex: none;
+}
+.el-alert {
+  margin-bottom: 16px;
+}
+h3 {
+  font-size: 15px;
+  margin: 24px 0 12px;
+}
+@media (max-width: 900px) {
+  .supply-page.employee-page {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
   }
-
-  strong {
-    display: block;
-    margin-top: 10px;
-    color: #0f172a;
-    font-size: 28px;
-    line-height: 1;
+  .employee-table-viewport {
+    flex: none;
+    height: 65dvh;
   }
-}
-
-.list-card {
-  margin-top: 12px;
-}
-
-.pagination-row {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 14px;
-}
-
-.record-name {
-  color: #0f172a;
-  font-weight: 700;
-}
-
-:deep(.employee-detail-drawer .el-drawer__body) {
-  padding: 0;
-}
-
-.detail-shell {
-  min-height: 100%;
-  background: #f8fafc;
-}
-
-.detail-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 24px;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
-
-  span {
-    color: #0f766e;
-    font-size: 13px;
-    font-weight: 700;
+  .employee-filters {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
-
-  h2 {
-    margin: 6px 0;
-    color: #0f172a;
-    font-size: 24px;
+  .directory-layout {
+    flex-direction: column;
   }
-
-  p {
-    margin: 0;
-    color: #64748b;
-  }
-}
-
-.detail-content {
-  padding: 20px 24px 28px;
-}
-
-@media (max-width: 980px) {
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
-  .metric-grid {
-    grid-template-columns: 1fr;
+  .heading {
+    align-items: flex-start;
+    gap: 12px;
   }
 }
 </style>

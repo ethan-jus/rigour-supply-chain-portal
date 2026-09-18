@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { builtinMenuIcon } from '@/utils/menu-icons'
 import {
   Avatar, Box, Briefcase, Connection, DataAnalysis, Document,
   Goods, House, List, Location, OfficeBuilding, Setting, Shop,
@@ -12,6 +13,8 @@ import {
 
 const props = defineProps<{ iconKey: string | null }>()
 const iconComponent = computed(() => {
+  const builtin = builtinMenuIcon(props.iconKey)
+  if (builtin) return builtin
   const value = (props.iconKey || '').toLowerCase()
   if (value.includes('home') || value.includes('dashboard') || value.includes('odometer')) return House
   if (value.includes('erp') || value.includes('product') || value.includes('goods')) return Goods

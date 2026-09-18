@@ -57,5 +57,5 @@ Object.defineProperty(window, 'sessionStorage', {
 vi.stubEnv('VITE_API_BASE_URL', '/api/v1')
 vi.stubEnv('VITE_APP_ENV', 'test')
 vi.stubEnv('VITE_OIDC_ISSUER', 'https://iam.test.rigour.local')
-vi.stubEnv('VITE_OIDC_CLIENT_ID', 'portal-test')
-vi.stubEnv('VITE_OIDC_REDIRECT_URI', 'https://portal.test.rigour.local/oidc/callback')
+vi.stubEnv('VITE_OIDC_CLIENT_ID', 'scdp-test')
+vi.stubEnv('VITE_OIDC_REDIRECT_URI', 'https://scdp.test.rigour.local/oidc/callback')

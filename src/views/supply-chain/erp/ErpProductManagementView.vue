@@ -3,10 +3,11 @@
     <div class="page-heading">
       <div>
         <span class="supply-page__eyebrow">ERP · 商品中心</span>
-        <h1>商品管理</h1>
+        <SupplyPageTitle>商品管理</SupplyPageTitle>
         <p>维护商品档案、规格价格、图片和上架状态。</p>
       </div>
       <div class="heading-actions">
+        <DhbPageSyncButton scope="PRODUCT_SPU" label="商品" @completed="loadRows" />
         <el-button type="primary" @click="openCreate">新增商品</el-button>
       </div>
     </div>
@@ -89,7 +90,9 @@
       <div>
         <div class="result-title-line">
           <h2>商品列表</h2>
-          <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+          <span class="result-count"
+            ><strong>{{ pageData.total }}</strong> 条</span
+          >
         </div>
       </div>
     </div>
@@ -104,7 +107,13 @@
           row-key="id"
           @row-click="openDetail"
         >
-          <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <el-table-column
+            type="index"
+            label="序号"
+            width="80"
+            fixed="left"
+            :index="tableRowIndex"
+          />
           <el-table-column prop="productCode" label="商品编码" width="150" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.productCode || '-' }}</template>
           </el-table-column>
@@ -143,7 +152,12 @@
           <el-table-column prop="brandName" label="商品品牌" min-width="180" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.brandName || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="categoryName" label="商品分类" min-width="180" show-overflow-tooltip>
+          <el-table-column
+            prop="categoryName"
+            label="商品分类"
+            min-width="180"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ scope.row.categoryName || '-' }}</template>
           </el-table-column>
           <el-table-column label="规格数" width="110" align="center">
@@ -160,14 +174,18 @@
             <template #default="scope">{{ recommendProductText(scope.row) }}</template>
           </el-table-column>
           <el-table-column label="起订量" width="110" align="right" header-align="right">
-            <template #default="scope">{{ quantityWithUnit(scope.row.minOrderQuantity, unitLabel(scope.row.unitCode)) }}</template>
+            <template #default="scope">{{
+              quantityWithUnit(scope.row.minOrderQuantity, unitLabel(scope.row.unitCode))
+            }}</template>
           </el-table-column>
           <!-- @vue-generic {ErpManagedProductSummary} -->
           <el-table-column label="整倍订货量" width="120" align="right" header-align="right">
             <template #default="scope">{{ orderMultipleText(scope.row) }}</template>
           </el-table-column>
           <el-table-column label="限购量" width="110" align="right" header-align="right">
-            <template #default="scope">{{ quantityWithUnit(scope.row.limitQuantity, unitLabel(scope.row.unitCode)) }}</template>
+            <template #default="scope">{{
+              quantityWithUnit(scope.row.limitQuantity, unitLabel(scope.row.unitCode))
+            }}</template>
           </el-table-column>
           <!-- @vue-generic {ErpManagedProductSummary} -->
           <el-table-column label="商品标签" min-width="160" show-overflow-tooltip>
@@ -194,7 +212,7 @@
             </template>
           </el-table-column>
           <el-table-column label="创建人" width="120">
-            <template #default="scope">{{ scope.row.createdBy || '-' }}</template>
+            <template #default="scope">{{ auditActorLabel(scope.row.createdBy) }}</template>
           </el-table-column>
           <el-table-column label="更新时间" width="170">
             <template #default="scope">{{ formatTime(scope.row.updatedTime) }}</template>
@@ -258,21 +276,24 @@
               </div>
             </div>
           </div>
-          <el-button
-            circle
-            plain
-            aria-label="关闭商品详情"
-            @click="detailVisible = false"
-          >
+          <el-button circle plain aria-label="关闭商品详情" @click="detailVisible = false">
             ×
           </el-button>
         </header>
 
         <div class="detail-summary detail-summary--four">
-          <div><span>订货价</span><strong>{{ primaryOrderPrice }}</strong></div>
-          <div><span>市场价</span><strong>{{ primaryMarketPrice }}</strong></div>
-          <div><span>进货价</span><strong>{{ primaryPurchasePrice }}</strong></div>
-          <div><span>可售规格</span><strong>{{ detail.variants.length }} 种</strong></div>
+          <div>
+            <span>订货价</span><strong>{{ primaryOrderPrice }}</strong>
+          </div>
+          <div>
+            <span>市场价</span><strong>{{ primaryMarketPrice }}</strong>
+          </div>
+          <div>
+            <span>进货价</span><strong>{{ primaryPurchasePrice }}</strong>
+          </div>
+          <div>
+            <span>可售规格</span><strong>{{ detail.variants.length }} 种</strong>
+          </div>
         </div>
 
         <div class="detail-business-view">
@@ -322,14 +343,25 @@
                   <el-tag v-if="variant.defaultFlag" size="small" type="success">默认</el-tag>
                 </header>
                 <div class="variant-price-row">
-                  <span>订货价 <strong>{{ moneyWithUnit(variant.salePrice, detailUnit) }}</strong></span>
-                  <span>市场价 <strong>{{ moneyWithUnit(variant.marketPrice, detailUnit) }}</strong></span>
-                  <span>进货价 <strong>{{ moneyWithUnit(variant.purchasePrice, detailUnit) }}</strong></span>
+                  <span
+                    >订货价
+                    <strong>{{ moneyWithUnit(variant.salePrice, detailUnit) }}</strong></span
+                  >
+                  <span
+                    >市场价
+                    <strong>{{ moneyWithUnit(variant.marketPrice, detailUnit) }}</strong></span
+                  >
+                  <span
+                    >进货价
+                    <strong>{{ moneyWithUnit(variant.purchasePrice, detailUnit) }}</strong></span
+                  >
                 </div>
                 <div class="variant-meta-row">
                   <span>单位：{{ unitLabel(variant.unitCode || detail.unitCode) }}</span>
                   <span>起订：{{ quantityWithUnit(variant.minOrderQuantity, detailUnit) }}</span>
-                  <span>整倍：{{ quantityWithUnit(variant.orderMultipleQuantity, detailUnit) }}</span>
+                  <span
+                    >整倍：{{ quantityWithUnit(variant.orderMultipleQuantity, detailUnit) }}</span
+                  >
                   <span>限购：{{ quantityWithUnit(variant.limitQuantity, detailUnit) }}</span>
                 </div>
               </article>
@@ -385,11 +417,18 @@
                   :preview-src-list="detailPreviewUrls"
                   :initial-index="detailPreviewIndex(mainDetailImage.imageUrl)"
                 />
-                <div v-else class="product-image-gallery__primary product-image-gallery__primary--empty">
+                <div
+                  v-else
+                  class="product-image-gallery__primary product-image-gallery__primary--empty"
+                >
                   暂无图片
                 </div>
                 <div v-if="mainDetailImage" class="product-image-gallery__meta">
-                  <el-tag size="small" effect="dark" :type="imageTagType(mainDetailImage.imageTypeCode)">
+                  <el-tag
+                    size="small"
+                    effect="dark"
+                    :type="imageTagType(mainDetailImage.imageTypeCode)"
+                  >
                     {{ imageTypeLabel(mainDetailImage.imageTypeCode) }}
                   </el-tag>
                   <span>#{{ mainDetailImage.ordinal ?? 0 }}</span>
@@ -413,7 +452,11 @@
                     />
                     <span v-else class="product-image-tile__empty">暂无图片</span>
                   </div>
-                  <el-tag class="product-image-tile__type" size="small" :type="imageTagType(image.imageTypeCode)">
+                  <el-tag
+                    class="product-image-tile__type"
+                    size="small"
+                    :type="imageTagType(image.imageTypeCode)"
+                  >
                     {{ imageTypeLabel(image.imageTypeCode) }}
                   </el-tag>
                   <span class="product-image-tile__ordinal">#{{ image.ordinal ?? 0 }}</span>
@@ -447,7 +490,11 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="商品规格">
-              <el-input v-model="form.productSpecification" clearable placeholder="如 12桶/箱、500ml" />
+              <el-input
+                v-model="form.productSpecification"
+                clearable
+                placeholder="如 12桶/箱、500ml"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -487,7 +534,13 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="商品单位">
-              <el-select v-model="form.unitCode" clearable filterable placeholder="选择单位" style="width: 100%">
+              <el-select
+                v-model="form.unitCode"
+                clearable
+                filterable
+                placeholder="选择单位"
+                style="width: 100%"
+              >
                 <el-option
                   v-for="item in unitOptions"
                   :key="item.value"
@@ -511,7 +564,11 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="上架状态">
-              <el-select v-model="form.shelfStatusCode" placeholder="选择上架状态" style="width: 100%">
+              <el-select
+                v-model="form.shelfStatusCode"
+                placeholder="选择上架状态"
+                style="width: 100%"
+              >
                 <el-option
                   v-for="item in shelfStatusOptions"
                   :key="item.value"
@@ -523,7 +580,12 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="起订量">
-              <el-input-number v-model="form.minOrderQuantity" :min="0" :precision="2" style="width: 100%" />
+              <el-input-number
+                v-model="form.minOrderQuantity"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -544,7 +606,12 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="限购量">
-              <el-input-number v-model="form.limitQuantity" :min="0" :precision="2" style="width: 100%" />
+              <el-input-number
+                v-model="form.limitQuantity"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="16">
@@ -590,7 +657,13 @@
           </el-col>
           <el-col :span="24">
             <el-form-item label="备注">
-              <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="1000" show-word-limit />
+              <el-input
+                v-model="form.remark"
+                type="textarea"
+                :rows="3"
+                maxlength="1000"
+                show-word-limit
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -635,7 +708,11 @@
             <el-row :gutter="12">
               <el-col :span="8">
                 <el-form-item label="规格名称">
-                  <el-input v-model="variant.specificationSnapshot" clearable placeholder="如 原味/箱" />
+                  <el-input
+                    v-model="variant.specificationSnapshot"
+                    clearable
+                    placeholder="如 原味/箱"
+                  />
                 </el-form-item>
               </el-col>
               <el-col :span="4">
@@ -652,32 +729,62 @@
               </el-col>
               <el-col :span="4">
                 <el-form-item label="售价">
-                  <el-input-number v-model="variant.salePrice" :min="0" :precision="2" style="width: 100%" />
+                  <el-input-number
+                    v-model="variant.salePrice"
+                    :min="0"
+                    :precision="2"
+                    style="width: 100%"
+                  />
                 </el-form-item>
               </el-col>
               <el-col :span="4">
                 <el-form-item label="市场价">
-                  <el-input-number v-model="variant.marketPrice" :min="0" :precision="2" style="width: 100%" />
+                  <el-input-number
+                    v-model="variant.marketPrice"
+                    :min="0"
+                    :precision="2"
+                    style="width: 100%"
+                  />
                 </el-form-item>
               </el-col>
               <el-col :span="4">
                 <el-form-item label="采购价">
-                  <el-input-number v-model="variant.purchasePrice" :min="0" :precision="2" style="width: 100%" />
+                  <el-input-number
+                    v-model="variant.purchasePrice"
+                    :min="0"
+                    :precision="2"
+                    style="width: 100%"
+                  />
                 </el-form-item>
               </el-col>
               <el-col :span="4">
                 <el-form-item label="起订量">
-                  <el-input-number v-model="variant.minOrderQuantity" :min="0" :precision="2" style="width: 100%" />
+                  <el-input-number
+                    v-model="variant.minOrderQuantity"
+                    :min="0"
+                    :precision="2"
+                    style="width: 100%"
+                  />
                 </el-form-item>
               </el-col>
               <el-col :span="4">
                 <el-form-item label="整倍数量">
-                  <el-input-number v-model="variant.orderMultipleQuantity" :min="0" :precision="2" style="width: 100%" />
+                  <el-input-number
+                    v-model="variant.orderMultipleQuantity"
+                    :min="0"
+                    :precision="2"
+                    style="width: 100%"
+                  />
                 </el-form-item>
               </el-col>
               <el-col :span="4">
                 <el-form-item label="限购量">
-                  <el-input-number v-model="variant.limitQuantity" :min="0" :precision="2" style="width: 100%" />
+                  <el-input-number
+                    v-model="variant.limitQuantity"
+                    :min="0"
+                    :precision="2"
+                    style="width: 100%"
+                  />
                 </el-form-item>
               </el-col>
               <el-col :span="4">
@@ -700,13 +807,19 @@
       <template #footer>
         <el-button @click="editorVisible = false">取消</el-button>
         <el-button :loading="saving" @click="saveProduct(false)">保存草稿</el-button>
-        <el-button type="primary" :loading="saving" @click="saveProduct(true)">保存并提交</el-button>
+        <el-button type="primary" :loading="saving" @click="saveProduct(true)"
+          >保存并提交</el-button
+        >
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
+import { auditActorLabel } from '@/utils/audit-actor'
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -808,7 +921,9 @@ interface RelatedProductCard {
 type SourceRecord = Record<string, unknown>
 
 const shelfStatusOptions = computed(() => businessDictionaryOptions('ERP', 'PRODUCT_SHELF_STATUS'))
-const submitStatusOptions = computed(() => businessDictionaryOptions('ERP', 'PRODUCT_SUBMIT_STATUS'))
+const submitStatusOptions = computed(() =>
+  businessDictionaryOptions('ERP', 'PRODUCT_SUBMIT_STATUS'),
+)
 const saleTypeOptions = computed(() => businessDictionaryOptions('ERP', 'PRODUCT_SALE_TYPE'))
 const unitOptions = computed(() => businessDictionaryOptions('COMMON', 'PRODUCT_UNIT'))
 
@@ -839,11 +954,18 @@ const form = reactive<ProductForm>(emptyForm())
 const categoryOptions = ref<ErpProductCategoryView[]>([])
 const brandOptions = ref<ErpProductBrandView[]>([])
 const filterBrandOptions = computed(() => {
-  const options = brandOptions.value.map((item) => ({ value: String(item.id), label: item.brandName }))
+  const options = brandOptions.value.map((item) => ({
+    value: String(item.id),
+    label: item.brandName,
+  }))
   const routeBrandId = routeText(route.query.brandId)
   const routeBrandName = routeText(route.query.brandName)
-  if (routeBrandId && routeBrandName && filters.brandId === routeBrandId
-    && !options.some((item) => item.value === routeBrandId)) {
+  if (
+    routeBrandId &&
+    routeBrandName &&
+    filters.brandId === routeBrandId &&
+    !options.some((item) => item.value === routeBrandId)
+  ) {
     options.push({ value: routeBrandId, label: routeBrandName })
   }
   return options
@@ -856,17 +978,19 @@ const warehouseLoading = ref(false)
 
 const mainDetailImage = computed<ErpManagedProductImage | null>(() => {
   const images = detail.value?.images ?? []
-  return images.find((item) => item.imageTypeCode === 'MAIN')
-    ?? images.find((item) => item.imageUrl)
-    ?? images[0]
-    ?? null
+  return (
+    images.find((item) => item.imageTypeCode === 'MAIN') ??
+    images.find((item) => item.imageUrl) ??
+    images[0] ??
+    null
+  )
 })
 const mainDetailImageUrl = computed(() => mainDetailImage.value?.imageUrl ?? null)
-const detailPreviewUrls = computed(() => (
+const detailPreviewUrls = computed(() =>
   (detail.value?.images ?? [])
     .map((image) => image.imageUrl)
-    .filter((url): url is string => Boolean(url))
-))
+    .filter((url): url is string => Boolean(url)),
+)
 const sourceFields = computed<SourceRecord>(() => detail.value?.sourceFields ?? {})
 const defaultDetailVariant = computed<ErpManagedProductVariant | null>(() => {
   const variants = detail.value?.variants ?? []
@@ -877,62 +1001,132 @@ const detailUnit = computed(() => {
   if (rawUnit) return rawUnit
   return unitLabel(detail.value?.unitCode)
 })
-const primaryOrderPrice = computed(() => moneyWithUnit(
-  firstPresent(sourceValue('price1', 'orderPrice', 'whole'), defaultDetailVariant.value?.salePrice,
-    detail.value?.defaultSalePrice),
-  detailUnit.value,
-))
-const primaryMarketPrice = computed(() => moneyWithUnit(
-  firstPresent(sourceValue('price2', 'marketPrice', 'selling'), defaultDetailVariant.value?.marketPrice),
-  detailUnit.value,
-))
-const primaryPurchasePrice = computed(() => moneyWithUnit(
-  firstPresent(sourceValue('price3', 'purchasePrice', 'purchase'), defaultDetailVariant.value?.purchasePrice),
-  detailUnit.value,
-))
+const primaryOrderPrice = computed(() =>
+  moneyWithUnit(
+    firstPresent(
+      sourceValue('price1', 'orderPrice', 'whole'),
+      defaultDetailVariant.value?.salePrice,
+      detail.value?.defaultSalePrice,
+    ),
+    detailUnit.value,
+  ),
+)
+const primaryMarketPrice = computed(() =>
+  moneyWithUnit(
+    firstPresent(
+      sourceValue('price2', 'marketPrice', 'selling'),
+      defaultDetailVariant.value?.marketPrice,
+    ),
+    detailUnit.value,
+  ),
+)
+const primaryPurchasePrice = computed(() =>
+  moneyWithUnit(
+    firstPresent(
+      sourceValue('price3', 'purchasePrice', 'purchase'),
+      defaultDetailVariant.value?.purchasePrice,
+    ),
+    detailUnit.value,
+  ),
+)
 const productSpecificationText = computed(() => {
-  const specification = textOrEmpty(detail.value?.productSpecification)
-    || textOrEmpty(sourceValue('model', 'specification', 'specificationSnapshot'))
-    || textOrEmpty(defaultDetailVariant.value?.specificationSnapshot)
+  const specification =
+    textOrEmpty(detail.value?.productSpecification) ||
+    textOrEmpty(sourceValue('model', 'specification', 'specificationSnapshot')) ||
+    textOrEmpty(defaultDetailVariant.value?.specificationSnapshot)
   return specification || '-'
 })
-const baseInfoFields = computed(() => visibleFields([
-  { label: '商品条码', value: displayValue(sourceValue('barcode')) },
-  { label: '商品分类', value: displayValue(detail.value?.categoryName) },
-  { label: '商品品牌', value: displayValue(detail.value?.brandName) },
-  { label: '商品规格', value: productSpecificationText.value },
-  { label: '商品型号', value: displayValue(sourceValue('model')) },
-  { label: '商品标识', value: detail.value?.tagCodes.length ? detail.value.tagCodes.join('、') : displayValue(sourceValue('goods_tag', 'tag_name', 'tagName')) },
-  { label: '搜索关键字', value: displayValue(sourceValue('keywords', 'keyword')) },
-  { label: '默认仓库', value: displayValue(detail.value?.defaultWarehouseName) },
-  { label: '库位号', value: displayValue(sourceValue('goods_allocation', 'allocation', 'location_code')) },
-]))
-const orderInventoryFields = computed(() => visibleFields([
-  { label: '商品单位', value: detailUnit.value, required: true },
-  { label: '起订量', value: quantityWithUnit(firstPresent(detail.value?.minOrderQuantity, sourceValue('package')), minOrderUnitText.value), required: true },
-  { label: '订货限制', value: orderLimitText.value, required: true },
-  { label: '安全库存', value: quantityWithUnit(sourceValue('librarysafe', 'safetyInventory'), detailUnit.value) },
-  { label: '库存上限', value: quantityWithUnit(sourceValue('libraryup', 'inventoryUpper'), detailUnit.value) },
-  { label: '库存下限', value: quantityWithUnit(sourceValue('librarydown', 'inventoryLower'), detailUnit.value) },
-  { label: '中包装单位', value: displayValue(sourceValue('middle_units', 'middleUnit')) },
-  { label: '中包装换算', value: quantityWithUnit(sourceValue('base2middle_unit_rate', 'baseToMiddleRate'), detailUnit.value) },
-  { label: '大包装单位', value: displayValue(sourceValue('bigunits', 'bigUnit')) },
-  { label: '大包装换算', value: quantityWithUnit(sourceValue('conversionnumber', 'baseToBigRate'), detailUnit.value) },
-  { label: '中包装条码', value: displayValue(sourceValue('middle_barcode', 'middleBarcode')) },
-  { label: '大包装条码', value: displayValue(sourceValue('big_barcode', 'bigBarcode')) },
-  { label: '换算条码', value: displayValue(sourceValue('conversion_barcode', 'conversionBarcode')) },
-  { label: '重量(kg)', value: displayValue(sourceValue('weight', 'weight_kg', 'weightKg')) },
-]))
-const priceFields = computed(() => visibleFields([
-  { label: '订货价', value: primaryOrderPrice.value, required: true },
-  { label: '市场价', value: primaryMarketPrice.value, required: true },
-  { label: '进货价', value: primaryPurchasePrice.value, required: true },
-  { label: '中包装订货价', value: moneyWithUnit(sourceValue('middle_unit_whole_price', 'middleOrderPrice'), textOrEmpty(sourceValue('middle_units', 'middleUnit')) || detailUnit.value) },
-  { label: '大包装订货价', value: moneyWithUnit(sourceValue('big_unit_whole_price', 'bigOrderPrice'), textOrEmpty(sourceValue('bigunits', 'bigUnit')) || detailUnit.value) },
-]))
-const minOrderUnitText = computed(() => (
-  textOrEmpty(sourceValue('minorder', 'minimumOrderUnit')) || detailUnit.value
-))
+const baseInfoFields = computed(() =>
+  visibleFields([
+    { label: '商品条码', value: displayValue(sourceValue('barcode')) },
+    { label: '商品分类', value: displayValue(detail.value?.categoryName) },
+    { label: '商品品牌', value: displayValue(detail.value?.brandName) },
+    { label: '商品规格', value: productSpecificationText.value },
+    { label: '商品型号', value: displayValue(sourceValue('model')) },
+    {
+      label: '商品标识',
+      value: detail.value?.tagCodes.length
+        ? detail.value.tagCodes.join('、')
+        : displayValue(sourceValue('goods_tag', 'tag_name', 'tagName')),
+    },
+    { label: '搜索关键字', value: displayValue(sourceValue('keywords', 'keyword')) },
+    { label: '默认仓库', value: displayValue(detail.value?.defaultWarehouseName) },
+    {
+      label: '库位号',
+      value: displayValue(sourceValue('goods_allocation', 'allocation', 'location_code')),
+    },
+  ]),
+)
+const orderInventoryFields = computed(() =>
+  visibleFields([
+    { label: '商品单位', value: detailUnit.value, required: true },
+    {
+      label: '起订量',
+      value: quantityWithUnit(
+        firstPresent(detail.value?.minOrderQuantity, sourceValue('package')),
+        minOrderUnitText.value,
+      ),
+      required: true,
+    },
+    { label: '订货限制', value: orderLimitText.value, required: true },
+    {
+      label: '安全库存',
+      value: quantityWithUnit(sourceValue('librarysafe', 'safetyInventory'), detailUnit.value),
+    },
+    {
+      label: '库存上限',
+      value: quantityWithUnit(sourceValue('libraryup', 'inventoryUpper'), detailUnit.value),
+    },
+    {
+      label: '库存下限',
+      value: quantityWithUnit(sourceValue('librarydown', 'inventoryLower'), detailUnit.value),
+    },
+    { label: '中包装单位', value: displayValue(sourceValue('middle_units', 'middleUnit')) },
+    {
+      label: '中包装换算',
+      value: quantityWithUnit(
+        sourceValue('base2middle_unit_rate', 'baseToMiddleRate'),
+        detailUnit.value,
+      ),
+    },
+    { label: '大包装单位', value: displayValue(sourceValue('bigunits', 'bigUnit')) },
+    {
+      label: '大包装换算',
+      value: quantityWithUnit(sourceValue('conversionnumber', 'baseToBigRate'), detailUnit.value),
+    },
+    { label: '中包装条码', value: displayValue(sourceValue('middle_barcode', 'middleBarcode')) },
+    { label: '大包装条码', value: displayValue(sourceValue('big_barcode', 'bigBarcode')) },
+    {
+      label: '换算条码',
+      value: displayValue(sourceValue('conversion_barcode', 'conversionBarcode')),
+    },
+    { label: '重量(kg)', value: displayValue(sourceValue('weight', 'weight_kg', 'weightKg')) },
+  ]),
+)
+const priceFields = computed(() =>
+  visibleFields([
+    { label: '订货价', value: primaryOrderPrice.value, required: true },
+    { label: '市场价', value: primaryMarketPrice.value, required: true },
+    { label: '进货价', value: primaryPurchasePrice.value, required: true },
+    {
+      label: '中包装订货价',
+      value: moneyWithUnit(
+        sourceValue('middle_unit_whole_price', 'middleOrderPrice'),
+        textOrEmpty(sourceValue('middle_units', 'middleUnit')) || detailUnit.value,
+      ),
+    },
+    {
+      label: '大包装订货价',
+      value: moneyWithUnit(
+        sourceValue('big_unit_whole_price', 'bigOrderPrice'),
+        textOrEmpty(sourceValue('bigunits', 'bigUnit')) || detailUnit.value,
+      ),
+    },
+  ]),
+)
+const minOrderUnitText = computed(
+  () => textOrEmpty(sourceValue('minorder', 'minimumOrderUnit')) || detailUnit.value,
+)
 const orderLimitText = computed(() => {
   const rawLimit = textOrEmpty(sourceValue('order_limit', 'orderLimit', 'limit_rule'))
   if (rawLimit) return rawLimit
@@ -941,32 +1135,45 @@ const orderLimitText = computed(() => {
   }
   return '正常'
 })
-const relatedProducts = computed<RelatedProductCard[]>(() => (
-  relationRows(sourceValue(
-    'recommend_goods',
-    'recommendGoods',
-    'commend_goods',
-    'commendGoods',
-    'related_goods',
-    'relatedGoods',
-    'relation_goods',
-    'relationGoods',
-    'goods_relation',
-    'goodsRelation',
-    'link_goods',
-    'linkGoods',
-    'associated_goods',
-    'associatedGoods',
-  ))
+const relatedProducts = computed<RelatedProductCard[]>(() =>
+  relationRows(
+    sourceValue(
+      'recommend_goods',
+      'recommendGoods',
+      'commend_goods',
+      'commendGoods',
+      'related_goods',
+      'relatedGoods',
+      'relation_goods',
+      'relationGoods',
+      'goods_relation',
+      'goodsRelation',
+      'link_goods',
+      'linkGoods',
+      'associated_goods',
+      'associatedGoods',
+    ),
+  )
     .slice(0, 12)
-    .map((row, index) => relatedProductCard(row, index, detail.value?.recommendProductIds[index]))
-))
-const productDescription = computed(() => (
-  textOrEmpty(sourceValue('goods_desc', 'goodsDesc', 'description', 'desc', 'content', 'intro', 'introduction'))
-  || textOrEmpty(detail.value?.remark)
-  || textOrEmpty(sourceValue('subtitle'))
-  || '暂无图文描述'
-))
+    .map((row, index) => relatedProductCard(row, index, detail.value?.recommendProductIds[index])),
+)
+const productDescription = computed(
+  () =>
+    textOrEmpty(
+      sourceValue(
+        'goods_desc',
+        'goodsDesc',
+        'description',
+        'desc',
+        'content',
+        'intro',
+        'introduction',
+      ),
+    ) ||
+    textOrEmpty(detail.value?.remark) ||
+    textOrEmpty(sourceValue('subtitle')) ||
+    '暂无图文描述',
+)
 
 function tableRowIndex(index: number): number {
   return (currentPage.value - 1) * pageSize.value + index + 1
@@ -984,11 +1191,14 @@ onMounted(() => {
   void loadRows()
 })
 
-watch(() => route.query, () => {
-  if (!applyRouteQuery()) return
-  currentPage.value = 1
-  void loadRows()
-})
+watch(
+  () => route.query,
+  () => {
+    if (!applyRouteQuery()) return
+    currentPage.value = 1
+    void loadRows()
+  },
+)
 
 async function searchRows() {
   currentPage.value = 1
@@ -1016,12 +1226,7 @@ async function loadRows() {
 }
 
 async function loadReferenceOptions() {
-  await Promise.all([
-    searchCategories(''),
-    searchBrands(''),
-    searchTags(),
-    searchWarehouses(''),
-  ])
+  await Promise.all([searchCategories(''), searchBrands(''), searchTags(), searchWarehouses('')])
 }
 
 async function searchCategories(_query = '') {
@@ -1042,11 +1247,13 @@ function handleCategoryVisibleChange(visible: boolean) {
 async function searchBrands(query: string) {
   brandLoading.value = true
   try {
-    brandOptions.value = (await getErpProductBrands({
-      begin: 0,
-      step: 50,
-      brandName: empty(query),
-    })).items
+    brandOptions.value = (
+      await getErpProductBrands({
+        begin: 0,
+        step: 50,
+        brandName: empty(query),
+      })
+    ).items
   } finally {
     brandLoading.value = false
   }
@@ -1059,12 +1266,14 @@ async function searchTags() {
 async function searchWarehouses(query: string) {
   warehouseLoading.value = true
   try {
-    warehouseOptions.value = (await getErpInventoryWarehouses({
-      begin: 0,
-      step: 50,
-      warehouseName: empty(query),
-      statusCode: 'ACTIVE',
-    })).items
+    warehouseOptions.value = (
+      await getErpInventoryWarehouses({
+        begin: 0,
+        step: 50,
+        warehouseName: empty(query),
+        statusCode: 'ACTIVE',
+      })
+    ).items
   } finally {
     warehouseLoading.value = false
   }
@@ -1286,13 +1495,14 @@ function toCommand(submit: boolean): ErpManagedProductCommand {
       defaultFlag: variant.defaultFlag,
       remark: empty(variant.remark),
     }))
-    .filter((variant) => (
-      variant.id
-      || variant.specificationSnapshot
-      || variant.salePrice != null
-      || variant.marketPrice != null
-      || variant.purchasePrice != null
-    ))
+    .filter(
+      (variant) =>
+        variant.id ||
+        variant.specificationSnapshot ||
+        variant.salePrice != null ||
+        variant.marketPrice != null ||
+        variant.purchasePrice != null,
+    )
   return {
     submit,
     productName: empty(form.productName),
@@ -1525,32 +1735,34 @@ function relatedProductCard(
   targetId?: string | number | null,
 ): RelatedProductCard {
   const id = displayValue(recordValue(row, ['goods_id', 'goodsId', 'guid', 'id', 'sourceId']))
-  const code = displayValue(recordValue(row, ['coding', 'goods_num', 'goodsNo', 'code', 'productCode']))
+  const code = displayValue(
+    recordValue(row, ['coding', 'goods_num', 'goodsNo', 'code', 'productCode']),
+  )
   const unit = textOrEmpty(recordValue(row, ['units', 'unit', 'unitCode'])) || detailUnit.value
   return {
     key: `${id}-${code}-${index}`,
     targetId,
-    name: textOrEmpty(recordValue(row, ['name', 'goods_name', 'goodsName', 'productName', 'title']))
-      || `关联商品 ${index + 1}`,
+    name:
+      textOrEmpty(recordValue(row, ['name', 'goods_name', 'goodsName', 'productName', 'title'])) ||
+      `关联商品 ${index + 1}`,
     code: code !== '-' ? code : id,
-    price: moneyWithUnit(recordValue(row, [
-      'price1',
-      'orderPrice',
-      'whole',
-      'salePrice',
-      'selling',
-      'price',
-    ]), unit),
-    imageUrl: textOrEmpty(recordValue(row, [
-      'goods_picture',
-      'imageUrl',
-      'image_url',
-      'picture',
-      'pic',
-      'url',
-      'img',
-      'mainImageUrl',
-    ])) || null,
+    price: moneyWithUnit(
+      recordValue(row, ['price1', 'orderPrice', 'whole', 'salePrice', 'selling', 'price']),
+      unit,
+    ),
+    imageUrl:
+      textOrEmpty(
+        recordValue(row, [
+          'goods_picture',
+          'imageUrl',
+          'image_url',
+          'picture',
+          'pic',
+          'url',
+          'img',
+          'mainImageUrl',
+        ]),
+      ) || null,
   }
 }
 
@@ -1572,11 +1784,7 @@ function productTagText(row: ErpManagedProductSummary) {
   return row.tagCodes?.length ? row.tagCodes.join('、') : '-'
 }
 
-function formatTime(value: string | null | undefined) {
-  if (!value) return '-'
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false })
-}
+const formatTime = displayDateTime
 
 function errorMessage(reason: unknown, fallback: string) {
   if (typeof reason === 'object' && reason !== null && 'message' in reason) {

@@ -3,10 +3,11 @@
     <div class="page-heading">
       <div>
         <span class="supply-page__eyebrow">ERP · 商品中心</span>
-        <h1>商品规格</h1>
+        <SupplyPageTitle>商品规格</SupplyPageTitle>
         <p>维护商品多规格和子规格值，用于商品建档、SKU组合和订单选规格。</p>
       </div>
       <div class="heading-actions">
+        <DhbPageSyncButton scope="SPECIFICATION" label="商品规格" @completed="loadRows" />
         <el-button type="primary" @click="openCreate">新增商品规格</el-button>
       </div>
     </div>
@@ -108,9 +109,9 @@
           <div><span>子规格数量</span><strong>{{ detail.valueCount || 0 }}</strong></div>
           <div><span>状态</span><strong>{{ specificationStatusLabel(detail.statusCode) }}</strong></div>
           <div><span>更新时间</span><strong>{{ formatTime(detail.updatedTime) }}</strong></div>
-          <div><span>创建人</span><strong>{{ detail.createdBy || '-' }}</strong></div>
+          <div><span>创建人</span><strong>{{ auditActorLabel(detail.createdBy) }}</strong></div>
           <div><span>创建时间</span><strong>{{ formatTime(detail.createdTime) }}</strong></div>
-          <div><span>更新人</span><strong>{{ detail.updatedBy || '-' }}</strong></div>
+          <div><span>更新人</span><strong>{{ auditActorLabel(detail.updatedBy) }}</strong></div>
         </div>
 
         <el-table class="supply-scroll-table detail-table" :data="detail.values" max-height="420" size="small">
@@ -192,6 +193,9 @@
 </template>
 
 <script setup lang="ts">
+import { auditActorLabel } from '@/utils/audit-actor'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {

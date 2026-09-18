@@ -115,6 +115,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import type { EChartsCoreOption } from 'echarts/core'
@@ -227,7 +228,7 @@ function sourceStatus(source: CityProductSupplyView['inventoryStatus']) {
     RUNNING: '正在同步，快照可能未完整',
     UNAVAILABLE: '尚无成功同步记录',
   }
-  return `${labels[source.status]}${source.lastSuccessAt && Number.isFinite(new Date(source.lastSuccessAt).getTime()) ? ` · ${new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(source.lastSuccessAt))}` : ''}`
+  return `${labels[source.status]}${source.lastSuccessAt && Number.isFinite(new Date(source.lastSuccessAt).getTime()) ? ` · ${displayDateTime(source.lastSuccessAt)}` : ''}`
 }
 const stockOption = computed<EChartsCoreOption>(() => ({
   animation: false,

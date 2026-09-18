@@ -3,24 +3,51 @@
     <div class="page-heading">
       <div>
         <span class="supply-page__eyebrow">Order · 客户资金</span>
-        <h1>客户资金流水</h1>
+        <SupplyPageTitle>客户资金流水</SupplyPageTitle>
         <p>按收支明细口径查看客户资金来源、关联单据、支付流水和账户信息。</p>
+      </div>
+      <div class="heading-actions">
+        <DhbPageSyncButton
+          scope="RECEIPT"
+          label="收款流水"
+          @completed="loadRows"
+        /><DhbPageSyncButton scope="PAYMENT" label="付款流水" @completed="loadRows" />
       </div>
     </div>
 
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="loadRows">
         <el-form-item label="收付款单号">
-          <el-input v-model="filters.sourceDocumentNo" clearable placeholder="FR/FP 单号" style="width: 170px" />
+          <el-input
+            v-model="filters.sourceDocumentNo"
+            clearable
+            placeholder="FR/FP 单号"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="关联单号">
-          <el-input v-model="filters.sourceOrderNo" clearable placeholder="DH 订单号" style="width: 170px" />
+          <el-input
+            v-model="filters.sourceOrderNo"
+            clearable
+            placeholder="DH 订单号"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="支付流水号">
-          <el-input v-model="filters.paymentSerialNo" clearable placeholder="银行/支付流水" style="width: 190px" />
+          <el-input
+            v-model="filters.paymentSerialNo"
+            clearable
+            placeholder="银行/支付流水"
+            style="width: 190px"
+          />
         </el-form-item>
         <el-form-item label="我方单号">
-          <el-input v-model="filters.documentNo" clearable placeholder="资金单号" style="width: 160px" />
+          <el-input
+            v-model="filters.documentNo"
+            clearable
+            placeholder="资金单号"
+            style="width: 160px"
+          />
         </el-form-item>
         <el-form-item label="收支时间">
           <el-date-picker
@@ -34,30 +61,80 @@
           />
         </el-form-item>
         <el-form-item label="客户名称">
-          <el-input v-model="filters.counterpartyName" clearable placeholder="客户名称" style="width: 190px" />
+          <el-input
+            v-model="filters.counterpartyName"
+            clearable
+            placeholder="客户名称"
+            style="width: 190px"
+          />
         </el-form-item>
         <el-form-item label="收支类型">
-          <el-select v-model="filters.businessTypeCode" clearable placeholder="全部类型" style="width: 150px">
-            <el-option v-for="item in businessTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.businessTypeCode"
+            clearable
+            placeholder="全部类型"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="item in businessTypeOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="支付方式">
-          <el-select v-model="filters.settlementMethodCode" clearable placeholder="全部方式" style="width: 140px">
-            <el-option v-for="item in paymentMethodOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.settlementMethodCode"
+            clearable
+            placeholder="全部方式"
+            style="width: 140px"
+          >
+            <el-option
+              v-for="item in paymentMethodOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="收支方向">
-          <el-select v-model="filters.directionCode" clearable placeholder="全部方向" style="width: 130px">
-            <el-option v-for="item in directionOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.directionCode"
+            clearable
+            placeholder="全部方向"
+            style="width: 130px"
+          >
+            <el-option
+              v-for="item in directionOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="单据状态">
-          <el-select v-model="filters.documentStatusCode" clearable placeholder="全部状态" style="width: 130px">
-            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.documentStatusCode"
+            clearable
+            placeholder="全部状态"
+            style="width: 130px"
+          >
+            <el-option
+              v-for="item in statusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="快速搜索">
-          <el-input v-model="filters.keyword" clearable placeholder="任意单号/流水号" style="width: 190px" />
+          <el-input
+            v-model="filters.keyword"
+            clearable
+            placeholder="任意单号/流水号"
+            style="width: 190px"
+          />
         </el-form-item>
         <el-form-item class="filter-actions">
           <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
@@ -69,7 +146,9 @@
     <div class="result-heading">
       <div class="result-title-line">
         <h2>客户资金流水列表</h2>
-        <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+        <span class="result-count"
+          ><strong>{{ pageData.total }}</strong> 条</span
+        >
       </div>
     </div>
 
@@ -83,7 +162,13 @@
           row-key="id"
           @row-click="openDetail"
         >
-          <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <el-table-column
+            type="index"
+            label="序号"
+            width="80"
+            fixed="left"
+            :index="tableRowIndex"
+          />
           <!-- @vue-generic {FundDocumentSummary} -->
           <el-table-column prop="sourceDocumentNo" label="单号" width="180" show-overflow-tooltip>
             <template #default="scope">{{ primaryDocumentNo(scope.row) }}</template>
@@ -92,20 +177,34 @@
             <template #default="scope">{{ formatTime(scope.row.occurredTime) }}</template>
           </el-table-column>
           <!-- @vue-generic {FundDocumentSummary} -->
-          <el-table-column prop="customerCodeSnapshot" label="客户编号" width="130" show-overflow-tooltip>
+          <el-table-column
+            prop="customerCodeSnapshot"
+            label="客户编号"
+            width="130"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ customerCode(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {FundDocumentSummary} -->
-          <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip>
+          <el-table-column
+            prop="customerNameSnapshot"
+            label="客户名称"
+            min-width="220"
+            show-overflow-tooltip
+          >
             <template #default="scope">
               <span class="record-name">{{ customerName(scope.row) }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="businessTypeCode" label="收支类型" width="130">
-            <template #default="scope">{{ businessTypeLabel(scope.row.businessTypeCode) }}</template>
+            <template #default="scope">{{
+              businessTypeLabel(scope.row.businessTypeCode)
+            }}</template>
           </el-table-column>
           <el-table-column prop="settlementMethodCode" label="支付方式" width="130">
-            <template #default="scope">{{ paymentMethodLabel(scope.row.settlementMethodCode) }}</template>
+            <template #default="scope">{{
+              paymentMethodLabel(scope.row.settlementMethodCode)
+            }}</template>
           </el-table-column>
           <!-- @vue-generic {FundDocumentSummary} -->
           <el-table-column prop="amount" label="收入" width="130" align="right">
@@ -152,43 +251,97 @@
       </div>
     </el-card>
 
-    <el-drawer v-model="detailVisible" class="fund-document-detail-drawer" size="min(760px, 94vw)" :with-header="false">
+    <el-drawer
+      v-model="detailVisible"
+      class="fund-document-detail-drawer"
+      size="min(760px, 94vw)"
+      :with-header="false"
+    >
       <div v-if="detail" class="detail-shell">
         <header class="detail-hero">
           <div>
             <span>客户资金流水详情</span>
             <h2>{{ primaryDocumentNo(detail) }}</h2>
-            <p>{{ businessTypeLabel(detail.businessTypeCode) }} · {{ directionLabel(detail.directionCode) }} · ¥{{ formatAmount(detail.amount) }}</p>
+            <p>
+              {{ businessTypeLabel(detail.businessTypeCode) }} ·
+              {{ directionLabel(detail.directionCode) }} · ¥{{ formatAmount(detail.amount) }}
+            </p>
           </div>
-          <el-button circle plain aria-label="关闭资金单据详情" @click="detailVisible = false">×</el-button>
+          <el-button circle plain aria-label="关闭资金单据详情" @click="detailVisible = false"
+            >×</el-button
+          >
         </header>
         <div class="detail-content">
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="收付款单号">{{ primaryDocumentNo(detail) }}</el-descriptions-item>
-            <el-descriptions-item label="我方资金单号">{{ detail.documentNo || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="收付款单号">{{
+              primaryDocumentNo(detail)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="我方资金单号">{{
+              detail.documentNo || '-'
+            }}</el-descriptions-item>
             <el-descriptions-item label="客户名称">{{ customerName(detail) }}</el-descriptions-item>
             <el-descriptions-item label="客户编号">{{ customerCode(detail) }}</el-descriptions-item>
-            <el-descriptions-item label="金额">¥{{ formatAmount(detail.amount) }}</el-descriptions-item>
-            <el-descriptions-item :label="statusFieldLabel(detail)">{{ statusLabel(detail.documentStatusCode) }}</el-descriptions-item>
-            <el-descriptions-item label="收支类型">{{ businessTypeLabel(detail.businessTypeCode) }}</el-descriptions-item>
-            <el-descriptions-item label="关联单号">{{ linkedDocumentNo(detail) }}</el-descriptions-item>
-            <el-descriptions-item label="支付方式">{{ paymentMethodLabel(detail.settlementMethodCode) }}</el-descriptions-item>
-            <el-descriptions-item label="收支方向">{{ directionLabel(detail.directionCode) }}</el-descriptions-item>
-            <el-descriptions-item label="付款日期">{{ formatDate(detail.occurredTime) }}</el-descriptions-item>
-            <el-descriptions-item label="支付流水号">{{ detail.paymentSerialNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item :label="accountFieldLabel(detail)">{{ detail.bankAccountNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="开户名称">{{ detail.bankAccountName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="开户银行">{{ detail.bankName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="提交时间">{{ submittedDisplay(detail) }}</el-descriptions-item>
-            <el-descriptions-item label="审核确认时间">{{ formatTime(detail.confirmedAt) }}</el-descriptions-item>
-            <el-descriptions-item label="经办人员">{{ detail.handlerStaffNameSnapshot || detail.handlerStaffCode || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="员工编码">{{ detail.handlerStaffCode || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ formatTime(detail.updatedTime) }}</el-descriptions-item>
-            <el-descriptions-item label="备注" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="金额"
+              >¥{{ formatAmount(detail.amount) }}</el-descriptions-item
+            >
+            <el-descriptions-item :label="statusFieldLabel(detail)">{{
+              statusLabel(detail.documentStatusCode)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="收支类型">{{
+              businessTypeLabel(detail.businessTypeCode)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="关联单号">{{
+              linkedDocumentNo(detail)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="支付方式">{{
+              paymentMethodLabel(detail.settlementMethodCode)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="收支方向">{{
+              directionLabel(detail.directionCode)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="付款日期">{{
+              formatDate(detail.occurredTime)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="支付流水号">{{
+              detail.paymentSerialNo || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item :label="accountFieldLabel(detail)">{{
+              detail.bankAccountNo || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="开户名称">{{
+              detail.bankAccountName || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="开户银行">{{
+              detail.bankName || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="提交时间">{{
+              submittedDisplay(detail)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="审核确认时间">{{
+              formatTime(detail.confirmedAt)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="经办人员">{{
+              detail.handlerStaffNameSnapshot || detail.handlerStaffCode || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="员工编码">{{
+              detail.handlerStaffCode || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{
+              formatTime(detail.updatedTime)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="备注" :span="2">{{
+              detail.remark || '-'
+            }}</el-descriptions-item>
             <el-descriptions-item label="附件" :span="2">
               <div v-if="attachmentItems(detail).length" class="attachment-list">
-                <div v-for="item in attachmentItems(detail)" :key="item.objectKey" class="attachment-item">
-                  <span class="attachment-name">{{ item.fileName || attachmentName(item.objectKey) }}</span>
+                <div
+                  v-for="item in attachmentItems(detail)"
+                  :key="item.objectKey"
+                  class="attachment-item"
+                >
+                  <span class="attachment-name">{{
+                    item.fileName || attachmentName(item.objectKey)
+                  }}</span>
                   <a v-if="item.url" :href="item.url" target="_blank" rel="noreferrer">查看</a>
                   <span v-else class="attachment-unavailable">仅来源引用</span>
                 </div>
@@ -204,6 +357,9 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -220,8 +376,12 @@ import {
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
 
-const directionOptions = computed(() => businessDictionaryOptions('ORDER', 'FUND_DOCUMENT_DIRECTION'))
-const businessTypeOptions = computed(() => businessDictionaryOptions('ORDER', 'FUND_DOCUMENT_BUSINESS_TYPE'))
+const directionOptions = computed(() =>
+  businessDictionaryOptions('ORDER', 'FUND_DOCUMENT_DIRECTION'),
+)
+const businessTypeOptions = computed(() =>
+  businessDictionaryOptions('ORDER', 'FUND_DOCUMENT_BUSINESS_TYPE'),
+)
 const statusOptions = computed(() => businessDictionaryOptions('ORDER', 'FUND_DOCUMENT_STATUS'))
 const paymentMethodOptions = computed(() => businessDictionaryOptions('ORDER', 'PAYMENT_METHOD'))
 
@@ -367,7 +527,12 @@ function accountFieldLabel(row: FundDocumentSummary) {
 
 function statusTagType(value: string | null | undefined) {
   const normalized = String(value || '').toUpperCase()
-  if (normalized.includes('CONFIRM') || normalized.includes('PAID') || normalized.includes('RECEIVED')) return 'success'
+  if (
+    normalized.includes('CONFIRM') ||
+    normalized.includes('PAID') ||
+    normalized.includes('RECEIVED')
+  )
+    return 'success'
   if (normalized.includes('PEND') || normalized.includes('WAIT')) return 'warning'
   if (normalized.includes('REJECT') || normalized.includes('FAIL')) return 'danger'
   return 'info'
@@ -397,7 +562,9 @@ function attachmentItems(row: FundDocumentDetail): FundDocumentAttachment[] {
 }
 
 function attachmentKeys(row: FundDocumentDetail) {
-  return Array.from(new Set([...(row.sourceAttachmentKeys || []), ...(row.voucherKeys || [])])).filter(Boolean)
+  return Array.from(
+    new Set([...(row.sourceAttachmentKeys || []), ...(row.voucherKeys || [])]),
+  ).filter(Boolean)
 }
 
 function attachmentName(value: string) {
@@ -417,22 +584,19 @@ function formatAmount(value: number | null | undefined): string {
   })
 }
 
-function formatTime(value: string | null | undefined): string {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
+const formatTime = displayDateTime
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).replace(/\//g, '-')
+  return date
+    .toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+    .replace(/\//g, '-')
 }
 
 function startOfDay(value: string | undefined) {
@@ -587,5 +751,4 @@ function errorMessage(reason: unknown, fallback: string): string {
   color: #909399;
   font-size: 12px;
 }
-
 </style>

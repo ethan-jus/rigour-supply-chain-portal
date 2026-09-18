@@ -1,103 +1,55 @@
-# 瑞盖优选统一应用门户与供应链管理端 (Portal)
+# 瑞盖供应链数字化平台 Web
 
-一期复用一个 Vue 工程承载两层体验：员工登录后先进入“我的应用”卡片目录，点击“供应链平台”后再进入供应链管理 Console。订货宝、飞书销售工作台及其他公司系统作为并列应用入口；是否支持单点登录以各系统真实能力为准。
+工程名：`rigour-supply-chain-digital-web`。后端工程：`rigour-supply-chain-digital-platform`。
 
-当前已完成 OIDC Authorization Code + PKCE、ID Token签名/声明校验、内存 Token、“我的应用”、平台管理中心、租户系统管理和数据库导航链路。销售管理已登记销售管控、外勤考勤、拜访、门店覆盖、组织、任务、异常和规则配置菜单骨架；飞书销售工作台卡片进入受控引导页，不在PC端复制现场作业。当前按本地loopback地址开发，但尚未执行真实DEV跨进程浏览器验收，不能把自动构建结果误报为已上线。
+访问首页时，已登录用户直接进入供应链工作区；未登录用户显示本工程的登录表单。登录成功统一进入首页。用户、角色、菜单、业务参数和操作日志统一维护在供应链「系统设置」。企业之间保持 SaaS 租户隔离。
 
-## 技术栈
-
-| 组件 | 选择 |
-|---|---|
-| 框架 | Vue 3 + TypeScript |
-| 构建 | Vite 7 |
-| UI 库 | Element Plus（按需引入） |
-| 状态管理 | Pinia |
-| 路由 | Vue Router 4 |
-| 测试 | Vitest + jsdom |
-| 代码规范 | ESLint + Prettier |
-
-## 环境要求
-
-- Node.js >= 24.0.0
-- pnpm >= 9.0.0
-
-## 快速开始
+## 本地启动
 
 ```bash
-pnpm install
-pnpm dev        # 监听0.0.0.0:5100；电脑访问localhost:5100，手机使用电脑局域网IP:5100
-pnpm build      # 生产构建
-pnpm test       # 运行测试
-pnpm typecheck  # 类型检查
-pnpm lint       # 代码检查
-pnpm lint:fix   # 代码检查（自动修复）
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-## 环境变量
+访问 `http://localhost:5100`。Vite 使用严格端口模式，5100 被占用会报错，不会自动改用 5101。后端 Gateway 默认 `26880`，IAM 默认 `26881`。更换工程目录后，需要在 VS Code 中重新打开本目录。
 
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `VITE_API_BASE_URL` | `/api/v1` | API 基础路径 |
-| `VITE_APP_ENV` | `dev` | 运行环境标识 |
-| `VITE_API_TARGET` | `http://localhost:26880` | 仅由Vite开发服务器读取的Gateway代理目标；换服务器时在`.env.local`覆盖 |
-| `VITE_OIDC_ISSUER` | `http://localhost:26881` | 当前本地IAM issuer；非开发构建必须HTTPS |
-| `VITE_OIDC_CLIENT_ID` | 无 | Portal 公开客户端 ID |
-| `VITE_OIDC_REDIRECT_URI` | 当前站点 `/oidc/callback` | 精确注册的登录回调 |
-| `VITE_OIDC_POST_LOGOUT_REDIRECT_URI` | 当前站点 `/` | 精确注册的退出回调 |
-| `VITE_FEISHU_SALES_WORKBENCH_URL` | 开发环境`http://localhost:5200/#/home` | 本地开发从局域网访问门户时自动替换为当前页面主机名；生产必须配置HTTPS或飞书受控地址 |
+| 配置 | 用途 |
+|---|---|
+| `VITE_API_BASE_URL` | API 前缀，默认 `/api/v1` |
+| `VITE_API_TARGET` | Vite 代理的 Gateway 地址 |
+| `VITE_OIDC_ISSUER` | IAM 地址，必须与服务端 issuer 一致 |
+| `VITE_OIDC_CLIENT_ID` | SCDP 公开客户端 ID；本地默认 `rigour-scdp-browser` |
+| `VITE_OIDC_REDIRECT_URI` | 精确登记的 `/oidc/callback` 地址 |
 
-Portal 不发送租户身份头；Gateway 从已验签 JWT 重建可信租户上下文。
+Web 通过同源 `/auth/` 白名单代理调用 IAM，会话和密码校验由 IAM 完成；浏览器无需访问 IAM 端口。部署时也必须配置该代理，参照后端 `scripts/desktop/nginx.conf`。
 
-## API 契约
+客户端公开标识已随 IAM V106 迁移改名。前后端应一起更新；IAM 启动时先执行 Flyway，浏览器再重新登录。远程 Git 仓库地址尚未改名，保留现有 origin。
 
-详见 [docs/api-contract.md](docs/api-contract.md)。
+## 登录与自动续期
 
-## 架构说明
+登录采用 Authorization Code + PKCE，获取短期 Access Token 和轮换式 Refresh Token。请求或路由切换发现 Access Token 即将到期时，自动调用同源 `/auth/oauth2/token` 刷新，并继续原页面；并发请求只刷新一次。服务端明确拒绝 Access Token 时，刷新成功后最多重试原请求一次。
 
-详见 [docs/architecture.md](docs/architecture.md)。
+两种 Token 只保存在页面内存，不写入 localStorage/sessionStorage。刷新整个页面仍通过 IAM 的 HttpOnly 会话恢复。网络中断和服务 503 不清除登录；Refresh Token 失效、会话过期或撤销后需要重新登录。续期不延长 IAM 会话的最大期限。
 
-## 项目结构
+首次启用：先重新构建并启动 IAM，确认 Flyway V109 成功（给 SCDP 客户端增加 `refresh_token` 授权），再刷新 Web 并登录一次。已有页面中的旧令牌不会自动变成双 Token。无需新增环境配置或把客户端密钥放进前端。
 
+## 开发约定
+
+- Vue 3、TypeScript、Vite、Pinia、Element Plus。
+- OIDC Authorization Code + PKCE；Token 只保存于内存。
+- `/me` 提供当前租户身份和实际权限；`/scdp/navigation` 提供动态菜单。
+- 菜单可配置名称、层级、图标和排序；路由必须匹配已编译的 `routeKey` 白名单。
+- ACTIVE 模式仅使用 SCDP 角色权限。前端没有超级管理员通配符旁路。
+- 普通业务用户关联 HR 员工；功能、部门范围、客户范围、仓库授权分别计算。
+- 品牌 PNG 使用用户提供的原图：页面 `src/assets/brand/scdp-logo.png`，浏览器 `public/scdp-icon.png`。
+
+## 验证
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test:run
+pnpm build
 ```
-src/
-├── api/               # API 层
-│   └── core/          # HTTP Client、错误处理
-├── auth/              # OIDC PKCE、回调与内存 Token
-├── assets/styles/     # 设计 Token 和全局样式
-├── components/        # 通用组件
-├── layouts/           # 页面布局
-├── router/            # 路由配置和权限守卫
-├── stores/            # Pinia Store
-├── types/             # TypeScript 类型
-├── utils/             # 工具函数
-└── views/             # 页面视图
-```
 
-## 认证与安全
-
-Portal 是公开 PKCE 客户端，不接收 Refresh Token。Access Token 和 ID Token 仅保存于页面内存；刷新页面或短期 Token 失效后，重新发起授权并复用 IAM 的 Secure/HttpOnly 会话。退出使用 OIDC RP-Initiated Logout，卡片跳往外部系统时不转发 Portal Token。
-
-## 基础管理路由
-
-| 层级 | 路径 | 数据库授权 |
-|---|---|---|
-| 我的应用 | `/apps` | IAM应用卡片 |
-| 平台管理 | `/platform-admin` | 租户、套餐、应用、资源、审计 |
-| 租户系统管理 | `/system-admin` | 组织、用户、角色、DataScope、租户菜单、设置、审计 |
-| 供应链Console | `/supply-chain` | CRM、订单、销售、ERP、HR、城市、渠道和BI |
-| 销售管理 | `/supply-chain/sales` | IAM驱动的销售管控、外勤、拜访、门店、异常和规则菜单 |
-| 飞书销售工作台卡片 | `/sales-workbench` | 进入受控启动页并打开独立销售H5；不复用供应链销售管理后台 |
-
-导航由IAM按“平台资源目录 ∩ 套餐范围 ∩ 租户菜单启用 ∩ 角色授权”生成，`routeKey`必须匹配Portal已编译白名单。租户可覆盖名称、图标、排序、显示状态并创建无路由分组，但不能修改平台路由和权限编码。BUTTON/API使用`permissionCode`；前端只控制体验，最终授权由Gateway和后端执行。
-
-## 职责边界
-
-- 页面只管理展示状态和用户输入
-- 业务判定由后端领域服务完成
-- 前端不得复制业务状态机
-- 财务金额不得在前端使用浮点数核算
-- BI 页面只调用分析查询 API，不聚合多个领域服务计算指标
-
-## License
-
-Internal
+本地构建、隔离测试与共享 DEV 的真实业务验收分别记录。详见 [架构](docs/architecture.md) 和 [接口契约](docs/api-contract.md)。

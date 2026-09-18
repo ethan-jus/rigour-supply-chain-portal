@@ -1,3 +1,4 @@
+import { displayDateTime } from '@/utils/business-date'
 import type { CityContactAnalytics } from '@/api/core/bi-city-contacts'
 import type { Figure } from './cockpit-model'
 import { bars, chartColors } from './cockpit-charts'
@@ -42,9 +43,7 @@ export function cityContactFigure(data: CityContactAnalytics | null, unavailable
       },
     })),
     note: `所选期间内 Sales 已提交、未删除的拜访按门店去重；同店多次拜访只计1户，不要求微信截图。城市按门店当前归属；建联不等于审核通过。销售筛选按提交人已确认的 HR 员工编码，未关联人员的拜访不计入个人统计；CRM 关联情况不影响建联总数。${
-      data?.syncedAt
-        ? ` 快照 ${new Date(data.syncedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`
-        : ''
+      data?.syncedAt ? ` 快照 ${displayDateTime(data.syncedAt)}` : ''
     }`,
     empty: reason,
   }

@@ -13,7 +13,7 @@ describe('台式机 HTTP 开发登录', () => {
     expect(isAllowedOidcUrl('http://user:pass@192.168.12.7')).toBe(false)
     vi.stubEnv('MODE', 'production')
     expect(isAllowedOidcUrl('http://192.168.12.7:5100')).toBe(false)
-    expect(isAllowedOidcUrl('https://portal.example')).toBe(true)
+    expect(isAllowedOidcUrl('https://scdp.example')).toBe(true)
   })
 
   it('没有 SubtleCrypto 时仍生成标准 SHA256 并拒绝伪造 RSA 签名', async () => {

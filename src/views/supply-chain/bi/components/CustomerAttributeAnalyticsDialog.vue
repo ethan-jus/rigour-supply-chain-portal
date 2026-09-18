@@ -56,6 +56,7 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
 import { computed, ref, watch } from 'vue'
 import type { EChartsOption } from 'echarts'
 import {
@@ -127,10 +128,7 @@ const money = (value: number | string | null) =>
   value == null
     ? '—'
     : Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const timestamp = (value: string | null) =>
-  value
-    ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
-    : '—'
+const timestamp = (value: string | null) => (value ? displayDateTime(value) : '—')
 async function load() {
   const id = ++sequence
   loading.value = true

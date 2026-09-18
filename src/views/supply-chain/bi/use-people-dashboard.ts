@@ -1,3 +1,4 @@
+import { displayDateTime } from '@/utils/business-date'
 import { onBeforeUnmount, ref, shallowRef } from 'vue'
 import type { EmployeeAnalyticsQuery } from '@/api/core/bi-employees'
 /** 筛选切换立即清除旧范围，过期请求不得覆盖新范围或已卸载的页面。 */
@@ -26,5 +27,4 @@ export function usePeopleDashboard<T>(fetcher: (query: EmployeeAnalyticsQuery) =
   }
   return { data, loading, error, load }
 }
-export const snapshotTime = (value: string | null) =>
-  value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '尚未同步'
+export const snapshotTime = (value: string | null) => (value ? displayDateTime(value) : '尚未同步')

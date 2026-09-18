@@ -3,7 +3,7 @@
     <div class="page-heading">
       <div>
         <span class="supply-page__eyebrow">数据字典 · 基础设置</span>
-        <h1>数据字典</h1>
+        <SupplyPageTitle>数据字典</SupplyPageTitle>
         <p>维护业务使用的单位、类型、状态和支付方式。</p>
       </div>
       <div class="heading-actions">
@@ -90,7 +90,7 @@
             <el-radio-button value="aliases">历史兼容（{{ items.length - standardItems.length }}）</el-radio-button>
             <el-radio-button value="sources">来源映射</el-radio-button>
           </el-radio-group>
-          <el-button v-if="canWrite && itemMode === 'standard'" type="primary" plain @click="openItem()">新增字典项</el-button>
+          <el-button v-if="canWrite && selectedDict?.allowNewItems && itemMode === 'standard'" type="primary" plain @click="openItem()">新增字典项</el-button>
         </div>
         <el-alert v-if="itemMode === 'aliases'" type="info" :closable="false" title="旧编码用于历史记录解析，新录入使用对应标准项。" />
         <DictionarySourceMappings v-if="itemMode === 'sources'" :dictionary-code="selectedDict.dictionaryCode" :dictionaries="dictionaries" :can-write="canWrite" />
@@ -107,6 +107,7 @@
         >
           <el-table-column prop="dictionaryItemCode" label="字典项编码" min-width="190" fixed="left" show-overflow-tooltip />
           <el-table-column prop="dictionaryItemName" label="字典项名称" min-width="190" show-overflow-tooltip />
+          <el-table-column label="状态" width="90"><template #default="scope"><el-tag :type="scope.row.enabled === false ? 'info' : 'success'">{{ scope.row.enabled === false ? '停用' : '启用' }}</el-tag></template></el-table-column>
           <el-table-column prop="parentDictionaryItemCode" label="父级编码" min-width="160" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.parentDictionaryItemCode || '-' }}</template>
           </el-table-column>
@@ -122,7 +123,7 @@
           <el-table-column v-if="canWrite && itemMode === 'standard'" label="操作" width="135" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click="openItem(scope.row)">编辑</el-button>
-              <el-button link type="primary" @click="openMerge(scope.row)">合并</el-button>
+              <el-button v-if="selectedDict?.allowNewItems" link type="primary" @click="openMerge(scope.row)">合并</el-button>
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无字典项" /></template>
@@ -175,10 +176,11 @@
           <el-input v-model="itemForm.dictionaryItemName" />
         </el-form-item>
         <el-form-item label="字典项编码" required>
-          <el-input v-model="itemForm.dictionaryItemCode" placeholder="例如 ON_SHELF" />
+          <el-input v-model="itemForm.dictionaryItemCode" :disabled="Boolean(editingItemId)" placeholder="例如 SALES" />
         </el-form-item>
+        <el-form-item label="状态"><el-switch v-model="itemForm.enabled" :disabled="!selectedDict?.allowNewItems" active-text="启用" inactive-text="停用" /></el-form-item>
         <el-form-item label="父级字典项">
-          <el-select v-model="itemForm.parentDictionaryItemCode" clearable placeholder="不选择表示根节点" style="width: 100%">
+          <el-select v-model="itemForm.parentDictionaryItemCode" :disabled="!selectedDict?.allowNewItems" clearable placeholder="不选择表示根节点" style="width: 100%">
             <el-option
               v-for="item in parentOptions"
               :key="item.dictionaryItemCode"
@@ -203,6 +205,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import DictionarySourceMappings from './DictionarySourceMappings.vue'
@@ -222,13 +225,13 @@ import {
   type DictItemView,
   type DictView,
 } from '@/api/core/business-settings'
-import { useAuthStore } from '@/stores/auth'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 
 interface DictItemTree extends DictItemView { children?: DictItemTree[] }
 
 const DEFAULT_DICTIONARY_TYPE = 'COMMON'
 
-const auth = useAuthStore()
+const { can } = useSupplyPermissions()
 const loading = ref(false)
 const itemsLoading = ref(false)
 const saving = ref(false)
@@ -292,10 +295,11 @@ const itemForm = reactive<DictItemCommand>({
   dictionaryItemName: '',
   remark: null,
   ordinal: 0,
+  enabled: true,
   revision: 0,
 })
 
-const canWrite = computed(() => auth.hasPermission('business-settings:dict:write'))
+const canWrite = computed(() => can('business-settings:dict:write'))
 const parentOptions = computed(() => standardItems.value.filter((item) => item.id !== editingItemId.value))
 
 const itemTree = computed<DictItemTree[]>(() => {
@@ -434,6 +438,7 @@ function openItem(row?: DictItemView) {
     dictionaryItemName: row.dictionaryItemName,
     remark: row.remark,
     ordinal: row.ordinal,
+    enabled: row.enabled !== false,
     revision: row.revision,
   } : {
     dictionaryCode: selectedDict.value.dictionaryCode,
@@ -442,6 +447,7 @@ function openItem(row?: DictItemView) {
     dictionaryItemName: '',
     remark: null,
     ordinal: 0,
+    enabled: true,
     revision: 0,
   })
   itemDialog.value = true
@@ -462,13 +468,17 @@ async function saveItem() {
       dictionaryItemName: itemForm.dictionaryItemName.trim(),
       remark: empty(itemForm.remark) || null,
       ordinal: itemForm.ordinal,
+      enabled: itemForm.enabled !== false,
       revision: itemForm.revision,
     }
     if (editingItemId.value) await updateBizDictItem(editingItemId.value, command)
     else await createBizDictItem(selectedDict.value.id, command)
     ElMessage.success('字典项保存成功')
     itemDialog.value = false
-    await selectDict(selectedDict.value)
+    const code = command.dictionaryCode
+    await loadDicts()
+    const updated = dictionaries.value.find((d) => d.dictionaryCode === code)
+    if (updated) await selectDict(updated)
     await refreshBusinessDictionaries()
   } finally {
     saving.value = false

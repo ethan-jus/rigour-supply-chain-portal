@@ -1,13 +1,7 @@
 import { apiClient } from './client'
 
 export type DhbSyncOrchestrationStatus =
-  | 'PENDING'
-  | 'RUNNING'
-  | 'SUCCEEDED'
-  | 'SUCCEEDED_WITH_WARNINGS'
-  | 'PARTIAL'
-  | 'FAILED'
-  | 'SKIPPED'
+  'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'SUCCEEDED_WITH_WARNINGS' | 'PARTIAL' | 'FAILED' | 'SKIPPED'
 export type DhbSyncDomain = 'ERP' | 'CRM' | 'ORDER' | string
 
 export interface DhbSyncOrchestrationCommand {
@@ -29,6 +23,11 @@ export interface DhbSyncOrchestrationStep {
   status: DhbSyncOrchestrationStatus
   fetched: number
   changed: number
+  created?: number | null
+  updated?: number | null
+  repaired?: number | null
+  duplicates?: number | null
+  rejected?: number | null
   unmapped: number
   message: string | null
 }

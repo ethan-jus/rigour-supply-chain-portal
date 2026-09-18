@@ -2,74 +2,86 @@ import type { App } from 'vue'
 import type { Pinia } from 'pinia'
 import type { Router } from 'vue-router'
 import { registerUnauthorizedSessionHandler } from '@/api'
-import { completeOidcCallback, safeReturnPath } from '@/auth/oidc'
+import { beginOidcLogin, completeOidcCallback, getAccessToken, safeReturnPath, takeOidcLandingPath } from '@/auth/oidc'
+import { readBrowserSession } from '@/auth/browser-session'
 import { useAuthStore } from '@/stores'
 import { devInfo, devWarn } from '@/utils/dev-log'
 
-interface PortalBootstrapOptions {
-  completeCallback?: () => Promise<string | null>
+interface ScdpBootstrapOptions {
+  completeCallback?: () => Promise<boolean>
   mountTarget?: string
 }
 
-type PortalRouterFactory = () => Router
-
-function currentReturnPath(router: Router): string {
-  const current = router.currentRoute.value
-  if (current.path === '/login' && typeof current.query.redirect === 'string') {
-    return safeReturnPath(current.query.redirect)
-  }
-  return safeReturnPath(current.fullPath)
-}
+type ScdpRouterFactory = () => Router
 
 /**
  * OIDC callback必须在Router启动前完成。
  *
  * Hash Router一旦安装就会立即触发初始导航；若此时内存Token尚未恢复，
- * 守卫会把OIDC callback误判为未登录并丢失原始returnPath。
+ * 守卫会把OIDC callback误判为未登录并重复进入登录页。
  */
-export async function bootstrapPortal(
+export async function bootstrapScdp(
   app: App,
   pinia: Pinia,
-  createRouter: PortalRouterFactory,
-  options: PortalBootstrapOptions = {},
+  createRouter: ScdpRouterFactory,
+  options: ScdpBootstrapOptions = {},
 ): Promise<void> {
   const completeCallback = options.completeCallback || completeOidcCallback
-  let returnPath: string | null = null
+  let loginCompleted = false
+  let callbackFailed = false
   try {
-    returnPath = await completeCallback()
+    loginCompleted = await completeCallback()
   } catch (error) {
-    devWarn('门户启动阶段OIDC回调失败，回到登录页', {
+    callbackFailed = true
+    devWarn('SCDP启动阶段OIDC回调失败，回到登录页', {
       message: error instanceof Error ? error.message : error,
     })
     window.history.replaceState({}, '', `${import.meta.env.BASE_URL}#/login?reason=oidc_callback_failed`)
   }
 
-  const authStore = useAuthStore(pinia)
-  authStore.synchronizeTokenState()
-  if (returnPath) {
-    devInfo('门户准备进入登录前目标页面', { returnPath })
-    window.history.replaceState({}, '', `${import.meta.env.BASE_URL}#${returnPath}`)
+  // 刷新受保护页面时先恢复有效的 HttpOnly 会话，避免先渲染登录页、
+  // 再丢弃原页面回到首页。真正未登录或显式退出仍显示正常登录表单。
+  const currentPath = window.location.hash.slice(1)
+  const canRestore = !currentPath || currentPath === '/'
+    || /^\/supply-chain(?:[/?#]|$)/.test(currentPath)
+  if (!loginCompleted && !callbackFailed && !getAccessToken() && canRestore) {
+    try {
+      const session = await readBrowserSession()
+      if (session.authenticated) {
+        await beginOidcLogin(safeReturnPath(currentPath))
+        return
+      }
+    } catch (error) {
+      devWarn('启动阶段无法恢复会话，交由登录页面展示状态', {
+        message: error instanceof Error ? error.message : error,
+      })
+    }
   }
 
-  // createWebHashHistory会缓存创建瞬间的Hash位置，必须在上面的returnPath
-  // 恢复之后才创建Router，否则其首次导航仍可能把页面带回旧的“/”→/apps。
+  const authStore = useAuthStore(pinia)
+  authStore.synchronizeTokenState()
+  if (loginCompleted) {
+    const landingPath = takeOidcLandingPath()
+    devInfo('SCDP登录完成', { path: landingPath })
+    window.history.replaceState({}, '', `${import.meta.env.BASE_URL}#${landingPath}`)
+  }
+
+  // Hash Router 在创建时读取地址，必须晚于认证回调清理与页面定位。
   const router = createRouter()
 
   registerUnauthorizedSessionHandler(async () => {
-    const redirect = currentReturnPath(router)
     authStore.clearLocalSession()
     if (router.currentRoute.value.path === '/login') return
     try {
       await router.replace({
         path: '/login',
-        query: { redirect, reason: 'session_expired' },
+        query: { reason: 'session_expired' },
       })
     } catch (error) {
-      const query = new URLSearchParams({ redirect, reason: 'session_expired' })
       devWarn('会话失效时Router跳转失败，改用Hash导航返回登录页', {
         message: error instanceof Error ? error.message : error,
       })
-      window.location.hash = `/login?${query.toString()}`
+      window.location.hash = '/login?reason=session_expired'
     }
   })
 

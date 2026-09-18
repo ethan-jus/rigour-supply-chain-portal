@@ -2,7 +2,7 @@
   <section class="dashboard" aria-label="业务首页">
     <header class="dashboard__heading">
       <div>
-        <h1>{{ title }}</h1>
+        <SupplyPageTitle>{{ title }}</SupplyPageTitle>
         <p>{{ authStore.user?.displayName || '当前用户' }} · {{ todayText }}</p>
       </div>
       <el-input
@@ -60,6 +60,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowRight, Loading, Refresh, Search } from '@element-plus/icons-vue'
@@ -85,14 +86,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 const navigationStore = useNavigationStore()
 const applicationCode = computed(() => String(route.meta.applicationCode || ''))
-const title = computed(
-  () =>
-    ({
-      SUPPLY_CHAIN: '供应链业务',
-      PLATFORM_ADMIN: '平台管理',
-      SYSTEM_ADMIN: '系统管理',
-    })[applicationCode.value] || '业务首页',
-)
+const title = '工作首页'
 const todayText = new Date().toLocaleDateString('zh-CN', {
   year: 'numeric',
   month: 'long',

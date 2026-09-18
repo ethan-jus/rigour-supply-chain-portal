@@ -7,31 +7,7 @@ import LoginView from '@/views/login/LoginView.vue'
 import { useAuthStore } from '@/stores/auth'
 
 describe('ServiceUnavailableView', () => {
-  it('Access Token过期时显示续期状态，通过IAM会话重新授权并保留原路由', async () => {
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const authStore = useAuthStore()
-    const login = vi.spyOn(authStore, 'login').mockResolvedValue(undefined)
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: '/login', component: LoginView }],
-    })
-    const redirect = '/supply-chain/crm/customers/areas?from=order'
-    await router.push({ path: '/login', query: { redirect, reason: 'session_expired' } })
-    await router.isReady()
-    const root = defineComponent({ render: () => h(RouterView) })
-    const wrapper = mount(root, { global: { plugins: [pinia, router] } })
-
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('登录状态已过期，正在安全续期…')
-    expect(login).toHaveBeenCalledOnce()
-    expect(login).toHaveBeenCalledWith(redirect, false)
-
-    wrapper.unmount()
-  })
-
-  it('手工返回登录时清理保留的本地会话并用原始redirect重新免登，不形成503循环', async () => {
+  it('手工返回登录时清理保留的本地会话并显示登录表单，不形成503循环', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const authStore = useAuthStore()
@@ -70,12 +46,11 @@ describe('ServiceUnavailableView', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.path).toBe('/login')
-    expect(router.currentRoute.value.query.redirect).toBe(redirect)
+    expect(router.currentRoute.value.query.redirect).toBeUndefined()
     expect(router.currentRoute.value.query.reason).toBe('service_unavailable')
     expect(authStore.isAuthenticated).toBe(false)
     expect(authStore.user).toBeNull()
-    expect(login).toHaveBeenCalledOnce()
-    expect(login).toHaveBeenCalledWith(redirect, false)
+    expect(login).not.toHaveBeenCalled()
     expect(router.currentRoute.value.path).not.toBe('/service-unavailable')
 
     wrapper.unmount()

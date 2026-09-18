@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   createProcurementOrder: vi.fn(), createTransferOrder: vi.fn(),
   warning: vi.fn(), error: vi.fn(),
 }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ meta: { routeKey: mocks.routeKey } }) }))
+vi.mock('@/composables/useSupplyPermissions', () => ({ useSupplyPermissions: () => ({ can: () => true }) }))
+vi.mock('vue-router', async (importOriginal) => ({
+  ...await importOriginal<typeof import('vue-router')>(), useRoute: () => ({ meta: { routeKey: mocks.routeKey } }) }))
 vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn(), warning: mocks.warning, error: mocks.error }, ElMessageBox: { confirm: vi.fn() } }))
 vi.mock('@/api/core/erp-documents', () => ({
   getProcurementOrders: vi.fn(async () => ({ total: 0, items: [] })),

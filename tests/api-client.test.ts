@@ -219,7 +219,7 @@ describe('API 401分类与会话恢复', () => {
     const recoverSession = vi.fn()
     unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recoverSession)
 
-    await expect(apiClient.get('/portal/navigation/SUPPLY_CHAIN', {
+    await expect(apiClient.get('/scdp/navigation', {
       adapter: unauthorizedAdapter({ marker, status }),
     })).rejects.toMatchObject({ code: marker, response: { status } })
 

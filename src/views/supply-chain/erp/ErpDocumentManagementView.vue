@@ -3,18 +3,32 @@
     <div class="page-heading">
       <div>
         <span class="supply-page__eyebrow">{{ pageConfig.eyebrow }}</span>
-        <h1>{{ pageConfig.title }}</h1>
+        <SupplyPageTitle>{{ pageConfig.title }}</SupplyPageTitle>
         <p>{{ pageConfig.description }}</p>
       </div>
       <div class="heading-actions">
-        <el-button v-if="mode === 'procurement' || mode === 'transfer'" type="primary" @click="openCreate">
+        <DhbPageSyncButton
+          :scope="pageSyncScope"
+          :label="pageConfig.shortTitle"
+          @completed="loadRows"
+        />
+        <el-button
+          v-if="(mode === 'procurement' || mode === 'transfer') && canChange('create')"
+          type="primary"
+          @click="openCreate"
+        >
           新增{{ pageConfig.shortTitle }}
         </el-button>
       </div>
     </div>
 
     <div class="workflow-strip" :aria-label="`${pageConfig.title}业务流程`">
-      <div v-for="step in workflowSteps" :key="step.title" class="workflow-step" :class="{ 'is-active': step.active }">
+      <div
+        v-for="step in workflowSteps"
+        :key="step.title"
+        class="workflow-step"
+        :class="{ 'is-active': step.active }"
+      >
         <span>{{ step.index }}</span>
         <strong>{{ step.title }}</strong>
         <small>{{ step.description }}</small>
@@ -24,22 +38,57 @@
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="searchRows">
         <el-form-item :label="`${pageConfig.shortTitle}号`">
-          <el-input v-model="filters.documentNo" clearable :placeholder="documentNoPlaceholder" style="width: 210px" />
+          <el-input
+            v-model="filters.documentNo"
+            clearable
+            :placeholder="documentNoPlaceholder"
+            style="width: 210px"
+          />
         </el-form-item>
         <el-form-item v-if="mode === 'stockOut'" label="客户名称">
-          <el-input v-model="filters.customerName" clearable placeholder="销售出库客户" style="width: 180px" />
+          <el-input
+            v-model="filters.customerName"
+            clearable
+            placeholder="销售出库客户"
+            style="width: 180px"
+          />
         </el-form-item>
         <el-form-item v-if="mode === 'stockOut'" label="销售订单">
-          <el-input v-model="filters.salesOrderNo" clearable placeholder="销售订单号" style="width: 180px" />
+          <el-input
+            v-model="filters.salesOrderNo"
+            clearable
+            placeholder="销售订单号"
+            style="width: 180px"
+          />
         </el-form-item>
         <el-form-item v-if="mode === 'stockIn'" label="入库类型">
-          <el-select v-model="filters.stockInTypeCode" clearable placeholder="全部类型" style="width: 150px">
-            <el-option v-for="item in stockInTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.stockInTypeCode"
+            clearable
+            placeholder="全部类型"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="item in stockInTypeOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item v-if="mode === 'stockOut'" label="出库类型">
-          <el-select v-model="filters.stockOutTypeCode" clearable placeholder="全部类型" style="width: 150px">
-            <el-option v-for="item in stockOutTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.stockOutTypeCode"
+            clearable
+            placeholder="全部类型"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="item in stockOutTypeOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item v-if="mode === 'procurement' || mode === 'stockIn'" label="供应商">
@@ -54,7 +103,12 @@
             placeholder="全部供应商"
             style="width: 180px"
           >
-            <el-option v-for="item in supplierOptions" :key="item.id" :label="item.supplierName" :value="item.id" />
+            <el-option
+              v-for="item in supplierOptions"
+              :key="item.id"
+              :label="item.supplierName"
+              :value="item.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item v-if="mode !== 'transfer'" :label="warehouseFilterLabel">
@@ -69,7 +123,12 @@
             placeholder="全部仓库"
             style="width: 170px"
           >
-            <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.warehouseName" :value="item.id" />
+            <el-option
+              v-for="item in warehouseOptions"
+              :key="item.id"
+              :label="item.warehouseName"
+              :value="item.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item v-if="mode === 'transfer'" label="调出仓库">
@@ -84,7 +143,12 @@
             placeholder="全部调出仓"
             style="width: 170px"
           >
-            <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.warehouseName" :value="item.id" />
+            <el-option
+              v-for="item in warehouseOptions"
+              :key="item.id"
+              :label="item.warehouseName"
+              :value="item.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item v-if="mode === 'transfer'" label="调入仓库">
@@ -99,7 +163,12 @@
             placeholder="全部调入仓"
             style="width: 170px"
           >
-            <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.warehouseName" :value="item.id" />
+            <el-option
+              v-for="item in warehouseOptions"
+              :key="item.id"
+              :label="item.warehouseName"
+              :value="item.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="timeRangeLabel">
@@ -114,8 +183,18 @@
           />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="filters.statusCode" clearable placeholder="全部状态" style="width: 140px">
-            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.statusCode"
+            clearable
+            placeholder="全部状态"
+            style="width: 140px"
+          >
+            <el-option
+              v-for="item in statusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item class="filter-actions">
@@ -129,7 +208,9 @@
       <div>
         <div class="result-title-line">
           <h2>{{ pageConfig.title }}列表</h2>
-          <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+          <span class="result-count"
+            ><strong>{{ pageData.total }}</strong> 条</span
+          >
         </div>
       </div>
     </div>
@@ -144,17 +225,35 @@
           row-key="id"
           @row-click="openDetail"
         >
-          <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <el-table-column
+            type="index"
+            label="序号"
+            width="80"
+            fixed="left"
+            :index="tableRowIndex"
+          />
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
           <el-table-column :label="`${pageConfig.shortTitle}号`" width="190" show-overflow-tooltip>
-            <template #default="scope"><strong>{{ documentNo(scope.row) }}</strong></template>
+            <template #default="scope"
+              ><strong>{{ documentNo(scope.row) }}</strong></template
+            >
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'procurement'" label="供应商" min-width="190" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'procurement'"
+            label="供应商"
+            min-width="190"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ supplierName(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'procurement'" label="入库仓库" min-width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'procurement'"
+            label="入库仓库"
+            min-width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ targetWarehouseName(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
@@ -166,19 +265,39 @@
             <template #default="scope">{{ stockInTypeLabel(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'stockIn'" label="来源采购单" width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'stockIn'"
+            label="来源采购单"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ procurementNo(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'stockIn'" label="来源调拨单" width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'stockIn'"
+            label="来源调拨单"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ transferNo(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'stockIn'" label="入库仓库" min-width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'stockIn'"
+            label="入库仓库"
+            min-width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ warehouseName(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'stockIn'" label="供应商" min-width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'stockIn'"
+            label="供应商"
+            min-width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ supplierName(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
@@ -190,19 +309,39 @@
             <template #default="scope">{{ stockOutTypeLabel(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'stockOut'" label="销售订单" width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'stockOut'"
+            label="销售订单"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ salesOrderNo(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'stockOut'" label="调拨单号" width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'stockOut'"
+            label="调拨单号"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ transferNo(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'stockOut'" label="客户名称" min-width="190" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'stockOut'"
+            label="客户名称"
+            min-width="190"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ customerName(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'stockOut'" label="出库仓库" min-width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'stockOut'"
+            label="出库仓库"
+            min-width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ warehouseName(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
@@ -210,19 +349,39 @@
             <template #default="scope">{{ formatTime(stockOutTime(scope.row)) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'transfer'" label="来源仓库" min-width="180" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'transfer'"
+            label="来源仓库"
+            min-width="180"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ sourceWarehouseName(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'transfer'" label="目标仓库" min-width="180" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'transfer'"
+            label="目标仓库"
+            min-width="180"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ targetWarehouseName(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'transfer'" label="调拨出库单" width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'transfer'"
+            label="调拨出库单"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ stockOutNo(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
-          <el-table-column v-if="mode === 'transfer'" label="调拨入库单" width="170" show-overflow-tooltip>
+          <el-table-column
+            v-if="mode === 'transfer'"
+            label="调拨入库单"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ stockInNo(scope.row) }}</template>
           </el-table-column>
           <!-- @vue-generic {DocumentSummary | DocumentDetail} -->
@@ -235,13 +394,20 @@
           </el-table-column>
           <el-table-column label="状态" width="120">
             <template #default="scope">
-              <el-tag :type="statusTag(scope.row.statusCode)" effect="light">{{ statusLabel(scope.row.statusCode) }}</el-tag>
+              <el-tag :type="statusTag(scope.row.statusCode)" effect="light">{{
+                statusLabel(scope.row.statusCode)
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="商品数量" width="110" align="right">
             <template #default="scope">{{ formatNumber(scope.row.totalQuantity) }}</template>
           </el-table-column>
-          <el-table-column v-if="mode === 'procurement' || mode === 'stockIn'" label="金额" width="130" align="right">
+          <el-table-column
+            v-if="mode === 'procurement' || mode === 'stockIn'"
+            label="金额"
+            width="130"
+            align="right"
+          >
             <template #default="scope">{{ formatMoney(scope.row.totalAmount) }}</template>
           </el-table-column>
           <el-table-column label="更新时间" width="170">
@@ -251,11 +417,41 @@
           <el-table-column label="操作" width="260" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button v-if="canEdit(scope.row)" link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
-              <el-button v-if="canStockIn(scope.row)" link type="primary" @click.stop="openProcurementStockIn(scope.row)">入库</el-button>
-              <el-button v-if="canTransferStockOut(scope.row)" link type="primary" @click.stop="openTransferAction(scope.row, 'out')">确认出库</el-button>
-              <el-button v-if="canTransferStockIn(scope.row)" link type="primary" @click.stop="openTransferAction(scope.row, 'in')">确认入库</el-button>
-              <el-button v-if="canDelete(scope.row)" link type="danger" @click.stop="deleteDocument(scope.row)">删除</el-button>
+              <el-button
+                v-if="canEdit(scope.row)"
+                link
+                type="primary"
+                @click.stop="openEdit(scope.row)"
+                >编辑</el-button
+              >
+              <el-button
+                v-if="canStockIn(scope.row)"
+                link
+                type="primary"
+                @click.stop="openProcurementStockIn(scope.row)"
+                >入库</el-button
+              >
+              <el-button
+                v-if="canTransferStockOut(scope.row)"
+                link
+                type="primary"
+                @click.stop="openTransferAction(scope.row, 'out')"
+                >确认出库</el-button
+              >
+              <el-button
+                v-if="canTransferStockIn(scope.row)"
+                link
+                type="primary"
+                @click.stop="openTransferAction(scope.row, 'in')"
+                >确认入库</el-button
+              >
+              <el-button
+                v-if="canDelete(scope.row)"
+                link
+                type="danger"
+                @click.stop="deleteDocument(scope.row)"
+                >删除</el-button
+              >
             </template>
           </el-table-column>
           <template #empty><el-empty :description="`暂无${pageConfig.shortTitle}`" /></template>
@@ -274,7 +470,12 @@
       </div>
     </el-card>
 
-    <el-drawer v-model="detailVisible" class="erp-document-detail-drawer" size="min(980px, 92vw)" :with-header="false">
+    <el-drawer
+      v-model="detailVisible"
+      class="erp-document-detail-drawer"
+      size="min(980px, 92vw)"
+      :with-header="false"
+    >
       <div v-if="detail" class="detail-shell">
         <header class="detail-hero">
           <div>
@@ -282,13 +483,26 @@
             <h2>{{ documentNo(detail) }}</h2>
             <p>{{ mainRelation(detail) }}</p>
           </div>
-          <el-button circle plain :aria-label="`关闭${pageConfig.shortTitle}详情`" @click="detailVisible = false">×</el-button>
+          <el-button
+            circle
+            plain
+            :aria-label="`关闭${pageConfig.shortTitle}详情`"
+            @click="detailVisible = false"
+            >×</el-button
+          >
         </header>
         <div class="detail-content">
           <div class="detail-summary detail-summary--three">
-            <div><span>状态</span><strong>{{ statusLabel(detail.statusCode) }}</strong></div>
-            <div><span>数量</span><strong>{{ formatNumber(detail.totalQuantity) }}</strong></div>
-            <div><span>明细行</span><strong>{{ detail.lines?.length || detail.lineCount || 0 }}</strong></div>
+            <div>
+              <span>状态</span><strong>{{ statusLabel(detail.statusCode) }}</strong>
+            </div>
+            <div>
+              <span>数量</span><strong>{{ formatNumber(detail.totalQuantity) }}</strong>
+            </div>
+            <div>
+              <span>明细行</span
+              ><strong>{{ detail.lines?.length || detail.lineCount || 0 }}</strong>
+            </div>
           </div>
           <el-descriptions :column="3" border>
             <el-descriptions-item
@@ -302,24 +516,58 @@
           </el-descriptions>
           <h3 class="detail-title">商品明细</h3>
           <!-- @vue-generic {DocumentDetail['lines'][number]} -->
-          <el-table class="supply-scroll-table detail-table" :data="detail.lines || []" max-height="360" size="small">
+          <el-table
+            class="supply-scroll-table detail-table"
+            :data="detail.lines || []"
+            max-height="360"
+            size="small"
+          >
             <el-table-column prop="productName" label="商品" min-width="220" fixed="left">
               <template #default="scope">{{ lineProductName(scope.row) }}</template>
             </el-table-column>
-            <el-table-column label="商品编码" width="150"><template #default="scope">{{ lineProductCode(scope.row) || '-' }}</template></el-table-column>
-            <el-table-column label="规格编码" width="150"><template #default="scope">{{ lineVariantCode(scope.row) || '-' }}</template></el-table-column>
+            <el-table-column label="商品编码" width="150"
+              ><template #default="scope">{{
+                lineProductCode(scope.row) || '-'
+              }}</template></el-table-column
+            >
+            <el-table-column label="规格编码" width="150"
+              ><template #default="scope">{{
+                lineVariantCode(scope.row) || '-'
+              }}</template></el-table-column
+            >
             <el-table-column label="单位" width="90">
               <template #default="scope">{{ unitLabel(scope.row.unitCode) }}</template>
             </el-table-column>
-            <el-table-column label="数量" width="110" align="right"><template #default="scope">{{ formatNumber(scope.row.quantity) }}</template></el-table-column>
-            <el-table-column v-if="mode === 'procurement'" label="已入库数量" width="120" align="right">
+            <el-table-column label="数量" width="110" align="right"
+              ><template #default="scope">{{
+                formatNumber(scope.row.quantity)
+              }}</template></el-table-column
+            >
+            <el-table-column
+              v-if="mode === 'procurement'"
+              label="已入库数量"
+              width="120"
+              align="right"
+            >
               <template #default="scope">{{ formatNumber(scope.row.receivedQuantity) }}</template>
             </el-table-column>
-            <el-table-column v-if="mode === 'procurement' || mode === 'stockIn'" label="单价" width="120" align="right">
+            <el-table-column
+              v-if="mode === 'procurement' || mode === 'stockIn'"
+              label="单价"
+              width="120"
+              align="right"
+            >
               <template #default="scope">{{ formatMoney(scope.row.unitPrice) }}</template>
             </el-table-column>
-            <el-table-column v-if="mode === 'procurement' || mode === 'stockIn'" label="金额" width="130" align="right">
-              <template #default="scope">{{ formatMoney(scope.row.lineAmount ?? scope.row.amount) }}</template>
+            <el-table-column
+              v-if="mode === 'procurement' || mode === 'stockIn'"
+              label="金额"
+              width="130"
+              align="right"
+            >
+              <template #default="scope">{{
+                formatMoney(scope.row.lineAmount ?? scope.row.amount)
+              }}</template>
             </el-table-column>
             <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
           </el-table>
@@ -328,38 +576,96 @@
       <el-skeleton v-else :rows="8" animated />
     </el-drawer>
 
-    <el-dialog v-model="editorVisible" :title="editingId ? `编辑${pageConfig.shortTitle}` : `新增${pageConfig.shortTitle}`" width="min(1040px, 94vw)" destroy-on-close>
+    <el-dialog
+      v-model="editorVisible"
+      :title="editingId ? `编辑${pageConfig.shortTitle}` : `新增${pageConfig.shortTitle}`"
+      width="min(1040px, 94vw)"
+      destroy-on-close
+    >
       <el-form :model="form" label-width="110px">
         <el-row :gutter="16">
           <el-col v-if="mode === 'procurement'" :span="12">
             <el-form-item label="供应商">
-              <el-select v-model="form.supplierId" filterable remote reserve-keyword placeholder="搜索供应商" :remote-method="searchSuppliers" :loading="supplierLoading" style="width: 100%">
-                <el-option v-for="item in supplierOptions" :key="item.id" :label="item.supplierName" :value="item.id" />
+              <el-select
+                v-model="form.supplierId"
+                filterable
+                remote
+                reserve-keyword
+                placeholder="搜索供应商"
+                :remote-method="searchSuppliers"
+                :loading="supplierLoading"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in supplierOptions"
+                  :key="item.id"
+                  :label="item.supplierName"
+                  :value="item.id"
+                />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item :label="mode === 'procurement' ? '入库仓库' : '来源仓库'">
-              <el-select v-model="form.sourceWarehouseId" filterable remote reserve-keyword placeholder="搜索仓库" :remote-method="searchWarehouses" :loading="warehouseLoading" style="width: 100%">
-                <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.warehouseName" :value="item.id" />
+              <el-select
+                v-model="form.sourceWarehouseId"
+                filterable
+                remote
+                reserve-keyword
+                placeholder="搜索仓库"
+                :remote-method="searchWarehouses"
+                :loading="warehouseLoading"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in warehouseOptions"
+                  :key="item.id"
+                  :label="item.warehouseName"
+                  :value="item.id"
+                />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col v-if="mode === 'transfer'" :span="12">
             <el-form-item label="目标仓库">
-              <el-select v-model="form.targetWarehouseId" filterable remote reserve-keyword placeholder="搜索仓库" :remote-method="searchWarehouses" :loading="warehouseLoading" style="width: 100%">
-                <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.warehouseName" :value="item.id" />
+              <el-select
+                v-model="form.targetWarehouseId"
+                filterable
+                remote
+                reserve-keyword
+                placeholder="搜索仓库"
+                :remote-method="searchWarehouses"
+                :loading="warehouseLoading"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in warehouseOptions"
+                  :key="item.id"
+                  :label="item.warehouseName"
+                  :value="item.id"
+                />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col v-if="mode === 'procurement'" :span="12">
             <el-form-item label="预计到货">
-              <el-date-picker v-model="form.expectedArrivalTime" type="datetime" placeholder="预计到货时间" style="width: 100%" />
+              <el-date-picker
+                v-model="form.expectedArrivalTime"
+                type="datetime"
+                placeholder="预计到货时间"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="24">
             <el-form-item label="备注">
-              <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="1000" show-word-limit />
+              <el-input
+                v-model="form.remark"
+                type="textarea"
+                :rows="2"
+                maxlength="1000"
+                show-word-limit
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -371,26 +677,61 @@
           <el-row :gutter="12">
             <el-col :span="7">
               <el-form-item :label="`商品${index + 1}`">
-                <el-select v-model="line.productId" filterable remote reserve-keyword placeholder="搜索商品" :remote-method="searchProducts" :loading="productLoading" style="width: 100%" @change="selectProduct(line)">
-                  <el-option v-for="item in productOptions" :key="item.id" :label="item.productName" :value="item.id" />
+                <el-select
+                  v-model="line.productId"
+                  filterable
+                  remote
+                  reserve-keyword
+                  placeholder="搜索商品"
+                  :remote-method="searchProducts"
+                  :loading="productLoading"
+                  style="width: 100%"
+                  @change="selectProduct(line)"
+                >
+                  <el-option
+                    v-for="item in productOptions"
+                    :key="item.id"
+                    :label="item.productName"
+                    :value="item.id"
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="5">
               <el-form-item label="规格">
-                <el-select v-model="line.productVariantId" placeholder="选择规格" style="width: 100%" @change="selectVariant(line)">
-                  <el-option v-for="item in line.variants" :key="item.id" :label="variantLabel(item)" :value="item.id" />
+                <el-select
+                  v-model="line.productVariantId"
+                  placeholder="选择规格"
+                  style="width: 100%"
+                  @change="selectVariant(line)"
+                >
+                  <el-option
+                    v-for="item in line.variants"
+                    :key="item.id"
+                    :label="variantLabel(item)"
+                    :value="item.id"
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="4">
               <el-form-item label="数量">
-                <el-input-number v-model="line.quantity" :min="0.000001" :precision="2" style="width: 100%" />
+                <el-input-number
+                  v-model="line.quantity"
+                  :min="0.000001"
+                  :precision="2"
+                  style="width: 100%"
+                />
               </el-form-item>
             </el-col>
             <el-col v-if="mode === 'procurement'" :span="4">
               <el-form-item label="单价">
-                <el-input-number v-model="line.unitPrice" :min="0" :precision="2" style="width: 100%" />
+                <el-input-number
+                  v-model="line.unitPrice"
+                  :min="0"
+                  :precision="2"
+                  style="width: 100%"
+                />
               </el-form-item>
             </el-col>
             <el-col :span="4" class="line-actions">
@@ -401,59 +742,127 @@
       </el-form>
       <template #footer>
         <el-button @click="editorVisible = false">取消</el-button>
-        <el-button v-if="mode === 'procurement'" :loading="saving" @click="saveDocument(false)">保存草稿</el-button>
-        <el-button v-if="mode === 'procurement'" type="primary" :loading="saving" @click="saveDocument(true)">保存并提交</el-button>
-        <el-button v-else type="primary" :loading="saving" @click="saveDocument(false)">保存</el-button>
+        <el-button v-if="mode === 'procurement'" :loading="saving" @click="saveDocument(false)"
+          >保存草稿</el-button
+        >
+        <el-button
+          v-if="mode === 'procurement'"
+          type="primary"
+          :loading="saving"
+          @click="saveDocument(true)"
+          >保存并提交</el-button
+        >
+        <el-button v-else type="primary" :loading="saving" @click="saveDocument(false)"
+          >保存</el-button
+        >
       </template>
     </el-dialog>
 
-    <el-dialog v-model="stockInVisible" title="确认采购入库" width="min(860px, 92vw)" destroy-on-close>
-      <el-alert class="request-hint" type="info" show-icon :closable="false" title="确认后会生成入库单，并增加采购单目标仓库库存。" />
+    <el-dialog
+      v-model="stockInVisible"
+      title="确认采购入库"
+      width="min(860px, 92vw)"
+      destroy-on-close
+    >
+      <el-alert
+        class="request-hint"
+        type="info"
+        show-icon
+        :closable="false"
+        title="确认后会生成入库单，并增加采购单目标仓库库存。"
+      />
       <el-form :model="stockInForm" label-width="110px">
         <el-form-item label="入库时间">
-          <el-date-picker v-model="stockInForm.stockInTime" type="datetime" placeholder="默认当前时间" style="width: 100%" />
+          <el-date-picker
+            v-model="stockInForm.stockInTime"
+            type="datetime"
+            placeholder="默认当前时间"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="stockInForm.remark" type="textarea" :rows="2" maxlength="1000" show-word-limit />
+          <el-input
+            v-model="stockInForm.remark"
+            type="textarea"
+            :rows="2"
+            maxlength="1000"
+            show-word-limit
+          />
         </el-form-item>
         <el-table :data="stockInForm.lines" size="small" max-height="300">
           <el-table-column prop="productName" label="商品" min-width="220" />
           <el-table-column label="单位" width="90">
             <template #default="scope">{{ unitLabel(scope.row.unitCode) }}</template>
           </el-table-column>
-          <el-table-column label="可入库" width="110" align="right"><template #default="scope">{{ formatNumber(scope.row.remainingQuantity) }}</template></el-table-column>
+          <el-table-column label="可入库" width="110" align="right"
+            ><template #default="scope">{{
+              formatNumber(scope.row.remainingQuantity)
+            }}</template></el-table-column
+          >
           <el-table-column label="本次入库" width="180">
-            <template #default="scope"><el-input-number v-model="scope.row.quantity" :min="0" :max="scope.row.remainingQuantity" :precision="2" /></template>
+            <template #default="scope"
+              ><el-input-number
+                v-model="scope.row.quantity"
+                :min="0"
+                :max="scope.row.remainingQuantity"
+                :precision="2"
+            /></template>
           </el-table-column>
         </el-table>
       </el-form>
       <template #footer>
         <el-button @click="stockInVisible = false">取消</el-button>
-        <el-button type="primary" :loading="stockInLoading" @click="confirmStockIn">确认入库</el-button>
+        <el-button type="primary" :loading="stockInLoading" @click="confirmStockIn"
+          >确认入库</el-button
+        >
       </template>
     </el-dialog>
 
-    <el-dialog v-model="transferActionVisible" :title="transferActionType === 'out' ? '确认调拨出库' : '确认调拨入库'" width="520px" destroy-on-close>
+    <el-dialog
+      v-model="transferActionVisible"
+      :title="transferActionType === 'out' ? '确认调拨出库' : '确认调拨入库'"
+      width="520px"
+      destroy-on-close
+    >
       <el-form :model="transferActionForm" label-width="110px">
         <el-form-item :label="transferActionType === 'out' ? '出库时间' : '入库时间'">
-          <el-date-picker v-model="transferActionForm.time" type="datetime" placeholder="默认当前时间" style="width: 100%" />
+          <el-date-picker
+            v-model="transferActionForm.time"
+            type="datetime"
+            placeholder="默认当前时间"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="transferActionForm.remark" type="textarea" :rows="2" maxlength="1000" show-word-limit />
+          <el-input
+            v-model="transferActionForm.remark"
+            type="textarea"
+            :rows="2"
+            maxlength="1000"
+            show-word-limit
+          />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="transferActionVisible = false">取消</el-button>
-        <el-button type="primary" :loading="transferActionLoading" @click="confirmTransferAction">确认</el-button>
+        <el-button type="primary" :loading="transferActionLoading" @click="confirmTransferAction"
+          >确认</el-button
+        >
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
+import { auditActorLabel } from '@/utils/audit-actor'
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
+import type { DhbPageScope } from '@/api/core/dhb-page-sync'
 import { randomId } from '@/utils/random-id'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   confirmProcurementStockIn,
@@ -508,8 +917,10 @@ import {
 } from '@/utils/business-dictionary'
 
 type DocumentMode = 'procurement' | 'stockIn' | 'stockOut' | 'transfer'
-type DocumentSummary = ProcurementOrderSummary | StockInOrderSummary | StockOutOrderSummary | TransferOrderSummary
-type DocumentDetail = ProcurementOrderDetail | StockInOrderDetail | StockOutOrderDetail | TransferOrderDetail
+type DocumentSummary =
+  ProcurementOrderSummary | StockInOrderSummary | StockOutOrderSummary | TransferOrderSummary
+type DocumentDetail =
+  ProcurementOrderDetail | StockInOrderDetail | StockOutOrderDetail | TransferOrderDetail
 type WorkflowStep = { index: number; title: string; description: string; active: boolean }
 type FilterDateRange = Date[] | string[] | null
 type DocumentCommand =
@@ -536,12 +947,57 @@ interface StockInLineForm {
 }
 
 const route = useRoute()
+const { can } = useSupplyPermissions()
+function canChange(action: string) {
+  return can(
+    mode.value === 'transfer' ? `erp:transfer:${action}` : `erp:procurement:${action}`,
+    'erp:supply:write',
+  )
+}
 
-const pageConfigs: Record<DocumentMode, { title: string; shortTitle: string; eyebrow: string; description: string; avatar: string }> = {
-  procurement: { title: '采购订单', shortTitle: '采购单', eyebrow: 'ERP · 采购管理', description: '创建采购商品和供应商订单，后续按订单确认入库。', avatar: '采' },
-  stockIn: { title: '入库单', shortTitle: '入库单', eyebrow: 'ERP · 库存管理', description: '查看采购入库或调拨入库生成的入库凭证。', avatar: '入' },
-  stockOut: { title: '出库单', shortTitle: '出库单', eyebrow: 'ERP · 库存管理', description: '查看销售出库或调拨出库生成的出库凭证。', avatar: '出' },
-  transfer: { title: '库存调拨', shortTitle: '调拨单', eyebrow: 'ERP · 库存管理', description: '独立处理仓库之间的库存转移。', avatar: '调' },
+const pageSyncScope = computed<DhbPageScope>(
+  () =>
+    (
+      ({
+        procurement: 'PURCHASE_ORDER',
+        stockIn: 'WAREHOUSING_RECEIPT',
+        stockOut: 'SHIPMENT',
+        transfer: 'TRANSFER',
+      }) as const
+    )[mode.value],
+)
+const pageConfigs: Record<
+  DocumentMode,
+  { title: string; shortTitle: string; eyebrow: string; description: string; avatar: string }
+> = {
+  procurement: {
+    title: '采购订单',
+    shortTitle: '采购单',
+    eyebrow: 'ERP · 采购管理',
+    description: '创建采购商品和供应商订单，后续按订单确认入库。',
+    avatar: '采',
+  },
+  stockIn: {
+    title: '入库单',
+    shortTitle: '入库单',
+    eyebrow: 'ERP · 库存管理',
+    description: '查看采购入库或调拨入库生成的入库凭证。',
+    avatar: '入',
+  },
+  stockOut: {
+    title: '出库单',
+    shortTitle: '出库单',
+    eyebrow: 'ERP · 库存管理',
+    description: '查看销售出库或调拨出库生成的出库凭证。',
+    avatar: '出',
+  },
+  transfer: {
+    title: '库存调拨',
+    shortTitle: '调拨单',
+    eyebrow: 'ERP · 库存管理',
+    description: '独立处理仓库之间的库存转移。',
+    avatar: '调',
+  },
 }
 
 const workflowConfigs: Record<DocumentMode, Array<Omit<WorkflowStep, 'active'>>> = {
@@ -603,14 +1059,18 @@ const timeRangeLabel = computed(() => {
   return '入库时间'
 })
 const workflowSteps = computed<WorkflowStep[]>(() => {
-  const activeIndex = mode.value === 'stockIn' || mode.value === 'stockOut'
-    ? 1
-    : mode.value === 'transfer' && filters.statusCode === 'OUT_CONFIRMED'
+  const activeIndex =
+    mode.value === 'stockIn' || mode.value === 'stockOut'
       ? 1
-      : mode.value === 'transfer' && filters.statusCode === 'IN_CONFIRMED'
-        ? 2
-        : 0
-  return workflowConfigs[mode.value].map((step, index) => ({ ...step, active: index === activeIndex }))
+      : mode.value === 'transfer' && filters.statusCode === 'OUT_CONFIRMED'
+        ? 1
+        : mode.value === 'transfer' && filters.statusCode === 'IN_CONFIRMED'
+          ? 2
+          : 0
+  return workflowConfigs[mode.value].map((step, index) => ({
+    ...step,
+    active: index === activeIndex,
+  }))
 })
 
 const loading = ref(false)
@@ -701,7 +1161,7 @@ async function loadRows() {
     const from = rangeStart(filters.timeRange)
     const to = rangeEnd(filters.timeRange)
     if (mode.value === 'procurement') {
-      pageData.value = await getProcurementOrders({
+      pageData.value = (await getProcurementOrders({
         ...common,
         procurementNo: empty(filters.documentNo),
         supplierId: empty(filters.supplierId),
@@ -709,9 +1169,9 @@ async function loadRows() {
         statusCode: empty(filters.statusCode),
         expectedArrivalFrom: from,
         expectedArrivalTo: to,
-      }) as ErpInternalPage<DocumentSummary>
+      })) as ErpInternalPage<DocumentSummary>
     } else if (mode.value === 'stockIn') {
-      pageData.value = await getStockInOrders({
+      pageData.value = (await getStockInOrders({
         ...common,
         stockInNo: empty(filters.documentNo),
         stockInTypeCode: empty(filters.stockInTypeCode),
@@ -720,9 +1180,9 @@ async function loadRows() {
         statusCode: empty(filters.statusCode),
         stockInTimeFrom: from,
         stockInTimeTo: to,
-      }) as ErpInternalPage<DocumentSummary>
+      })) as ErpInternalPage<DocumentSummary>
     } else if (mode.value === 'stockOut') {
-      pageData.value = await getStockOutOrders({
+      pageData.value = (await getStockOutOrders({
         ...common,
         stockOutNo: empty(filters.documentNo),
         stockOutTypeCode: empty(filters.stockOutTypeCode),
@@ -732,9 +1192,9 @@ async function loadRows() {
         salesOrderNo: empty(filters.salesOrderNo),
         stockOutTimeFrom: from,
         stockOutTimeTo: to,
-      }) as ErpInternalPage<DocumentSummary>
+      })) as ErpInternalPage<DocumentSummary>
     } else {
-      pageData.value = await getTransferOrders({
+      pageData.value = (await getTransferOrders({
         ...common,
         transferNo: empty(filters.documentNo),
         sourceWarehouseId: empty(filters.sourceWarehouseId),
@@ -742,7 +1202,7 @@ async function loadRows() {
         statusCode: empty(filters.statusCode),
         stockOutTimeFrom: from,
         stockOutTimeTo: to,
-      }) as ErpInternalPage<DocumentSummary>
+      })) as ErpInternalPage<DocumentSummary>
     }
   } catch (reason) {
     ElMessage.error(errorMessage(reason, `${pageConfig.value.shortTitle}列表加载失败`))
@@ -832,11 +1292,15 @@ async function saveDocument(submit: boolean) {
 
 async function deleteDocument(row: DocumentSummary) {
   try {
-    await ElMessageBox.confirm(`确认删除${pageConfig.value.shortTitle}「${documentNo(row)}」？后端会按规则做逻辑删除。`, `删除${pageConfig.value.shortTitle}`, {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      `确认删除${pageConfig.value.shortTitle}「${documentNo(row)}」？后端会按规则做逻辑删除。`,
+      `删除${pageConfig.value.shortTitle}`,
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
     if (mode.value === 'procurement') await deleteProcurementOrder(row.id, row.revision)
     else if (mode.value === 'transfer') await deleteTransferOrder(row.id, row.revision)
     ElMessage.success(`${pageConfig.value.shortTitle}已删除`)
@@ -853,16 +1317,21 @@ async function openProcurementStockIn(row: DocumentSummary) {
   stockInForm.procurementRevision = current.revision
   stockInForm.stockInTime = new Date()
   stockInForm.remark = ''
-  stockInForm.lines = current.lines.map((line) => {
-    const remainingQuantity = Math.max(Number(line.quantity || 0) - Number(line.receivedQuantity || 0), 0)
-    return {
-      procurementOrderLineId: line.id,
-      productName: line.productName,
-      unitCode: line.unitCode,
-      remainingQuantity,
-      quantity: remainingQuantity,
-    }
-  }).filter((line) => line.remainingQuantity > 0)
+  stockInForm.lines = current.lines
+    .map((line) => {
+      const remainingQuantity = Math.max(
+        Number(line.quantity || 0) - Number(line.receivedQuantity || 0),
+        0,
+      )
+      return {
+        procurementOrderLineId: line.id,
+        productName: line.productName,
+        unitCode: line.unitCode,
+        remainingQuantity,
+        quantity: remainingQuantity,
+      }
+    })
+    .filter((line) => line.remainingQuantity > 0)
   if (!stockInForm.lines.length) {
     ElMessage.warning('该采购单已无可入库数量')
     return
@@ -873,7 +1342,10 @@ async function openProcurementStockIn(row: DocumentSummary) {
 async function confirmStockIn() {
   const lines = stockInForm.lines
     .filter((line) => Number(line.quantity) > 0)
-    .map((line) => ({ procurementOrderLineId: line.procurementOrderLineId, quantity: line.quantity }))
+    .map((line) => ({
+      procurementOrderLineId: line.procurementOrderLineId,
+      quantity: line.quantity,
+    }))
   if (!lines.length) {
     ElMessage.warning('请输入入库数量')
     return
@@ -927,7 +1399,9 @@ async function confirmTransferAction() {
     transferActionVisible.value = false
     await loadRows()
   } catch (reason) {
-    ElMessage.error(errorMessage(reason, transferActionType.value === 'out' ? '调拨出库失败' : '调拨入库失败'))
+    ElMessage.error(
+      errorMessage(reason, transferActionType.value === 'out' ? '调拨出库失败' : '调拨入库失败'),
+    )
   } finally {
     transferActionLoading.value = false
   }
@@ -989,7 +1463,9 @@ function buildDocumentCommand(submit: boolean): DocumentCommand | null {
 
 function buildLines(withPrice: true): ProcurementOrderLineCommand[] | null
 function buildLines(withPrice: false): TransferOrderLineCommand[] | null
-function buildLines(withPrice: boolean): ProcurementOrderLineCommand[] | TransferOrderLineCommand[] | null {
+function buildLines(
+  withPrice: boolean,
+): ProcurementOrderLineCommand[] | TransferOrderLineCommand[] | null {
   if (!form.lines.length) {
     ElMessage.warning('请添加商品明细')
     return null
@@ -1084,7 +1560,12 @@ function removeLine(index: number) {
 async function searchSuppliers(query: string) {
   supplierLoading.value = true
   try {
-    const result = await getErpSupplierProfiles({ begin: 0, step: 20, supplierName: empty(query), statusCode: 'ACTIVE' })
+    const result = await getErpSupplierProfiles({
+      begin: 0,
+      step: 20,
+      supplierName: empty(query),
+      statusCode: 'ACTIVE',
+    })
     supplierOptions.value = result.items
   } finally {
     supplierLoading.value = false
@@ -1094,7 +1575,12 @@ async function searchSuppliers(query: string) {
 async function searchWarehouses(query: string) {
   warehouseLoading.value = true
   try {
-    const result = await getErpInventoryWarehouses({ begin: 0, step: 20, warehouseName: empty(query), statusCode: 'ACTIVE' })
+    const result = await getErpInventoryWarehouses({
+      begin: 0,
+      step: 20,
+      warehouseName: empty(query),
+      statusCode: 'ACTIVE',
+    })
     warehouseOptions.value = result.items
   } finally {
     warehouseLoading.value = false
@@ -1104,7 +1590,13 @@ async function searchWarehouses(query: string) {
 async function searchProducts(query: string) {
   productLoading.value = true
   try {
-    const result = await getErpManagedProducts({ begin: 0, step: 20, productName: empty(query), shelfStatusCode: 'ON_SHELF', submitStatusCode: 'SUBMITTED' })
+    const result = await getErpManagedProducts({
+      begin: 0,
+      step: 20,
+      productName: empty(query),
+      shelfStatusCode: 'ON_SHELF',
+      submitStatusCode: 'SUBMITTED',
+    })
     productOptions.value = result.items
   } finally {
     productLoading.value = false
@@ -1128,7 +1620,8 @@ function selectVariant(line: LineForm) {
   const variant = line.variants.find((item) => String(item.id) === String(line.productVariantId))
   if (!variant) return
   line.unitCode = variant.unitCode || line.unitCode
-  if (mode.value === 'procurement') line.unitPrice = Number(variant.purchasePrice || variant.salePrice || 0)
+  if (mode.value === 'procurement')
+    line.unitPrice = Number(variant.purchasePrice || variant.salePrice || 0)
 }
 
 function documentNo(row: DocumentSummary | DocumentDetail) {
@@ -1153,12 +1646,21 @@ function sourceDocumentNo(row: DocumentSummary | DocumentDetail) {
 }
 
 function mainRelation(row: DocumentSummary | DocumentDetail) {
-  if (mode.value === 'procurement' && 'supplierName' in row) return `供应商：${row.supplierName || '-'}`
+  if (mode.value === 'procurement' && 'supplierName' in row)
+    return `供应商：${row.supplierName || '-'}`
   if (mode.value === 'stockIn' && 'stockInTypeCode' in row) {
-    return row.procurementNo ? `来源采购单：${row.procurementNo}` : row.transferOrderNo ? `来源调拨单：${row.transferOrderNo}` : '手工入库'
+    return row.procurementNo
+      ? `来源采购单：${row.procurementNo}`
+      : row.transferOrderNo
+        ? `来源调拨单：${row.transferOrderNo}`
+        : '手工入库'
   }
   if (mode.value === 'stockOut' && 'stockOutTypeCode' in row) {
-    return row.salesOrderNo ? `来源销售单：${row.salesOrderNo}` : row.transferOrderNo ? `来源调拨单：${row.transferOrderNo}` : '手工出库'
+    return row.salesOrderNo
+      ? `来源销售单：${row.salesOrderNo}`
+      : row.transferOrderNo
+        ? `来源调拨单：${row.transferOrderNo}`
+        : '手工出库'
   }
   if (mode.value === 'transfer' && 'sourceWarehouseName' in row) {
     return `${row.sourceWarehouseName || '-'} → ${row.targetWarehouseName || '-'}`
@@ -1286,9 +1788,9 @@ function documentDetailItems(row: DocumentDetail) {
   }
   result.push(
     { label: '备注', value: row.remark || '-', span: 3 },
-    { label: '创建人', value: row.createdBy || '-' },
+    { label: '创建人', value: auditActorLabel(row.createdBy) },
     { label: '创建时间', value: formatTime(row.createdTime) },
-    { label: '更新人', value: row.updatedBy || '-' },
+    { label: '更新人', value: auditActorLabel(row.updatedBy) },
     { label: '更新时间', value: formatTime(row.updatedTime) },
   )
   return result
@@ -1296,26 +1798,39 @@ function documentDetailItems(row: DocumentDetail) {
 
 function canEdit(row: DocumentSummary) {
   if (isExternalSource(row)) return false
-  return (mode.value === 'procurement' || mode.value === 'transfer') && row.statusCode === 'DRAFT'
+  return (
+    (mode.value === 'procurement' || mode.value === 'transfer') &&
+    row.statusCode === 'DRAFT' &&
+    canChange('update')
+  )
 }
 
 function canDelete(row: DocumentSummary) {
-  return canEdit(row)
+  return (
+    !isExternalSource(row) &&
+    (mode.value === 'procurement' || mode.value === 'transfer') &&
+    row.statusCode === 'DRAFT' &&
+    canChange('delete')
+  )
 }
 
 function canStockIn(row: DocumentSummary) {
   if (isExternalSource(row)) return false
-  return mode.value === 'procurement' && ['SUBMITTED', 'PARTIAL_IN'].includes(row.statusCode)
+  return (
+    mode.value === 'procurement' &&
+    ['SUBMITTED', 'PARTIAL_IN'].includes(row.statusCode) &&
+    can('erp:stock-in:confirm', 'erp:supply:write')
+  )
 }
 
 function canTransferStockOut(row: DocumentSummary) {
   if (isExternalSource(row)) return false
-  return mode.value === 'transfer' && row.statusCode === 'DRAFT'
+  return mode.value === 'transfer' && row.statusCode === 'DRAFT' && canChange('stock-out')
 }
 
 function canTransferStockIn(row: DocumentSummary) {
   if (isExternalSource(row)) return false
-  return mode.value === 'transfer' && row.statusCode === 'OUT_CONFIRMED'
+  return mode.value === 'transfer' && row.statusCode === 'OUT_CONFIRMED' && canChange('stock-in')
 }
 
 function statusLabel(value: string | null | undefined) {
@@ -1359,12 +1874,7 @@ function formatNumber(value: number | string | null | undefined) {
   return Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }
 
-function formatTime(value: string | null | undefined) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
+const formatTime = displayDateTime
 
 function toIso(value: Date | string | null) {
   if (!value) return null

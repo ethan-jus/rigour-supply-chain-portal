@@ -1,6 +1,7 @@
 import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
 import type { ApiResponse } from '@/types'
 import { getAuthorizationHeader, removeToken } from '@/utils/token'
+import { ensureAccessToken, getSessionGeneration, hasRefreshToken, TokenRefreshError } from '@/auth/oidc'
 import { generateRequestId } from '@/utils/request-id'
 import { devInfo, devWarn } from '@/utils/dev-log'
 import { getErrorMessage } from './error'
@@ -13,6 +14,9 @@ declare module 'axios' {
     deferSessionRecovery?: boolean
     /** 仅供会话复核请求使用，防止/me 401递归触发恢复。 */
     skipSessionRecovery?: boolean
+    /** 同一请求最多在刷新成功后重试一次。 */
+    tokenRefreshRetried?: boolean
+    tokenSessionGeneration?: number
   }
 }
 
@@ -110,7 +114,7 @@ function isIamSessionEndpoint(value: string | undefined): boolean {
   if (!value) return false
   try {
     const path = new URL(value, window.location.origin).pathname.replace(/^\/api\/v1(?=\/|$)/, '')
-    return path === '/me' || path === '/portal/apps' || path.startsWith('/portal/navigation/')
+    return path === '/me' || path === '/scdp/navigation' || path === '/management/supply/context'
   } catch {
     return false
   }
@@ -180,7 +184,7 @@ async function probeCurrentSession(): Promise<boolean> {
  * - trusted-context和业务401保留当前页面，无marker时single-flight复核/me
  *
  * 边界：不包含业务判定逻辑；错误码映射在 error.ts 维护。
- * Access Token仅在当前页面内存中保存；刷新页面后通过IAM会话重新授权。
+ * 双 Token 仅保存在页面内存；运行期间标准刷新，重载页面才通过 IAM 会话重新授权。
  */
 function createClient(): ApiClient {
   const client = axios.create({
@@ -193,10 +197,25 @@ function createClient(): ApiClient {
   })
 
   /** 请求拦截器：注入认证、租户、追踪头 */
-  client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  client.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+    config.tokenSessionGeneration ??= getSessionGeneration()
+    try {
+      await ensureAccessToken()
+      if (config.tokenSessionGeneration !== getSessionGeneration()) {
+        throw new TokenRefreshError('REQUEST_CANCELLED', '会话已变更')
+      }
+    } catch (error) {
+      if (error instanceof TokenRefreshError && error.code === 'IAM_TOKEN_INVALID'
+        && !config.deferSessionRecovery && !config.skipSessionRecovery) {
+        await notifySessionInvalid({ code: error.code, requestId: '', requestUrl: config.url || '' })
+      }
+      throw error
+    }
     const authorization = getAuthorizationHeader()
     if (authorization) {
       config.headers.Authorization = authorization
+    } else {
+      config.headers.delete('Authorization')
     }
 
     const requestId = generateRequestId()
@@ -229,6 +248,11 @@ function createClient(): ApiClient {
       return body.data
     },
     async (error: AxiosError<ApiResponse>) => {
+      if (error instanceof TokenRefreshError) return Promise.reject(error)
+      if (error.config?.tokenSessionGeneration !== undefined
+        && error.config.tokenSessionGeneration !== getSessionGeneration()) {
+        return Promise.reject(new TokenRefreshError('REQUEST_CANCELLED', '会话已变更'))
+      }
       const requestId = error.config?.headers?.['X-Request-Id']
       const marker = responseMarker(error)
       devWarn('接口请求失败', {
@@ -264,6 +288,20 @@ function createClient(): ApiClient {
           marker,
           sessionInvalid ? 'IAM_TOKEN_INVALID' : undefined,
         )
+        if (sessionInvalid && error.config && !error.config.tokenRefreshRetried && hasRefreshToken()) {
+          try {
+            const rejected = String(error.config.headers.Authorization || '').replace(/^Bearer /i, '')
+            const token = await ensureAccessToken(rejected)
+            if (token) {
+              error.config.tokenRefreshRetried = true
+              return client.request(error.config)
+            }
+          } catch (refreshError) {
+            if (!(refreshError instanceof TokenRefreshError) || refreshError.code !== 'IAM_TOKEN_INVALID') {
+              return Promise.reject(refreshError)
+            }
+          }
+        }
         if (sessionInvalid && !error.config?.deferSessionRecovery) {
           devWarn('IAM Access Token已失效，触发集中会话恢复', { requestId, url: error.config?.url })
           await notifySessionInvalid({

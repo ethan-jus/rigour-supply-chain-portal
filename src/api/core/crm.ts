@@ -12,6 +12,7 @@ export interface InternalCrmCustomerSummary {
   id: string
   customerCode: string
   customerName: string
+  loginAccount?: string | null
   contactName: string | null
   contactPhone: string | null
   customerTypeCode: string | null
@@ -28,6 +29,16 @@ export interface InternalCrmCustomerSummary {
   statusCode: string
   sourceSystemCode?: string | null
   sourceDocumentNo?: string | null
+  dhbCustomerCode?: string | null
+  dhbCustomerCodes?: string[]
+  syncedAt?: string | null
+  syncedBy?: string | null
+  remark?: string | null
+  updatedBy?: string | null
+  businessCreatedAt?: string | null
+  businessCreatedById?: string | null
+  businessCreatedByName?: string | null
+  businessCreationSource?: string | null
   sourceCreatedAt?: string | null
   sourceUpdatedAt?: string | null
   revision: number
@@ -43,6 +54,8 @@ export interface InternalCrmCustomerDetail extends InternalCrmCustomerSummary {
 }
 
 export interface InternalCrmCustomerCommand {
+  loginAccount: string
+  shippingAddress?: CustomerShippingAddressCommand | null
   customerName: string
   contactName?: string | null
   contactPhone?: string | null
@@ -60,6 +73,14 @@ export interface InternalCrmCustomerCommand {
 }
 
 export interface InternalCrmCustomerQuery {
+  loginAccount?: string
+  createdFrom?: string
+  dhbCustomerCode?: string
+  dhbLinkStatus?: 'LINKED' | 'UNLINKED'
+  creatorName?: string
+  createdTo?: string
+  sortBy?: 'businessCreatedAt' | 'syncedAt' | 'dhbCustomerCode'
+  sortDirection?: 'asc' | 'desc'
   begin: number
   step: number
   customerCode?: string
@@ -73,6 +94,12 @@ export interface InternalCrmCustomerQuery {
 }
 
 export interface CrmDictionaryView {
+  sortOrder?: number | null
+  sourceCode?: string | null
+  createdBy?: string | null
+  createdTime?: string | null
+  updatedBy?: string | null
+  updatedTime?: string | null
   id: string
   code: string
   name: string
@@ -86,6 +113,7 @@ export interface CrmDictionaryView {
 }
 
 export interface CrmCustomerAreaCommand {
+  sortOrder?: number | null
   areaName: string
   parentAreaCode?: string | null
   status?: string | null
@@ -115,6 +143,12 @@ export interface ShippingAddressSummaryView {
 
 const CRM_BASE_PATH = '/crm'
 
+export function getInternalCrmCustomerCreators() {
+  return apiClient.get<string[]>(`${CRM_BASE_PATH}/internal-customers/creators`, {
+    stayOnUnauthorized: true,
+  })
+}
+
 export function getInternalCrmCustomers(params: InternalCrmCustomerQuery) {
   return apiClient.get<CrmPage<InternalCrmCustomerSummary>>(`${CRM_BASE_PATH}/internal-customers`, {
     params,
@@ -123,9 +157,12 @@ export function getInternalCrmCustomers(params: InternalCrmCustomerQuery) {
 }
 
 export function getInternalCrmCustomer(id: string | number) {
-  return apiClient.get<InternalCrmCustomerDetail>(`${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(id))}`, {
-    stayOnUnauthorized: true,
-  })
+  return apiClient.get<InternalCrmCustomerDetail>(
+    `${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(id))}`,
+    {
+      stayOnUnauthorized: true,
+    },
+  )
 }
 
 export function createInternalCrmCustomer(command: InternalCrmCustomerCommand) {
@@ -134,7 +171,10 @@ export function createInternalCrmCustomer(command: InternalCrmCustomerCommand) {
   })
 }
 
-export function updateInternalCrmCustomer(id: string | number, command: InternalCrmCustomerCommand) {
+export function updateInternalCrmCustomer(
+  id: string | number,
+  command: InternalCrmCustomerCommand,
+) {
   return apiClient.put<InternalCrmCustomerDetail>(
     `${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(id))}`,
     command,
@@ -143,10 +183,13 @@ export function updateInternalCrmCustomer(id: string | number, command: Internal
 }
 
 export function deleteInternalCrmCustomer(id: string | number, revision: number) {
-  return apiClient.delete<void>(`${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(id))}`, {
-    params: { revision },
-    stayOnUnauthorized: true,
-  })
+  return apiClient.delete<void>(
+    `${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(id))}`,
+    {
+      params: { revision },
+      stayOnUnauthorized: true,
+    },
+  )
 }
 
 export function getCrmCustomerTypes(params: { begin?: number; step?: number; q?: string } = {}) {
@@ -198,9 +241,54 @@ export function deleteCrmCustomerArea(id: string | number, revision: number) {
   )
 }
 
-export function getCrmShippingAddresses(params: { begin?: number; step?: number; q?: string } = {}) {
+export function getCrmShippingAddresses(
+  params: { begin?: number; step?: number; q?: string } = {},
+) {
   return apiClient.get<CrmPage<ShippingAddressSummaryView>>(`${CRM_BASE_PATH}/shipping-addresses`, {
     params: { begin: 0, step: 20, ...params },
     stayOnUnauthorized: true,
   })
+}
+
+export interface CustomerShippingAddressCommand {
+  consignee?: string | null
+  contact: string
+  phone: string
+  regionText: string
+  addressDetail: string
+  defaultAddress: boolean
+  revision?: number | null
+}
+export interface CustomerShippingAddressView extends CustomerShippingAddressCommand {
+  id: string
+  fullAddress: string
+  revision: number
+}
+export function getCustomerShippingAddresses(customerId: string | number) {
+  return apiClient.get<CustomerShippingAddressView[]>(
+    `${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(customerId))}/shipping-addresses`,
+    { stayOnUnauthorized: true },
+  )
+}
+export function saveCustomerShippingAddress(
+  customerId: string | number,
+  id: string | null,
+  command: CustomerShippingAddressCommand,
+) {
+  const url = `${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(customerId))}/shipping-addresses`
+  return id
+    ? apiClient.put<CustomerShippingAddressView>(`${url}/${encodeURIComponent(id)}`, command, {
+        stayOnUnauthorized: true,
+      })
+    : apiClient.post<CustomerShippingAddressView>(url, command, { stayOnUnauthorized: true })
+}
+export function deleteCustomerShippingAddress(
+  customerId: string | number,
+  id: string,
+  revision: number,
+) {
+  return apiClient.delete<void>(
+    `${CRM_BASE_PATH}/internal-customers/${encodeURIComponent(String(customerId))}/shipping-addresses/${encodeURIComponent(id)}`,
+    { params: { revision }, stayOnUnauthorized: true },
+  )
 }

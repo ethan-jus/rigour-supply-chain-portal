@@ -17,23 +17,40 @@ function menuNode(routeKey: string): NavigationNode {
 }
 
 describe('数据库导航注册表', () => {
-  it('接受已编译且路径一致的routeKey', () => {
-    expect(validateNavigation([node('system.user.list', '/system-admin/users')]))
-      .toHaveLength(1)
+  it('员工档案仅使用正式页面，旧占位入口不可恢复', () => {
+    expect(validateNavigation([node('supply.hr.employees', '/supply-chain/hr/employees')])).toHaveLength(1)
+    expect(() => validateNavigation([node('supply.hr.index', '/supply-chain/hr')])).toThrow('未注册或路径不一致')
+    expect(constantRoutes.find(route => route.path === '/supply-chain')?.children?.some(route => route.path === 'hr')).toBe(false)
+  })
+  it('拒绝已撤销的管理入口', () => {
+    for (const [key, path] of [['system.user.list', '/system-admin/users'], ['platform.dashboard', '/platform-admin']])
+      expect(() => validateNavigation([node(key, path)])).toThrow('未注册或路径不一致')
   })
 
-  it('接受系统菜单管理页面和无路由租户自定义分组', () => {
-    expect(validateNavigation([
-      node('system.menu-config.list', '/system-admin/menus'),
-      menuNode('tenant.menu.group.019fdynamicgroup'),
-    ])).toHaveLength(2)
-  })
+  it('接受供应链系统设置的完整菜单，并对应实际页面和功能权限', () => {
+    const settingsPages = [
+      ['users', 'supply:user:read'],
+      ['roles', 'supply:role:read'],
+      ['menus', 'supply:menu:read'],
+      ['parameters', 'supply:parameter:read'],
+      ['audits', 'supply:audit:read'],
+    ] as const
+    const settingsMenu = {
+      ...menuNode('supply.setting.menu'),
+      children: settingsPages.map(([key]) =>
+        node(`supply.settings.${key}`, `/supply-chain/settings/${key}`)),
+    }
+    expect(validateNavigation([settingsMenu])[0].children).toHaveLength(5)
 
-  it('接受系统管理人员与岗位入口', () => {
-    expect(validateNavigation([
-      node('system.staff.list', '/system-admin/staff'),
-      node('system.position.list', '/system-admin/positions'),
-    ])).toHaveLength(2)
+    const supplyRoot = constantRoutes.find((route) => route.path === '/supply-chain')
+    for (const [key, permission] of settingsPages) {
+      const route = supplyRoot?.children?.find((item) => item.path === `settings/${key}`)
+      expect(route?.meta?.permission).toBe(permission)
+      expect(typeof route?.component).toBe('function')
+    }
+    expect(() => validateNavigation([
+      node('supply.settings.parameters', '/supply-chain/settings/users'),
+    ])).toThrow('未注册或路径不一致')
   })
 
   it('租户自定义分组不能携带可执行路径', () => {
@@ -82,7 +99,7 @@ describe('数据库导航注册表', () => {
     ])).toThrow('未注册或路径不一致')
   })
 
-  it('接受V2.1 ERP、CRM与城市运营三级路由', () => {
+  it('接受V2.1 ERP和CRM三级路由', () => {
     expect(validateNavigation([
       node('supply.erp.master-data.menu', null),
       node('supply.erp.master-data.products', '/supply-chain/erp/master-data/products'),
@@ -93,8 +110,38 @@ describe('数据库导航注册表', () => {
       node('supply.crm.customers.areas', '/supply-chain/crm/customers/areas'),
       node('supply.crm.customers.shipping-addresses', '/supply-chain/crm/customers/shipping-addresses'),
       node('supply.crm.assignments.sales', '/supply-chain/crm/assignments/sales'),
-      node('supply.city.scope.service-areas', '/supply-chain/city/scope/service-areas'),
-    ])).toHaveLength(10)
+    ])).toHaveLength(9)
+  })
+
+  it('丢弃 IAM 返回的已隐藏旧分支，保留当前商品中心和系统设置', () => {
+    const navigation = [
+      { ...menuNode('supply.erp.master-data.menu'), children: [
+        node('supply.erp.master-data.products', '/supply-chain/erp/master-data/products'),
+        node('supply.erp.master-data.attributes.categories', '/supply-chain/erp/master-data/attributes/categories'),
+        { ...menuNode('supply.erp.master-data.attributes.menu'), visible: false, children: [
+          node('supply.erp.master-data.sync', '/supply-chain/erp/master-data/sync'),
+        ] },
+      ] },
+      node('supply.settings.menus', '/supply-chain/settings/menus'),
+      { ...node('supply.bi.dashboards', '/supply-chain/bi/dashboards'), visible: false },
+    ]
+    const result = validateNavigation(navigation)
+    expect(result.map(item => item.routeKey)).toEqual(['supply.erp.master-data.menu', 'supply.settings.menus'])
+    expect(result[0].children.map(item => item.routeKey)).toEqual([
+      'supply.erp.master-data.products', 'supply.erp.master-data.attributes.categories',
+    ])
+    expect(navigation[0].children).toHaveLength(3)
+    expect(() => validateNavigation([menuNode('supply.erp.master-data.attributes.menu')]))
+      .toThrow('未注册或路径不一致')
+  })
+
+  it('已注册隐藏页面保留授权直达能力，但错误路径仍失败关闭', () => {
+    const hiddenPage = { ...node('supply.settings.users', '/supply-chain/settings/users'), visible: false }
+    expect(validateNavigation([hiddenPage])).toEqual([hiddenPage])
+    expect(() => validateNavigation([{ ...hiddenPage, routePath: '/supply-chain/settings/roles' }]))
+      .toThrow('未注册或路径不一致')
+    expect(() => validateNavigation([{ ...menuNode('tenant.menu.group.test'), visible: false, routePath: '/arbitrary' }]))
+      .toThrow('未注册或路径不一致')
   })
 
   it('接受新销售订单入口，并拒绝旧订货宝档案菜单', () => {
@@ -164,6 +211,14 @@ describe('数据库导航注册表', () => {
     expect(specificationModule.default).toBeTruthy()
   })
 
+  it('拒绝已退出的城市运营和渠道代理路由', () => {
+    for (const domain of ['city', 'channel']) {
+      expect(() => validateNavigation([node(`supply.${domain}.index`, `/supply-chain/${domain}`)]))
+        .toThrow('未注册或路径不一致')
+      expect(SUPPLY_DOMAIN_PAGES.some((page) => page.domainKey === domain)).toBe(false)
+    }
+  })
+
   it('接受完整领域菜单目录中的全部分组与页面路由', () => {
     const navigation = [
       ...SUPPLY_DOMAIN_MENU_KEYS.map((routeKey) => node(routeKey, null)),
@@ -180,8 +235,8 @@ describe('数据库导航注册表', () => {
       'supply.bi.product-sales', 'supply.bi.city-cost', 'supply.hr.employees',
       'supply.hr.payroll-commission', 'supply.hr.performance',
     ]))
-    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(14)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(86)
+    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(11)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(73)
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))

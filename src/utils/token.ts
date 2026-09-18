@@ -5,7 +5,7 @@ export function getToken(): string | null {
   return getAccessToken()
 }
 
-/** 为所有受保护的 Portal API 请求生成统一认证头。 */
+/** 为所有受保护的 Scdp API 请求生成统一认证头。 */
 export function getAuthorizationHeader(): string | null {
   const token = getToken()
   return token ? `Bearer ${token}` : null

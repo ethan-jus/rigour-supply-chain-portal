@@ -84,3 +84,16 @@ export function businessPeriodDays(from: string, to: string) {
   if (end.getTime() < start.getTime()) throw new RangeError('业务时间结束不能早于开始')
   return (Date.parse(businessDate(end)) - Date.parse(businessDate(start))) / 86_400_000 + 1
 }
+
+/** 页面统一展示格式；业务日期运算仍使用上面的严格函数。 */
+export function displayDateTime(value: string | Date | null | undefined): string {
+  if (!value) return '—'
+  try {
+    const parts = Object.fromEntries(
+      timeFormat.formatToParts(businessInstant(value)).map((p) => [p.type, p.value]),
+    )
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`
+  } catch {
+    return '—'
+  }
+}

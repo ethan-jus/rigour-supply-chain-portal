@@ -36,7 +36,7 @@ export function formatAdminOrder(value: string | null): string {
   return businessDictionaryLabel('ORDER', 'DHB_ORDER_ADMIN_FLAG', value, '订单来源')
 }
 
-/** 订货宝未公布完整设备枚举，保持本地库中的来源原文，不在 Portal 猜测。 */
+/** 订货宝未公布完整设备枚举，保持本地库中的来源原文，不在 Scdp 猜测。 */
 export function formatSourceDevice(value: string | null): string {
   return sourceText(value)
 }

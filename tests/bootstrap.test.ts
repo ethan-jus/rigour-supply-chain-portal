@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     clearLocalSession: vi.fn(),
   },
   registerUnauthorizedSessionHandler: vi.fn(),
+  readSession: vi.fn(), beginLogin: vi.fn(), landingPath: vi.fn(), token: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -21,21 +22,24 @@ vi.mock('@/stores', () => ({
 }))
 
 vi.mock('@/auth/oidc', () => ({
-  completeOidcCallback: vi.fn().mockResolvedValue(null),
-  safeReturnPath: (value: string | null | undefined) =>
-    value?.startsWith('/') && !value.startsWith('//') ? value : '/apps',
+  completeOidcCallback: vi.fn().mockResolvedValue(false),
+  beginOidcLogin: mocks.beginLogin,
+  getAccessToken: mocks.token,
+  takeOidcLandingPath: mocks.landingPath,
+  safeReturnPath: (value: string) => value || '/supply-chain',
 }))
+vi.mock('@/auth/browser-session', () => ({ readBrowserSession: mocks.readSession }))
 
 vi.mock('@/router/permissionGuard', () => ({
   setupPermissionGuard: vi.fn(),
 }))
 
-import { bootstrapPortal } from '@/bootstrap'
-import { createPortalRouter } from '@/router'
+import { bootstrapScdp } from '@/bootstrap'
+import { createScdpRouter } from '@/router'
 
 type UnauthorizedHandler = () => void | Promise<void>
 
-function createHarness(path = '/apps', fullPath = path) {
+function createHarness(path = '/supply-chain', fullPath = path) {
   const events: string[] = []
   const app = {
     use: vi.fn(() => { events.push('router-installed'); return app }),
@@ -49,11 +53,15 @@ function createHarness(path = '/apps', fullPath = path) {
   return { app, router, events }
 }
 
-describe('Portal启动顺序与会话失效恢复', () => {
+describe('Scdp启动顺序与会话失效恢复', () => {
   let unauthorizedHandler: UnauthorizedHandler | undefined
 
   beforeEach(() => {
     unauthorizedHandler = undefined
+    mocks.readSession.mockReset().mockResolvedValue({ authenticated: false })
+    mocks.beginLogin.mockReset().mockResolvedValue(undefined)
+    mocks.landingPath.mockReset().mockReturnValue('/supply-chain')
+    mocks.token.mockReset().mockReturnValue(null)
     mocks.authStore.synchronizeTokenState.mockReset()
     mocks.authStore.clearLocalSession.mockReset()
     mocks.registerUnauthorizedSessionHandler.mockReset()
@@ -72,7 +80,7 @@ describe('Portal启动顺序与会话失效恢复', () => {
     const { app, router, events } = createHarness()
     const completeCallback = vi.fn(async () => {
       events.push('oidc-callback')
-      return '/system-admin/users?tab=enabled'
+      return true
     })
     mocks.authStore.synchronizeTokenState.mockImplementation(() => { events.push('token-synchronized') })
     const createRouter = vi.fn(() => {
@@ -80,7 +88,7 @@ describe('Portal启动顺序与会话失效恢复', () => {
       return router
     })
 
-    await bootstrapPortal(app, {} as Pinia, createRouter, { completeCallback, mountTarget: '#portal' })
+    await bootstrapScdp(app, {} as Pinia, createRouter, { completeCallback, mountTarget: '#scdp' })
 
     expect(events).toEqual([
       'oidc-callback',
@@ -90,36 +98,35 @@ describe('Portal启动顺序与会话失效恢复', () => {
       'router-ready',
       'mounted',
     ])
-    expect(window.location.hash).toBe('#/system-admin/users?tab=enabled')
-    expect(app.mount).toHaveBeenCalledWith('#portal')
+    expect(window.location.hash).toBe('#/supply-chain')
+    expect(app.mount).toHaveBeenCalledWith('#scdp')
   })
 
   it.each([
     '/supply-chain/order/sales-orders?tab=pending',
     '/supply-chain/crm/customers/areas?from=order',
-  ])('真实Hash Router在callback后从目标路由启动，不回落/apps：%s', async (returnPath) => {
-    window.history.replaceState({}, '', '/#/')
+  ])('真实Hash Router在callback后统一进入首页，忽略旧目标路由：%s', async (returnPath) => {
+    window.history.replaceState({}, '', `/#${returnPath}`)
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
     const host = document.createElement('div')
-    host.id = 'portal-bootstrap-integration'
+    host.id = 'scdp-bootstrap-integration'
     document.body.append(host)
-    const app = createApp({ render: () => h('div', 'portal-ready') })
+    const app = createApp({ render: () => h('div', 'scdp-ready') })
     let router: Router | undefined
     const createRouter = vi.fn(() => {
-      expect(window.location.hash).toBe(`#${returnPath}`)
-      router = createPortalRouter()
+      expect(window.location.hash).toBe('#/supply-chain')
+      router = createScdpRouter()
       return router
     })
 
     try {
-      await bootstrapPortal(app, {} as Pinia, createRouter, {
-        completeCallback: async () => returnPath,
-        mountTarget: '#portal-bootstrap-integration',
+      await bootstrapScdp(app, {} as Pinia, createRouter, {
+        completeCallback: async () => true,
+        mountTarget: '#scdp-bootstrap-integration',
       })
 
       expect(createRouter).toHaveBeenCalledOnce()
-      expect(router?.currentRoute.value.fullPath).toBe(returnPath)
-      expect(router?.currentRoute.value.fullPath).not.toBe('/apps')
+      expect(router?.currentRoute.value.fullPath).toBe('/supply-chain')
     } finally {
       app.unmount()
       host.remove()
@@ -127,21 +134,65 @@ describe('Portal启动顺序与会话失效恢复', () => {
     }
   })
 
-  it('router.replace失败时使用Hash导航回登录页并保留当前fullPath', async () => {
+  it('router.replace失败时使用Hash导航回登录页且不自动重登', async () => {
     const currentPath = '/supply-chain/order/sales-orders?tab=pending'
     const { app, router } = createHarness('/supply-chain/order/sales-orders', currentPath)
     vi.mocked(router.replace).mockRejectedValueOnce(new Error('navigation aborted'))
-    await bootstrapPortal(app, {} as Pinia, () => router, { completeCallback: async () => null })
+    await bootstrapScdp(app, {} as Pinia, () => router, { completeCallback: async () => false })
 
     await unauthorizedHandler?.()
 
     expect(mocks.authStore.clearLocalSession).toHaveBeenCalledOnce()
     expect(router.replace).toHaveBeenCalledWith({
       path: '/login',
-      query: { redirect: currentPath, reason: 'session_expired' },
+      query: { reason: 'session_expired' },
     })
     expect(window.location.hash).toBe(
-      '#/login?redirect=%2Fsupply-chain%2Forder%2Fsales-orders%3Ftab%3Dpending&reason=session_expired',
+      '#/login?reason=session_expired',
     )
+  })
+
+  it('刷新业务页先恢复现有服务器会话，不挂载登录页且保留完整站内地址', async () => {
+    window.history.replaceState({}, '', '/#/supply-chain/hr/employees?keyword=zhang')
+    mocks.readSession.mockResolvedValue({ authenticated: true })
+    const { app, router } = createHarness()
+    const createRouter = vi.fn(() => router)
+    await bootstrapScdp(app, {} as Pinia, createRouter)
+    expect(mocks.beginLogin).toHaveBeenCalledWith('/supply-chain/hr/employees?keyword=zhang')
+    expect(createRouter).not.toHaveBeenCalled()
+    expect(app.mount).not.toHaveBeenCalled()
+  })
+
+  it('会话恢复回调返回原页面，交由权限守卫重新校验', async () => {
+    mocks.landingPath.mockReturnValue('/supply-chain/erp/master-data/products?keyword=test')
+    const { app, router } = createHarness()
+    await bootstrapScdp(app, {} as Pinia, () => router, { completeCallback: async () => true })
+    expect(window.location.hash).toBe('#/supply-chain/erp/master-data/products?keyword=test')
+    expect(mocks.readSession).not.toHaveBeenCalled()
+  })
+
+  it.each(['/#/login?reason=logout', '/#/login?reason=session_expired', '/#/login?reason=reauthenticate'])('显式登录状态 %s 不自动恢复', async path => {
+    window.history.replaceState({}, '', path)
+    mocks.readSession.mockResolvedValue({ authenticated: true })
+    const { app, router } = createHarness()
+    await bootstrapScdp(app, {} as Pinia, () => router)
+    expect(mocks.beginLogin).not.toHaveBeenCalled()
+    expect(mocks.readSession).not.toHaveBeenCalled()
+    expect(app.mount).toHaveBeenCalled()
+  })
+
+  it('回调校验失败不发起第二次授权，停留在登录表单', async () => {
+    mocks.readSession.mockResolvedValue({ authenticated: true })
+    const { app, router } = createHarness()
+    await bootstrapScdp(app, {} as Pinia, () => router, { completeCallback: async () => { throw new Error('invalid state') } })
+    expect(mocks.beginLogin).not.toHaveBeenCalled()
+    expect(window.location.hash).toBe('#/login?reason=oidc_callback_failed')
+  })
+
+  it('首次未登录访问不发起自动授权', async () => {
+    const { app, router } = createHarness()
+    await bootstrapScdp(app, {} as Pinia, () => router)
+    expect(mocks.beginLogin).not.toHaveBeenCalled()
+    expect(app.mount).toHaveBeenCalled()
   })
 })

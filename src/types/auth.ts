@@ -1,6 +1,6 @@
 export interface UserInfo {
   id: string
-  principalScope: 'PLATFORM' | 'TENANT'
+  principalScope: 'TENANT'
   username: string
   displayName: string
   avatar?: string

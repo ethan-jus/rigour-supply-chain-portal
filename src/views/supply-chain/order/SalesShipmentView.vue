@@ -1,9 +1,10 @@
 <template>
   <div class="sales-shipment-page supply-page supply-page--business-main">
     <div class="page-heading">
+      <DhbPageSyncButton scope="SHIPMENT" label="发货" @completed="loadRows" />
       <div>
         <span class="supply-page__eyebrow">Order · 履约中心</span>
-        <h1>发货单</h1>
+        <SupplyPageTitle>发货单</SupplyPageTitle>
         <p>查看销售订单对应的客户发货、物流单号和发货商品明细。</p>
       </div>
     </div>
@@ -11,20 +12,50 @@
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="loadRows">
         <el-form-item label="发货单号">
-          <el-input v-model="filters.shipmentNo" clearable placeholder="发货单号" style="width: 170px" />
+          <el-input
+            v-model="filters.shipmentNo"
+            clearable
+            placeholder="发货单号"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="销售订单号">
-          <el-input v-model="filters.salesOrderNo" clearable placeholder="销售订单号" style="width: 170px" />
+          <el-input
+            v-model="filters.salesOrderNo"
+            clearable
+            placeholder="销售订单号"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="客户名称">
-          <el-input v-model="filters.customerName" clearable placeholder="客户名称" style="width: 200px" />
+          <el-input
+            v-model="filters.customerName"
+            clearable
+            placeholder="客户名称"
+            style="width: 200px"
+          />
         </el-form-item>
         <el-form-item label="物流单号">
-          <el-input v-model="filters.trackingNo" clearable placeholder="物流/配送单号" style="width: 180px" />
+          <el-input
+            v-model="filters.trackingNo"
+            clearable
+            placeholder="物流/配送单号"
+            style="width: 180px"
+          />
         </el-form-item>
         <el-form-item label="发货状态">
-          <el-select v-model="filters.shipmentStatusCode" clearable placeholder="全部状态" style="width: 140px">
-            <el-option v-for="item in shipmentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.shipmentStatusCode"
+            clearable
+            placeholder="全部状态"
+            style="width: 140px"
+          >
+            <el-option
+              v-for="item in shipmentStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item class="filter-actions">
@@ -37,7 +68,9 @@
     <div class="result-heading">
       <div class="result-title-line">
         <h2>发货单列表</h2>
-        <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+        <span class="result-count"
+          ><strong>{{ pageData.total }}</strong> 条</span
+        >
       </div>
     </div>
 
@@ -51,14 +84,30 @@
           row-key="id"
           @row-click="openDetail"
         >
-          <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <el-table-column
+            type="index"
+            label="序号"
+            width="80"
+            fixed="left"
+            :index="tableRowIndex"
+          />
           <el-table-column prop="shipmentNo" label="发货单号" width="170" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.shipmentNo || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="salesOrderNoSnapshot" label="销售订单号" width="170" show-overflow-tooltip>
+          <el-table-column
+            prop="salesOrderNoSnapshot"
+            label="销售订单号"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ scope.row.salesOrderNoSnapshot || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip>
+          <el-table-column
+            prop="customerNameSnapshot"
+            label="客户名称"
+            min-width="220"
+            show-overflow-tooltip
+          >
             <template #default="scope">
               <span class="record-name">{{ scope.row.customerNameSnapshot || '-' }}</span>
             </template>
@@ -70,7 +119,12 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="logisticsCompany" label="物流/配送方" min-width="150" show-overflow-tooltip>
+          <el-table-column
+            prop="logisticsCompany"
+            label="物流/配送方"
+            min-width="150"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ scope.row.logisticsCompany || '-' }}</template>
           </el-table-column>
           <el-table-column prop="trackingNo" label="物流单号" min-width="170" show-overflow-tooltip>
@@ -86,7 +140,13 @@
           <el-table-column label="操作" width="150" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button v-if="!isExternalSource(scope.row)" link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
+              <el-button
+                v-if="!isExternalSource(scope.row) && can('order:shipment:delete', 'order:write')"
+                link
+                type="danger"
+                @click.stop="deleteRow(scope.row)"
+                >删除</el-button
+              >
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无发货单" /></template>
@@ -105,42 +165,95 @@
       </div>
     </el-card>
 
-    <el-drawer v-model="detailVisible" class="sales-shipment-detail-drawer" size="min(920px, 94vw)" :with-header="false">
+    <el-drawer
+      v-model="detailVisible"
+      class="sales-shipment-detail-drawer"
+      size="min(920px, 94vw)"
+      :with-header="false"
+    >
       <div v-if="detail" class="detail-shell">
         <header class="detail-hero">
           <div>
             <span>发货单详情</span>
             <h2>{{ detail.shipmentNo }}</h2>
-            <p>{{ detail.salesOrderNoSnapshot || '-' }} · {{ shipmentStatusLabel(detail.shipmentStatusCode) }}</p>
+            <p>
+              {{ detail.salesOrderNoSnapshot || '-' }} ·
+              {{ shipmentStatusLabel(detail.shipmentStatusCode) }}
+            </p>
           </div>
-          <el-button circle plain aria-label="关闭发货单详情" @click="detailVisible = false">×</el-button>
+          <el-button circle plain aria-label="关闭发货单详情" @click="detailVisible = false"
+            >×</el-button
+          >
         </header>
         <div class="detail-content">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="发货单号">{{ detail.shipmentNo }}</el-descriptions-item>
-            <el-descriptions-item label="销售订单号">{{ detail.salesOrderNoSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户名称">{{ detail.customerNameSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="联系电话">{{ detail.contactPhoneSnapshot || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="发货状态">{{ shipmentStatusLabel(detail.shipmentStatusCode) }}</el-descriptions-item>
-            <el-descriptions-item label="发货数量">{{ formatNumber(detail.totalQuantity) }}</el-descriptions-item>
-            <el-descriptions-item label="物流/配送方">{{ detail.logisticsCompany || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="物流单号">{{ detail.trackingNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="ERP出库单号">{{ detail.stockOutNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="发货时间">{{ formatTime(detail.shipTime) }}</el-descriptions-item>
-            <el-descriptions-item label="备注" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="创建人">{{ auditActorLabel(detail.createdBy) }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ formatTime(detail.createdTime) }}</el-descriptions-item>
-            <el-descriptions-item label="更新人">{{ auditActorLabel(detail.updatedBy) }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ formatTime(detail.updatedTime) }}</el-descriptions-item>
+            <el-descriptions-item label="销售订单号">{{
+              detail.salesOrderNoSnapshot || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="客户名称">{{
+              detail.customerNameSnapshot || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="联系电话">{{
+              detail.contactPhoneSnapshot || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="发货状态">{{
+              shipmentStatusLabel(detail.shipmentStatusCode)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="发货数量">{{
+              formatNumber(detail.totalQuantity)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="物流/配送方">{{
+              detail.logisticsCompany || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="物流单号">{{
+              detail.trackingNo || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="ERP出库单号">{{
+              detail.stockOutNo || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="发货时间">{{
+              formatTime(detail.shipTime)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="备注" :span="2">{{
+              detail.remark || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="创建人">{{
+              auditActorLabel(detail.createdBy)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{
+              formatTime(detail.createdTime)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="更新人">{{
+              auditActorLabel(detail.updatedBy)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{
+              formatTime(detail.updatedTime)
+            }}</el-descriptions-item>
           </el-descriptions>
 
           <section class="detail-section">
             <h3>发货商品</h3>
             <el-table class="business-table" :data="detail.lines" row-key="id">
               <el-table-column prop="lineNo" label="行号" width="80" />
-              <el-table-column prop="productCodeSnapshot" label="商品编码" width="150" show-overflow-tooltip />
-              <el-table-column prop="productNameSnapshot" label="商品名称" min-width="220" show-overflow-tooltip />
-              <el-table-column prop="specificationSnapshot" label="规格" min-width="180" show-overflow-tooltip />
+              <el-table-column
+                prop="productCodeSnapshot"
+                label="商品编码"
+                width="150"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                prop="productNameSnapshot"
+                label="商品名称"
+                min-width="220"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                prop="specificationSnapshot"
+                label="规格"
+                min-width="180"
+                show-overflow-tooltip
+              />
               <el-table-column label="单位" width="100">
                 <template #default="scope">{{ unitLabel(scope.row.unitCode) }}</template>
               </el-table-column>
@@ -157,6 +270,11 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
+const { can } = useSupplyPermissions()
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -174,7 +292,9 @@ import {
 } from '@/utils/business-dictionary'
 import { auditActorLabel } from '@/utils/audit-actor'
 
-const shipmentStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_SHIPMENT_STATUS'))
+const shipmentStatusOptions = computed(() =>
+  businessDictionaryOptions('ORDER', 'SALES_SHIPMENT_STATUS'),
+)
 
 const loading = ref(false)
 const detailVisible = ref(false)
@@ -253,11 +373,15 @@ async function deleteRow(row: SalesShipmentSummary) {
     return
   }
   try {
-    await ElMessageBox.confirm(`确认删除发货单「${row.shipmentNo}」？后端会做逻辑删除，不会物理清库。`, '删除发货单', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      `确认删除发货单「${row.shipmentNo}」？后端会做逻辑删除，不会物理清库。`,
+      '删除发货单',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
     await deleteSalesShipment(row.id, row.revision)
     ElMessage.success('发货单已删除')
     await loadRows()
@@ -296,12 +420,7 @@ function formatNumber(value: number | string | null | undefined) {
   return number.toLocaleString('zh-CN', { maximumFractionDigits: 6 })
 }
 
-function formatTime(value: string | null | undefined) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
+const formatTime = displayDateTime
 
 function errorMessage(reason: unknown, fallback: string) {
   if (reason && typeof reason === 'object' && 'message' in reason) {

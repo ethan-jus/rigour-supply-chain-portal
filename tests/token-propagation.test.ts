@@ -10,9 +10,9 @@ vi.mock('@/utils/token', () => ({
 
 import { apiClient } from '@/api'
 
-describe('Portal API认证头', () => {
+describe('Scdp API认证头', () => {
   it('供应链入口请求统一携带登录后获取的Bearer Token', async () => {
-    const response = await apiClient.get('/portal/navigation/SUPPLY_CHAIN', {
+    const response = await apiClient.get('/scdp/navigation', {
       adapter: async (config: AxiosRequestConfig): Promise<AxiosResponse> => {
         const authorization = typeof config.headers?.get === 'function'
           ? config.headers.get('Authorization')

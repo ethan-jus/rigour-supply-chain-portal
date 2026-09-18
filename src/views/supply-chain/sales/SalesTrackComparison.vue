@@ -18,8 +18,8 @@
 
     <el-alert
       v-if="!amapConfigured"
-      title="Portal 未配置高德地图"
-      description="请在 Portal 的 .env.local 配置 VITE_AMAP_JS_KEY 和 VITE_AMAP_SECURITY_CODE；精确轨迹接口不会因此降级为公开数据。"
+      title="Scdp 未配置高德地图"
+      description="请在 Scdp 的 .env.local 配置 VITE_AMAP_JS_KEY 和 VITE_AMAP_SECURITY_CODE；精确轨迹接口不会因此降级为公开数据。"
       type="warning"
       :closable="false"
       show-icon

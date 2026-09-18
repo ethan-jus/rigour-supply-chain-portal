@@ -437,6 +437,7 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import {
   Back,
@@ -813,23 +814,10 @@ function businessCell(row: BusinessRow, column: BusinessColumn) {
   return String(value)
 }
 
-function localText(value: string) {
-  const time = new Date(value)
-  return Number.isFinite(time.getTime())
-    ? new Intl.DateTimeFormat('sv-SE', {
-        timeZone: 'Asia/Shanghai',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23',
-      }).format(time)
-    : ''
-}
+const localText = displayDateTime
 const displayDate = (value: string) =>
   Number.isFinite(new Date(value).getTime()) ? businessDate(value) : '未提供日期'
-const displayTime = (value: string) => localText(value).slice(5, 16) || '未提供时间'
+const displayTime = (value: string) => localText(value) || '未提供时间'
 function displayCell(row: CityProductDetailRow, column: CityProductColumn) {
   return reportCellText(row, column, reportLabels.value)
 }

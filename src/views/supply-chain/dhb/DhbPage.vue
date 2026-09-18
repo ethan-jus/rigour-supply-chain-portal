@@ -3,8 +3,10 @@
     <section class="sync-heading">
       <div>
         <span class="eyebrow">外部同步 · 订货宝</span>
-        <h1>订货宝同步中心</h1>
-        <p>订货宝只作为后台来源接入，数据经过映射、幂等和对账后写入我方业务表；ERP、CRM、Order 主流程不承载同步运维动作。</p>
+        <SupplyPageTitle>订货宝同步中心</SupplyPageTitle>
+        <p>
+          订货宝只作为后台来源接入，数据经过映射、幂等和对账后写入我方业务表；各业务页面分别同步对应对象。
+        </p>
       </div>
       <el-tag type="info" effect="plain">运维视图</el-tag>
     </section>
@@ -14,75 +16,22 @@
       type="info"
       :closable="false"
       show-icon
-      title="主业务页面参考成熟后台的筛选、列表、详情和处理节奏，但只围绕我方业务流程组织；同步规则集中在本页。"
+      title="按业务对象分别同步。飞书历史订单先按门店关联，缺失映射保留待处理，不重复创建。"
     />
 
-    <section class="sync-operation">
-      <div class="operation-copy">
-        <span>手动入口</span>
-        <h2>选择同步范围后执行订货宝同步</h2>
-        <p>默认全链路；需要只同步商品时选择 ERP商品，采购订单、仓库和库存流转不会被触发。</p>
-        <el-alert
-          v-if="syncBusyMessage"
-          class="sync-busy-alert"
-          type="warning"
-          show-icon
-          :closable="false"
-          :title="syncBusyMessage"
+    <HistoryOrderReview />
+    <el-card v-for="group in groups" :key="group.title" style="margin-top: 16px">
+      <template #header>{{ group.title }}</template>
+      <div style="display: flex; gap: 12px; flex-wrap: wrap">
+        <DhbPageSyncButton
+          v-for="item in group.items"
+          :key="item.scope"
+          :scope="item.scope"
+          :label="item.label"
+          @completed="onPageCompleted"
         />
       </div>
-      <div class="operation-actions">
-        <el-date-picker
-          v-model="syncWindow"
-          type="datetimerange"
-          unlink-panels
-          clearable
-          format="YYYY-MM-DD HH:mm:ss"
-          value-format="YYYY-MM-DDTHH:mm:ss"
-          start-placeholder="开始时间"
-          end-placeholder="结束时间"
-          range-separator="至"
-          class="operation-window"
-        />
-        <el-input-number
-          v-model="maxPages"
-          :min="1"
-          :max="100"
-          :step="10"
-          controls-position="right"
-          aria-label="最大页数"
-        />
-        <el-button type="primary" :loading="syncing && runningStage === 'full'" @click="runUnifiedSync">
-          同步{{ selectedSyncMode.label }}
-        </el-button>
-      </div>
-    </section>
-
-    <section class="sync-scope">
-      <div class="sync-scope__heading">
-        <div>
-          <span>同步范围</span>
-          <strong>当前：{{ selectedSyncMode.label }}</strong>
-          <p>{{ selectedSyncMode.description }}</p>
-        </div>
-        <div class="sync-scope__steps">
-          <span v-for="step in selectedSyncMode.steps" :key="step">{{ step }}</span>
-        </div>
-      </div>
-      <div class="sync-scope__options" role="group" aria-label="订货宝同步范围">
-        <button
-          v-for="mode in syncModes"
-          :key="mode.key"
-          type="button"
-          :class="['sync-scope-option', { 'sync-scope-option--active': selectedSyncModeKey === mode.key }]"
-          :disabled="syncing"
-          @click="selectSyncMode(mode.key)"
-        >
-          <strong>{{ mode.label }}</strong>
-          <span>{{ mode.summary }}</span>
-        </button>
-      </div>
-    </section>
+    </el-card>
 
     <section class="issue-workbench">
       <div class="issue-workbench__heading">
@@ -118,7 +67,10 @@
       <div v-if="issueGroups.length" class="issue-group-list" aria-label="待处理问题分组">
         <button
           type="button"
-          :class="['issue-group', { 'issue-group--active': activeIssueGroupKey === ALL_ISSUE_GROUPS }]"
+          :class="[
+            'issue-group',
+            { 'issue-group--active': activeIssueGroupKey === ALL_ISSUE_GROUPS },
+          ]"
           @click="activeIssueGroupKey = ALL_ISSUE_GROUPS"
         >
           <span>全部</span>
@@ -128,7 +80,10 @@
           v-for="group in issueGroups"
           :key="issueGroupKey(group)"
           type="button"
-          :class="['issue-group', { 'issue-group--active': activeIssueGroupKey === issueGroupKey(group) }]"
+          :class="[
+            'issue-group',
+            { 'issue-group--active': activeIssueGroupKey === issueGroupKey(group) },
+          ]"
           @click="activeIssueGroupKey = issueGroupKey(group)"
         >
           <span>{{ group.title }}</span>
@@ -171,7 +126,12 @@
             <span v-else class="muted-text">-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="handlingAdvice" label="建议处理" min-width="260" show-overflow-tooltip />
+        <el-table-column
+          prop="handlingAdvice"
+          label="建议处理"
+          min-width="260"
+          show-overflow-tooltip
+        />
         <el-table-column label="更新时间" width="170">
           <template #default="scope">
             {{ formatTime(scope.row.updatedAt) }}
@@ -199,7 +159,10 @@
               >
                 重放
               </el-button>
-              <span v-if="!scope.row.manualResolutionRequired && !scope.row.replaySupported" class="issue-action-hint">
+              <span
+                v-if="!scope.row.manualResolutionRequired && !scope.row.replaySupported"
+                class="issue-action-hint"
+              >
                 按建议处理
               </span>
             </div>
@@ -216,7 +179,9 @@
         </div>
         <div>
           <span>执行状态</span>
-          <el-tag :type="statusTag(latestResult.status)" effect="light">{{ statusLabel(latestResult.status) }}</el-tag>
+          <el-tag :type="statusTag(latestResult.status)" effect="light">{{
+            statusLabel(latestResult.status)
+          }}</el-tag>
         </div>
         <div>
           <span>耗时</span>
@@ -228,7 +193,9 @@
         <el-table-column prop="objectType" label="同步对象" min-width="170" />
         <el-table-column label="状态" width="110">
           <template #default="scope">
-            <el-tag :type="statusTag(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
+            <el-tag :type="statusTag(scope.row.status)" effect="light">{{
+              statusLabel(scope.row.status)
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="fetched" label="来源数" width="110" align="right" />
@@ -336,6 +303,12 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
+import HistoryOrderReview from '@/components/supply/HistoryOrderReview.vue'
+import type { DhbPageScope } from '@/api/core/dhb-page-sync'
+
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Check, Refresh } from '@element-plus/icons-vue'
@@ -345,10 +318,8 @@ import {
   getDhbSyncTasks,
   queryDhbWarehousingReceipts,
   replayDhbOrderObject,
-  syncDhbOrchestration,
   type DhbSyncOpenIssueGroup,
   type DhbSyncOpenIssueItem,
-  type DhbSyncOrchestrationCommand,
   type DhbSyncOrchestrationResult,
   type DhbSyncOrchestrationStatus,
   type DhbSyncTask,
@@ -368,22 +339,7 @@ interface SyncSection {
   rules: SyncRule[]
 }
 
-interface SyncStage {
-  key: string
-  label: string
-  description: string
-  summary: string
-  steps: string[]
-  command: Omit<DhbSyncOrchestrationCommand, 'maxPages'>
-}
-
 const activeSection = ref('overview')
-const maxPages = ref(100)
-const syncWindow = ref<[string, string] | []>([])
-const syncing = ref(false)
-const runningStage = ref('')
-const selectedSyncModeKey = ref('all')
-const syncBusyMessage = ref('')
 const latestResult = ref<DhbSyncOrchestrationResult | null>(null)
 const issueLoading = ref(false)
 const issueGroups = ref<DhbSyncOpenIssueGroup[]>([])
@@ -411,9 +367,18 @@ const sections: SyncSection[] = [
     domain: '接入状态',
     description: '只看订货宝接入链路是否健康，不把这些指标散到 ERP、CRM、Order 业务页。',
     rules: [
-      { title: '对象覆盖', description: '商品、客户、销售订单、库存和采购对象分别记录来源覆盖情况。' },
-      { title: '最近运行', description: '展示最近一次全量、增量或修复任务的状态、耗时和结果摘要。' },
-      { title: '写入目标', description: '有效数据最终落到我方新业务表，旧订货宝档案不再作为业务入口。' },
+      {
+        title: '对象覆盖',
+        description: '商品、客户、销售订单、库存和采购对象分别记录来源覆盖情况。',
+      },
+      {
+        title: '最近运行',
+        description: '展示最近一次全量、增量或修复任务的状态、耗时和结果摘要。',
+      },
+      {
+        title: '写入目标',
+        description: '有效数据最终落到我方新业务表，旧订货宝档案不再作为业务入口。',
+      },
     ],
   },
   {
@@ -422,8 +387,14 @@ const sections: SyncSection[] = [
     domain: '字段与枚举',
     description: '订货宝字段、状态、字典和外部 ID 在后台映射到我方业务模型。',
     rules: [
-      { title: '外部 ID 绑定', description: '用来源对象、来源 ID 和租户维度建立绑定，保证重复同步幂等。' },
-      { title: '字段映射', description: '字段、枚举、状态统一映射到我方字段，不在业务页面暴露订货宝内部字段。' },
+      {
+        title: '外部 ID 绑定',
+        description: '用来源对象、来源 ID 和租户维度建立绑定，保证重复同步幂等。',
+      },
+      {
+        title: '字段映射',
+        description: '字段、枚举、状态统一映射到我方字段，不在业务页面暴露订货宝内部字段。',
+      },
       { title: '冲突策略', description: '保护人工维护字段，同步只更新来源负责的字段集合。' },
     ],
   },
@@ -433,9 +404,15 @@ const sections: SyncSection[] = [
     domain: '批次审计',
     description: '按同步批次记录拉取、跳过、写入、失败和修复结果，支撑后续对账。',
     rules: [
-      { title: 'payload hash 跳过', description: '来源 payload hash 未变化时直接跳过，避免重复写入业务表。' },
+      {
+        title: 'payload hash 跳过',
+        description: '来源 payload hash 未变化时直接跳过，避免重复写入业务表。',
+      },
       { title: '模式区分', description: '全量、增量、修复任务分开记录，方便判断本次同步目的。' },
-      { title: '结果证据', description: '保存来源数量、Raw 数量、目标表数量和失败数量，便于复盘。' },
+      {
+        title: '结果证据',
+        description: '保存来源数量、Raw 数量、目标表数量和失败数量，便于复盘。',
+      },
     ],
   },
   {
@@ -446,7 +423,10 @@ const sections: SyncSection[] = [
     rules: [
       { title: '可重试失败', description: '网络、限流、临时服务错误进入重试队列。' },
       { title: '需人工确认', description: '字段缺失、字典未映射、外部 ID 冲突进入待处理池。' },
-      { title: '修复入口', description: '修复任务以来源对象和失败原因重新执行，不要求业务人员进入旧档案页。' },
+      {
+        title: '修复入口',
+        description: '修复任务以来源对象和失败原因重新执行，不要求业务人员进入旧档案页。',
+      },
     ],
   },
   {
@@ -454,9 +434,18 @@ const sections: SyncSection[] = [
     title: '图片附件',
     domain: 'COS 处理',
     rules: [
-      { title: '对象已存在跳过', description: 'COS 中已有相同对象时不重复上传，直接复用已有 URL。' },
-      { title: '稳定对象键', description: '对象路径由租户、来源对象和内容摘要生成，避免同一图片反复落不同地址。' },
-      { title: '失败可修复', description: '上传失败记录在同步异常中，修复后再回填我方商品图片 URL。' },
+      {
+        title: '对象已存在跳过',
+        description: 'COS 中已有相同对象时不重复上传，直接复用已有 URL。',
+      },
+      {
+        title: '稳定对象键',
+        description: '对象路径由租户、来源对象和内容摘要生成，避免同一图片反复落不同地址。',
+      },
+      {
+        title: '失败可修复',
+        description: '上传失败记录在同步异常中，修复后再回填我方商品图片 URL。',
+      },
     ],
   },
   {
@@ -472,8 +461,8 @@ const sections: SyncSection[] = [
   },
 ]
 
-const activeSectionDetail = computed(() =>
-  sections.find((section) => section.key === activeSection.value) || sections[0],
+const activeSectionDetail = computed(
+  () => sections.find((section) => section.key === activeSection.value) || sections[0],
 )
 
 const boundaryRules = [
@@ -483,107 +472,49 @@ const boundaryRules = [
   { label: '页面动作', value: '手动同步可指定范围；单对象修复放在运维排障链路中逐步补齐' },
 ]
 
-const syncStages: SyncStage[] = [
+const groups: { title: string; items: { scope: DhbPageScope; label: string }[] }[] = [
   {
-    key: 'all',
-    label: '全链路',
-    description: '按依赖顺序同步字典/IAM、ERP、CRM 和 Order，适合完整重同步验收。',
-    summary: 'ERP + CRM + Order',
-    steps: ['字典/IAM', 'ERP商品', 'CRM客户', 'ERP供应链', 'Order订单'],
-    command: {
-      includeDictionary: true,
-      includeIam: true,
-      includeErp: true,
-      includeErpProduct: true,
-      includeErpSupply: true,
-      includeCrm: true,
-      includeOrder: true,
-    },
+    title: '订单与资金',
+    items: [
+      { scope: 'SALES_ORDER', label: '销售订单' },
+      { scope: 'RECEIPT', label: '回款' },
+      { scope: 'PAYMENT', label: '付款' },
+      { scope: 'SHIPMENT', label: '发货' },
+      { scope: 'TRANSFER', label: '调拨' },
+    ],
   },
   {
-    key: 'erp',
-    label: 'ERP商品',
-    description: '只同步 ERP 商品主数据，不触发采购订单、仓库和其他供应链数据。',
-    summary: '商品主数据',
-    steps: ['ERP商品'],
-    command: {
-      includeDictionary: false,
-      includeIam: false,
-      includeErp: true,
-      includeErpProduct: true,
-      includeErpSupply: false,
-      includeCrm: false,
-      includeOrder: false,
-    },
+    title: '客户资料',
+    items: [
+      { scope: 'CUSTOMER', label: '客户门店' },
+      { scope: 'ADDRESS', label: '收货地址' },
+    ],
   },
   {
-    key: 'dictionary-iam',
-    label: '字典/IAM',
-    description: '只同步业务字典和人员来源映射，作为后续客户、商品和订单同步的前置数据。',
-    summary: '前置主数据',
-    steps: ['字典', 'IAM'],
-    command: {
-      includeDictionary: true,
-      includeIam: true,
-      includeErp: false,
-      includeCrm: false,
-      includeOrder: false,
-    },
+    title: '商品与仓库',
+    items: [
+      { scope: 'PRODUCT_SPU', label: '商品' },
+      { scope: 'CATEGORY', label: '商品分类' },
+      { scope: 'BRAND', label: '品牌' },
+      { scope: 'SPECIFICATION', label: '规格' },
+      { scope: 'TAG', label: '标签' },
+      { scope: 'WAREHOUSE', label: '仓库' },
+      { scope: 'INVENTORY', label: '库存' },
+    ],
   },
   {
-    key: 'crm',
-    label: 'CRM客户',
-    description: '只同步 CRM 客户主数据，不触发 ERP、Order 同步。',
-    summary: '客户主数据',
-    steps: ['CRM客户'],
-    command: {
-      includeDictionary: false,
-      includeIam: false,
-      includeErp: false,
-      includeCrm: true,
-      includeOrder: false,
-    },
-  },
-  {
-    key: 'erp-supply',
-    label: 'ERP供应链',
-    description: '只同步 ERP 供应链数据，适合采购、入库、出库和调拨链路单独修复。',
-    summary: '采购/库存流转',
-    steps: ['ERP供应链'],
-    command: {
-      includeDictionary: false,
-      includeIam: false,
-      includeErp: true,
-      includeErpProduct: false,
-      includeErpSupply: true,
-      includeCrm: false,
-      includeOrder: false,
-    },
-  },
-  {
-    key: 'order',
-    label: 'Order订单',
-    description: '只同步 Order 订单域数据，不触发 ERP 和 CRM。',
-    summary: '订单/履约/回款',
-    steps: ['Order订单'],
-    command: {
-      includeDictionary: false,
-      includeIam: false,
-      includeErp: false,
-      includeCrm: false,
-      includeOrder: true,
-    },
+    title: '采购',
+    items: [
+      { scope: 'SUPPLIER', label: '供应商' },
+      { scope: 'PURCHASE_ORDER', label: '采购订单' },
+      { scope: 'PURCHASE_RETURN', label: '采购退货' },
+      { scope: 'WAREHOUSING_RECEIPT', label: '采购入库' },
+    ],
   },
 ]
 
-const syncModes = syncStages
-
-const selectedSyncMode = computed(() =>
-  syncModes.find((mode) => mode.key === selectedSyncModeKey.value) || syncModes[0],
-)
-
-const latestSteps = computed(() =>
-  latestResult.value?.tenants.flatMap((tenant) => tenant.steps) || [],
+const latestSteps = computed(
+  () => latestResult.value?.tenants.flatMap((tenant) => tenant.steps) || [],
 )
 
 const visibleIssueItems = computed<IssueItemWithAction[]>(() => {
@@ -625,52 +556,9 @@ const syncDurationLabel = computed(() => {
   return `${((finishedAt - startedAt) / 1000).toFixed(1)} 秒`
 })
 
-async function runUnifiedSync() {
-  const mode = selectedSyncMode.value
-  await runSync(
-    'full',
-    { ...mode.command, ...selectedWindowCommand(), maxPages: maxPages.value },
-    `${mode.label}同步已完成`,
-  )
-}
-
-async function runStageSync(stage: SyncStage) {
-  await runSync(
-    stage.key,
-    { ...stage.command, ...selectedWindowCommand(), maxPages: maxPages.value },
-    `${stage.label}同步已完成`,
-  )
-}
-
-function selectSyncMode(key: string) {
-  selectedSyncModeKey.value = key
-}
-
-async function runSync(stageKey: string, command: DhbSyncOrchestrationCommand, successMessage: string) {
-  syncing.value = true
-  runningStage.value = stageKey
-  syncBusyMessage.value = ''
-  try {
-    const result = await syncDhbOrchestration(command)
-    latestResult.value = result
-    if (result.status === 'SUCCEEDED' && latestSteps.value.length > 0) {
-      ElMessage.success(successMessage)
-    } else if (result.status === 'SKIPPED' || latestSteps.value.length === 0) {
-      ElMessage.warning('本次没有执行同步步骤，请检查订货宝连接器或同步任务配置')
-    } else {
-      ElMessage.warning('订货宝统一同步未全部成功，请查看结果明细')
-    }
-  } catch (reason) {
-    if (isSyncBusyError(reason)) {
-      syncBusyMessage.value = '后台已有订货宝同步任务正在执行，本次未重复发起；请稍后刷新页面或再次点击统一同步查看结果。'
-      ElMessage.warning(syncBusyMessage.value)
-      return
-    }
-    ElMessage.error(errorMessage(reason, '订货宝统一同步失败'))
-  } finally {
-    syncing.value = false
-    runningStage.value = ''
-  }
+function onPageCompleted(result: DhbSyncOrchestrationResult) {
+  latestResult.value = result
+  void loadIssueWorkbench()
 }
 
 async function loadIssueWorkbench() {
@@ -679,8 +567,10 @@ async function loadIssueWorkbench() {
     const [groups, tasks] = await Promise.all([getDhbOpenIssues(500), getDhbSyncTasks()])
     issueGroups.value = groups
     syncTasks.value = tasks
-    if (activeIssueGroupKey.value !== ALL_ISSUE_GROUPS
-      && !groups.some((group) => issueGroupKey(group) === activeIssueGroupKey.value)) {
+    if (
+      activeIssueGroupKey.value !== ALL_ISSUE_GROUPS &&
+      !groups.some((group) => issueGroupKey(group) === activeIssueGroupKey.value)
+    ) {
       activeIssueGroupKey.value = ALL_ISSUE_GROUPS
     }
   } catch (reason) {
@@ -705,7 +595,9 @@ async function loadCandidateReceipts(issue: IssueItemWithAction) {
     const candidates = new Set(issue.candidateSourceIds)
     const nextDetails: Record<string, DhbWarehousingReceipt> = {}
     for (const receipt of page.items || []) {
-      const keys = [receipt.sourceId, receipt.number].filter((value): value is string => Boolean(value))
+      const keys = [receipt.sourceId, receipt.number].filter((value): value is string =>
+        Boolean(value),
+      )
       for (const key of keys) {
         if (candidates.has(key)) nextDetails[key] = receipt
       }
@@ -779,11 +671,14 @@ async function replayIssue(issue: IssueItemWithAction) {
 }
 
 function orderSyncTask(issue: DhbSyncOpenIssueItem): DhbSyncTask | null {
-  return syncTasks.value.find((task) =>
-    task.objectType === 'ORDER'
-    && task.status !== 'PAUSED'
-    && (!issue.connectorId || task.connectorId === issue.connectorId),
-  ) || null
+  return (
+    syncTasks.value.find(
+      (task) =>
+        task.objectType === 'ORDER' &&
+        task.status !== 'PAUSED' &&
+        (!issue.connectorId || task.connectorId === issue.connectorId),
+    ) || null
+  )
 }
 
 function issueGroupKey(group: DhbSyncOpenIssueGroup) {
@@ -803,34 +698,7 @@ function actionLabel(actionType: string) {
   return labels[actionType] || actionType || '-'
 }
 
-function formatTime(value: string | null | undefined) {
-  if (!value) return '-'
-  const timestamp = new Date(value)
-  if (Number.isNaN(timestamp.getTime())) return '-'
-  return timestamp.toLocaleString('zh-CN', { hour12: false })
-}
-
-function selectedWindowCommand(): Pick<DhbSyncOrchestrationCommand, 'from' | 'to'> {
-  if (!Array.isArray(syncWindow.value) || syncWindow.value.length !== 2) return {}
-  const [from, to] = syncWindow.value
-  if (!from || !to) return {}
-  return {
-    from: localDateTimeToIso(from),
-    to: localDateTimeToIso(to),
-  }
-}
-
-function localDateTimeToIso(value: string) {
-  const timestamp = new Date(value)
-  if (Number.isNaN(timestamp.getTime())) return value
-  return timestamp.toISOString()
-}
-
-function isSyncBusyError(reason: unknown): boolean {
-  if (!reason || typeof reason !== 'object') return false
-  const candidate = reason as { code?: unknown; response?: { status?: unknown } }
-  return candidate.code === 'SERVICE_UNAVAILABLE' || candidate.response?.status === 503
-}
+const formatTime = displayDateTime
 
 function statusLabel(status: DhbSyncOrchestrationStatus | string) {
   const labels: Record<string, string> = {
@@ -845,7 +713,9 @@ function statusLabel(status: DhbSyncOrchestrationStatus | string) {
   return labels[status] || status || '-'
 }
 
-function statusTag(status: DhbSyncOrchestrationStatus | string): 'success' | 'info' | 'warning' | 'danger' {
+function statusTag(
+  status: DhbSyncOrchestrationStatus | string,
+): 'success' | 'info' | 'warning' | 'danger' {
   if (status === 'SUCCEEDED') return 'success'
   if (status === 'FAILED') return 'danger'
   if (status === 'PARTIAL' || status === 'SUCCEEDED_WITH_WARNINGS') return 'warning'
@@ -871,17 +741,9 @@ defineExpose({
   sections,
   boundaryRules,
   latestSteps,
-  syncStages,
-  syncModes,
-  selectedSyncMode,
-  selectedSyncModeKey,
   issueGroups,
   visibleIssueItems,
   issueSummary,
-  selectSyncMode,
-  syncWindow,
-  runUnifiedSync,
-  runStageSync,
   loadIssueWorkbench,
   openResolution,
   submitManualResolution,

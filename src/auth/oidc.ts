@@ -3,38 +3,68 @@ import { allowDevelopmentHttp, sha256, verifyRs256 } from './oidc-crypto'
 
 interface OidcTokenResponse {
   access_token: string
-  id_token: string
+  refresh_token: string
+  id_token?: string
   token_type: string
   expires_in: number
 }
 
 const STATE_KEY = 'rigour_oidc_state'
 const VERIFIER_KEY = 'rigour_oidc_code_verifier'
-const REDIRECT_KEY = 'rigour_oidc_return_path'
 const NONCE_KEY = 'rigour_oidc_nonce'
-const LOGOUT_PENDING_KEY = 'rigour_oidc_logout_pending'
+const LANDING_PATH_KEY = 'rigour_oidc_landing_path'
 const ACCESS_TOKEN_EXPIRY_SAFETY_WINDOW_MS = 5_000
 
 let accessToken: string | null = null
-let idToken: string | null = null
 let accessTokenExpiresAt: number | null = null
+let refreshToken: string | null = null
+let tokenGeneration = 0
+let refreshInFlight: Promise<string> | null = null
+let refreshController: AbortController | null = null
 
-export interface OidcLoginOptions {
-  /** 要求IAM重新显示登录表单，避免退出后复用旧浏览器会话。 */
-  prompt?: 'login'
+export class TokenRefreshError extends Error {
+  constructor(
+    public readonly code: 'IAM_TOKEN_INVALID' | 'IAM_UNAVAILABLE' | 'REQUEST_CANCELLED',
+    message: string,
+  ) {
+    super(message)
+    this.name = 'TokenRefreshError'
+  }
+}
+
+function validTokens(tokens: Partial<OidcTokenResponse>): tokens is OidcTokenResponse {
+  return typeof tokens.access_token === 'string' && !!tokens.access_token
+    && typeof tokens.refresh_token === 'string' && !!tokens.refresh_token
+    && typeof tokens.token_type === 'string' && tokens.token_type.toLowerCase() === 'bearer'
+    && typeof tokens.expires_in === 'number' && Number.isFinite(tokens.expires_in) && tokens.expires_in > 0
+}
+
+function saveTokens(tokens: OidcTokenResponse, requestedAt: number): void {
+  accessToken = tokens.access_token
+  refreshToken = tokens.refresh_token
+  accessTokenExpiresAt = requestedAt + tokens.expires_in * 1000
 }
 
 function config() {
   const issuer = import.meta.env.VITE_OIDC_ISSUER?.replace(/\/$/, '')
   const clientId = import.meta.env.VITE_OIDC_CLIENT_ID
   const redirectUri = import.meta.env.VITE_OIDC_REDIRECT_URI || `${window.location.origin}/oidc/callback`
-  const postLogoutRedirectUri =
-    import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || `${window.location.origin}/`
-  if (!issuer || !clientId || !isAllowedOidcUrl(issuer) || !isAllowedOidcUrl(redirectUri)
-    || !isAllowedOidcUrl(postLogoutRedirectUri)) {
+  if (!issuer || !clientId || !isAllowedOidcUrl(issuer) || !isAllowedOidcUrl(redirectUri)) {
     throw new Error('OIDC 配置不完整：开发环境允许 HTTP，正式环境需要 HTTPS')
   }
-  return { issuer, clientId, redirectUri, postLogoutRedirectUri }
+  return { issuer, clientId, redirectUri }
+}
+
+/** 回调地址不可跨 Web 实例，否则 state 和 PKCE verifier 会落在另一个端口。 */
+export function assertOidcBrowserOrigin(): void {
+  const { redirectUri } = config()
+  if (new URL(redirectUri).origin !== window.location.origin) {
+    throw new Error(`当前访问地址与登录配置不一致，请从 ${new URL(redirectUri).origin}/ 打开系统。`)
+  }
+}
+
+function browserAuthUrl(path: string): string {
+  return new URL(`/auth${path}`, window.location.origin).toString()
 }
 
 export function isAllowedOidcUrl(value: string): boolean {
@@ -68,31 +98,27 @@ export async function createPkcePair(): Promise<{ verifier: string; challenge: s
 }
 
 export function safeReturnPath(value: string | null | undefined): string {
-  return value?.startsWith('/') && !value.startsWith('//') ? value : '/apps'
+  return value && /^\/supply-chain(?:[/?#]|$)/.test(value) && !value.includes('\\')
+    ? value : '/supply-chain'
 }
 
-export async function beginOidcLogin(
-  returnPath = '/apps',
-  options: OidcLoginOptions = {},
-): Promise<void> {
-  // 用户明确点击重新登录时，解除退出后的暂停标记。
-  sessionStorage.removeItem(LOGOUT_PENDING_KEY)
+/** 只由启动阶段恢复既有会话时传入站内地址；主动登录默认进入首页。 */
+export async function beginOidcLogin(restorePath?: string): Promise<void> {
+  assertOidcBrowserOrigin()
   const { issuer, clientId, redirectUri } = config()
   devInfo('开始OIDC登录', {
     issuer,
     clientId,
     redirectUri,
-    returnPath: safeReturnPath(returnPath),
-    prompt: options.prompt ?? '-',
   })
   const state = randomUrlSafe(32)
   const nonce = randomUrlSafe(32)
   const { verifier, challenge } = await createPkcePair()
   sessionStorage.setItem(STATE_KEY, state)
   sessionStorage.setItem(VERIFIER_KEY, verifier)
-  sessionStorage.setItem(REDIRECT_KEY, safeReturnPath(returnPath))
   sessionStorage.setItem(NONCE_KEY, nonce)
-  const url = new URL(`${issuer}/oauth2/authorize`)
+  sessionStorage.setItem(LANDING_PATH_KEY, safeReturnPath(restorePath))
+  const url = new URL(browserAuthUrl('/oauth2/authorize'))
   const parameters = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
@@ -103,17 +129,22 @@ export async function beginOidcLogin(
     code_challenge_method: 'S256',
     nonce,
   })
-  if (options.prompt) parameters.set('prompt', options.prompt)
   url.search = parameters.toString()
   window.location.assign(url)
+}
+
+export function takeOidcLandingPath(): string {
+  const path = safeReturnPath(sessionStorage.getItem(LANDING_PATH_KEY))
+  sessionStorage.removeItem(LANDING_PATH_KEY)
+  return path
 }
 
 export function isOidcCallback(): boolean {
   return window.location.pathname.endsWith('/oidc/callback')
 }
 
-export async function completeOidcCallback(): Promise<string | null> {
-  if (!isOidcCallback()) return null
+export async function completeOidcCallback(): Promise<boolean> {
+  if (!isOidcCallback()) return false
   devInfo('开始处理OIDC回调')
   const parameters = new URLSearchParams(window.location.search)
   const expectedState = sessionStorage.getItem(STATE_KEY)
@@ -127,9 +158,13 @@ export async function completeOidcCallback(): Promise<string | null> {
       throw new Error('OIDC 回调校验失败')
     }
     const { issuer, clientId, redirectUri } = config()
-    const response = await fetch(`${issuer}/oauth2/token`, {
+    const generation = tokenGeneration
+    const requestedAt = Date.now()
+    const response = await fetch(browserAuthUrl('/oauth2/token'), {
       method: 'POST',
       credentials: 'omit',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10_000),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
@@ -141,24 +176,21 @@ export async function completeOidcCallback(): Promise<string | null> {
     })
     if (!response.ok) throw new Error(`OIDC Token 交换失败：${response.status}`)
     const tokens = (await response.json()) as OidcTokenResponse
-    if (!tokens.access_token || !tokens.id_token || typeof tokens.token_type !== 'string'
-      || tokens.token_type.toLowerCase() !== 'bearer'
-      || !Number.isFinite(tokens.expires_in) || tokens.expires_in <= 0) {
+    if (!tokens || !validTokens(tokens) || typeof tokens.id_token !== 'string' || !tokens.id_token) {
       throw new Error('OIDC Token 响应不完整')
     }
     await validateIdToken(tokens.id_token, issuer, clientId, expectedNonce)
-    accessToken = tokens.access_token
-    idToken = tokens.id_token
-    accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000
+    if (generation !== tokenGeneration) throw new TokenRefreshError('REQUEST_CANCELLED', '登录操作已取消')
+    saveTokens(tokens, requestedAt)
     devInfo('OIDC回调完成，Token已保存在当前页面内存')
-    return safeReturnPath(sessionStorage.getItem(REDIRECT_KEY))
+    return true
   } catch (error) {
+    sessionStorage.removeItem(LANDING_PATH_KEY)
     devWarn('OIDC回调处理失败', { message: error instanceof Error ? error.message : error })
     throw error
   } finally {
     sessionStorage.removeItem(STATE_KEY)
     sessionStorage.removeItem(VERIFIER_KEY)
-    sessionStorage.removeItem(REDIRECT_KEY)
     sessionStorage.removeItem(NONCE_KEY)
   }
 }
@@ -190,7 +222,7 @@ async function validateIdToken(token: string, issuer: string, clientId: string, 
   if (header.alg !== 'RS256' || !header.kid) throw new Error('ID Token 签名算法无效')
   validateIdTokenClaims(claims, issuer, clientId, nonce, Math.floor(Date.now() / 1000))
 
-  const discoveryResponse = await fetch(`${issuer}/.well-known/openid-configuration`, {
+  const discoveryResponse = await fetch(browserAuthUrl('/.well-known/openid-configuration'), {
     headers: { Accept: 'application/json' }, credentials: 'omit',
   })
   if (!discoveryResponse.ok) throw new Error('无法读取OIDC Discovery')
@@ -198,7 +230,8 @@ async function validateIdToken(token: string, issuer: string, clientId: string, 
   if (discovery.issuer !== issuer || !isAllowedJwksUri(discovery.jwks_uri, issuer)) {
     throw new Error('OIDC Discovery不可信')
   }
-  const jwksResponse = await fetch(discovery.jwks_uri, { headers: { Accept: 'application/json' }, credentials: 'omit' })
+  if (new URL(discovery.jwks_uri).pathname !== '/oauth2/jwks') throw new Error('OIDC JWKS路径不可信')
+  const jwksResponse = await fetch(browserAuthUrl('/oauth2/jwks'), { headers: { Accept: 'application/json' }, credentials: 'omit' })
   if (!jwksResponse.ok) throw new Error('无法读取OIDC JWKS')
   const jwks = (await jwksResponse.json()) as JsonWebKeySet
   const jwk = jwks.keys.find((key) => key.kid === header.kid && key.kty === 'RSA'
@@ -245,43 +278,81 @@ function decodeBase64Url(value: string): Uint8Array {
 export function getAccessToken(): string | null {
   if (accessToken && accessTokenExpiresAt !== null
     && Date.now() >= accessTokenExpiresAt - ACCESS_TOKEN_EXPIRY_SAFETY_WINDOW_MS) {
-    devInfo('OIDC Access Token已到或接近到期，等待复用IAM会话重新授权')
-    clearOidcTokens()
+    return null
   }
   return accessToken
 }
 
-export function clearOidcTokens(): void {
-  accessToken = null
-  idToken = null
-  accessTokenExpiresAt = null
+export function hasRefreshToken(): boolean {
+  return refreshToken !== null
 }
 
-/** 标记一次跨域OIDC退出，防止退出回到Portal后立即静默重新登录。 */
-function markLogoutPending(): void {
-  sessionStorage.setItem(LOGOUT_PENDING_KEY, '1')
+/** 轮换 Token 不改变代次；退出后旧请求不能再操作新登录会话。 */
+export function getSessionGeneration(): number {
+  return tokenGeneration
 }
 
-/** 仅消费一次退出标记；刷新登录页不会重复显示退出提示。 */
-export function consumeLogoutPending(): boolean {
-  const pending = sessionStorage.getItem(LOGOUT_PENDING_KEY) === '1'
-  sessionStorage.removeItem(LOGOUT_PENDING_KEY)
+/**
+ * 请求及路由共用同一次刷新；迟到的旧 Token 401 直接使用已更新的 Token。
+ * 不使用定时心跳延长闲置登录，也不把任何 Token 写入 Web Storage。
+ */
+export async function ensureAccessToken(rejectedToken?: string): Promise<string | null> {
+  const current = getAccessToken()
+  if (current && (!rejectedToken || current !== rejectedToken)) return current
+  if (refreshInFlight) return refreshInFlight
+  if (!refreshToken) return null
+
+  const generation = tokenGeneration
+  const previousRefreshToken = refreshToken
+  const controller = new AbortController()
+  refreshController = controller
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+  const requestedAt = Date.now()
+  const pending = (async () => {
+    try {
+      const response = await fetch(browserAuthUrl('/oauth2/token'), {
+        method: 'POST', credentials: 'omit', cache: 'no-store', signal: controller.signal,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token', client_id: config().clientId, refresh_token: previousRefreshToken,
+        }),
+      })
+      const tokens = await response.json()
+      if (generation !== tokenGeneration) throw new TokenRefreshError('REQUEST_CANCELLED', '会话已变更')
+      if (!response.ok) {
+        if (response.status === 400 && tokens?.error === 'invalid_grant') {
+          clearOidcTokens()
+          throw new TokenRefreshError('IAM_TOKEN_INVALID', '登录状态已过期，请重新登录。')
+        }
+        throw new TokenRefreshError('IAM_UNAVAILABLE', '登录续期暂时不可用，请稍后重试。')
+      }
+      if (!tokens || !validTokens(tokens) || tokens.refresh_token === previousRefreshToken) {
+        throw new TokenRefreshError('IAM_UNAVAILABLE', '登录续期响应无效，请联系管理员。')
+      }
+      saveTokens(tokens, requestedAt)
+      return tokens.access_token
+    } catch (error) {
+      if (error instanceof TokenRefreshError) throw error
+      if (generation !== tokenGeneration) throw new TokenRefreshError('REQUEST_CANCELLED', '会话已变更')
+      throw new TokenRefreshError('IAM_UNAVAILABLE', '登录续期暂时不可用，请检查网络后重试。')
+    }
+  })().finally(() => {
+    clearTimeout(timeout)
+    if (generation === tokenGeneration) {
+      refreshInFlight = null
+      refreshController = null
+    }
+  })
+  refreshInFlight = pending
   return pending
 }
 
-export function beginOidcLogout(): void {
-  const { issuer, postLogoutRedirectUri } = config()
-  const currentIdToken = idToken
-  markLogoutPending()
-  clearOidcTokens()
-  if (!currentIdToken) {
-    window.location.assign('/#/login?reason=logout')
-    return
-  }
-  const url = new URL(`${issuer}/connect/logout`)
-  url.search = new URLSearchParams({
-    id_token_hint: currentIdToken,
-    post_logout_redirect_uri: postLogoutRedirectUri,
-  }).toString()
-  window.location.assign(url)
+export function clearOidcTokens(): void {
+  tokenGeneration++
+  refreshController?.abort()
+  refreshController = null
+  refreshInFlight = null
+  accessToken = null
+  accessTokenExpiresAt = null
+  refreshToken = null
 }

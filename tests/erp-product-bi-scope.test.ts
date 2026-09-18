@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
   route: { query: { brandId: '123', brandName: '测试品牌' } as Record<string, string> },
   products: vi.fn(),
 }))
-vi.mock('vue-router', () => ({ useRoute: () => mocks.route }))
+vi.mock('vue-router', async (importOriginal) => ({
+  ...await importOriginal<typeof import('vue-router')>(), useRoute: () => mocks.route }))
 vi.mock('@/api/core/erp-product', () => ({
   getErpManagedProducts: mocks.products,
   getErpManagedProduct: vi.fn(),
@@ -35,7 +36,7 @@ beforeEach(() => {
 describe('BI 品牌下钻到 ERP', () => {
   it('首次请求使用品牌 ID，选中名称不受品牌列表前 50 条限制，换品牌从第一页查，重置清除范围', async () => {
     const wrapper = mount(ProductView, {
-      global: { plugins: [ElementPlus], stubs: { ProductCategorySelect: true } },
+      global: { plugins: [ElementPlus], stubs: { ProductCategorySelect: true, DhbPageSyncButton: true } },
     })
     await flushPromises()
     expect(mocks.products).toHaveBeenLastCalledWith(

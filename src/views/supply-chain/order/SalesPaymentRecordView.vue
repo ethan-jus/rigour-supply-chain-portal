@@ -1,9 +1,11 @@
 <template>
   <div class="sales-payment-page supply-page supply-page--business-main">
     <div class="page-heading">
+      <HistoryOrderReview />
+      <DhbPageSyncButton scope="RECEIPT" label="回款" @completed="loadRows" />
       <div>
         <span class="supply-page__eyebrow">Order · 收款中心</span>
-        <h1>销售回款</h1>
+        <SupplyPageTitle>销售回款</SupplyPageTitle>
         <p>查看销售订单对应的回款记录、回款方式、回款人和金额。</p>
       </div>
     </div>
@@ -11,23 +13,58 @@
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="loadRows">
         <el-form-item label="回款单号">
-          <el-input v-model="filters.paymentNo" clearable placeholder="回款单号" style="width: 170px" />
+          <el-input
+            v-model="filters.paymentNo"
+            clearable
+            placeholder="回款单号"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="销售订单号">
-          <el-input v-model="filters.salesOrderNo" clearable placeholder="系统订单号" style="width: 170px" />
+          <el-input
+            v-model="filters.salesOrderNo"
+            clearable
+            placeholder="系统订单号"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="来源单号">
-          <el-input v-model="filters.sourceDocumentNo" clearable placeholder="飞书/DD单号" style="width: 170px" />
+          <el-input
+            v-model="filters.sourceDocumentNo"
+            clearable
+            placeholder="飞书/DD单号"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="客户名称">
-          <el-input v-model="filters.customerName" clearable placeholder="客户名称" style="width: 200px" />
+          <el-input
+            v-model="filters.customerName"
+            clearable
+            placeholder="客户名称"
+            style="width: 200px"
+          />
         </el-form-item>
         <el-form-item label="回款人员">
-          <el-input v-model="filters.collectorStaffCode" clearable placeholder="员工编码" style="width: 160px" />
+          <el-input
+            v-model="filters.collectorStaffCode"
+            clearable
+            placeholder="员工编码"
+            style="width: 160px"
+          />
         </el-form-item>
         <el-form-item label="付款方式">
-          <el-select v-model="filters.paymentMethodCode" clearable placeholder="全部方式" style="width: 140px">
-            <el-option v-for="item in paymentMethodOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.paymentMethodCode"
+            clearable
+            placeholder="全部方式"
+            style="width: 140px"
+          >
+            <el-option
+              v-for="item in paymentMethodOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="回款时间">
@@ -51,7 +88,9 @@
     <div class="result-heading">
       <div class="result-title-line">
         <h2>回款列表</h2>
-        <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+        <span class="result-count"
+          ><strong>{{ pageData.total }}</strong> 条</span
+        >
       </div>
     </div>
 
@@ -65,7 +104,13 @@
           row-key="id"
           @row-click="openDetail"
         >
-          <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <el-table-column
+            type="index"
+            label="序号"
+            width="80"
+            fixed="left"
+            :index="tableRowIndex"
+          />
           <el-table-column prop="paymentNo" label="回款单号" width="170" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.paymentNo || '-' }}</template>
           </el-table-column>
@@ -77,13 +122,28 @@
               <span v-else>-</span>
             </template>
           </el-table-column>
-          <el-table-column prop="sourceDocumentNo" label="来源单号" width="170" show-overflow-tooltip>
+          <el-table-column
+            prop="sourceDocumentNo"
+            label="来源单号"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ scope.row.sourceDocumentNo || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="salesOrderNoSnapshot" label="销售订单号" width="170" show-overflow-tooltip>
+          <el-table-column
+            prop="salesOrderNoSnapshot"
+            label="销售订单号"
+            width="170"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ scope.row.salesOrderNoSnapshot || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip>
+          <el-table-column
+            prop="customerNameSnapshot"
+            label="客户名称"
+            min-width="220"
+            show-overflow-tooltip
+          >
             <template #default="scope">
               <span class="record-name">{{ scope.row.customerNameSnapshot || '-' }}</span>
             </template>
@@ -92,9 +152,16 @@
             <template #default="scope">¥{{ formatAmount(scope.row.paidAmount) }}</template>
           </el-table-column>
           <el-table-column prop="paymentMethodCode" label="付款方式" width="130">
-            <template #default="scope">{{ paymentMethodLabel(scope.row.paymentMethodCode) }}</template>
+            <template #default="scope">{{
+              paymentMethodLabel(scope.row.paymentMethodCode)
+            }}</template>
           </el-table-column>
-          <el-table-column prop="collectorStaffCode" label="回款人员" width="160" show-overflow-tooltip>
+          <el-table-column
+            prop="collectorStaffCode"
+            label="回款人员"
+            width="160"
+            show-overflow-tooltip
+          >
             <template #default="scope">
               {{ scope.row.collectorNameSnapshot || scope.row.collectorStaffCode || '-' }}
             </template>
@@ -106,7 +173,13 @@
           <el-table-column label="操作" width="150" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button v-if="!isExternalSource(scope.row)" link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
+              <el-button
+                v-if="!isExternalSource(scope.row) && can('order:payment:delete', 'order:write')"
+                link
+                type="danger"
+                @click.stop="deleteRow(scope.row)"
+                >删除</el-button
+              >
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无销售回款" /></template>
@@ -125,7 +198,12 @@
       </div>
     </el-card>
 
-    <el-drawer v-model="detailVisible" class="sales-payment-detail-drawer" size="min(860px, 94vw)" :with-header="false">
+    <el-drawer
+      v-model="detailVisible"
+      class="sales-payment-detail-drawer"
+      size="min(860px, 94vw)"
+      :with-header="false"
+    >
       <div v-if="detail" class="detail-shell">
         <header class="detail-hero">
           <div class="detail-hero-main">
@@ -133,14 +211,28 @@
             <h2>{{ detail.paymentNo }}</h2>
             <p>{{ detail.salesOrderNoSnapshot || '-' }} · ¥{{ formatAmount(detail.paidAmount) }}</p>
           </div>
-          <el-button circle plain aria-label="关闭回款详情" @click="detailVisible = false">×</el-button>
+          <el-button circle plain aria-label="关闭回款详情" @click="detailVisible = false"
+            >×</el-button
+          >
         </header>
         <div class="detail-content payment-detail-content">
           <div class="detail-summary payment-detail-summary">
-            <div><span>回款金额</span><strong>¥{{ formatAmount(detail.paidAmount) }}</strong></div>
-            <div><span>回款时间</span><strong>{{ formatTime(detail.paymentTime) }}</strong></div>
-            <div><span>付款方式</span><strong>{{ paymentMethodLabel(detail.paymentMethodCode) }}</strong></div>
-            <div><span>回款人员</span><strong>{{ detail.collectorNameSnapshot || detail.collectorStaffCode || '-' }}</strong></div>
+            <div>
+              <span>回款金额</span><strong>¥{{ formatAmount(detail.paidAmount) }}</strong>
+            </div>
+            <div>
+              <span>回款时间</span><strong>{{ formatTime(detail.paymentTime) }}</strong>
+            </div>
+            <div>
+              <span>付款方式</span
+              ><strong>{{ paymentMethodLabel(detail.paymentMethodCode) }}</strong>
+            </div>
+            <div>
+              <span>回款人员</span
+              ><strong>{{
+                detail.collectorNameSnapshot || detail.collectorStaffCode || '-'
+              }}</strong>
+            </div>
           </div>
 
           <section class="detail-panel">
@@ -151,14 +243,30 @@
               </div>
             </div>
             <div class="detail-field-grid">
-              <div class="detail-field"><span>回款单号</span><strong>{{ detail.paymentNo }}</strong></div>
-              <div class="detail-field"><span>销售订单号</span><strong>{{ detail.salesOrderNoSnapshot || '-' }}</strong></div>
-              <div class="detail-field"><span>来源单号</span><strong>{{ detail.sourceDocumentNo || '-' }}</strong></div>
-              <div class="detail-field detail-field--wide"><span>客户名称</span><strong>{{ detail.customerNameSnapshot || '-' }}</strong></div>
-              <div class="detail-field"><span>客户编码</span><strong>{{ detail.customerCodeSnapshot || '-' }}</strong></div>
-              <div class="detail-field"><span>员工编码</span><strong>{{ detail.collectorStaffCode || '-' }}</strong></div>
-              <div class="detail-field"><span>更新时间</span><strong>{{ formatTime(detail.updatedTime) }}</strong></div>
-              <div class="detail-field detail-field--full"><span>备注</span><strong>{{ detail.remark || '-' }}</strong></div>
+              <div class="detail-field">
+                <span>回款单号</span><strong>{{ detail.paymentNo }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>销售订单号</span><strong>{{ detail.salesOrderNoSnapshot || '-' }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>来源单号</span><strong>{{ detail.sourceDocumentNo || '-' }}</strong>
+              </div>
+              <div class="detail-field detail-field--wide">
+                <span>客户名称</span><strong>{{ detail.customerNameSnapshot || '-' }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>客户编码</span><strong>{{ detail.customerCodeSnapshot || '-' }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>员工编码</span><strong>{{ detail.collectorStaffCode || '-' }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>更新时间</span><strong>{{ formatTime(detail.updatedTime) }}</strong>
+              </div>
+              <div class="detail-field detail-field--full">
+                <span>备注</span><strong>{{ detail.remark || '-' }}</strong>
+              </div>
             </div>
           </section>
 
@@ -186,6 +294,12 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import HistoryOrderReview from '@/components/supply/HistoryOrderReview.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
+const { can } = useSupplyPermissions()
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -230,11 +344,14 @@ onMounted(() => {
   void loadRows()
 })
 
-watch(() => route.query, () => {
-  if (!applyRouteQuery()) return
-  currentPage.value = 1
-  void loadRows()
-})
+watch(
+  () => route.query,
+  () => {
+    if (!applyRouteQuery()) return
+    currentPage.value = 1
+    void loadRows()
+  },
+)
 
 async function loadRows() {
   loading.value = true
@@ -276,7 +393,8 @@ function applyRouteQuery() {
   changed = setFilterValue('salesOrderNo', routeText(route.query.salesOrderNo)) || changed
   changed = setFilterValue('sourceDocumentNo', routeText(route.query.sourceDocumentNo)) || changed
   changed = setFilterValue('customerName', routeText(route.query.customerName)) || changed
-  changed = setFilterValue('collectorStaffCode', routeText(route.query.collectorStaffCode)) || changed
+  changed =
+    setFilterValue('collectorStaffCode', routeText(route.query.collectorStaffCode)) || changed
   changed = setFilterValue('paymentMethodCode', routeText(route.query.paymentMethodCode)) || changed
   const from = routeDate(route.query.paymentTimeFrom)
   const to = routeDate(route.query.paymentTimeTo)
@@ -289,7 +407,13 @@ function applyRouteQuery() {
 }
 
 function setFilterValue(
-  key: 'paymentNo' | 'salesOrderNo' | 'sourceDocumentNo' | 'customerName' | 'collectorStaffCode' | 'paymentMethodCode',
+  key:
+    | 'paymentNo'
+    | 'salesOrderNo'
+    | 'sourceDocumentNo'
+    | 'customerName'
+    | 'collectorStaffCode'
+    | 'paymentMethodCode',
   value: string,
 ) {
   if (filters[key] === value) return false
@@ -343,11 +467,15 @@ async function deleteRow(row: SalesPaymentSummary) {
     return
   }
   try {
-    await ElMessageBox.confirm(`确认删除回款记录「${row.paymentNo}」？删除后会重新汇总销售订单收款状态。`, '删除回款记录', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      `确认删除回款记录「${row.paymentNo}」？删除后会重新汇总销售订单收款状态。`,
+      '删除回款记录',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
     await deleteSalesPayment(row.id, row.revision)
     ElMessage.success('回款记录已删除')
     await loadRows()
@@ -377,12 +505,7 @@ function formatAmount(value: number | null | undefined): string {
   })
 }
 
-function formatTime(value: string | null | undefined): string {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
+const formatTime = displayDateTime
 
 function startOfDay(value: string | undefined) {
   return value ? new Date(`${value}T00:00:00+08:00`).toISOString() : undefined
@@ -668,5 +791,4 @@ function attachmentName(value: string) {
     grid-column: auto;
   }
 }
-
 </style>

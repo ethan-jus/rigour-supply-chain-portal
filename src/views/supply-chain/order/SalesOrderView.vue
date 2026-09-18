@@ -3,11 +3,15 @@
     <div class="page-heading">
       <div>
         <span class="supply-page__eyebrow">订单管理 · 销售订单</span>
-        <h1>销售订单</h1>
+        <SupplyPageTitle>销售订单</SupplyPageTitle>
         <p>维护销售订单、商品明细、提交状态和销售出库。</p>
       </div>
       <div class="heading-actions">
-        <el-button type="primary" @click="openCreate">新增销售订单</el-button>
+        <HistoryOrderReview />
+        <DhbPageSyncButton scope="SALES_ORDER" label="销售订单" @completed="loadOrders" />
+        <el-button v-if="can('order:create')" type="primary" @click="openCreate"
+          >新增销售订单</el-button
+        >
       </div>
     </div>
 
@@ -25,7 +29,7 @@
       <div class="workflow-step">
         <span>3</span>
         <strong>确认销售出库</strong>
-        <small>选择出库仓库</small>
+        <small>从订单已确认仓库出库</small>
       </div>
       <div class="workflow-step">
         <span>4</span>
@@ -37,25 +41,66 @@
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="loadOrders">
         <el-form-item label="订单号">
-          <el-input v-model="filters.orderNo" clearable placeholder="销售订单号" style="width: 180px" />
+          <el-input
+            v-model="filters.orderNo"
+            clearable
+            placeholder="销售订单号"
+            style="width: 180px"
+          />
         </el-form-item>
         <el-form-item label="来源单号">
-          <el-input v-model="filters.sourceOrderNo" clearable placeholder="飞书/订货宝单号" style="width: 180px" />
+          <el-input
+            v-model="filters.sourceOrderNo"
+            clearable
+            placeholder="飞书/订货宝单号"
+            style="width: 180px"
+          />
         </el-form-item>
         <el-form-item label="来源状态">
-          <el-select v-model="filters.sourceStatusCode" clearable placeholder="全部来源状态" style="width: 150px">
-            <el-option v-for="item in sourceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.sourceStatusCode"
+            clearable
+            placeholder="全部来源状态"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="item in sourceStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="客户名称">
-          <el-input v-model="filters.customerName" clearable placeholder="客户/门店名称" style="width: 200px" />
+          <el-input
+            v-model="filters.customerName"
+            clearable
+            placeholder="客户/门店名称"
+            style="width: 200px"
+          />
         </el-form-item>
         <el-form-item label="联系电话">
-          <el-input v-model="filters.contactPhone" clearable placeholder="联系人电话" style="width: 160px" />
+          <el-input
+            v-model="filters.contactPhone"
+            clearable
+            placeholder="联系人电话"
+            style="width: 160px"
+          />
         </el-form-item>
         <el-form-item label="归属地区">
-          <el-select v-model="filters.regionCode" clearable filterable placeholder="全部地区" style="width: 150px">
-            <el-option v-for="item in regionOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.regionCode"
+            clearable
+            filterable
+            placeholder="全部地区"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="item in regionOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="归属销售">
@@ -79,12 +124,27 @@
           </el-select>
         </el-form-item>
         <el-form-item label="订单状态">
-          <el-select v-model="filters.orderStatusCode" clearable placeholder="全部订单状态" style="width: 150px">
-            <el-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.orderStatusCode"
+            clearable
+            placeholder="全部订单状态"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="item in orderStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="数据状态">
-          <el-select v-model="filters.dataQualityStatusCode" clearable placeholder="全部数据状态" style="width: 150px">
+          <el-select
+            v-model="filters.dataQualityStatusCode"
+            clearable
+            placeholder="全部数据状态"
+            style="width: 150px"
+          >
             <el-option
               v-for="item in dataQualityStatusOptions"
               :key="item.value"
@@ -94,20 +154,50 @@
           </el-select>
         </el-form-item>
         <el-form-item label="收款状态">
-          <el-select v-model="filters.paymentStatusCode" clearable placeholder="全部收款状态" style="width: 150px">
-            <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.paymentStatusCode"
+            clearable
+            placeholder="全部收款状态"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="item in paymentStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="出库状态">
-          <el-select v-model="filters.outboundStatusCode" clearable placeholder="全部出库状态" style="width: 150px">
-            <el-option v-for="item in outboundStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="filters.outboundStatusCode"
+            clearable
+            placeholder="全部出库状态"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="item in outboundStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="开始日期">
-          <el-date-picker v-model="filters.orderDateFrom" type="date" value-format="YYYY-MM-DD" placeholder="开始日期" />
+          <el-date-picker
+            v-model="filters.orderDateFrom"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="开始日期"
+          />
         </el-form-item>
         <el-form-item label="截止日期">
-          <el-date-picker v-model="filters.orderDateTo" type="date" value-format="YYYY-MM-DD" placeholder="截止日期" />
+          <el-date-picker
+            v-model="filters.orderDateTo"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="截止日期"
+          />
         </el-form-item>
         <el-form-item class="filter-actions">
           <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
@@ -129,7 +219,9 @@
       <div>
         <div class="result-title-line">
           <h2>销售订单列表</h2>
-          <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+          <span class="result-count"
+            ><strong>{{ pageData.total }}</strong> 条</span
+          >
         </div>
       </div>
     </div>
@@ -151,7 +243,13 @@
           row-key="id"
           @row-click="openDetail"
         >
-          <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <el-table-column
+            type="index"
+            label="序号"
+            width="80"
+            fixed="left"
+            :index="tableRowIndex"
+          />
           <el-table-column prop="orderNo" label="销售订单号" width="190" show-overflow-tooltip>
             <template #default="scope">
               <strong>{{ scope.row.orderNo }}</strong>
@@ -196,43 +294,79 @@
           </el-table-column>
           <el-table-column label="发货状态" width="120">
             <template #default="scope">
-              <el-tag v-if="scope.row.shipmentStatusCode" :type="shipmentStatusTag(scope.row.shipmentStatusCode)" effect="light">
+              <el-tag
+                v-if="scope.row.shipmentStatusCode"
+                :type="shipmentStatusTag(scope.row.shipmentStatusCode)"
+                effect="light"
+              >
                 {{ salesShipmentStatusLabel(scope.row.shipmentStatusCode) }}
               </el-tag>
               <span v-else>-</span>
             </template>
           </el-table-column>
-          <el-table-column prop="customerNameSnapshot" label="客户名称" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="customerCodeSnapshot" label="客户编号" width="150" show-overflow-tooltip>
+          <el-table-column
+            prop="customerNameSnapshot"
+            label="客户名称"
+            min-width="220"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="customerCodeSnapshot"
+            label="客户编号"
+            width="150"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ scope.row.customerCodeSnapshot || '-' }}</template>
           </el-table-column>
           <el-table-column label="订单类型" width="130">
             <template #default="scope">{{ orderTypeLabel(scope.row.orderTypeCode) }}</template>
           </el-table-column>
-          <el-table-column prop="contactPhoneSnapshot" label="联系电话" min-width="150" show-overflow-tooltip>
+          <el-table-column
+            prop="contactPhoneSnapshot"
+            label="联系电话"
+            min-width="150"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ scope.row.contactPhoneSnapshot || '-' }}</template>
           </el-table-column>
           <el-table-column label="归属地区" width="120">
-            <template #default="scope">{{ regionLabel(scope.row.regionCode, scope.row.regionName) }}</template>
+            <template #default="scope">{{
+              regionLabel(scope.row.regionCode, scope.row.regionName)
+            }}</template>
           </el-table-column>
           <el-table-column prop="ownerEmployeeNameSnapshot" label="归属销售人员" width="170">
             <template #default="scope">
-              {{ scope.row.ownerEmployeeNameSnapshot || scope.row.ownerSalesName || scope.row.ownerEmployeeCode || '-' }}
+              {{
+                scope.row.ownerEmployeeNameSnapshot ||
+                scope.row.ownerSalesName ||
+                scope.row.ownerEmployeeCode ||
+                '-'
+              }}
             </template>
           </el-table-column>
           <el-table-column label="订单状态" width="120">
             <template #default="scope">
-              <el-tag :type="orderStatusTag(scope.row.orderStatusCode)" effect="light">{{ salesOrderStatusLabel(scope.row.orderStatusCode) }}</el-tag>
+              <el-tag :type="orderStatusTag(scope.row.orderStatusCode)" effect="light">{{
+                salesOrderStatusLabel(scope.row.orderStatusCode)
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="收款状态" width="120">
             <template #default="scope">
-              <el-tag :type="paymentStatusTag(scope.row.paymentStatusCode)" effect="light">{{ statusLabel(paymentStatusOptions, scope.row.paymentStatusCode, paymentStatusFallbackLabels) }}</el-tag>
+              <el-tag :type="paymentStatusTag(scope.row.paymentStatusCode)" effect="light">{{
+                statusLabel(
+                  paymentStatusOptions,
+                  scope.row.paymentStatusCode,
+                  paymentStatusFallbackLabels,
+                )
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="出库状态" width="120">
             <template #default="scope">
-              <el-tag :type="outboundStatusTag(scope.row.outboundStatusCode)" effect="light">{{ statusLabel(outboundStatusOptions, scope.row.outboundStatusCode) }}</el-tag>
+              <el-tag :type="outboundStatusTag(scope.row.outboundStatusCode)" effect="light">{{
+                statusLabel(outboundStatusOptions, scope.row.outboundStatusCode)
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="商品数量" width="110" align="right">
@@ -243,10 +377,14 @@
           </el-table-column>
           <!-- @vue-generic {SalesOrderSummary} -->
           <el-table-column label="优惠金额" width="130" align="right">
-            <template #default="scope">{{ formatMoney(displayDiscountAmount(scope.row)) }}</template>
+            <template #default="scope">{{
+              formatMoney(displayDiscountAmount(scope.row))
+            }}</template>
           </el-table-column>
           <el-table-column label="实际小计" width="140" align="right">
-            <template #default="scope"><strong>{{ formatMoney(scope.row.payableAmount) }}</strong></template>
+            <template #default="scope"
+              ><strong>{{ formatMoney(scope.row.payableAmount) }}</strong></template
+            >
           </el-table-column>
           <el-table-column label="已收金额" width="140" align="right">
             <template #default="scope">{{ formatMoney(scope.row.paidAmount) }}</template>
@@ -261,11 +399,58 @@
           <el-table-column label="操作" width="230" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button v-if="canRepairProducts(scope.row)" link type="primary" @click.stop="openProductRepair(scope.row.id)">商品复核</el-button>
-              <el-button v-if="canSubmit(scope.row)" link type="primary" @click.stop="submitExisting(scope.row)">提交</el-button>
-              <el-button v-if="canStockOut(scope.row)" link type="primary" @click.stop="openStockOut(scope.row)">出库</el-button>
-              <el-button v-if="canEdit(scope.row)" link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
-              <el-button v-if="canDelete(scope.row)" link type="danger" @click.stop="deleteDraft(scope.row)">删除</el-button>
+              <el-button
+                v-if="can('order:attribution:read')"
+                link
+                type="primary"
+                @click.stop="
+                  attributionOrderId = scope.row.id;
+                  attributionVisible = true
+                "
+                >归属复核</el-button
+              >
+              <el-button
+                v-if="canRepairProducts(scope.row)"
+                link
+                type="primary"
+                @click.stop="openProductRepair(scope.row.id)"
+                >商品复核</el-button
+              >
+              <el-button
+                v-if="canSubmit(scope.row)"
+                link
+                type="primary"
+                @click.stop="submitExisting(scope.row)"
+                >提交</el-button
+              >
+              <el-button
+                v-if="canSelectWarehouse(scope.row)"
+                link
+                type="primary"
+                @click.stop="openWarehouseSelection(scope.row)"
+                >选仓</el-button
+              >
+              <el-button
+                v-if="canStockOut(scope.row)"
+                link
+                type="primary"
+                @click.stop="openStockOut(scope.row)"
+                >出库</el-button
+              >
+              <el-button
+                v-if="canEdit(scope.row)"
+                link
+                type="primary"
+                @click.stop="openEdit(scope.row)"
+                >编辑</el-button
+              >
+              <el-button
+                v-if="canDelete(scope.row)"
+                link
+                type="danger"
+                @click.stop="deleteDraft(scope.row)"
+                >删除</el-button
+              >
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无销售订单" /></template>
@@ -284,18 +469,36 @@
       </div>
     </el-card>
 
-    <OrderProductRepairDialog v-model="productRepairVisible" :order-id="productRepairOrderId"
-      :source-context="productRepairSourceContext" @applied="productRepairApplied" />
+    <OrderAttributionReviewDialog
+      v-model="attributionVisible"
+      :order-id="attributionOrderId"
+      @applied="loadOrders"
+    />
+    <OrderProductRepairDialog
+      v-model="productRepairVisible"
+      :order-id="productRepairOrderId"
+      :source-context="productRepairSourceContext"
+      @applied="productRepairApplied"
+    />
 
-    <el-drawer v-model="detailVisible" class="order-detail-drawer" size="min(1120px, 94vw)" :with-header="false">
+    <el-drawer
+      v-model="detailVisible"
+      class="order-detail-drawer"
+      size="min(1120px, 94vw)"
+      :with-header="false"
+    >
       <div v-if="detail" class="detail-shell">
         <header class="detail-hero">
           <div class="detail-hero-main">
             <span>销售订单详情</span>
             <h2>{{ detail.orderNo }}</h2>
-            <p>{{ detail.customerNameSnapshot || '客户待补齐' }} · {{ formatTime(detail.orderDate) }}</p>
+            <p>
+              {{ detail.customerNameSnapshot || '客户待补齐' }} · {{ formatTime(detail.orderDate) }}
+            </p>
             <div class="detail-tags">
-              <el-tag :type="orderStatusTag(detail.orderStatusCode)" effect="light">{{ salesOrderStatusLabel(detail.orderStatusCode) }}</el-tag>
+              <el-tag :type="orderStatusTag(detail.orderStatusCode)" effect="light">{{
+                salesOrderStatusLabel(detail.orderStatusCode)
+              }}</el-tag>
               <el-tooltip
                 v-if="isOrderNeedsReview(detail)"
                 :content="detail.dataQualityMessage || '待业务补齐'"
@@ -303,27 +506,55 @@
               >
                 <el-tag type="warning" effect="light">待完善</el-tag>
               </el-tooltip>
-              <el-tag v-if="detail.sourceStatusCode" effect="light">{{ dhbOrderStatusLabel(detail.sourceStatusCode) }}</el-tag>
-              <el-tag :type="paymentStatusTag(detail.paymentStatusCode)" effect="light">{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode, paymentStatusFallbackLabels) }}</el-tag>
-              <el-tag :type="outboundStatusTag(detail.outboundStatusCode)" effect="light">{{ statusLabel(outboundStatusOptions, detail.outboundStatusCode) }}</el-tag>
-              <el-tag v-if="detail.shipmentStatusCode" :type="shipmentStatusTag(detail.shipmentStatusCode)" effect="light">
+              <el-tag v-if="detail.sourceStatusCode" effect="light">{{
+                dhbOrderStatusLabel(detail.sourceStatusCode)
+              }}</el-tag>
+              <el-tag :type="paymentStatusTag(detail.paymentStatusCode)" effect="light">{{
+                statusLabel(
+                  paymentStatusOptions,
+                  detail.paymentStatusCode,
+                  paymentStatusFallbackLabels,
+                )
+              }}</el-tag>
+              <el-tag :type="outboundStatusTag(detail.outboundStatusCode)" effect="light">{{
+                statusLabel(outboundStatusOptions, detail.outboundStatusCode)
+              }}</el-tag>
+              <el-tag
+                v-if="detail.shipmentStatusCode"
+                :type="shipmentStatusTag(detail.shipmentStatusCode)"
+                effect="light"
+              >
                 {{ salesShipmentStatusLabel(detail.shipmentStatusCode) }}
               </el-tag>
             </div>
           </div>
           <div class="detail-hero-actions">
             <el-button plain @click="openPayments(detail)">回款记录</el-button>
-            <el-button circle plain aria-label="关闭销售订单详情" @click="detailVisible = false">×</el-button>
+            <el-button circle plain aria-label="关闭销售订单详情" @click="detailVisible = false"
+              >×</el-button
+            >
           </div>
         </header>
         <div class="detail-content order-detail-content">
           <div class="detail-summary order-detail-summary">
-            <div><span>原小计</span><strong>{{ formatMoney(detail.originalAmount) }}</strong></div>
-            <div><span>实际小计</span><strong>{{ formatMoney(detail.payableAmount) }}</strong></div>
-            <div><span>优惠金额</span><strong>{{ formatMoney(displayDiscountAmount(detail)) }}</strong></div>
-            <div><span>已收金额</span><strong>{{ formatMoney(detail.paidAmount) }}</strong></div>
-            <div><span>未收金额</span><strong>{{ formatMoney(detail.unpaidAmount) }}</strong></div>
-            <div><span>商品数量</span><strong>{{ formatNumber(detail.totalQuantity) }}</strong></div>
+            <div>
+              <span>原小计</span><strong>{{ formatMoney(detail.originalAmount) }}</strong>
+            </div>
+            <div>
+              <span>实际小计</span><strong>{{ formatMoney(detail.payableAmount) }}</strong>
+            </div>
+            <div>
+              <span>优惠金额</span><strong>{{ formatMoney(displayDiscountAmount(detail)) }}</strong>
+            </div>
+            <div>
+              <span>已收金额</span><strong>{{ formatMoney(detail.paidAmount) }}</strong>
+            </div>
+            <div>
+              <span>未收金额</span><strong>{{ formatMoney(detail.unpaidAmount) }}</strong>
+            </div>
+            <div>
+              <span>商品数量</span><strong>{{ formatNumber(detail.totalQuantity) }}</strong>
+            </div>
           </div>
           <section class="detail-panel">
             <div class="detail-section-heading">
@@ -333,15 +564,39 @@
               </div>
             </div>
             <div class="detail-field-grid">
-              <div class="detail-field"><span>客户编号</span><strong>{{ detail.customerCodeSnapshot || '-' }}</strong></div>
-              <div class="detail-field detail-field--wide"><span>客户名称</span><strong>{{ detail.customerNameSnapshot || '-' }}</strong></div>
-              <div class="detail-field"><span>归属地区</span><strong>{{ regionLabel(detail.regionCode, detail.regionName) }}</strong></div>
-              <div class="detail-field"><span>归属销售人员</span><strong>{{ detail.ownerEmployeeNameSnapshot || detail.ownerSalesName || '-' }}</strong></div>
-              <div class="detail-field"><span>联系人</span><strong>{{ detail.contactNameSnapshot || '-' }}</strong></div>
-              <div class="detail-field"><span>联系电话</span><strong>{{ detail.contactPhoneSnapshot || '-' }}</strong></div>
-              <div class="detail-field"><span>来源系统</span><strong>{{ sourceSystemLabel(detail.sourceSystemCode) }}</strong></div>
-              <div class="detail-field"><span>来源单号</span><strong>{{ detail.sourceOrderNo || '-' }}</strong></div>
-              <div class="detail-field"><span>来源状态</span><strong>{{ dhbOrderStatusLabel(detail.sourceStatusCode) }}</strong></div>
+              <div class="detail-field">
+                <span>客户编号</span><strong>{{ detail.customerCodeSnapshot || '-' }}</strong>
+              </div>
+              <div class="detail-field detail-field--wide">
+                <span>客户名称</span><strong>{{ detail.customerNameSnapshot || '-' }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>归属地区</span
+                ><strong>{{ regionLabel(detail.regionCode, detail.regionName) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>归属销售人员</span
+                ><strong>{{
+                  detail.ownerEmployeeNameSnapshot || detail.ownerSalesName || '-'
+                }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>联系人</span><strong>{{ detail.contactNameSnapshot || '-' }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>联系电话</span><strong>{{ detail.contactPhoneSnapshot || '-' }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>来源系统</span
+                ><strong>{{ sourceSystemLabel(detail.sourceSystemCode) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>来源单号</span><strong>{{ detail.sourceOrderNo || '-' }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>来源状态</span
+                ><strong>{{ dhbOrderStatusLabel(detail.sourceStatusCode) }}</strong>
+              </div>
             </div>
           </section>
 
@@ -353,20 +608,60 @@
               </div>
             </div>
             <div class="detail-field-grid">
-              <div class="detail-field"><span>订单类型</span><strong>{{ orderTypeLabel(detail.orderTypeCode) }}</strong></div>
-              <div class="detail-field"><span>订单状态</span><strong>{{ salesOrderStatusLabel(detail.orderStatusCode) }}</strong></div>
-              <div class="detail-field"><span>收款状态</span><strong>{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode, paymentStatusFallbackLabels) }}</strong></div>
-              <div class="detail-field"><span>出库状态</span><strong>{{ statusLabel(outboundStatusOptions, detail.outboundStatusCode) }}</strong></div>
-              <div class="detail-field"><span>发货状态</span><strong>{{ salesShipmentStatusLabel(detail.shipmentStatusCode) }}</strong></div>
-              <div class="detail-field"><span>折扣比例</span><strong>{{ percent(detail.discountRate) }}</strong></div>
-              <div class="detail-field"><span>制单人</span><strong>{{ sourceCreatorLabel(detail) }}</strong></div>
-              <div class="detail-field"><span>付款时间</span><strong>{{ formatTime(detail.paymentTime) }}</strong></div>
-              <div class="detail-field"><span>发货时间</span><strong>{{ formatTime(detail.shipmentTime) }}</strong></div>
-              <div class="detail-field"><span>创建人</span><strong>{{ auditActorLabel(detail.createdBy) }}</strong></div>
-              <div class="detail-field"><span>创建时间</span><strong>{{ formatTime(detail.createdTime) }}</strong></div>
-              <div class="detail-field"><span>更新人</span><strong>{{ auditActorLabel(detail.updatedBy) }}</strong></div>
-              <div class="detail-field"><span>更新时间</span><strong>{{ formatTime(detail.updatedTime) }}</strong></div>
-              <div class="detail-field detail-field--full"><span>备注</span><strong>{{ detail.remark || '-' }}</strong></div>
+              <div class="detail-field">
+                <span>订单类型</span><strong>{{ orderTypeLabel(detail.orderTypeCode) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>订单状态</span
+                ><strong>{{ salesOrderStatusLabel(detail.orderStatusCode) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>收款状态</span
+                ><strong>{{
+                  statusLabel(
+                    paymentStatusOptions,
+                    detail.paymentStatusCode,
+                    paymentStatusFallbackLabels,
+                  )
+                }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>出库状态</span
+                ><strong>{{
+                  statusLabel(outboundStatusOptions, detail.outboundStatusCode)
+                }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>发货状态</span
+                ><strong>{{ salesShipmentStatusLabel(detail.shipmentStatusCode) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>折扣比例</span><strong>{{ percent(detail.discountRate) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>制单人</span><strong>{{ sourceCreatorLabel(detail) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>付款时间</span><strong>{{ formatTime(detail.paymentTime) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>发货时间</span><strong>{{ formatTime(detail.shipmentTime) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>创建人</span><strong>{{ auditActorLabel(detail.createdBy) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>创建时间</span><strong>{{ formatTime(detail.createdTime) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>更新人</span><strong>{{ auditActorLabel(detail.updatedBy) }}</strong>
+              </div>
+              <div class="detail-field">
+                <span>更新时间</span><strong>{{ formatTime(detail.updatedTime) }}</strong>
+              </div>
+              <div class="detail-field detail-field--full">
+                <span>备注</span><strong>{{ detail.remark || '-' }}</strong>
+              </div>
             </div>
           </section>
 
@@ -392,7 +687,13 @@
               </div>
               <div>
                 <span>收款状态</span>
-                <strong>{{ statusLabel(paymentStatusOptions, detail.paymentStatusCode, paymentStatusFallbackLabels) }}</strong>
+                <strong>{{
+                  statusLabel(
+                    paymentStatusOptions,
+                    detail.paymentStatusCode,
+                    paymentStatusFallbackLabels,
+                  )
+                }}</strong>
               </div>
             </div>
             <div v-if="orderPaymentAttachmentItems(detail).length" class="payment-attachment-panel">
@@ -417,7 +718,12 @@
               size="small"
             >
               <el-table-column prop="paymentNo" label="回款单号" width="150" fixed="left" />
-              <el-table-column prop="sourceDocumentNo" label="来源单号" width="170" show-overflow-tooltip>
+              <el-table-column
+                prop="sourceDocumentNo"
+                label="来源单号"
+                width="170"
+                show-overflow-tooltip
+              >
                 <template #default="scope">{{ scope.row.sourceDocumentNo || '-' }}</template>
               </el-table-column>
               <el-table-column label="回款时间" width="170">
@@ -427,10 +733,14 @@
                 <template #default="scope">{{ formatMoney(scope.row.paidAmount) }}</template>
               </el-table-column>
               <el-table-column label="付款方式" width="130">
-                <template #default="scope">{{ paymentMethodLabel(scope.row.paymentMethodCode) }}</template>
+                <template #default="scope">{{
+                  paymentMethodLabel(scope.row.paymentMethodCode)
+                }}</template>
               </el-table-column>
               <el-table-column label="回款人员" width="140" show-overflow-tooltip>
-                <template #default="scope">{{ scope.row.collectorNameSnapshot || scope.row.collectorStaffCode || '-' }}</template>
+                <template #default="scope">{{
+                  scope.row.collectorNameSnapshot || scope.row.collectorStaffCode || '-'
+                }}</template>
               </el-table-column>
               <!-- @vue-generic {SalesPaymentDetail} -->
               <el-table-column label="回款凭证" min-width="220">
@@ -454,19 +764,49 @@
                 <span>商品 {{ detail.lines.length }} 条</span>
               </div>
             </div>
-            <el-table class="supply-scroll-table detail-table" :data="detail.lines" max-height="360" size="small">
-              <el-table-column prop="productNameSnapshot" label="商品" min-width="220" fixed="left" />
+            <el-table
+              class="supply-scroll-table detail-table"
+              :data="detail.lines"
+              max-height="360"
+              size="small"
+            >
+              <el-table-column
+                prop="productNameSnapshot"
+                label="商品"
+                min-width="220"
+                fixed="left"
+              />
               <el-table-column prop="productCodeSnapshot" label="商品编码" width="150" />
               <el-table-column prop="skuCodeSnapshot" label="SKU" width="150" />
               <el-table-column prop="specificationSnapshot" label="规格" min-width="160" />
               <el-table-column label="单位" width="90">
                 <template #default="scope">{{ unitLabel(scope.row.unitCode) }}</template>
               </el-table-column>
-              <el-table-column label="数量" width="100" align="right"><template #default="scope">{{ formatNumber(scope.row.quantity) }}</template></el-table-column>
-              <el-table-column label="单价" width="120" align="right"><template #default="scope">{{ formatMoney(scope.row.unitPrice) }}</template></el-table-column>
-              <el-table-column label="折扣比例" width="110" align="right"><template #default="scope">{{ percent(scope.row.discountRate) }}</template></el-table-column>
-              <el-table-column label="折扣金额" width="120" align="right"><template #default="scope">{{ formatMoney(scope.row.discountAmount) }}</template></el-table-column>
-              <el-table-column label="金额" width="130" align="right"><template #default="scope">{{ formatMoney(scope.row.lineAmount) }}</template></el-table-column>
+              <el-table-column label="数量" width="100" align="right"
+                ><template #default="scope">{{
+                  formatNumber(scope.row.quantity)
+                }}</template></el-table-column
+              >
+              <el-table-column label="单价" width="120" align="right"
+                ><template #default="scope">{{
+                  formatMoney(scope.row.unitPrice)
+                }}</template></el-table-column
+              >
+              <el-table-column label="折扣比例" width="110" align="right"
+                ><template #default="scope">{{
+                  percent(scope.row.discountRate)
+                }}</template></el-table-column
+              >
+              <el-table-column label="折扣金额" width="120" align="right"
+                ><template #default="scope">{{
+                  formatMoney(scope.row.discountAmount)
+                }}</template></el-table-column
+              >
+              <el-table-column label="金额" width="130" align="right"
+                ><template #default="scope">{{
+                  formatMoney(scope.row.lineAmount)
+                }}</template></el-table-column
+              >
               <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
             </el-table>
           </section>
@@ -475,7 +815,12 @@
       <el-skeleton v-else :rows="8" animated />
     </el-drawer>
 
-    <el-dialog v-model="editorVisible" :title="editingId ? '编辑销售订单' : '新增销售订单'" width="min(1040px, 94vw)" destroy-on-close>
+    <el-dialog
+      v-model="editorVisible"
+      :title="editingId ? '编辑销售订单' : '新增销售订单'"
+      width="min(1040px, 94vw)"
+      destroy-on-close
+    >
       <el-form :model="form" label-width="110px" class="sales-order-form">
         <el-row :gutter="16">
           <el-col :span="12">
@@ -491,26 +836,58 @@
                 style="width: 100%"
                 @change="selectCustomer"
               >
-                <el-option v-for="item in customerOptions" :key="item.id" :label="item.customerName" :value="item.id" />
+                <el-option
+                  v-for="item in customerOptions"
+                  :key="item.id"
+                  :label="item.customerName"
+                  :value="item.id"
+                />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="下单时间">
-              <el-date-picker v-model="form.orderDate" type="datetime" placeholder="默认当前时间" style="width: 100%" />
+              <el-date-picker
+                v-model="form.orderDate"
+                type="datetime"
+                placeholder="默认当前时间"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="客户名称快照">
-              <el-input v-model="form.customerNameSnapshot" clearable placeholder="导入缺客户映射时可先保留名称" />
+              <el-input
+                v-model="form.customerNameSnapshot"
+                clearable
+                placeholder="导入缺客户映射时可先保留名称"
+              />
             </el-form-item>
           </el-col>
-          <el-col :span="8"><el-form-item label="联系人"><el-input v-model="form.contactNameSnapshot" clearable /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="联系电话"><el-input v-model="form.contactPhoneSnapshot" clearable /></el-form-item></el-col>
+          <el-col :span="8"
+            ><el-form-item label="联系人"
+              ><el-input v-model="form.contactNameSnapshot" clearable /></el-form-item
+          ></el-col>
+          <el-col :span="8"
+            ><el-form-item label="联系电话"
+              ><el-input v-model="form.contactPhoneSnapshot" clearable /></el-form-item
+          ></el-col>
           <el-col :span="8">
             <el-form-item label="归属地区">
-              <el-select v-model="form.regionCode" clearable filterable placeholder="选择归属地区" style="width: 100%">
-                <el-option v-for="item in regionOptions" :key="item.value" :label="item.label" :value="item.value" />
+              <el-select
+                v-model="form.regionCode"
+                disabled
+                clearable
+                filterable
+                placeholder="选择归属地区"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in regionOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
               </el-select>
             </el-form-item>
           </el-col>
@@ -518,6 +895,7 @@
             <el-form-item label="归属销售人员">
               <el-select
                 v-model="form.ownerEmployeeCode"
+                disabled
                 clearable
                 filterable
                 remote
@@ -545,7 +923,12 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="付款方式">
-              <el-select v-model="form.paymentMethodCode" clearable placeholder="选择付款方式" style="width: 100%">
+              <el-select
+                v-model="form.paymentMethodCode"
+                clearable
+                placeholder="选择付款方式"
+                style="width: 100%"
+              >
                 <el-option
                   v-for="item in paymentMethodOptions"
                   :key="item.value"
@@ -555,7 +938,15 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="1000" show-word-limit /></el-form-item></el-col>
+          <el-col :span="24"
+            ><el-form-item label="备注"
+              ><el-input
+                v-model="form.remark"
+                type="textarea"
+                :rows="2"
+                maxlength="1000"
+                show-word-limit /></el-form-item
+          ></el-col>
         </el-row>
 
         <div class="form-section-title">
@@ -577,53 +968,118 @@
                   style="width: 100%"
                   @change="selectProduct(line)"
                 >
-                  <el-option v-for="item in productOptions" :key="item.id" :label="item.productName" :value="item.id" />
+                  <el-option
+                    v-for="item in productOptions"
+                    :key="item.id"
+                    :label="item.productName"
+                    :value="item.id"
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="5">
               <el-form-item label="规格">
-                <el-select v-model="line.productVariantId" placeholder="选择规格" style="width: 100%" @change="selectVariant(line)">
-                  <el-option v-for="item in line.variants" :key="item.id" :label="variantLabel(item)" :value="item.id" />
+                <el-select
+                  v-model="line.productVariantId"
+                  placeholder="选择规格"
+                  style="width: 100%"
+                  @change="selectVariant(line)"
+                >
+                  <el-option
+                    v-for="item in line.variants"
+                    :key="item.id"
+                    :label="variantLabel(item)"
+                    :value="item.id"
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="5">
               <el-form-item label="商品名称快照">
-                <el-input v-model="line.productNameSnapshot" clearable placeholder="飞书导入商品名" />
+                <el-input
+                  v-model="line.productNameSnapshot"
+                  clearable
+                  placeholder="飞书导入商品名"
+                />
               </el-form-item>
             </el-col>
             <el-col :span="4">
-              <el-form-item label="单位编码">
-                <el-input v-model="line.unitCode" clearable placeholder="单位" />
+              <el-form-item label="商品单位">
+                <el-select v-model="line.unitCode" clearable filterable placeholder="选择单位">
+                  <el-option
+                    v-for="option in productUnitOptions"
+                    :key="option.value"
+                    :value="option.value"
+                    :label="option.label"
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="3"><el-form-item label="数量"><el-input-number v-model="line.quantity" :min="0.000001" :precision="2" style="width: 100%" /></el-form-item></el-col>
-            <el-col :span="3"><el-form-item label="单价"><el-input-number v-model="line.unitPrice" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
-            <el-col :span="3"><el-form-item label="优惠"><el-input-number v-model="line.discountAmount" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
-            <el-col :span="3" class="line-actions"><el-button type="danger" link @click="removeLine(index)">删除</el-button></el-col>
+            <el-col :span="3"
+              ><el-form-item label="数量"
+                ><el-input-number
+                  v-model="line.quantity"
+                  :min="0.000001"
+                  :precision="2"
+                  style="width: 100%" /></el-form-item
+            ></el-col>
+            <el-col :span="3"
+              ><el-form-item label="单价"
+                ><el-input-number
+                  v-model="line.unitPrice"
+                  :min="0"
+                  :precision="2"
+                  style="width: 100%" /></el-form-item
+            ></el-col>
+            <el-col :span="3"
+              ><el-form-item label="优惠"
+                ><el-input-number
+                  v-model="line.discountAmount"
+                  :min="0"
+                  :precision="2"
+                  style="width: 100%" /></el-form-item
+            ></el-col>
+            <el-col :span="3" class="line-actions"
+              ><el-button type="danger" link @click="removeLine(index)">删除</el-button></el-col
+            >
           </el-row>
         </div>
       </el-form>
       <template #footer>
         <el-button @click="editorVisible = false">取消</el-button>
         <el-button :loading="saving" @click="saveOrder(false)">保存草稿</el-button>
-        <el-button type="primary" :loading="saving" @click="saveOrder(true)">保存并提交</el-button>
+        <el-button
+          v-if="can('order:submit')"
+          type="primary"
+          :loading="saving"
+          @click="saveOrder(true)"
+          >保存并提交</el-button
+        >
       </template>
     </el-dialog>
 
-    <el-dialog v-model="stockOutVisible" title="确认销售出库" width="520px" destroy-on-close>
+    <el-dialog
+      v-model="stockOutVisible"
+      :title="fulfillmentMode === 'SELECT' ? '选择订单仓库' : '确认销售出库'"
+      width="520px"
+      destroy-on-close
+    >
       <el-alert
         class="request-hint"
         type="warning"
         :closable="false"
         show-icon
-        title="确认后 ERP 会生成销售出库单并扣减所选仓库库存；库存不足时不会修改订单状态。"
+        :title="
+          fulfillmentMode === 'SELECT'
+            ? '保存订单仓库后，由有出库权限的人员确认出库。'
+            : '从订单已确认仓库出库；重复请求会核对既有结果，避免重复扣库。'
+        "
       />
       <el-form :model="stockOutForm" label-width="100px">
         <el-form-item label="出库仓库">
           <el-select
             v-model="stockOutForm.warehouseId"
+            :disabled="fulfillmentMode === 'EXECUTE'"
             filterable
             remote
             reserve-keyword
@@ -632,34 +1088,65 @@
             :loading="warehouseLoading"
             style="width: 100%"
           >
-            <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.warehouseName" :value="item.id" />
+            <el-option
+              v-for="item in warehouseOptions"
+              :key="item.id"
+              :label="item.warehouseName"
+              :value="item.id"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="出库时间">
-          <el-date-picker v-model="stockOutForm.stockOutTime" type="datetime" placeholder="默认当前时间" style="width: 100%" />
+        <el-form-item v-if="fulfillmentMode === 'EXECUTE'" label="出库时间">
+          <el-date-picker
+            v-model="stockOutForm.stockOutTime"
+            type="datetime"
+            placeholder="默认当前时间"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="stockOutForm.remark" type="textarea" :rows="2" maxlength="1000" show-word-limit />
+          <el-input
+            v-model="stockOutForm.remark"
+            type="textarea"
+            :rows="2"
+            maxlength="1000"
+            show-word-limit
+          />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="stockOutVisible = false">取消</el-button>
-        <el-button type="primary" :loading="stockOutLoading" @click="confirmStockOut">确认出库</el-button>
+        <el-button
+          type="primary"
+          :loading="stockOutLoading"
+          :disabled="!stockOutForm.warehouseId"
+          @click="confirmStockOut"
+          >{{ fulfillmentMode === 'SELECT' ? '保存仓库' : '确认出库' }}</el-button
+        >
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import HistoryOrderReview from '@/components/supply/HistoryOrderReview.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
 import { randomId } from '@/utils/random-id'
 import { computed, nextTick, onActivated, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FundAttachmentPreviewList from '@/components/supply/FundAttachmentPreviewList.vue'
 import OrderProductRepairDialog from './components/OrderProductRepairDialog.vue'
-import { useAuthStore } from '@/stores/auth'
+import OrderAttributionReviewDialog from './components/OrderAttributionReviewDialog.vue'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import {
-  confirmSalesOrderStockOut,
+  executeOrderFulfillment,
+  getOrderFulfillment,
+  getOrderWarehouseOptions,
+  selectOrderWarehouse,
+  type OrderWarehouseOption,
   createSalesOrder,
   deleteSalesOrder,
   getSalesPayment,
@@ -692,10 +1179,6 @@ import {
   type ErpManagedProductVariant,
 } from '@/api/core/erp-product'
 import {
-  getErpInventoryWarehouses,
-  type ErpInternalWarehouseView,
-} from '@/api/core/erp-internal'
-import {
   businessDictionaryLabel,
   businessDictionaryOptions,
   loadBusinessDictionaries,
@@ -703,11 +1186,16 @@ import {
 import { formatOrderStatus as formatDhbOrderStatus } from '@/utils/dhb-order-status'
 import { auditActorLabel } from '@/utils/audit-actor'
 
+const productUnitOptions = computed(() => businessDictionaryOptions('COMMON', 'PRODUCT_UNIT'))
 const orderStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_ORDER_STATUS'))
-const repairAuth = useAuthStore()
+const { can } = useSupplyPermissions()
+const attributionVisible = ref(false),
+  attributionOrderId = ref<string | number | null>(null)
 const productRepairVisible = ref(false)
 const productRepairOrderId = ref<string | number | null>(null)
-const hasRepairPermission = computed(() => repairAuth.hasPermission('order:read') && repairAuth.hasPermission('order:write'))
+const hasRepairPermission = computed(
+  () => can('order:read') && can('order:history:repair', 'order:write'),
+)
 
 function canRepairProducts(row: { sourceSystemCode?: unknown }) {
   return hasRepairPermission.value && row.sourceSystemCode === 'FEISHU'
@@ -726,7 +1214,9 @@ async function productRepairApplied() {
 }
 const sourceStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'DHB_ORDER_STATUS'))
 const outboundStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'OUTBOUND_STATUS'))
-const shipmentStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_SHIPMENT_STATUS'))
+const shipmentStatusOptions = computed(() =>
+  businessDictionaryOptions('ORDER', 'SALES_SHIPMENT_STATUS'),
+)
 const paymentStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'PAYMENT_STATUS'))
 const paymentMethodOptions = computed(() => businessDictionaryOptions('ORDER', 'PAYMENT_METHOD'))
 const customerAreaOptions = ref<CrmDictionaryView[]>([])
@@ -762,8 +1252,8 @@ const dhbOrderStatusFallbackLabels: Record<string, string> = {
   forcedone: '强制完成',
   cancelled: '已取消',
   canceled: '已取消',
-  '部分出库': '部分出库',
-  '已收货': '已收货',
+  部分出库: '部分出库',
+  已收货: '已收货',
 }
 const salesShipmentStatusFallbackLabels: Record<string, string> = {
   CREATED: '待发货',
@@ -784,17 +1274,22 @@ const productRepairSourceContext = computed(() => {
   const sourceCaptureRef = routeText(route.query.repairSourceCaptureRef)
   if (!sourceNamespace || !sourceCaptureRef) return undefined
   return {
-    sourceNamespace, sourceCaptureRef,
+    sourceNamespace,
+    sourceCaptureRef,
     sourceProductRecordId: routeText(route.query.repairSourceProductRecordId) || undefined,
     sourceProductCode: routeText(route.query.repairSourceProductCode) || undefined,
     sourceOrderNo: routeText(route.query.sourceOrderNo) || undefined,
     lineId: routeText(route.query.repairLineId) || undefined,
   }
 })
-watch(() => [route.query.repairOrderId, hasRepairPermission.value], () => {
-  const id = routeText(route.query.repairOrderId)
-  if (hasRepairPermission.value && /^\d+$/.test(id)) openProductRepair(id)
-}, { immediate: true })
+watch(
+  () => [route.query.repairOrderId, hasRepairPermission.value],
+  () => {
+    const id = routeText(route.query.repairOrderId)
+    if (hasRepairPermission.value && /^\d+$/.test(id)) openProductRepair(id)
+  },
+  { immediate: true },
+)
 
 const loading = ref(false)
 const saving = ref(false)
@@ -805,6 +1300,7 @@ const detailPaymentsLoading = ref(false)
 const editorVisible = ref(false)
 const editingId = ref<string | null>(null)
 const stockOutVisible = ref(false)
+const fulfillmentMode = ref<'SELECT' | 'EXECUTE'>('EXECUTE')
 const stockOutLoading = ref(false)
 const selectedStockOutOrder = ref<SalesOrderSummary | null>(null)
 const currentPage = ref(1)
@@ -897,7 +1393,7 @@ const warehouseLoading = ref(false)
 const customerOptions = ref<InternalCrmCustomerSummary[]>([])
 const employeeOptions = ref<HrEmployeeRecord[]>([])
 const productOptions = ref<ErpManagedProductSummary[]>([])
-const warehouseOptions = ref<ErpInternalWarehouseView[]>([])
+const warehouseOptions = ref<OrderWarehouseOption[]>([])
 
 onMounted(() => {
   void loadBusinessDictionaries([
@@ -918,7 +1414,6 @@ onMounted(() => {
     searchCustomers(''),
     searchSalesEmployees(''),
     searchProducts(''),
-    searchWarehouses(''),
   ])
 })
 
@@ -926,20 +1421,20 @@ onActivated(() => {
   if (!customerAreaOptions.value.length) void loadCustomerAreas()
 })
 
-watch(() => route.query, () => {
-  if (!applyRouteQuery()) return
-  currentPage.value = 1
-  void loadOrders()
-})
+watch(
+  () => route.query,
+  () => {
+    if (!applyRouteQuery()) return
+    currentPage.value = 1
+    void loadOrders()
+  },
+)
 
 async function loadOrders() {
   loading.value = true
   try {
     const query = salesOrderQuery()
-    const [orders, totals] = await Promise.all([
-      getSalesOrders(query),
-      getSalesOrderTotals(query),
-    ])
+    const [orders, totals] = await Promise.all([getSalesOrders(query), getSalesOrderTotals(query)])
     pageData.value = orders
     orderTotals.value = totals
   } catch (reason) {
@@ -1021,17 +1516,25 @@ function applyRouteQuery() {
   changed = setFilterValue('regionCode', routeText(route.query.regionCode)) || changed
   changed = setFilterValue('ownerEmployeeCode', routeText(route.query.ownerEmployeeCode)) || changed
   changed = setFilterValue('sourceStatusCode', routeText(route.query.sourceStatusCode)) || changed
-  changed = setFilterValue('dataQualityStatusCode', routeText(route.query.dataQualityStatusCode)) || changed
+  changed =
+    setFilterValue('dataQualityStatusCode', routeText(route.query.dataQualityStatusCode)) || changed
   changed = setFilterValue('paymentStatusCode', routeText(route.query.paymentStatusCode)) || changed
   changed = setFilterValue('productId', routeText(route.query.productId)) || changed
   changed = setFilterValue('productVariantId', routeText(route.query.productVariantId)) || changed
-  changed = setFilterValue('productCodeSnapshot', routeText(route.query.productCodeSnapshot)) || changed
+  changed =
+    setFilterValue('productCodeSnapshot', routeText(route.query.productCodeSnapshot)) || changed
   changed = setFilterValue('skuCodeSnapshot', routeText(route.query.skuCodeSnapshot)) || changed
-  changed = setFilterValue('productNameSnapshot', routeText(route.query.productNameSnapshot)) || changed
-  changed = setFilterValue('specificationSnapshot', routeText(route.query.specificationSnapshot)) || changed
+  changed =
+    setFilterValue('productNameSnapshot', routeText(route.query.productNameSnapshot)) || changed
+  changed =
+    setFilterValue('specificationSnapshot', routeText(route.query.specificationSnapshot)) || changed
   changed = setFilterValue('drillLabel', routeText(route.query.drillLabel)) || changed
   const ownerEmployeeCode = routeText(route.query.ownerEmployeeCode)
-  if (ownerEmployeeCode) ensureEmployeeOption(ownerEmployeeCode, routeText(route.query.ownerEmployeeName) || ownerEmployeeCode)
+  if (ownerEmployeeCode)
+    ensureEmployeeOption(
+      ownerEmployeeCode,
+      routeText(route.query.ownerEmployeeName) || ownerEmployeeCode,
+    )
   return changed
 }
 
@@ -1098,21 +1601,23 @@ async function loadDetailPayments(order: SalesOrderDetail) {
       step: 50,
       salesOrderNo: order.orderNo,
     })
-    detailPayments.value = await Promise.all(result.items.map(async (item) => {
-      try {
-        return await getSalesPayment(item.id)
-      } catch {
-        return {
-          ...item,
-          voucherKeys: [],
-          attachments: [],
-          remark: null,
-          createdBy: null,
-          createdTime: item.updatedTime,
-          updatedBy: null,
+    detailPayments.value = await Promise.all(
+      result.items.map(async (item) => {
+        try {
+          return await getSalesPayment(item.id)
+        } catch {
+          return {
+            ...item,
+            voucherKeys: [],
+            attachments: [],
+            remark: null,
+            createdBy: null,
+            createdTime: item.updatedTime,
+            updatedBy: null,
+          }
         }
-      }
-    }))
+      }),
+    )
   } catch (reason) {
     detailPayments.value = []
     ElMessage.error(errorMessage(reason, '销售订单回款凭证加载失败'))
@@ -1144,7 +1649,8 @@ async function openEdit(row: SalesOrderSummary) {
     form.ownerSalesUserId = current.ownerSalesUserId || ''
     form.ownerSalesName = current.ownerSalesName || ''
     form.ownerEmployeeCode = current.ownerEmployeeCode || ''
-    form.ownerEmployeeNameSnapshot = current.ownerEmployeeNameSnapshot || current.ownerSalesName || ''
+    form.ownerEmployeeNameSnapshot =
+      current.ownerEmployeeNameSnapshot || current.ownerSalesName || ''
     ensureEmployeeOption(form.ownerEmployeeCode, form.ownerEmployeeNameSnapshot)
     form.orderDate = current.orderDate
     form.paymentMethodCode = current.paymentMethodCode || ''
@@ -1219,21 +1725,28 @@ function isFeishuRepairForm() {
 }
 
 function canSubmit(row: SalesOrderSummary) {
+  if (!can('order:submit')) return false
   if (isExternalSource(row) && !isFeishuSource(row)) return false
   if (isOrderNeedsReview(row)) return false
   return row.orderStatusCode === 'DRAFT'
 }
 
 function canEdit(row: SalesOrderSummary) {
+  if (!can('order:update')) return false
   if (isExternalSource(row) && !isFeishuSource(row)) return false
   return row.orderStatusCode === 'DRAFT'
 }
 
 function canDelete(row: SalesOrderSummary) {
-  return canEdit(row)
+  return (
+    can('order:delete') &&
+    row.orderStatusCode === 'DRAFT' &&
+    (!isExternalSource(row) || isFeishuSource(row))
+  )
 }
 
 function canStockOut(row: SalesOrderSummary) {
+  if (!can('order:outbound:confirm')) return false
   if (isExternalSource(row) && !isFeishuSource(row)) return false
   if (isOrderNeedsReview(row)) return false
   return row.orderStatusCode === 'SUBMITTED' && row.outboundStatusCode === 'PENDING'
@@ -1259,15 +1772,52 @@ async function deleteDraft(row: SalesOrderSummary) {
   }
 }
 
-function openStockOut(row: SalesOrderSummary) {
-  selectedStockOutOrder.value = row
-  stockOutForm.warehouseId = ''
+function canSelectWarehouse(row: SalesOrderSummary) {
+  return (
+    can('order:warehouse:select') &&
+    !isExternalSource(row) &&
+    ['DRAFT', 'SUBMITTED'].includes(row.orderStatusCode) &&
+    row.outboundStatusCode === 'PENDING'
+  )
+}
+async function openWarehouseSelection(row: SalesOrderSummary) {
+  fulfillmentMode.value = 'SELECT'
+  await openFulfillment(row)
+}
+async function openStockOut(row: SalesOrderSummary) {
+  fulfillmentMode.value = 'EXECUTE'
+  await openFulfillment(row)
+}
+async function openFulfillment(row: SalesOrderSummary) {
+  selectedStockOutOrder.value = { ...row }
   stockOutForm.stockOutTime = new Date()
   stockOutForm.remark = ''
-  stockOutVisible.value = true
+  try {
+    const state = await getOrderFulfillment(row.id)
+    selectedStockOutOrder.value.revision = state.orderRevision
+    stockOutForm.warehouseId = state.warehouseId == null ? '' : String(state.warehouseId)
+    if (fulfillmentMode.value === 'SELECT') await searchWarehouses('')
+    else
+      warehouseOptions.value =
+        state.warehouseId == null
+          ? []
+          : [
+              {
+                id: String(state.warehouseId),
+                warehouseName: `订单已确认仓库（编号 ${state.warehouseId}）`,
+              },
+            ]
+    if (fulfillmentMode.value === 'EXECUTE' && state.warehouseId == null)
+      ElMessage.warning('订单尚未选仓，请先由有选仓权限的人员保存仓库')
+    stockOutVisible.value = true
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason, '订单仓库信息加载失败'))
+  }
 }
 
-function openPayments(row: Pick<SalesOrderSummary, 'orderNo' | 'sourceOrderNo' | 'customerNameSnapshot'>) {
+function openPayments(
+  row: Pick<SalesOrderSummary, 'orderNo' | 'sourceOrderNo' | 'customerNameSnapshot'>,
+) {
   detailVisible.value = false
   void router.push({
     name: 'SupplyOrderSalesPayments',
@@ -1313,17 +1863,31 @@ async function confirmStockOut() {
   }
   stockOutLoading.value = true
   try {
-    const result = await confirmSalesOrderStockOut(selectedStockOutOrder.value.id, {
+    if (fulfillmentMode.value === 'SELECT') {
+      await selectOrderWarehouse(
+        selectedStockOutOrder.value.id,
+        stockOutForm.warehouseId,
+        selectedStockOutOrder.value.revision,
+      )
+      stockOutVisible.value = false
+      ElMessage.success('订单仓库已保存')
+      await loadOrders()
+      return
+    }
+    const result = await executeOrderFulfillment(selectedStockOutOrder.value.id, {
       warehouseId: stockOutForm.warehouseId,
       stockOutTime: toIso(stockOutForm.stockOutTime),
       remark: empty(stockOutForm.remark),
       revision: selectedStockOutOrder.value.revision,
     })
     stockOutVisible.value = false
+    if (result.status !== 'COMPLETED') throw new Error('ERP 结果待核对，可重试查询同一执行记录')
     ElMessage.success(`出库成功，ERP出库单 ${result.stockOutNo}`)
     await loadOrders()
   } catch (reason) {
-    ElMessage.error(errorMessage(reason, '销售出库失败；如提示库存不足，请先完成采购入库或调拨后重试'))
+    ElMessage.error(
+      errorMessage(reason, '销售出库失败；如提示库存不足，请先完成采购入库或调拨后重试'),
+    )
   } finally {
     stockOutLoading.value = false
   }
@@ -1363,29 +1927,33 @@ function selectCustomer(value: string | number) {
   form.contactPhoneSnapshot = customer.contactPhone || ''
   form.regionCode = customer.regionCode || ''
   form.ownerEmployeeCode = customer.ownerEmployeeCode || ''
-  form.ownerEmployeeNameSnapshot = customer.ownerEmployeeNameSnapshot || customer.ownerSalesName || ''
+  form.ownerEmployeeNameSnapshot =
+    customer.ownerEmployeeNameSnapshot || customer.ownerSalesName || ''
   ensureEmployeeOption(form.ownerEmployeeCode, form.ownerEmployeeNameSnapshot)
 }
 
 function ensureCustomerOption(customerId: string, customerName: string, customerCode: string) {
   if (!customerId || customerOptions.value.some((item) => String(item.id) === customerId)) return
-  customerOptions.value = [{
-    id: customerId,
-    customerCode,
-    customerName: customerName || customerId,
-    contactName: null,
-    contactPhone: null,
-    customerTypeCode: null,
-    regionCode: null,
-    ownerSalesUserId: null,
-    ownerSalesName: null,
-    ownerEmployeeCode: null,
-    ownerEmployeeNameSnapshot: null,
-    settlementTypeCode: null,
-    statusCode: 'ACTIVE',
-    revision: 0,
-    updatedTime: '',
-  }, ...customerOptions.value]
+  customerOptions.value = [
+    {
+      id: customerId,
+      customerCode,
+      customerName: customerName || customerId,
+      contactName: null,
+      contactPhone: null,
+      customerTypeCode: null,
+      regionCode: null,
+      ownerSalesUserId: null,
+      ownerSalesName: null,
+      ownerEmployeeCode: null,
+      ownerEmployeeNameSnapshot: null,
+      settlementTypeCode: null,
+      statusCode: 'ACTIVE',
+      revision: 0,
+      updatedTime: '',
+    },
+    ...customerOptions.value,
+  ]
 }
 
 async function searchSalesEmployees(query: string) {
@@ -1413,35 +1981,39 @@ function selectOwnerEmployee(value: string | number) {
 }
 
 function ensureEmployeeOption(employeeCode: string, employeeName: string) {
-  if (!employeeCode || employeeOptions.value.some((item) => item.employeeCode === employeeCode)) return
-  employeeOptions.value = [{
-    id: employeeCode,
-    employeeCode,
-    employeeName: employeeName || employeeCode,
-    mobile: null,
-    email: null,
-    employmentStatus: 'ACTIVE',
-    jobCategory: null,
-    positionCode: null,
-    positionName: null,
-    departmentName: null,
-    leaderEmployeeCode: null,
-    leaderName: null,
-    regionName: null,
-    cityName: null,
-    sourceSystem: null,
-    sourceDocumentNo: null,
-    sourceCreatedAt: null,
-    sourceUpdatedAt: null,
-    entryDate: null,
-    leaveDate: null,
-    remark: null,
-    revision: 0,
-    createdBy: null,
-    createdTime: null,
-    updatedBy: null,
-    updatedTime: null,
-  }, ...employeeOptions.value]
+  if (!employeeCode || employeeOptions.value.some((item) => item.employeeCode === employeeCode))
+    return
+  employeeOptions.value = [
+    {
+      id: employeeCode,
+      employeeCode,
+      employeeName: employeeName || employeeCode,
+      mobile: null,
+      email: null,
+      employmentStatus: 'ACTIVE',
+      jobCategory: null,
+      positionCode: null,
+      positionName: null,
+      departmentName: null,
+      leaderEmployeeCode: null,
+      leaderName: null,
+      regionName: null,
+      cityName: null,
+      sourceSystem: null,
+      sourceDocumentNo: null,
+      sourceCreatedAt: null,
+      sourceUpdatedAt: null,
+      entryDate: null,
+      leaveDate: null,
+      remark: null,
+      revision: 0,
+      createdBy: null,
+      createdTime: null,
+      updatedBy: null,
+      updatedTime: null,
+    },
+    ...employeeOptions.value,
+  ]
 }
 
 async function searchProducts(query: string) {
@@ -1493,13 +2065,11 @@ function applyVariant(line: SalesOrderLineForm, variant: ErpManagedProductVarian
 async function searchWarehouses(query: string) {
   warehouseLoading.value = true
   try {
-    const result = await getErpInventoryWarehouses({
-      begin: 0,
-      step: 20,
-      warehouseName: empty(query),
-      statusCode: 'ACTIVE',
-    })
-    warehouseOptions.value = result.items
+    if (!selectedStockOutOrder.value) return
+    const result = await getOrderWarehouseOptions(selectedStockOutOrder.value.id)
+    warehouseOptions.value = result
+      .filter((w) => !query || w.warehouseName.includes(query))
+      .map((w) => ({ ...w, id: String(w.id) }))
   } finally {
     warehouseLoading.value = false
   }
@@ -1550,7 +2120,13 @@ function buildCommand(submit: boolean): SalesOrderCommand | null {
     discountAmount: line.discountAmount || 0,
     remark: line.remark,
   }))
-  if (!allowPartialDraft && lines.some((line) => !line.productId || !line.productVariantId || !line.productNameSnapshot || !line.unitCode)) {
+  if (
+    !allowPartialDraft &&
+    lines.some(
+      (line) =>
+        !line.productId || !line.productVariantId || !line.productNameSnapshot || !line.unitCode,
+    )
+  ) {
     ElMessage.warning('请完善商品、规格和单位')
     return null
   }
@@ -1613,14 +2189,19 @@ function dhbOrderStatusLabel(value: string | null | undefined) {
   if (!rawValue) return '-'
   const label = formatDhbOrderStatus(rawValue)
   return label === rawValue
-    ? dhbOrderStatusFallbackLabels[rawValue] || dhbOrderStatusFallbackLabels[rawValue.toLowerCase()] || rawValue
+    ? dhbOrderStatusFallbackLabels[rawValue] ||
+        dhbOrderStatusFallbackLabels[rawValue.toLowerCase()] ||
+        rawValue
     : label
 }
 
 function salesShipmentStatusLabel(value: string | null | undefined) {
   const rawValue = value?.trim()
   if (!rawValue) return '-'
-  return salesShipmentStatusFallbackLabels[rawValue] || statusLabel(shipmentStatusOptions.value, rawValue)
+  return (
+    salesShipmentStatusFallbackLabels[rawValue] ||
+    statusLabel(shipmentStatusOptions.value, rawValue)
+  )
 }
 
 function paymentMethodLabel(value: string | null | undefined) {
@@ -1633,12 +2214,20 @@ function sourceSystemLabel(value: string | null | undefined) {
   return value || '-'
 }
 
-function sourceCreatorLabel(value: Pick<SalesOrderSummary, 'sourceCreatorName' | 'sourceCreatorStaffCode' | 'sourceCreatorId'>) {
+function sourceCreatorLabel(
+  value: Pick<
+    SalesOrderSummary,
+    'sourceCreatorName' | 'sourceCreatorStaffCode' | 'sourceCreatorId'
+  >,
+) {
   return value.sourceCreatorName || value.sourceCreatorStaffCode || value.sourceCreatorId || '-'
 }
 
-function dataQualityLabel(value: Pick<SalesOrderSummary, 'dataQualityStatusCode' | 'dataQualityMessage'>) {
-  if (value.dataQualityStatusCode === 'NEEDS_REVIEW') return value.dataQualityMessage || '待业务补齐'
+function dataQualityLabel(
+  value: Pick<SalesOrderSummary, 'dataQualityStatusCode' | 'dataQualityMessage'>,
+) {
+  if (value.dataQualityStatusCode === 'NEEDS_REVIEW')
+    return value.dataQualityMessage || '待业务补齐'
   return '完整'
 }
 
@@ -1657,8 +2246,10 @@ function regionLabel(value: string | null | undefined, displayName?: string | nu
   if (normalizedName) return normalizedName
   const rawValue = value?.trim()
   if (!rawValue) return '-'
-  return customerAreaOptions.value.find((item) => item.code === rawValue)?.name
-    || businessDictionaryLabel('COMMON', 'REGION', rawValue, '地区')
+  return (
+    customerAreaOptions.value.find((item) => item.code === rawValue)?.name ||
+    businessDictionaryLabel('COMMON', 'REGION', rawValue, '地区')
+  )
 }
 
 function unitLabel(value: string | null | undefined) {
@@ -1733,12 +2324,7 @@ function formatNumber(value: number | string | null | undefined) {
   return Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }
 
-function formatTime(value: string | null | undefined) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
+const formatTime = displayDateTime
 
 function startOfDay(value: string) {
   return value ? new Date(`${value}T00:00:00+08:00`).toISOString() : undefined

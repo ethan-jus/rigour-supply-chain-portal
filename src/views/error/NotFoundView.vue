@@ -6,7 +6,7 @@
     <p class="error-desc">
       页面不存在或已被移除
     </p>
-    <el-button type="primary" @click="$router.push('/dashboard')">
+    <el-button type="primary" @click="$router.push('/supply-chain')">
       返回工作台
     </el-button>
   </div>

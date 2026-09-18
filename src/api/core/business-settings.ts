@@ -2,6 +2,8 @@ import { apiClient } from './client'
 
 /** 字典定义；前端只展示后端 DictView 返回的字段。 */
 export interface DictView {
+  sourceType?: 'BUILTIN' | 'OVERRIDE' | 'CUSTOM'
+  allowNewItems?: boolean
   /** 字典主键。 */
   id: string
   /** 字典编码，调用方按该编码直接读取。 */
@@ -18,6 +20,7 @@ export interface DictView {
 
 /** 字典项；层级和父子关系由后端 View 明确返回。 */
 export interface DictItemView {
+  enabled?: boolean
   /** 字典项主键。 */
   id: string
   /** 所属字典编码。 */
@@ -52,6 +55,7 @@ export interface DictCommand {
 
 /** 新增或修改字典项的请求；字段与后端 DictItemCommand 对齐。 */
 export interface DictItemCommand {
+  enabled?: boolean
   dictionaryCode: string
   parentDictionaryItemCode: string | null
   dictionaryItemCode: string

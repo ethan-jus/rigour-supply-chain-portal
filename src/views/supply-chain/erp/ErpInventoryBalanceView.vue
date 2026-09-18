@@ -1,9 +1,10 @@
 <template>
   <div class="erp-inventory-balance-page supply-page supply-page--business-main">
     <div class="page-heading">
+      <DhbPageSyncButton scope="INVENTORY" label="库存" @completed="loadRows" />
       <div>
         <span class="supply-page__eyebrow">ERP · 库存管理</span>
-        <h1>库存</h1>
+        <SupplyPageTitle>库存</SupplyPageTitle>
         <p>按仓库、商品和规格查看当前库存余额；库存变动必须通过入库单、出库单或调拨单形成流水。</p>
       </div>
       <el-tag type="info" effect="plain">只读</el-tag>
@@ -12,13 +13,28 @@
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="loadRows">
         <el-form-item label="商品编码">
-          <el-input v-model="filters.productCode" clearable placeholder="商品编码" style="width: 170px" />
+          <el-input
+            v-model="filters.productCode"
+            clearable
+            placeholder="商品编码"
+            style="width: 170px"
+          />
         </el-form-item>
         <el-form-item label="商品名称">
-          <el-input v-model="filters.productName" clearable placeholder="商品名称" style="width: 220px" />
+          <el-input
+            v-model="filters.productName"
+            clearable
+            placeholder="商品名称"
+            style="width: 220px"
+          />
         </el-form-item>
         <el-form-item label="仓库名称">
-          <el-input v-model="filters.warehouseName" clearable placeholder="仓库名称" style="width: 190px" />
+          <el-input
+            v-model="filters.warehouseName"
+            clearable
+            placeholder="仓库名称"
+            style="width: 190px"
+          />
         </el-form-item>
         <el-form-item class="filter-actions">
           <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
@@ -31,7 +47,9 @@
       <div>
         <div class="result-title-line">
           <h2>库存列表</h2>
-          <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+          <span class="result-count"
+            ><strong>{{ pageData.total }}</strong> 条</span
+          >
         </div>
       </div>
     </div>
@@ -45,7 +63,13 @@
           :data="pageData.items"
           row-key="id"
         >
-          <el-table-column type="index" label="序号" width="80" fixed="left" :index="tableRowIndex" />
+          <el-table-column
+            type="index"
+            label="序号"
+            width="80"
+            fixed="left"
+            :index="tableRowIndex"
+          />
           <el-table-column label="商品编码" width="150" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.productCode || '-' }}</template>
           </el-table-column>
@@ -100,6 +124,9 @@
 </template>
 
 <script setup lang="ts">
+import { displayDateTime } from '@/utils/business-date'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -108,16 +135,18 @@ import {
   type ErpInternalPage,
   type ErpStockBalanceView,
 } from '@/api/core/erp-internal'
-import {
-  businessDictionaryLabel,
-  loadBusinessDictionaries,
-} from '@/utils/business-dictionary'
+import { businessDictionaryLabel, loadBusinessDictionaries } from '@/utils/business-dictionary'
 
 const loading = ref(false)
 const route = useRoute()
 const currentPage = ref(1)
 const pageSize = ref(20)
-const pageData = ref<ErpInternalPage<ErpStockBalanceView>>({ total: 0, begin: 0, step: 20, items: [] })
+const pageData = ref<ErpInternalPage<ErpStockBalanceView>>({
+  total: 0,
+  begin: 0,
+  step: 20,
+  items: [],
+})
 
 const filters = reactive({
   productCode: '',
@@ -135,11 +164,14 @@ onMounted(() => {
   void loadRows()
 })
 
-watch(() => route.query, () => {
-  if (!applyRouteQuery()) return
-  currentPage.value = 1
-  void loadRows()
-})
+watch(
+  () => route.query,
+  () => {
+    if (!applyRouteQuery()) return
+    currentPage.value = 1
+    void loadRows()
+  },
+)
 
 async function loadRows() {
   loading.value = true
@@ -209,12 +241,7 @@ function formatNumber(value: number | string | null | undefined) {
   return number.toLocaleString('zh-CN', { maximumFractionDigits: 6 })
 }
 
-function formatTime(value: string | null | undefined) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
+const formatTime = displayDateTime
 
 function errorMessage(reason: unknown, fallback: string) {
   if (reason && typeof reason === 'object' && 'message' in reason) {

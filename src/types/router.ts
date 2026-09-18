@@ -10,10 +10,7 @@ declare module 'vue-router' {
     roles?: string[]
     permission?: string
     applicationCode?: string
-    /** 仅校验应用卡片授权，不加载内部路由菜单。 */
-    requiredApplicationCode?: string
     keepAlive?: boolean
-    dictionaryScope?: 'platform' | 'tenant'
     pageKey?: string
   }
 }

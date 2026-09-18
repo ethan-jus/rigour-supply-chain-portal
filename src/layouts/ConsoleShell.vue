@@ -4,11 +4,11 @@
     :class="{ 'console--supply-chain': applicationCode === 'SUPPLY_CHAIN' }"
   >
     <aside class="sidebar">
-      <router-link class="sidebar__brand" to="/apps">
-        <img src="@/assets/brand/ruigai-logo.png" alt="瑞盖优选">
+      <router-link class="sidebar__brand" to="/supply-chain">
+        <img src="@/assets/brand/scdp-logo.png" alt="瑞盖供应链数字化平台">
         <span class="sidebar__brand-copy">
-          <strong>瑞盖优选</strong>
-          <small>{{ title }}</small>
+          <strong>瑞盖供应链</strong>
+          <small>数字化平台</small>
         </span>
       </router-link>
 
@@ -16,15 +16,6 @@
         <ConsoleNavTree :nodes="navigation" />
       </nav>
 
-      <div class="sidebar__footer">
-        <router-link class="back-portal" to="/apps">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M19 12H5M11 18l-6-6 6-6" />
-          </svg>
-          返回门户
-        </router-link>
-      </div>
     </aside>
 
     <section class="console__main">
@@ -88,7 +79,7 @@
 
 <script setup lang="ts">
 /**
- * 后台主框架（平台管理中心 / 系统管理 / 供应链系统共用）
+ * 供应链数字化平台主框架
  *
  * 职责：深色分组侧栏 + 顶栏 + 内容区的统一骨架。
  * 菜单数据由 navigationStore 按应用编码从 IAM 实时加载，
@@ -105,6 +96,7 @@ import { useAuthStore, useNavigationStore } from '@/stores'
 import type { NavigationNode } from '@/types/management'
 import ConsoleNavTree from '@/components/console/ConsoleNavTree.vue'
 import ConsoleTabPane from '@/components/console/ConsoleTabPane.vue'
+import { supplyPageName } from '@/utils/supply-page-title'
 
 interface WorkspaceTab {
   id: string
@@ -126,19 +118,14 @@ const tabStrip = ref<HTMLElement | null>(null)
 const contentViewport = ref<HTMLElement | null>(null)
 
 const applicationCode = computed(() => String(route.meta.applicationCode || ''))
-const title = computed(() => ({
-  PLATFORM_ADMIN: '平台管理中心',
-  SYSTEM_ADMIN: '系统管理',
-  SUPPLY_CHAIN: '供应链系统',
-}[applicationCode.value] || '工作台'))
 
 const navigation = computed(() => navigationStore.getNavigation(applicationCode.value))
-const tenantLabel = computed(() => authStore.user?.principalScope === 'PLATFORM'
-  ? '瑞盖优选 · 平台'
-  : authStore.user?.tenantName || '企业空间')
+const tenantLabel = computed(() => authStore.user?.tenantName || '企业空间')
 
 const currentPageName = computed(() => {
-  return findCurrentPageName(navigation.value) || (route.meta.title as string) || '工作台'
+  return (applicationCode.value === 'SUPPLY_CHAIN'
+    ? supplyPageName(navigation.value, route.path)
+    : findCurrentPageName(navigation.value)) || (route.meta.title as string) || '工作台'
 })
 
 function findCurrentPageName(nodes: NavigationNode[]): string | undefined {
@@ -159,8 +146,6 @@ function workspaceTabId(appCode: string, path: string) {
 
 function applicationHomePath(appCode: string) {
   return {
-    PLATFORM_ADMIN: '/platform-admin',
-    SYSTEM_ADMIN: '/system-admin',
     SUPPLY_CHAIN: '/supply-chain',
   }[appCode]
 }
@@ -272,9 +257,19 @@ onErrorCaptured((error) => {
 
 watch(
   () => [route.fullPath, currentPageName.value] as const,
-  ([, pageTitle]) => upsertWorkspaceTab(route, pageTitle),
+  ([, pageTitle]) => {
+    upsertWorkspaceTab(route, pageTitle)
+    if (applicationCode.value === 'SUPPLY_CHAIN') document.title = `${pageTitle} - 瑞盖供应链数字化平台`
+  },
   { immediate: true },
 )
+
+watch(navigation, (nodes) => {
+  if (applicationCode.value !== 'SUPPLY_CHAIN') return
+  workspaceTabs.value = workspaceTabs.value.map(tab => ({
+    ...tab, title: supplyPageName(nodes, tab.path) || String(tab.route.meta.title || '工作台'),
+  }))
+}, { deep: true })
 
 onBeforeRouteUpdate((_to, from) => {
   savePageScroll(from.path, String(from.meta.applicationCode || ''))
@@ -314,13 +309,14 @@ onMounted(() => {
     text-decoration: none;
 
     img {
-      width: 32px;
-      height: 32px;
+      width: 52px;
+      height: 52px;
+      object-fit: contain;
       border-radius: 8px;
     }
 
     strong {
-      font-size: $font-size-md;
+      font-size: 18px;
       font-weight: 650;
       letter-spacing: 0.01em;
     }
@@ -333,8 +329,8 @@ onMounted(() => {
     gap: 2px;
 
     small {
-      color: $color-ink-text-faint;
-      font-size: 11px;
+      color: #a9bad1;
+      font-size: 12px;
       font-weight: 500;
     }
   }
@@ -347,27 +343,6 @@ onMounted(() => {
     scrollbar-width: thin;
   }
 
-  &__footer {
-    padding: 12px;
-    border-top: 1px solid $color-ink-divider;
-  }
-}
-
-.back-portal {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  height: 36px;
-  padding: 0 10px;
-  color: $color-ink-text-faint;
-  font-size: $font-size-sm;
-  text-decoration: none;
-  border-radius: $border-radius-base;
-
-  &:hover {
-    color: $color-ink-text;
-    background: $color-ink-hover;
-  }
 }
 
 .console__main {
@@ -573,10 +548,6 @@ onMounted(() => {
 
   :deep(.nav-branch__text),
   :deep(.nav-item span),
-  .back-portal {
-    display: none;
-  }
-
   :deep(.nav-item),
   :deep(.nav-branch) {
     justify-content: center;
