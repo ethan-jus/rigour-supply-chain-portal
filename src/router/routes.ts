@@ -76,6 +76,8 @@ const dedicatedOrderRouteKeys = new Set([
   'supply.order.fulfillments',
   'supply.order.shipments',
   'supply.order.sales-payments',
+  'supply.order.lines',
+  'supply.order.statistics',
   'supply.order.fund-documents',
   'supply.order.sales-refunds',
 ])
