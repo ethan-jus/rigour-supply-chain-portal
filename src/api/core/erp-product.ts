@@ -21,6 +21,10 @@ export interface ErpManagedProductSummary {
   industryName: string | null
   productSpecification: string | null
   unitCode: string | null
+  middleUnitCode: string | null
+  bigUnitCode: string | null
+  baseToMiddleRate: number | null
+  baseToBigRate: number | null
   saleTypeCode: string
   shelfStatusCode: string
   ordinal: number

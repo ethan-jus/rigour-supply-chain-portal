@@ -211,6 +211,19 @@ describe('数据库导航注册表', () => {
     expect(specificationModule.default).toBeTruthy()
   })
 
+  it('商品价格使用独立业务页', async () => {
+    const supplyRoot = constantRoutes.find((route) => route.path === '/supply-chain')
+    const productPriceRoute = supplyRoot?.children?.find((route) =>
+      route.meta?.routeKey === 'supply.erp.master-data.prices')
+
+    expect(productPriceRoute?.path).toBe('erp/master-data/prices')
+    expect(productPriceRoute?.meta?.title).toBe('商品价格')
+
+    const productPriceModule =
+      await (productPriceRoute?.component as () => Promise<{ default: unknown }>)()
+    expect(productPriceModule.default).toBeTruthy()
+  })
+
   it('拒绝已退出的城市运营和渠道代理路由', () => {
     for (const domain of ['city', 'channel']) {
       expect(() => validateNavigation([node(`supply.${domain}.index`, `/supply-chain/${domain}`)]))
@@ -236,7 +249,7 @@ describe('数据库导航注册表', () => {
       'supply.hr.payroll-commission', 'supply.hr.performance',
     ]))
     expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(11)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(73)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(74)
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
@@ -264,7 +277,7 @@ describe('数据库导航注册表', () => {
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.erp.master-data.skus')
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '商品中心').map((item) => item.title))
-      .toEqual(['商品管理', '商品分类', '商品品牌', '商品标签', '商品规格'])
+      .toEqual(['商品管理', '商品分类', '商品品牌', '商品标签', '商品规格', '商品价格'])
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '库存管理').map((item) => item.title))
       .toEqual(['库存看板', '库存', '入库单', '出库单', '出入库流水', '库存调拨', '库存盘点', '仓库信息'])
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '采购管理').map((item) => item.title))

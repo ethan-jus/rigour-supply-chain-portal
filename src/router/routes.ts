@@ -9,6 +9,10 @@ const erpProductSpecificationRouteKeys = new Set([
   'supply.erp.master-data.attributes.specifications',
 ])
 
+const erpProductPriceRouteKeys = new Set([
+  'supply.erp.master-data.prices',
+])
+
 const erpDocumentRouteKeys = new Set([
   'supply.erp.procurement.orders',
   'supply.erp.procurement.receipts',
@@ -86,7 +90,9 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
     ? () => import('@/views/supply-chain/erp/ErpProductManagementView.vue')
     : erpProductSpecificationRouteKeys.has(page.routeKey)
       ? () => import('@/views/supply-chain/erp/ErpProductSpecificationView.vue')
-      : erpBasicDataRouteKeys.has(page.routeKey)
+      : erpProductPriceRouteKeys.has(page.routeKey)
+        ? () => import('@/views/supply-chain/erp/ErpProductCustomerTypePriceView.vue')
+        : erpBasicDataRouteKeys.has(page.routeKey)
         ? () => import('@/views/supply-chain/erp/ErpBasicDataManagementView.vue')
         : erpInventoryBalanceRouteKeys.has(page.routeKey)
           ? () => import('@/views/supply-chain/erp/ErpInventoryBalanceView.vue')
