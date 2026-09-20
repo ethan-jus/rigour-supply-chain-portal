@@ -52,7 +52,7 @@ import { computed, ref } from 'vue'
 import type { FundDocumentAttachment } from '@/api/core/order-sales'
 
 const props = withDefaults(defineProps<{
-  attachments: FundDocumentAttachment[]
+  attachments: Array<FundDocumentAttachment | string>
   direction?: 'row' | 'column'
   emptyText?: string
   unavailableText?: string
@@ -66,7 +66,20 @@ const previewVisible = ref(false)
 const activeAttachment = ref<FundDocumentAttachment | null>(null)
 const imageLoadFailed = ref(false)
 
-const items = computed(() => props.attachments || [])
+const items = computed<FundDocumentAttachment[]>(() =>
+  (props.attachments || []).flatMap((item) => {
+    if (typeof item === 'string') {
+      const objectKey = item.trim()
+      return objectKey ? [{ objectKey, fileName: null, url: null }] : []
+    }
+    if (!item || typeof item.objectKey !== 'string' || !item.objectKey.trim()) return []
+    return [{
+      objectKey: item.objectKey.trim(),
+      fileName: typeof item.fileName === 'string' ? item.fileName : null,
+      url: typeof item.url === 'string' ? item.url : null,
+    }]
+  }),
+)
 const activeTitle = computed(() => activeAttachment.value ? displayName(activeAttachment.value) : '凭证预览')
 
 function openPreview(item: FundDocumentAttachment) {
@@ -98,7 +111,8 @@ function shouldRenderImage(item: FundDocumentAttachment) {
   return Boolean(item.url) && !isPdf(item) && !imageLoadFailed.value
 }
 
-function attachmentName(value: string) {
+function attachmentName(value: string | null | undefined) {
+  if (!value?.trim()) return '未命名凭证'
   const normalized = value.split('?')[0] || value
   const parts = normalized.split(/[\\/]/)
   return parts[parts.length - 1] || normalized

@@ -1,5 +1,4 @@
 import { apiClient } from './client'
-import type { FundDocumentAttachment } from './order-sales'
 
 /**
  * 订单注册读接口（V2）。
@@ -166,7 +165,8 @@ export interface OrderRegisterPaymentItem {
   paymentStatusCode: string
   paymentTime: string | null
   transactionNo: string | null
-  attachments: FundDocumentAttachment[]
+  /** 订单登记接口返回原始凭证对象键；详情接口才返回带临时 URL 的附件视图。 */
+  attachments: string[]
   createdBy: string | null
   createdTime: string | null
   updatedBy: string | null
