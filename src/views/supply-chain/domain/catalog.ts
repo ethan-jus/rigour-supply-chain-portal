@@ -67,6 +67,11 @@ const erpProductCenterPages: SupplyDomainPage[] = [
     routeKey: 'supply.erp.master-data.attributes.specifications',
     path: '/supply-chain/erp/master-data/attributes/specifications', owner: 'erp-core-service',
   },
+  {
+    domainKey: 'erp', domainTitle: 'ERP', groupTitle: '商品中心', title: '商品价格',
+    routeKey: 'supply.erp.master-data.prices',
+    path: '/supply-chain/erp/master-data/prices', owner: 'erp-core-service',
+  },
 ]
 
 export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [

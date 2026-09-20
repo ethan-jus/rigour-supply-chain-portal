@@ -19,9 +19,15 @@ export interface ErpManagedProductSummary {
   brandName: string | null
   brandNameSnapshot: string | null
   industryName: string | null
+  productSpecification: string | null
   unitCode: string | null
+  middleUnitCode: string | null
+  bigUnitCode: string | null
+  baseToMiddleRate: number | null
+  baseToBigRate: number | null
   saleTypeCode: string
   shelfStatusCode: string
+  ordinal: number
   submitStatusCode: string
   sourceSystemCode: string | null
   sourceDocumentNo: string | null
@@ -36,11 +42,15 @@ export interface ErpManagedProductSummary {
   limitQuantity?: number | null
   tagCodes?: string[]
   recommendProductIds?: Array<string | number>
-  createdBy?: string | null
   mainImageKey: string | null
   mainImageUrl: string | null
   variantCount: number
+  /** 仅在查询带 withVariants=true 时下发；否则为空数组。 */
+  variants: ErpManagedProductVariant[]
   revision: number
+  createdBy: string | null
+  createdTime: string
+  updatedBy: string | null
   updatedTime: string
 }
 
@@ -69,7 +79,6 @@ export interface ErpManagedProductVariant {
 }
 
 export interface ErpManagedProductDetail extends ErpManagedProductSummary {
-  productSpecification: string | null
   minOrderQuantity: number | null
   orderMultipleFlag: boolean | null
   orderMultipleQuantity: number | null
@@ -77,13 +86,9 @@ export interface ErpManagedProductDetail extends ErpManagedProductSummary {
   tagCodes: string[]
   limitQuantity: number | null
   images: ErpManagedProductImage[]
-  variants: ErpManagedProductVariant[]
   recommendProductIds: Array<string | number>
   sourceFields: Record<string, unknown>
   remark: string | null
-  createdBy: string | null
-  createdTime: string
-  updatedBy: string | null
 }
 
 export interface ErpManagedProductQuery {
@@ -98,6 +103,8 @@ export interface ErpManagedProductQuery {
   shelfStatusCode?: string
   submitStatusCode?: string
   defaultWarehouseId?: string | number
+  /** 为 true 时列表行额外携带规格明细，用于列表就地展开规格。 */
+  withVariants?: boolean
 }
 
 export interface ErpManagedProductImageCommand {
@@ -132,6 +139,7 @@ export interface ErpManagedProductCommand {
   orderMultipleQuantity?: number | null
   saleTypeCode?: string | null
   shelfStatusCode?: string | null
+  ordinal?: number | null
   tagCodes?: string[] | null
   limitQuantity?: number | null
   defaultWarehouseId?: string | number | null
@@ -170,6 +178,28 @@ export function updateErpManagedProduct(id: string | number, command: ErpManaged
   return apiClient.put<ErpManagedProductDetail>(
     `${ERP_BASE_PATH}/product-management/products/${encodeURIComponent(String(id))}`,
     command,
+    { stayOnUnauthorized: true },
+  )
+}
+
+/** 列表就地切换上架状态；只改 shelfStatusCode，不触达商品其他字段。 */
+export function updateErpProductShelfStatus(
+  id: string | number,
+  shelfStatusCode: string,
+  revision: number,
+) {
+  return apiClient.put<ErpManagedProductDetail>(
+    `${ERP_BASE_PATH}/product-management/products/${encodeURIComponent(String(id))}/shelf-status`,
+    { shelfStatusCode, revision },
+    { stayOnUnauthorized: true },
+  )
+}
+
+/** 列表就地修改排序值；只改 ordinal，不触达商品其他字段。 */
+export function updateErpProductOrdinal(id: string | number, ordinal: number, revision: number) {
+  return apiClient.put<ErpManagedProductDetail>(
+    `${ERP_BASE_PATH}/product-management/products/${encodeURIComponent(String(id))}/ordinal`,
+    { ordinal, revision },
     { stayOnUnauthorized: true },
   )
 }
