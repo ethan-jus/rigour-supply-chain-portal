@@ -368,10 +368,10 @@ export function exportOrderRegisterCsv(
   })
 }
 
-/** 财务核对回款：写入交易单号（凭证验重）并标记已核对。 */
+/** 财务核对回款：写入交易单号（凭证验重）并标记已核对；revision 为乐观锁版本。 */
 export const checkOrderRegisterPayment = (
   id: string | number,
-  payload: { transactionNo: string },
+  payload: { transactionNo: string; revision: number },
 ) =>
   apiClient.post<OrderRegisterPaymentItem>(
     `${ORDER_REGISTER_BASE_PATH}/payments/${encodeURIComponent(String(id))}/check`,

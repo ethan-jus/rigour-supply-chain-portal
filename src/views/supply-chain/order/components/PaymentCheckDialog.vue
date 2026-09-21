@@ -112,7 +112,10 @@ async function submit() {
   submitting.value = true
   checkError.value = ''
   try {
-    const updated = await checkOrderRegisterPayment(current.id, { transactionNo: value })
+    const updated = await checkOrderRegisterPayment(current.id, {
+      transactionNo: value,
+      revision: current.revision,
+    })
     emit('checked', updated)
     visible.value = false
     ElMessage.success('回款已核对')

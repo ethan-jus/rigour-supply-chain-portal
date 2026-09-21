@@ -115,7 +115,8 @@ describe('核对回款弹窗', () => {
     bodyButton('审核通过').click()
     await flushPromises()
 
-    expect(mocks.check).toHaveBeenCalledWith('9', { transactionNo: 'TXN-998877' })
+    // 核对命令带页面版本，服务端按版本做乐观锁
+    expect(mocks.check).toHaveBeenCalledWith('9', { transactionNo: 'TXN-998877', revision: 1 })
     expect(wrapper.emitted('checked')).toHaveLength(1)
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
     wrapper.unmount()
