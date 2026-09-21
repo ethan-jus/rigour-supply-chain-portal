@@ -47,6 +47,26 @@ describe('商品默认统计单位换算', () => {
     expect(unit).toEqual({ level: 'BASE', unitCode: 'BUCKET', rate: 1 })
   })
 
+  it('未知单位不参与换算，原样返回且不猜成基础单位', () => {
+    const converted = convertLine(
+      { unitCode: 'UNKNOWN', quantity: 12, unitPrice: 6.5, lineAmount: 78 },
+      noodle,
+    )
+    expect(converted.converted).toBe(false)
+    expect(converted.unitCode).toBe('UNKNOWN')
+    expect(converted.quantity).toBe(12)
+    expect(converted.unitPrice).toBe(6.5)
+  })
+
+  it('换算率缺失时同样不做换算', () => {
+    const converted = convertLine(
+      { unitCode: 'BOX', quantity: 2, unitPrice: 60, lineAmount: 120 },
+      { ...noodle, baseToMiddleRate: null, statisticsUnitLevel: 'MIDDLE' },
+    )
+    expect(converted.converted).toBe(false)
+    expect(converted.quantity).toBe(2)
+  })
+
   it('大单位换算率参与折算', () => {
     const converted = convertLine(
       { unitCode: 'BUCKET', quantity: 24, unitPrice: 5, lineAmount: 120 },

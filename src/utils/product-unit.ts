@@ -44,17 +44,24 @@ export function statisticsUnit(config: ProductUnitConfig | null | undefined): St
   return { level: 'BASE', unitCode: config.unitCode, rate: 1 }
 }
 
-/** 明细行单位对应的层级换算率：1 行单位 = rate 个基础单位。 */
-function lineUnitRate(config: ProductUnitConfig, unitCode: string | null | undefined): number {
+/**
+ * 明细行单位对应的层级换算率：1 行单位 = rate 个基础单位。
+ * 只认基础/中包装/大包装三个明确单位；未知单位返回 null，表示不可换算。
+ */
+function lineUnitRate(
+  config: ProductUnitConfig,
+  unitCode: string | null | undefined,
+): number | null {
   const unit = unitCode?.trim()
-  if (!unit) return 1
+  if (!unit) return null
+  if (unit === config.unitCode?.trim()) return 1
   if (config.middleUnitCode && unit === config.middleUnitCode) {
-    return positiveRate(config.baseToMiddleRate) ?? 1
+    return positiveRate(config.baseToMiddleRate)
   }
   if (config.bigUnitCode && unit === config.bigUnitCode) {
-    return positiveRate(config.baseToBigRate) ?? 1
+    return positiveRate(config.baseToBigRate)
   }
-  return 1
+  return null
 }
 
 export interface ConvertedLineQuantity {
@@ -89,6 +96,7 @@ export function convertLine(
   const target = statisticsUnit(config)
   if (!config || !target || !target.unitCode) return raw
   const sourceRate = lineUnitRate(config, line.unitCode)
+  // 未知单位或换算率缺失时按注释约定原样返回，绝不猜成基础单位。
   if (!sourceRate || !target.rate) return raw
   const amount = line.lineAmount ?? line.unitPrice * line.quantity
   const quantity = (line.quantity * sourceRate) / target.rate
