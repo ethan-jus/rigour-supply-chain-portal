@@ -13,6 +13,16 @@
         <OrderPackageSyncButton plain @completed="loadOrders" />
       </template>
       <template #primary>
+        <el-date-picker
+          v-model="filters.orderDateRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          range-separator="~"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          aria-label="下单时间"
+          style="width: 230px"
+        />
         <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 190px" @keyup.enter="search" />
         <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 220px" @keyup.enter="search" />
         <el-tree-select
@@ -71,23 +81,16 @@
         <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态" style="width: 115px">
           <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
+        <el-select v-model="pageFilters.dhbLinked" aria-label="订货宝关联单" clearable placeholder="订货宝关联单" style="width: 140px">
+          <el-option label="已关联" value="true" />
+          <el-option label="未关联" value="false" />
+        </el-select>
         <el-select v-model="pageFilters.invoiceStatusCode" aria-label="发票状态" clearable placeholder="发票状态" style="width: 115px">
           <el-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-select v-model="filters.createdBy" aria-label="创建人" clearable filterable placeholder="创建人" style="width: 125px">
           <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
-        </el-select>
-        <el-date-picker
-          v-model="filters.orderDateRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="~"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
-          aria-label="下单时间"
-          style="width: 230px"
-        />
-      </template>
+        </el-select>      </template>
     </OrderRegisterFilterCard>
 
     <div class="order-summary" aria-label="金额统计">
@@ -409,6 +412,8 @@ const pageFilters = reactive({
   orderStatusCode: '',
   paymentStatusCode: '',
   invoiceStatusCode: '',
+  /** '' 不过滤；'true' 已关联订货宝订单号；'false' 未关联。 */
+  dhbLinked: '',
 })
 
 const orderStatusOptions = [
@@ -535,6 +540,7 @@ function buildQuery() {
     orderStatusCode: empty(pageFilters.orderStatusCode),
     paymentStatusCode: empty(pageFilters.paymentStatusCode),
     invoiceStatusCode: empty(pageFilters.invoiceStatusCode),
+    dhbLinked: pageFilters.dhbLinked === '' ? undefined : pageFilters.dhbLinked === 'true',
     sortBy: sortBy.value,
     sortDirection: sortDirection.value,
     ...dateParams,
@@ -569,6 +575,7 @@ function resetFilters() {
   pageFilters.orderStatusCode = ''
   pageFilters.paymentStatusCode = ''
   pageFilters.invoiceStatusCode = ''
+  pageFilters.dhbLinked = ''
   sortBy.value = 'createdTime'
   sortDirection.value = 'desc'
   search()

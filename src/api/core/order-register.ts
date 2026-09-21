@@ -39,6 +39,8 @@ export interface OrderRegisterOrderQuery extends OrderRegisterCommonQuery {
   paymentStatusCode?: string
   hasUnpaid?: boolean
   invoiceStatusCode?: string
+  /** 订货宝关联单：true=已关联，false=未关联。 */
+  dhbLinked?: boolean
 }
 
 export interface OrderRegisterLineQuery extends OrderRegisterCommonQuery {
