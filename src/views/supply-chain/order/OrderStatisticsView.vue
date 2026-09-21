@@ -38,12 +38,12 @@
             />
             <el-select
               v-model="filters.ownerEmployeeCode"
-              aria-label="所属业务员"
+              aria-label="业务员"
               clearable
               filterable
               remote
               reserve-keyword
-              placeholder="所属业务员"
+              placeholder="搜索业务员"
               :remote-method="searchEmployees"
               :loading="employeeLoading"
               style="width: 170px"
@@ -66,9 +66,10 @@
               aria-label="部门"
               clearable
               filterable
-              placeholder="部门"
+              placeholder="选择部门"
               style="width: 160px"
             />
+            <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
             <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 170px" @keyup.enter="loadPeriod" />
             <el-input v-model="filters.customerCode" aria-label="客户编码" clearable placeholder="客户编码" style="width: 150px" @keyup.enter="loadPeriod" />
             <el-select v-model="periodFilters.groupBy" aria-label="汇总维度" placeholder="汇总维度" style="width: 130px">
@@ -157,12 +158,12 @@
             />
             <el-select
               v-model="filters.ownerEmployeeCode"
-              aria-label="所属业务员"
+              aria-label="业务员"
               clearable
               filterable
               remote
               reserve-keyword
-              placeholder="所属业务员"
+              placeholder="搜索业务员"
               :remote-method="searchEmployees"
               :loading="employeeLoading"
               style="width: 170px"
@@ -185,9 +186,10 @@
               aria-label="部门"
               clearable
               filterable
-              placeholder="部门"
+              placeholder="选择部门"
               style="width: 160px"
             />
+            <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
             <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 170px" @keyup.enter="loadReceivables" />
             <el-input v-model="filters.customerCode" aria-label="客户编码" clearable placeholder="客户编码" style="width: 150px" @keyup.enter="loadReceivables" />
             <el-date-picker
@@ -400,6 +402,7 @@ function commonAttributionParams() {
     regionCode: empty(filters.regionCode),
     ownerEmployeeCode: empty(filters.ownerEmployeeCode),
     departmentId: filters.departmentId ?? undefined,
+    includeSubDepartments: filters.includeSubDepartments,
   }
 }
 

@@ -521,6 +521,8 @@ export interface OrderFulfillmentStatus {
 export interface OrderWarehouseOption {
   id: string | number
   warehouseName: string
+  /** 仓库归属地区编码，用于和订单客户归属地区匹配。 */
+  regionCode?: string | null
 }
 export const getOrderFulfillment = (id: string | number) =>
   apiClient.get<OrderFulfillmentStatus>(

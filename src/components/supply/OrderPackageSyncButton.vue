@@ -1,5 +1,5 @@
 <template>
-  <el-button v-if="can('integration:dhb:write')" :loading="busy" @click="open"
+  <el-button v-if="can('integration:dhb:write')" :plain="plain" :loading="busy" @click="open"
     >同步订单</el-button
   >
   <el-dialog
@@ -87,6 +87,10 @@ import {
 } from '@/api/core/dhb-orchestration'
 import { syncDhbPage } from '@/api/core/dhb-page-sync'
 
+defineProps<{
+  /** 与查询区其他次级按钮保持一致的浅底样式。 */
+  plain?: boolean
+}>()
 const emit = defineEmits<{ completed: [result: DhbSyncOrchestrationResult] }>()
 const { can } = useSupplyPermissions()
 

@@ -7,6 +7,8 @@ export interface OrderRegisterCommonFilters {
   regionCode: string
   ownerEmployeeCode: string
   departmentId: number | null
+  /** 部门筛选是否包含子部门；默认包含。 */
+  includeSubDepartments: boolean
   createdBy: string
   orderDateRange: [string, string] | null
 }
@@ -19,6 +21,7 @@ export function useOrderRegisterCommonFilters() {
     regionCode: '',
     ownerEmployeeCode: '',
     departmentId: null,
+    includeSubDepartments: true,
     createdBy: '',
     orderDateRange: null,
   })
@@ -30,6 +33,7 @@ export function useOrderRegisterCommonFilters() {
     filters.regionCode = ''
     filters.ownerEmployeeCode = ''
     filters.departmentId = null
+    filters.includeSubDepartments = true
     filters.createdBy = ''
     filters.orderDateRange = null
   }

@@ -1066,12 +1066,12 @@
     >
       <el-alert
         class="request-hint"
-        type="warning"
+        :type="warehouseRegionHint.type"
         :closable="false"
         show-icon
         :title="
           fulfillmentMode === 'SELECT'
-            ? '保存订单仓库后，由有出库权限的人员确认出库。'
+            ? `客户归属地区：${warehouseRegionHint.regionLabel}，${warehouseRegionHint.message}`
             : '从订单已确认仓库出库；重复请求会核对既有结果，避免重复扣库。'
         "
       />
@@ -1091,7 +1091,7 @@
             <el-option
               v-for="item in warehouseOptions"
               :key="item.id"
-              :label="item.warehouseName"
+              :label="warehouseOptionLabel(item, regionLabel(item.regionCode))"
               :value="item.id"
             />
           </el-select>
@@ -1183,6 +1183,10 @@ import {
   businessDictionaryOptions,
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
+import {
+  pickRegionMatchedWarehouse,
+  warehouseOptionLabel,
+} from '@/utils/warehouse-region-match'
 import { formatOrderStatus as formatDhbOrderStatus } from '@/utils/dhb-order-status'
 import { auditActorLabel } from '@/utils/audit-actor'
 
@@ -1301,6 +1305,11 @@ const editorVisible = ref(false)
 const editingId = ref<string | null>(null)
 const stockOutVisible = ref(false)
 const fulfillmentMode = ref<'SELECT' | 'EXECUTE'>('EXECUTE')
+const warehouseRegionHint = reactive({
+  type: 'warning' as 'warning' | 'success' | 'info',
+  regionLabel: '-',
+  message: '保存订单仓库后，由有出库权限的人员确认出库。',
+})
 const stockOutLoading = ref(false)
 const selectedStockOutOrder = ref<SalesOrderSummary | null>(null)
 const currentPage = ref(1)
@@ -1796,8 +1805,29 @@ async function openFulfillment(row: SalesOrderSummary) {
     const state = await getOrderFulfillment(row.id)
     selectedStockOutOrder.value.revision = state.orderRevision
     stockOutForm.warehouseId = state.warehouseId == null ? '' : String(state.warehouseId)
-    if (fulfillmentMode.value === 'SELECT') await searchWarehouses('')
-    else
+    if (fulfillmentMode.value === 'SELECT') {
+      await searchWarehouses('')
+      const regionCode = selectedStockOutOrder.value.regionCode
+      const regionName = regionLabel(regionCode)
+      const matched =
+        state.warehouseId == null
+          ? pickRegionMatchedWarehouse(warehouseOptions.value, regionCode)
+          : undefined
+      if (matched) {
+        stockOutForm.warehouseId = String(matched.id)
+        warehouseRegionHint.type = 'success'
+        warehouseRegionHint.regionLabel = regionName
+        warehouseRegionHint.message = `已默认选中同地区仓库「${matched.warehouseName}」，可改选其他仓库。`
+      } else if (state.warehouseId != null) {
+        warehouseRegionHint.type = 'info'
+        warehouseRegionHint.regionLabel = regionName
+        warehouseRegionHint.message = '订单已保存仓库，如需调整请直接改选。'
+      } else {
+        warehouseRegionHint.type = 'warning'
+        warehouseRegionHint.regionLabel = regionName
+        warehouseRegionHint.message = '未找到同地区仓库，请人工选择出库仓库。'
+      }
+    } else
       warehouseOptions.value =
         state.warehouseId == null
           ? []
@@ -2067,8 +2097,14 @@ async function searchWarehouses(query: string) {
   try {
     if (!selectedStockOutOrder.value) return
     const result = await getOrderWarehouseOptions(selectedStockOutOrder.value.id)
+    const keyword = query.trim()
     warehouseOptions.value = result
-      .filter((w) => !query || w.warehouseName.includes(query))
+      .filter(
+        (w) =>
+          !keyword ||
+          w.warehouseName.includes(keyword) ||
+          regionLabel(w.regionCode).includes(keyword),
+      )
       .map((w) => ({ ...w, id: String(w.id) }))
   } finally {
     warehouseLoading.value = false

@@ -78,6 +78,7 @@ const dedicatedOrderRouteKeys = new Set([
   'supply.order.sales-payments',
   'supply.order.lines',
   'supply.order.statistics',
+  'supply.order.invoices',
   'supply.order.fund-documents',
   'supply.order.sales-refunds',
 ])
@@ -204,11 +205,13 @@ export const constantRoutes: RouteRecordRaw[] = [
       { path: 'order/fulfillments', name: 'SupplyOrderFulfillments', component: () => import('@/views/supply-chain/order/FulfillmentView.vue'), meta: { title: '订单出库', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.fulfillments', pageKey: 'fulfillments', permission: 'order:outbound:read' } },
       { path: 'order/sales-orders', name: 'SupplyOrderSalesOrders', component: () => import('@/views/supply-chain/order/OrderListView.vue'), meta: { title: '订单列表', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.sales-orders', pageKey: 'sales-orders', permission: 'order:read' } },
       { path: 'order/shipments', name: 'SupplyOrderShipments', component: () => import('@/views/supply-chain/order/SalesShipmentView.vue'), meta: { title: '发货单', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.shipments', pageKey: 'shipments', permission: 'order:read' } },
-      { path: 'order/sales-payments', name: 'SupplyOrderSalesPayments', component: () => import('@/views/supply-chain/order/PaymentRecordListView.vue'), meta: { title: '收款列表', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.sales-payments', pageKey: 'sales-payments', permission: 'order:read' } },
+      { path: 'order/sales-payments', name: 'SupplyOrderSalesPayments', component: () => import('@/views/supply-chain/order/PaymentRecordListView.vue'),         meta: {
+          title: '订单回款', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.sales-payments', pageKey: 'sales-payments', permission: 'order:read' } },
       { path: 'order/fund-documents', name: 'SupplyOrderFundDocuments', component: () => import('@/views/supply-chain/order/FundDocumentView.vue'), meta: { title: '客户资金流水', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.fund-documents', pageKey: 'fund-documents', permission: 'order:read' } },
       { path: 'order/sales-refunds', name: 'SupplyOrderSalesRefunds', component: () => import('@/views/supply-chain/order/SalesRefundRecordView.vue'), meta: { title: '销售退款', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.sales-refunds', pageKey: 'sales-refunds', permission: 'order:read' } },
       { path: 'order/lines', name: 'SupplyOrderLines', component: () => import('@/views/supply-chain/order/OrderLineListView.vue'), meta: { title: '订单明细', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.lines', pageKey: 'order-lines', permission: 'order:read' } },
       { path: 'order/statistics', name: 'SupplyOrderStatistics', component: () => import('@/views/supply-chain/order/OrderStatisticsView.vue'), meta: { title: '订单与回款统计', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.statistics', pageKey: 'order-statistics', permission: 'order:read' } },
+      { path: 'order/invoices', name: 'SupplyOrderInvoices', component: () => import('@/views/supply-chain/order/InvoiceManagementView.vue'), meta: { title: '发票管理', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', routeKey: 'supply.order.invoices', pageKey: 'order-invoices', permission: 'order:read' } },
       { path: 'sales', name: 'SupplySalesDashboard', component: () => import('@/views/supply-chain/sales/IndexView.vue'), meta: { title: '销售管控台', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'dashboard', permission: 'sales:dashboard:read' } },
       { path: 'sales/attendance/today', name: 'SupplySalesAttendanceToday', component: () => import('@/views/supply-chain/sales/IndexView.vue'), meta: { title: '今日状态', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'attendance-today' } },
       { path: 'sales/attendance/punches', name: 'SupplySalesAttendancePunches', component: () => import('@/views/supply-chain/sales/IndexView.vue'), meta: { title: '打卡明细', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', pageKey: 'attendance-punches' } },

@@ -12,6 +12,7 @@ const ROUTES: Record<string, string | null> = {
   'supply.order.sales-payments': '/supply-chain/order/sales-payments',
   'supply.order.lines': '/supply-chain/order/lines',
   'supply.order.statistics': '/supply-chain/order/statistics',
+  'supply.order.invoices': '/supply-chain/order/invoices',
   'supply.order.fund-documents': '/supply-chain/order/fund-documents',
   'supply.order.sales-refunds': '/supply-chain/order/sales-refunds',
   'supply.sales.menu': null, 'supply.sales.dashboard': '/supply-chain/sales',

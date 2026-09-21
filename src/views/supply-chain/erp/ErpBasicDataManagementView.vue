@@ -206,11 +206,17 @@
             />
           </el-form-item>
           <el-form-item v-if="pageKind === 'warehouse'" label="归属地区">
-            <el-input
+            <el-tree-select
               v-model="filters.regionCode"
+              :data="customerAreaTree"
+              :props="areaTreeProps"
+              node-key="code"
+              check-strictly
+              :render-after-expand="false"
               clearable
-              placeholder="地区编码"
-              style="width: 150px"
+              filterable
+              placeholder="归属地区"
+              style="width: 200px"
             />
           </el-form-item>
           <el-form-item v-if="pageKind === 'tag'" label="标签类型">
@@ -516,12 +522,36 @@
           </el-col>
           <el-col v-if="pageKind === 'warehouse'" :span="12">
             <el-form-item label="归属地区">
-              <el-input v-model="form.regionCode" clearable placeholder="地区编码" />
+              <el-tree-select
+                v-model="form.regionCode"
+                :data="customerAreaTree"
+                :props="areaTreeProps"
+                node-key="code"
+                check-strictly
+                :render-after-expand="false"
+                clearable
+                filterable
+                placeholder="选择归属地区"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col v-if="pageKind === 'warehouse'" :span="12">
             <el-form-item label="仓库类型">
-              <el-input v-model="form.warehouseTypeCode" clearable placeholder="仓库类型编码" />
+              <el-select
+                v-model="form.warehouseTypeCode"
+                clearable
+                filterable
+                placeholder="选择仓库类型"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in warehouseTypeOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col v-if="pageKind === 'warehouse'" :span="12">
@@ -642,6 +672,8 @@ import {
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import ProductCategorySelect from '@/components/supply/ProductCategorySelect.vue'
 import { loadAllErpProductCategories } from '@/utils/product-categories'
+import { getAllCrmCustomerAreas, type CrmDictionaryView } from '@/api/core/crm'
+import { buildAreaTree } from '@/utils/crm-area-tree'
 
 type PageKind = 'category' | 'brand' | 'tag' | 'warehouse' | 'supplier'
 type BasicRow =
@@ -719,6 +751,21 @@ const statusDictionaryCode = computed(() =>
   pageKind.value === 'supplier' ? 'SUPPLIER_STATUS' : 'WAREHOUSE_STATUS',
 )
 const statusOptions = computed(() => businessDictionaryOptions('ERP', statusDictionaryCode.value))
+const warehouseTypeOptions = computed(() =>
+  businessDictionaryOptions('ERP', 'WAREHOUSE_TYPE'),
+)
+/** 仓库归属地区和客户归属地区同源：出库时按客户地区匹配对应地区的仓库。 */
+const customerAreaOptions = ref<CrmDictionaryView[]>([])
+const customerAreaTree = computed(() => buildAreaTree(customerAreaOptions.value))
+const areaTreeProps = { value: 'code', label: 'name', children: 'children' }
+async function loadCustomerAreas() {
+  try {
+    const areas = await getAllCrmCustomerAreas()
+    customerAreaOptions.value = areas.filter((item) => item.status === 'ACTIVE')
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason, '归属地区选项加载失败'))
+  }
+}
 
 const loading = ref(false)
 const saving = ref(false)
@@ -792,6 +839,7 @@ const form = reactive({
 })
 
 onMounted(() => {
+  if (pageKind.value === 'warehouse') void loadCustomerAreas()
   void loadBusinessDictionaries([
     { moduleCode: 'COMMON', code: 'REGION' },
     { moduleCode: 'ERP', code: 'PRODUCT_TAG_TYPE' },
@@ -810,6 +858,9 @@ watch(pageKind, () => {
   selectedCategoryId.value = null
   categoryKeyword.value = ''
   resetFilters()
+  if (pageKind.value === 'warehouse' && !customerAreaOptions.value.length) {
+    void loadCustomerAreas()
+  }
 })
 
 async function loadRows() {
@@ -1134,9 +1185,13 @@ function tagTypeLabel(row: BasicRow) {
 }
 
 function regionLabel(row: BasicRow) {
-  return 'regionCode' in row
-    ? businessDictionaryLabel('COMMON', 'REGION', row.regionCode, '地区')
-    : '-'
+  if (!('regionCode' in row)) return '-'
+  const code = row.regionCode
+  if (!code) return '-'
+  return (
+    customerAreaOptions.value.find((item) => item.code === code)?.name ||
+    businessDictionaryLabel('COMMON', 'REGION', code, '地区')
+  )
 }
 
 function warehouseTypeLabel(row: BasicRow) {

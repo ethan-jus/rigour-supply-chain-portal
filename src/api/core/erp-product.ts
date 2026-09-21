@@ -25,6 +25,8 @@ export interface ErpManagedProductSummary {
   bigUnitCode: string | null
   baseToMiddleRate: number | null
   baseToBigRate: number | null
+  /** 默认统计单位层级：BASE/MIDDLE/BIG；空按基础单位。 */
+  statisticsUnitLevel: string | null
   saleTypeCode: string
   shelfStatusCode: string
   ordinal: number
@@ -105,6 +107,8 @@ export interface ErpManagedProductQuery {
   defaultWarehouseId?: string | number
   /** 为 true 时列表行额外携带规格明细，用于列表就地展开规格。 */
   withVariants?: boolean
+  /** 按商品ID批量核对（明细页批量取主图与单位配置）；单次最多 200 个。 */
+  productIds?: Array<string | number>
 }
 
 export interface ErpManagedProductImageCommand {
@@ -134,6 +138,12 @@ export interface ErpManagedProductCommand {
   brandId?: string | number | null
   productSpecification?: string | null
   unitCode?: string | null
+  middleUnitCode?: string | null
+  baseToMiddleRate?: number | null
+  bigUnitCode?: string | null
+  baseToBigRate?: number | null
+  /** 默认统计单位层级：BASE/MIDDLE/BIG；空按基础单位。 */
+  statisticsUnitLevel?: string | null
   minOrderQuantity?: number | null
   orderMultipleFlag?: boolean | null
   orderMultipleQuantity?: number | null

@@ -213,14 +213,25 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="单位" width="96">
+          <el-table-column label="单位口径" width="200">
             <template #default="scope">
-              <span v-if="scope.row.rowKind === 'product'">{{
-                unitLabel(scope.row.product.unitCode)
-              }}</span>
-              <span v-else>{{
-                unitLabel(scope.row.variant?.unitCode || scope.row.product.unitCode)
-              }}</span>
+              <div class="unit-scope">
+                <template v-if="scope.row.rowKind === 'product'">
+                  <span>{{ unitLabel(scope.row.product.unitCode) }}</span>
+                  <span v-if="scope.row.product.middleUnitCode" class="unit-scope__extra">
+                    / {{ unitLabel(scope.row.product.middleUnitCode) }}×{{ scope.row.product.baseToMiddleRate }}
+                  </span>
+                  <span v-if="scope.row.product.bigUnitCode" class="unit-scope__extra">
+                    / {{ unitLabel(scope.row.product.bigUnitCode) }}×{{ scope.row.product.baseToBigRate }}
+                  </span>
+                  <el-tag v-if="scope.row.product.statisticsUnitLevel" size="small" effect="plain" type="info">
+                    统计 {{ unitLabel(statisticsUnitCodeOf(scope.row.product)) }}
+                  </el-tag>
+                </template>
+                <span v-else>{{
+                  unitLabel(scope.row.variant?.unitCode || scope.row.product.unitCode)
+                }}</span>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="订货价" width="150" align="right" header-align="right">
@@ -645,7 +656,7 @@
                 v-model="form.unitCode"
                 clearable
                 filterable
-                placeholder="选择单位"
+                placeholder="基础单位（提交必填）"
                 style="width: 100%"
               >
                 <el-option
@@ -656,6 +667,111 @@
                 />
               </el-select>
             </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="中包装单位">
+              <el-select
+                v-model="form.middleUnitCode"
+                clearable
+                filterable
+                placeholder="如：箱（不需要可留空）"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in unitOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="大包装单位">
+              <el-select
+                v-model="form.bigUnitCode"
+                clearable
+                filterable
+                placeholder="如：件（不需要可留空）"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in unitOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="中包装换算">
+              <div class="unit-rate">
+                <span class="unit-rate__prefix">
+                  1 {{ unitName(form.middleUnitCode, '中包装') }} =
+                </span>
+                <el-input-number
+                  v-model="form.baseToMiddleRate"
+                  :min="1.000001"
+                  :controls="false"
+                  :disabled="!form.middleUnitCode"
+                  placeholder="数量"
+                  style="width: 110px"
+                />
+                <span class="unit-rate__hint">{{ unitLabel(form.unitCode) || '基础单位' }}</span>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="大包装换算">
+              <div class="unit-rate">
+                <span class="unit-rate__prefix">
+                  1 {{ unitName(form.bigUnitCode, '大包装') }} =
+                </span>
+                <el-input-number
+                  v-model="form.baseToBigRate"
+                  :min="1.000001"
+                  :controls="false"
+                  :disabled="!form.bigUnitCode"
+                  placeholder="数量"
+                  style="width: 110px"
+                />
+                <span class="unit-rate__hint">{{ unitLabel(form.unitCode) || '基础单位' }}</span>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="默认统计单位">
+              <el-select
+                v-model="form.statisticsUnitLevel"
+                clearable
+                placeholder="按基础单位统计"
+                style="width: 100%"
+              >
+                <el-option
+                  :label="`基础单位（${unitLabel(form.unitCode)}）`"
+                  :value="'BASE'"
+                  :disabled="!form.unitCode"
+                />
+                <el-option
+                  :label="`中包装单位（${unitLabel(form.middleUnitCode)}）· 1${unitLabel(form.middleUnitCode) || '中包装'} = ${form.baseToMiddleRate ?? 'N'}${unitLabel(form.unitCode) || '基础单位'}`"
+                  :value="'MIDDLE'"
+                  :disabled="!form.middleUnitCode || !form.baseToMiddleRate"
+                />
+                <el-option
+                  :label="`大包装单位（${unitLabel(form.bigUnitCode)}）· 1${unitLabel(form.bigUnitCode) || '大包装'} = ${form.baseToBigRate ?? 'N'}${unitLabel(form.unitCode) || '基础单位'}`"
+                  :value="'BIG'"
+                  :disabled="!form.bigUnitCode || !form.baseToBigRate"
+                />
+              </el-select>
+              <div class="form-hint">订单与统计里的数量、单价按该单位换算展示，金额不变。</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <div class="form-hint form-hint--block">
+              单位层级：基础单位 → 中包装单位 → 大包装单位。先选单位、再填换算数量（如 1 箱 = 12 桶），
+              之后才能在"默认统计单位"里选择对应层级；不需要中/大包装时留空即可。
+            </div>
           </el-col>
           <el-col :span="8">
             <el-form-item label="售卖类型">
@@ -741,7 +857,7 @@
                 remote
                 clearable
                 reserve-keyword
-                placeholder="搜索仓库"
+                placeholder="搜索仓库（提交必填）"
                 :remote-method="searchWarehouses"
                 :loading="warehouseLoading"
                 style="width: 100%"
@@ -815,28 +931,54 @@
           <div class="form-section__header">
             <div>
               <h3>规格价格</h3>
-              <p>不同规格可以设置不同售价、市场价、采购价和订货规则。</p>
+              <p>
+                每个商品至少一条规格价格：单规格商品填一条即可（<strong>售价必填且大于 0</strong>，默认规格标记一条），
+                多规格商品逐条添加。不同规格可以设置不同售价、市场价、采购价和订货规则。
+              </p>
             </div>
             <el-button @click="addVariant">新增规格价格</el-button>
           </div>
+          <p v-if="submitNotice" class="form-section__error">{{ submitNotice }}</p>
           <div
             v-for="(variant, index) in form.variants"
             :key="`variant-${index}`"
             class="variant-editor"
           >
-            <el-row :gutter="12">
-              <el-col :span="8">
-                <el-form-item label="规格名称">
-                  <el-input
-                    v-model="variant.specificationSnapshot"
-                    clearable
-                    placeholder="如 原味/箱"
-                  />
-                </el-form-item>
-              </el-col>
-              <el-col :span="4">
-                <el-form-item label="单位">
-                  <el-select v-model="variant.unitCode" clearable filterable placeholder="单位">
+            <el-form label-position="top" size="small" class="variant-editor__form">
+              <el-row :gutter="12">
+                <el-col :span="6">
+                  <el-form-item label="规格名称">
+                    <el-select
+                      :model-value="variantSpecValues(variant)"
+                      multiple
+                      filterable
+                      allow-create
+                      default-first-option
+                      clearable
+                      collapse-tags
+                      collapse-tags-tooltip
+                      placeholder="选择规格值（可多选组合），或直接输入"
+                      style="width: 100%"
+                      @update:model-value="(values) => setVariantSpecValues(variant, values)"
+                    >
+                      <el-option-group
+                        v-for="group in specificationGroups"
+                        :key="group.label"
+                        :label="group.label"
+                      >
+                        <el-option
+                          v-for="option in group.options"
+                          :key="`${group.label}-${option}`"
+                          :label="option"
+                          :value="option"
+                        />
+                      </el-option-group>
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="3">
+                  <el-form-item label="单位">
+                    <el-select v-model="variant.unitCode" clearable filterable placeholder="单位">
                     <el-option
                       v-for="item in unitOptions"
                       :key="item.value"
@@ -846,89 +988,101 @@
                   </el-select>
                 </el-form-item>
               </el-col>
-              <el-col :span="4">
-                <el-form-item label="售价">
-                  <el-input-number
-                    v-model="variant.salePrice"
+                <el-col :span="5">
+                  <el-form-item label="售价">
+                    <el-input-number
+                      v-model="variant.salePrice"
                     :min="0"
                     :precision="2"
                     style="width: 100%"
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="4">
-                <el-form-item label="市场价">
-                  <el-input-number
-                    v-model="variant.marketPrice"
+                <el-col :span="5">
+                  <el-form-item label="市场价">
+                    <el-input-number
+                      v-model="variant.marketPrice"
                     :min="0"
                     :precision="2"
                     style="width: 100%"
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="4">
-                <el-form-item label="采购价">
-                  <el-input-number
-                    v-model="variant.purchasePrice"
+                <el-col :span="5">
+                  <el-form-item label="采购价">
+                    <el-input-number
+                      v-model="variant.purchasePrice"
+                      :min="0"
+                      :precision="2"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="12">
+                <el-col :span="4">
+                  <el-form-item label="起订量">
+                    <el-input-number
+                      v-model="variant.minOrderQuantity"
                     :min="0"
                     :precision="2"
                     style="width: 100%"
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="4">
-                <el-form-item label="起订量">
-                  <el-input-number
-                    v-model="variant.minOrderQuantity"
+                <el-col :span="4">
+                  <el-form-item label="整倍数量">
+                    <el-input-number
+                      v-model="variant.orderMultipleQuantity"
                     :min="0"
                     :precision="2"
                     style="width: 100%"
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="4">
-                <el-form-item label="整倍数量">
-                  <el-input-number
-                    v-model="variant.orderMultipleQuantity"
+                <el-col :span="4">
+                  <el-form-item label="限购量">
+                    <el-input-number
+                      v-model="variant.limitQuantity"
                     :min="0"
                     :precision="2"
                     style="width: 100%"
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="4">
-                <el-form-item label="限购量">
-                  <el-input-number
-                    v-model="variant.limitQuantity"
-                    :min="0"
-                    :precision="2"
-                    style="width: 100%"
-                  />
-                </el-form-item>
-              </el-col>
-              <el-col :span="4">
-                <el-form-item label="默认规格">
-                  <el-switch v-model="variant.defaultFlag" active-text="是" inactive-text="否" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="6">
-                <el-form-item label="备注">
-                  <el-input v-model="variant.remark" clearable />
-                </el-form-item>
-              </el-col>
-              <el-col :span="2" class="variant-actions">
-                <el-button link type="danger" @click="removeVariant(index)">删除</el-button>
-              </el-col>
-            </el-row>
+                <el-col :span="4">
+                  <el-form-item label="默认规格">
+                    <el-switch v-model="variant.defaultFlag" active-text="是" inactive-text="否" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="5">
+                  <el-form-item label="备注">
+                    <el-input v-model="variant.remark" clearable />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="3" class="variant-actions">
+                  <el-form-item label=" ">
+                    <el-button link type="danger" @click="removeVariant(index)">删除</el-button>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-form>
           </div>
         </section>
       </el-form>
       <template #footer>
-        <el-button @click="editorVisible = false">取消</el-button>
-        <el-button :loading="saving" @click="saveProduct(false)">保存草稿</el-button>
-        <el-button type="primary" :loading="saving" @click="saveProduct(true)"
-          >保存并提交</el-button
-        >
+        <div class="editor-footer">
+          <span v-if="saveError" class="editor-footer__error">{{ saveError }}</span>
+          <span v-else-if="saving" class="editor-footer__saving">正在保存，请稍候…</span>
+          <span v-else class="editor-footer__hint">保存成功后自动关闭；失败原因会显示在这里</span>
+          <div class="editor-footer__actions">
+            <el-button @click="editorVisible = false">取消</el-button>
+            <el-button :loading="saving" @click="saveProduct(false)">保存草稿</el-button>
+            <el-button type="primary" :loading="saving" @click="saveProduct(true)"
+              >保存并提交</el-button
+            >
+          </div>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -963,6 +1117,7 @@ import {
 import {
   getErpInventoryWarehouses,
   getErpProductBrands,
+  getErpProductSpecifications,
   getErpProductTags,
   type ErpInternalWarehouseView,
   type ErpProductBrandView,
@@ -1013,6 +1168,12 @@ interface ProductForm {
   brandId: string | null
   productSpecification: string
   unitCode: string
+  middleUnitCode: string
+  baseToMiddleRate: number | null
+  bigUnitCode: string
+  baseToBigRate: number | null
+  /** 默认统计单位层级：BASE/MIDDLE/BIG；空按基础单位。 */
+  statisticsUnitLevel: string
   minOrderQuantity: number | null
   orderMultipleFlag: boolean
   orderMultipleQuantity: number | null
@@ -1072,6 +1233,13 @@ const unitOptions = computed(() => businessDictionaryOptions('COMMON', 'PRODUCT_
 const loading = ref(false)
 const route = useRoute()
 const saving = ref(false)
+/** 保存失败原因；显示在弹窗页脚内，避免提示被弹窗遮挡导致"点了没反应"。 */
+const saveError = ref('')
+/** 规格价格规则的内联提示；提交被拦时显示在规格价格区，避免只靠弹窗提示被忽略。 */
+const submitNotice = ref('')
+/** 规格主档（规格 → 规格值），规格行改为从这里选择，支持多选组合与临时输入。 */
+const specificationGroups = ref<Array<{ label: string; options: string[] }>>([])
+let specificationLoaded = false
 const detailVisible = ref(false)
 const editorVisible = ref(false)
 const currentPage = ref(1)
@@ -1093,6 +1261,7 @@ const filters = reactive<ProductFilters>({
   submitStatusCode: '',
 })
 const form = reactive<ProductForm>(emptyForm())
+
 
 const { can } = useSupplyPermissions()
 const canWrite = computed(() => can('erp:product:write'))
@@ -1631,11 +1800,17 @@ async function openDetailById(id: string | number) {
 function openCreate() {
   editingId.value = null
   Object.assign(form, emptyForm())
+  saveError.value = ''
+  submitNotice.value = ''
+  void loadSpecificationOptions()
   editorVisible.value = true
 }
 
 async function openEdit(row: ErpManagedProductSummary) {
   editingId.value = row.id
+  saveError.value = ''
+  submitNotice.value = ''
+  void loadSpecificationOptions()
   editorVisible.value = true
   try {
     const product = await getErpManagedProduct(row.id)
@@ -1647,9 +1822,30 @@ async function openEdit(row: ErpManagedProductSummary) {
 }
 
 async function saveProduct(submit: boolean) {
+  if (saving.value) return
   saving.value = true
+  saveError.value = ''
+  submitNotice.value = ''
+  let watchdog: number | undefined
   try {
     const command = toCommand(submit)
+    // 提交前把所有缺失项一次说清（与后端提交校验一致），避免逐条被后端打回。
+    if (submit) {
+      const blockers = submitBlockers(command)
+      if (blockers.length) {
+        submitNotice.value = `提交前请先补充：${blockers.join('、')}`
+        saveError.value = `无法提交：${blockers.join('、')}`
+        ElMessage.warning('还有必填项未完成，请查看提示')
+        return
+      }
+    }
+    // 保险：任何环节卡住（会话/网络）都会在 35 秒后给出可见提示并解锁按钮。
+    watchdog = window.setTimeout(() => {
+      if (!saving.value) return
+      saving.value = false
+      saveError.value =
+        '保存请求超过 35 秒无响应：请确认登录状态与网络后重试；如反复出现，请刷新页面重新登录。'
+    }, 35000)
     if (editingId.value) {
       await updateErpManagedProduct(editingId.value, command)
       ElMessage.success(submit ? '商品已保存并提交' : '商品草稿已保存')
@@ -1660,8 +1856,10 @@ async function saveProduct(submit: boolean) {
     editorVisible.value = false
     await loadRows()
   } catch (reason) {
-    ElMessage.error(errorMessage(reason, '商品保存失败'))
+    saveError.value = errorMessage(reason, '商品保存失败，请稍后重试')
+    ElMessage.error(saveError.value)
   } finally {
+    if (watchdog !== undefined) window.clearTimeout(watchdog)
     saving.value = false
   }
 }
@@ -1689,6 +1887,11 @@ function emptyForm(): ProductForm {
     brandId: null,
     productSpecification: '',
     unitCode: '',
+    middleUnitCode: '',
+    baseToMiddleRate: null,
+    bigUnitCode: '',
+    baseToBigRate: null,
+    statisticsUnitLevel: '',
     minOrderQuantity: null,
     orderMultipleFlag: false,
     orderMultipleQuantity: null,
@@ -1728,6 +1931,11 @@ function applyDetailToForm(product: ErpManagedProductDetail) {
     brandId: product.brandId ? String(product.brandId) : null,
     productSpecification: product.productSpecification ?? '',
     unitCode: product.unitCode ?? '',
+    middleUnitCode: product.middleUnitCode ?? '',
+    baseToMiddleRate: product.baseToMiddleRate ?? null,
+    bigUnitCode: product.bigUnitCode ?? '',
+    baseToBigRate: product.baseToBigRate ?? null,
+    statisticsUnitLevel: product.statisticsUnitLevel ?? '',
     minOrderQuantity: product.minOrderQuantity ?? null,
     orderMultipleFlag: Boolean(product.orderMultipleFlag),
     orderMultipleQuantity: product.orderMultipleQuantity ?? null,
@@ -1769,6 +1977,25 @@ function normalizeVariants(variants: ErpManagedProductVariant[]): VariantForm[] 
   }))
 }
 
+/** 提交前预检（与后端提交校验一致）：一次列出全部缺失项，避免逐条被打回。 */
+function submitBlockers(command: ErpManagedProductCommand): string[] {
+  const blockers: string[] = []
+  if (!command.productName) blockers.push('商品名称')
+  if (!command.unitCode) blockers.push('商品单位（基础单位）')
+  if (!command.defaultWarehouseId) blockers.push('归属仓库（提交必填）')
+  const variants = command.variants ?? []
+  if (!variants.length) {
+    blockers.push('规格价格至少一条（单规格商品填一条：规格名称 + 售价）')
+    return blockers
+  }
+  if (variants.some((item) => item.salePrice == null || Number(item.salePrice) <= 0)) {
+    blockers.push('每条规格的售价（必须大于 0）')
+  }
+  const defaultCount = variants.filter((item) => item.defaultFlag).length
+  if (defaultCount !== 1) blockers.push('默认规格必须且只能标记一条')
+  return blockers
+}
+
 function toCommand(submit: boolean): ErpManagedProductCommand {
   const images = form.images
     .map<ErpManagedProductImageCommand>((image, index) => ({
@@ -1806,6 +2033,11 @@ function toCommand(submit: boolean): ErpManagedProductCommand {
     brandId: form.brandId,
     productSpecification: empty(form.productSpecification),
     unitCode: empty(form.unitCode),
+    middleUnitCode: empty(form.middleUnitCode),
+    baseToMiddleRate: numberOrNull(form.baseToMiddleRate),
+    bigUnitCode: empty(form.bigUnitCode),
+    baseToBigRate: numberOrNull(form.baseToBigRate),
+    statisticsUnitLevel: empty(form.statisticsUnitLevel),
     minOrderQuantity: numberOrNull(form.minOrderQuantity),
     orderMultipleFlag: form.orderMultipleFlag,
     orderMultipleQuantity: numberOrNull(form.orderMultipleQuantity),
@@ -1840,10 +2072,12 @@ function removeImage(index: number) {
 }
 
 function addVariant() {
+  submitNotice.value = ''
   form.variants.push(emptyVariant(!form.variants.length))
 }
 
 function removeVariant(index: number) {
+  submitNotice.value = ''
   form.variants.splice(index, 1)
   if (!form.variants.length) form.variants.push(emptyVariant(true))
 }
@@ -1862,6 +2096,55 @@ function productSaleTypeLabel(value: string | null | undefined) {
 
 function unitLabel(value: string | null | undefined) {
   return dictLabel('COMMON', 'PRODUCT_UNIT', value, '单位')
+}
+
+/** 单位名兜底：字典未命中时用可读名称，避免出现"1 - ="这类占位。 */
+function unitName(value: string | null | undefined, fallback: string) {
+  const label = unitLabel(value)
+  return label && label !== '-' ? label : fallback
+}
+
+/** 规格主档选项：首次打开编辑弹窗时加载一次；失败不阻断，仍可临时输入规格。 */
+async function loadSpecificationOptions() {
+  if (specificationLoaded) return
+  try {
+    const page = await getErpProductSpecifications({ begin: 0, step: 200 })
+    specificationGroups.value = (page.items || [])
+      .filter((item) => String(item.statusCode || '').toUpperCase() === 'ACTIVE')
+      .map((item) => ({
+        label: item.specificationName,
+        options: (item.values || [])
+          .filter((value) => String(value.statusCode || '').toUpperCase() === 'ACTIVE')
+          .map((value) => value.valueName)
+          .filter((value): value is string => Boolean(value)),
+      }))
+      .filter((group) => group.options.length > 0)
+    specificationLoaded = true
+  } catch {
+    specificationGroups.value = []
+  }
+}
+
+/** 规格快照与规格值多选之间的双向换算：多值用 "/" 组合（如 原味/箱）。 */
+function variantSpecValues(variant: VariantForm) {
+  return (variant.specificationSnapshot || '')
+    .split('/')
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function setVariantSpecValues(variant: VariantForm, values: Array<string | number>) {
+  variant.specificationSnapshot = values
+    .map((value) => String(value).trim())
+    .filter(Boolean)
+    .join('/')
+}
+
+/** 默认统计单位对应的单位编码；未配置或配置缺失时回退基础单位。 */
+function statisticsUnitCodeOf(product: ErpManagedProductSummary) {
+  if (product.statisticsUnitLevel === 'MIDDLE' && product.middleUnitCode) return product.middleUnitCode
+  if (product.statisticsUnitLevel === 'BIG' && product.bigUnitCode) return product.bigUnitCode
+  return product.unitCode
 }
 
 function dictLabel(
@@ -2729,9 +3012,21 @@ function errorMessage(reason: unknown, fallback: string) {
   background: #fff;
 }
 
+/* 规格行用顶标签压缩横向占用；控件不再被标签宽度挤压。 */
+.variant-editor__form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.variant-editor__form :deep(.el-form-item__label) {
+  padding-bottom: 2px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 18px;
+}
+
 .variant-actions {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
 }
 
 @media (max-width: 720px) {
@@ -2751,5 +3046,92 @@ function errorMessage(reason: unknown, fallback: string) {
   .product-image-gallery__grid {
     grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   }
+}
+
+.unit-rate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.unit-rate__prefix {
+  flex: none;
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.unit-rate__hint {
+  flex: none;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.form-hint--block {
+  display: block;
+  margin-top: -6px;
+  margin-bottom: 4px;
+  line-height: 20px;
+}
+
+.form-section__error {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border: 1px solid #fecaca;
+  border-radius: $border-radius-base;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+/* 保存状态固定在弹窗页脚，保证失败原因一定可见（不被弹窗遮挡）。 */
+.editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-footer__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.editor-footer__error {
+  color: #b91c1c;
+  font-size: 13px;
+  text-align: left;
+}
+
+.editor-footer__saving {
+  color: var(--el-color-primary);
+  font-size: 13px;
+}
+
+.editor-footer__hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.unit-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.unit-scope__extra {
+  color: var(--el-text-color-secondary);
+}
+
+.form-hint {
+  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>

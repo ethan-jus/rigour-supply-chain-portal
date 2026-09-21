@@ -108,7 +108,11 @@ onMounted(load)
     />
     <el-dialog v-model="visible" title="订单出库" width="760px" destroy-on-close
       ><template v-if="detail"
-        ><p>订单：{{ detail.order.orderNo }} · 已选仓库编号：{{ detail.order.warehouseId }}</p>
+        ><p>
+          订单：{{ detail.order.orderNo }} · 已选仓库：{{
+            detail.order.warehouseName || `编号 ${detail.order.warehouseId}`
+          }}
+        </p>
         <el-alert
           v-if="detail.execution.lastError"
           :title="detail.execution.lastError"

@@ -1460,3 +1460,17 @@
     }
   }
 }
+
+// 订单登记筛选区的树形下拉弹层宽度对齐输入框，避免节点文案被截断成“浙…”这类省略。
+.order-register-tree-popper {
+  min-width: 180px;
+
+  .el-select-dropdown {
+    min-width: 180px;
+  }
+
+  .el-select-dropdown__item {
+    max-width: none;
+    padding-right: 16px;
+  }
+}

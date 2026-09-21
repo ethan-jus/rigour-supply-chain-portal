@@ -1,21 +1,54 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
-    <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">订单管理 · 收款列表</span>
-        <SupplyPageTitle>收款列表</SupplyPageTitle>
-        <p>一行一笔关联订单的收款；待收款和已取消不计入实际回款。</p>
-      </div>
-    </div>
-
-    <OrderRegisterFilterCard :loading="loading" @search="search" @reset="resetFilters">
+    <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="resetFilters">
       <template #actions>
-        <el-button :loading="exporting" @click="exportCsv">导出</el-button>
+        <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+        <TableColumnSettings
+          plain
+          :columns="paymentColumns.columns"
+          :visibility="paymentColumns.visibility"
+          @change="paymentColumns.setVisible"
+          @reset="paymentColumns.reset"
+        />
       </template>
       <template #primary>
+        <el-date-picker
+          v-model="pageFilters.paymentTimeRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          range-separator="至"
+          start-placeholder="付款开始日期"
+          end-placeholder="付款截止日期"
+          aria-label="付款时间"
+          style="width: 250px"
+        />
+        <el-date-picker
+          v-model="filters.orderDateRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          range-separator="至"
+          start-placeholder="下单开始日期"
+          end-placeholder="下单截止日期"
+          aria-label="下单时间"
+          style="width: 250px"
+        />
         <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 160px" @keyup.enter="search" />
-        <el-input v-model="pageFilters.paymentNo" aria-label="收款编码" clearable placeholder="收款编码" style="width: 160px" @keyup.enter="search" />
-        <el-input v-model="pageFilters.transactionNo" aria-label="交易流水号" clearable placeholder="交易流水号" style="width: 170px" @keyup.enter="search" />
+        <el-tree-select
+          v-model="filters.departmentId"
+          :data="departmentOptionsTree"
+          :props="departmentTreeProps"
+          node-key="id"
+          check-strictly
+          :render-after-expand="false"
+          :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
+          aria-label="部门"
+          clearable
+          filterable
+          placeholder="选择部门"
+          popper-class="order-register-tree-popper"
+          style="width: 160px"
+        />
+        <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
         <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 170px" @keyup.enter="search" />
         <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态" style="width: 130px">
           <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
@@ -32,16 +65,17 @@
           clearable
           filterable
           placeholder="归属地区"
+          popper-class="order-register-tree-popper"
           style="width: 160px"
         />
         <el-select
           v-model="filters.ownerEmployeeCode"
-          aria-label="所属业务员"
+          aria-label="业务员"
           clearable
           filterable
           remote
           reserve-keyword
-          placeholder="所属业务员"
+          placeholder="搜索业务员"
           :remote-method="searchEmployees"
           :loading="employeeLoading"
           style="width: 170px"
@@ -55,73 +89,30 @@
         </el-select>
       </template>
       <template #extra>
-        <el-tree-select
-          v-model="filters.departmentId"
-          :data="departmentOptionsTree"
-          :props="departmentTreeProps"
-          node-key="id"
-          check-strictly
-          :render-after-expand="false"
-          :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
-          aria-label="部门"
-          clearable
-          filterable
-          placeholder="部门"
-          style="width: 160px"
-        />
-        <el-input v-model="filters.customerCode" aria-label="客户编码" clearable placeholder="客户编码" style="width: 150px" @keyup.enter="search" />
+        <el-input v-model="pageFilters.transactionNo" aria-label="交易单号" clearable placeholder="交易单号" style="width: 170px" @keyup.enter="search" />
         <el-select v-model="filters.createdBy" aria-label="创建人" clearable filterable placeholder="创建人" style="width: 150px">
           <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
         </el-select>
-        <el-date-picker
-          v-model="filters.orderDateRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="至"
-          start-placeholder="下单开始日期"
-          end-placeholder="下单截止日期"
-          aria-label="下单时间"
-          style="width: 250px"
-        />
-        <el-date-picker
-          v-model="pageFilters.paymentTimeRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="至"
-          start-placeholder="收款开始日期"
-          end-placeholder="收款截止日期"
-          aria-label="收款时间"
-          style="width: 250px"
-        />
+        <el-input v-model="pageFilters.paymentNo" aria-label="收款编码" clearable placeholder="收款编码" style="width: 160px" @keyup.enter="search" />
       </template>
     </OrderRegisterFilterCard>
 
-    <el-alert
-      v-if="coverageNotice"
-      :title="coverageNotice"
-      type="warning"
-      :closable="false"
-      class="order-register-coverage"
-    />
-    <el-alert
-      v-if="filters.orderDateRange && pageFilters.paymentTimeRange"
-      title="下单时间与收款时间两项条件同时生效，结果取交集。"
-      type="info"
-      :closable="false"
-      class="order-register-coverage"
-    />
-
-    <div class="result-heading">
-      <div class="result-title-line">
-        <h2>收款列表</h2>
-        <span class="result-count"><strong>{{ pageData.total }}</strong> 条</span>
+    <div class="order-summary" aria-label="金额统计">
+      <div class="order-summary__metric" title="当前查询条件下订单表的订单金额合计（订单侧条件，不受付款条件影响）">
+        <span class="order-summary__label">应收金额</span>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.relatedOrderAmount) }}</strong>
       </div>
-      <div class="result-totals">
-        <span>实收金额 <strong>{{ moneyText(pageData.totals.receivedAmount) }}</strong></span>
-        <span>已核金额 <strong>{{ moneyText(pageData.totals.checkedAmount) }}</strong></span>
-        <span>待收款单据 <strong>{{ moneyText(pageData.totals.pendingDocumentAmount) }}</strong></span>
-        <span>已取消单据 <strong>{{ moneyText(pageData.totals.cancelledDocumentAmount) }}</strong></span>
-        <span>关联订单金额（按订单去重） <strong>{{ moneyText(pageData.totals.relatedOrderAmount) }}</strong></span>
+      <div class="order-summary__metric" title="当前查询条件下已回款金额（不含待收款与已取消）">
+        <span class="order-summary__label">实收金额</span>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric" title="应收金额 - 实收金额">
+        <span class="order-summary__label">待收金额</span>
+        <strong class="order-summary__value">{{ moneyText(receivablePending) }}</strong>
+      </div>
+      <div class="order-summary__metric" title="财务核对通过（已核对）的收款单额度合计">
+        <span class="order-summary__label">核对金额</span>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
       </div>
     </div>
 
@@ -136,7 +127,15 @@
           :default-sort="{ prop: 'paymentTime', order: 'descending' }"
           @sort-change="changeSort"
         >
+          <!-- @vue-generic {OrderRegisterPaymentItem} -->
           <el-table-column type="index" label="序号" width="70" fixed="left" :index="tableRowIndex" />
+          <el-table-column prop="paymentNo" label="收款编码" width="160" fixed="left" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-link type="primary" underline="never" @click.stop="openPaymentDetail(row as OrderRegisterPaymentItem)">
+                <span class="order-no-cell">{{ row.paymentNo || '-' }}</span>
+              </el-link>
+            </template>
+          </el-table-column>
           <el-table-column label="订单号" width="160" fixed="left">
             <template #default="{ row }">
               <el-link type="primary" underline="never" @click.stop="openDetail(row)">
@@ -144,68 +143,153 @@
               </el-link>
             </template>
           </el-table-column>
-          <el-table-column label="付款凭证" width="130">
-            <template #default="{ row }">
-              <FundAttachmentPreviewList :attachments="row.attachments || []" direction="row" />
-            </template>
-          </el-table-column>
-          <el-table-column prop="transactionNo" label="交易流水号" width="160" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.transactionNo || '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="paymentNo" label="收款编码" width="160" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.paymentNo || '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="customerName" label="客户名称" min-width="180" show-overflow-tooltip>
+          <el-table-column
+            v-if="paymentColumns.isVisible('customerName')"
+            prop="customerName"
+            label="客户名称"
+            min-width="240"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">{{ row.customerName || '-' }}</template>
           </el-table-column>
-          <el-table-column label="归属地区" width="130">
+          <el-table-column v-if="paymentColumns.isVisible('regionName')" label="归属地区" width="140">
             <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
           </el-table-column>
-          <el-table-column label="所属业务员" width="120">
+          <el-table-column v-if="paymentColumns.isVisible('ownerEmployee')" label="业务员" width="110">
             <template #default="{ row }">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</template>
           </el-table-column>
-          <el-table-column label="部门" width="130" show-overflow-tooltip>
+          <el-table-column v-if="paymentColumns.isVisible('departmentName')" label="部门" width="130" show-overflow-tooltip>
             <template #default="{ row }">{{ departmentLabel(row.departmentId, row.departmentName) }}</template>
           </el-table-column>
-          <el-table-column label="订单金额" width="120" align="right" prop="orderAmount">
+          <el-table-column v-if="paymentColumns.isVisible('orderAmount')" label="订单金额" width="120" align="right" prop="orderAmount">
             <template #default="{ row }">{{ moneyText(row.orderAmount) }}</template>
           </el-table-column>
-          <el-table-column label="收款金额" width="120" align="right" prop="paidAmount">
-            <template #default="{ row }"><strong>{{ moneyText(row.paidAmount) }}</strong></template>
+          <el-table-column v-if="paymentColumns.isVisible('paidAmount')" label="收款金额" width="120" align="right" prop="paidAmount">
+            <template #default="{ row }">{{ moneyText(row.paidAmount) }}</template>
           </el-table-column>
-          <el-table-column label="收款状态" width="110">
-            <template #default="{ row }">
-              <el-tag :type="paymentRecordStatusTag(row.paymentStatusCode)" effect="plain" size="small">
-                {{ paymentRecordStatusLabel(row.paymentStatusCode) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="收款时间" width="170" sortable="custom" prop="paymentTime">
+          <el-table-column v-if="paymentColumns.isVisible('paymentTime')" label="收款时间" width="170" sortable="custom" prop="paymentTime">
             <template #default="{ row }">{{ displayDateTime(row.paymentTime) }}</template>
           </el-table-column>
-          <el-table-column label="核对人" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.checkedBy || '-' }}</template>
+          <el-table-column v-if="paymentColumns.isVisible('paymentStatus')" label="收款状态" width="100">
+            <template #default="{ row }">
+              <span class="status-cell">
+                <i
+                  class="status-dot"
+                  :class="`status-dot--${paymentRecordStatusTag(row.paymentStatusCode)}`"
+                />
+                {{ paymentRecordStatusLabel(row.paymentStatusCode) }}
+              </span>
+            </template>
           </el-table-column>
-          <el-table-column label="核对时间" width="170">
-            <template #default="{ row }">{{ displayDateTime(row.checkedAt) }}</template>
+          <el-table-column v-if="paymentColumns.isVisible('checkedStatus')" label="核对状态" width="100">
+            <template #default="{ row }">
+              <span class="status-cell">
+                <i
+                  class="status-dot"
+                  :class="`status-dot--${row.checkedAt || row.checkedBy ? 'success' : 'warning'}`"
+                />
+                {{ row.checkedAt || row.checkedBy ? '已核对' : '未核对' }}
+              </span>
+            </template>
           </el-table-column>
-          <el-table-column label="创建人" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.createdBy || '-' }}</template>
+          <el-table-column v-if="paymentColumns.isVisible('checkedBy')" label="核对人" width="110" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.checkedAt || row.checkedBy ? auditActorLabel(row.checkedBy) : '-' }}</template>
           </el-table-column>
-          <el-table-column label="创建时间" width="170">
+          <el-table-column
+            v-if="paymentColumns.isVisible('transactionNo')"
+            prop="transactionNo"
+            label="交易单号"
+            width="280"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">{{ row.transactionNo || '-' }}</template>
+          </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('attachments')" label="付款凭证" width="130">
+            <template #default="{ row }">
+              <FundAttachmentThumbnails
+                :attachments="row.attachmentViews?.length ? row.attachmentViews : row.attachments"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('createdBy')" label="创建人" width="110" show-overflow-tooltip>
+            <template #header>
+              <el-tooltip content="来源系统真实创建人；无来源时为本系统记录人。" placement="top">
+                <span class="column-header-hint">创建人</span>
+              </el-tooltip>
+            </template>
+            <template #default="{ row }">{{ auditActorLabel(row.createdBy) }}</template>
+          </el-table-column>
+          <el-table-column
+            v-if="paymentColumns.isVisible('createdTime')"
+            label="创建时间"
+            width="170"
+            sortable="custom"
+            prop="createdTime"
+          >
             <template #default="{ row }">{{ displayDateTime(row.createdTime) }}</template>
           </el-table-column>
-          <el-table-column label="修改人" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.updatedBy || '-' }}</template>
+          <el-table-column v-if="paymentColumns.isVisible('updatedBy')" label="修改人" width="110" show-overflow-tooltip>
+            <template #header>
+              <el-tooltip content="来源系统真实修改人；无来源时为本系统记录人。" placement="top">
+                <span class="column-header-hint">修改人</span>
+              </el-tooltip>
+            </template>
+            <template #default="{ row }">{{ auditActorLabel(row.updatedBy) }}</template>
           </el-table-column>
-          <el-table-column label="修改时间" width="170">
+          <el-table-column v-if="paymentColumns.isVisible('updatedTime')" label="修改时间" width="170">
             <template #default="{ row }">{{ displayDateTime(row.updatedTime) }}</template>
           </el-table-column>
-          <el-table-column label="同步人" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.syncedBy || '-' }}</template>
+          <el-table-column v-if="paymentColumns.isVisible('syncedBy')" label="同步人" width="110" show-overflow-tooltip>
+            <template #default="{ row }">{{ auditActorLabel(row.syncedBy) }}</template>
           </el-table-column>
-          <el-table-column label="同步时间" width="170">
+          <el-table-column
+            v-if="paymentColumns.isVisible('syncedAt')"
+            label="同步时间"
+            width="170"
+            sortable="custom"
+            prop="syncedAt"
+          >
             <template #default="{ row }">{{ displayDateTime(row.syncedAt) }}</template>
+          </el-table-column>
+          <el-table-column
+            v-if="paymentColumns.isVisible('sourceRecordId')"
+            prop="sourceRecordId"
+            label="来源回款号"
+            width="170"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">{{ row.sourceRecordId || '-' }}</template>
+          </el-table-column>
+          <el-table-column
+            v-if="paymentColumns.isVisible('dhbOrderNo')"
+            prop="dhbOrderNo"
+            label="订货宝订单号"
+            width="160"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">{{ row.dhbOrderNo || '-' }}</template>
+          </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('checkedAt')" label="核对时间" width="170">
+            <template #default="{ row }">{{ displayDateTime(row.checkedAt) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="110" fixed="right" class-name="order-actions-cell">
+            <template #default="{ row }">
+              <el-button
+                v-if="
+                  canCheckPayments &&
+                  row.paymentStatusCode !== 'CHECKED' &&
+                  row.paymentStatusCode !== 'CANCELLED'
+                "
+                class="order-action order-action--check"
+                size="small"
+                @click="openCheck(row as OrderRegisterPaymentItem)"
+              >
+                <el-icon><CircleCheck /></el-icon>核对
+              </el-button>
+              <span v-else class="payment-check-state">
+                {{ row.paymentStatusCode === 'CHECKED' ? '已核对' : '-' }}
+              </span>
+            </template>
           </el-table-column>
         </el-table>
       </div>
@@ -222,6 +306,8 @@
       </div>
     </el-card>
 
+    <PaymentCheckDialog v-model="checkVisible" :payment="checkTarget" @checked="onChecked" />
+    <PaymentDetailDrawer v-model="paymentDetailVisible" :payment="selectedPayment" />
     <OrderRegisterDetailDrawer v-model="detailVisible" :order-id="detailOrderId" />
   </div>
 </template>
@@ -230,11 +316,15 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
-import FundAttachmentPreviewList from '@/components/supply/FundAttachmentPreviewList.vue'
+import PaymentDetailDrawer from './components/PaymentDetailDrawer.vue'
+import PaymentCheckDialog from './components/PaymentCheckDialog.vue'
+import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
+import FundAttachmentThumbnails from '@/components/supply/FundAttachmentThumbnails.vue'
 import { displayDateTime } from '@/utils/business-date'
+import { CircleCheck } from '@element-plus/icons-vue'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import {
   moneyText,
   paymentRecordStatusLabel,
@@ -242,16 +332,41 @@ import {
 } from '@/utils/order-register-status'
 import { dateRangeParams, empty, orderRegisterDateParams } from '@/utils/order-register-query'
 import { csvFilename, downloadBlob } from '@/utils/file-download'
+import { auditActorLabel } from '@/utils/audit-actor'
 import {
   exportOrderRegisterCsv,
   getOrderRegisterPayments,
-  type OrderRegisterCoverage,
+  type OrderRegisterPaymentItem,
   type OrderRegisterPaymentPage,
 } from '@/api/core/order-register'
 import { useOrderRegisterCommonFilters } from '@/composables/useOrderRegisterQuery'
 import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
+import { useColumnSettings } from '@/composables/useColumnSettings'
 
 const route = useRoute()
+const paymentColumns = useColumnSettings('order-payments', [
+  { key: 'customerName', label: '客户名称', locked: true },
+  { key: 'regionName', label: '归属地区' },
+  { key: 'ownerEmployee', label: '业务员' },
+  { key: 'departmentName', label: '部门' },
+  { key: 'orderAmount', label: '订单金额' },
+  { key: 'paidAmount', label: '收款金额' },
+  { key: 'paymentTime', label: '收款时间' },
+  { key: 'paymentStatus', label: '收款状态' },
+  { key: 'checkedStatus', label: '核对状态' },
+  { key: 'checkedBy', label: '核对人' },
+  { key: 'transactionNo', label: '交易单号' },
+  { key: 'attachments', label: '付款凭证' },
+  { key: 'createdBy', label: '创建人', defaultVisible: false },
+  { key: 'createdTime', label: '创建时间', defaultVisible: false },
+  { key: 'updatedBy', label: '修改人', defaultVisible: false },
+  { key: 'updatedTime', label: '修改时间', defaultVisible: false },
+  { key: 'syncedBy', label: '同步人', defaultVisible: false },
+  { key: 'syncedAt', label: '同步时间', defaultVisible: false },
+  { key: 'sourceRecordId', label: '来源回款号', defaultVisible: false },
+  { key: 'dhbOrderNo', label: '订货宝订单号', defaultVisible: false },
+  { key: 'checkedAt', label: '核对时间', defaultVisible: false },
+])
 const {
   areaTree,
   departmentOptionsTree,
@@ -301,21 +416,34 @@ const pageData = ref<OrderRegisterPaymentPage>({
   },
   coverage: null,
 })
-const coverageNotice = computed(() => coverageText(pageData.value.coverage))
 
 const detailVisible = ref(false)
 const detailOrderId = ref<string | number | null>(null)
 
-function coverageText(coverage: OrderRegisterCoverage | null): string {
-  if (!coverage) return ''
-  if (coverage.message) return coverage.message
-  if (coverage.historyComplete === false) {
-    return coverage.coverageFrom
-      ? `历史回款仅可从 ${coverage.coverageFrom} 起准确回溯，此前范围不完整。`
-      : '历史回款覆盖不完整，实收与待收不能视为已确认。'
-  }
-  return ''
+const paymentDetailVisible = ref(false)
+const selectedPayment = ref<OrderRegisterPaymentItem | null>(null)
+
+const { can } = useSupplyPermissions()
+const canCheckPayments = computed(() => can('order:payment:check'))
+const checkVisible = ref(false)
+const checkTarget = ref<OrderRegisterPaymentItem | null>(null)
+
+/** 待收金额 = 应收（当前条件下订单金额） - 实收（已回款）。 */
+const receivablePending = computed(
+  () =>
+    Number(pageData.value.totals.relatedOrderAmount || 0) -
+    Number(pageData.value.totals.receivedAmount || 0),
+)
+
+function openCheck(row: OrderRegisterPaymentItem) {
+  checkTarget.value = row
+  checkVisible.value = true
 }
+
+function onChecked() {
+  void loadPayments()
+}
+
 
 function errorMessage(reason: unknown, fallback: string) {
   if (reason && typeof reason === 'object' && 'message' in reason) {
@@ -340,6 +468,7 @@ function buildQuery() {
     regionCode: empty(filters.regionCode),
     ownerEmployeeCode: empty(filters.ownerEmployeeCode),
     departmentId: filters.departmentId ?? undefined,
+    includeSubDepartments: filters.includeSubDepartments,
     createdBy: empty(filters.createdBy),
     paymentNo: empty(pageFilters.paymentNo),
     transactionNo: empty(pageFilters.transactionNo),
@@ -356,7 +485,7 @@ async function loadPayments() {
   try {
     pageData.value = await getOrderRegisterPayments(buildQuery())
   } catch (reason) {
-    ElMessage.error(errorMessage(reason, '收款列表加载失败，请稍后重试'))
+    ElMessage.error(errorMessage(reason, '订单回款加载失败，请稍后重试'))
   } finally {
     loading.value = false
   }
@@ -404,6 +533,11 @@ function openDetail(row: { orderId?: string }) {
   detailVisible.value = true
 }
 
+function openPaymentDetail(row: OrderRegisterPaymentItem) {
+  selectedPayment.value = row
+  paymentDetailVisible.value = true
+}
+
 async function exportCsv() {
   exporting.value = true
   try {
@@ -412,7 +546,7 @@ async function exportCsv() {
     delete params.begin
     delete params.step
     const blob = await exportOrderRegisterCsv('payments', params)
-    downloadBlob(blob, csvFilename('收款列表'))
+    downloadBlob(blob, csvFilename('订单回款'))
   } catch (reason) {
     ElMessage.error(errorMessage(reason, '导出失败，请稍后重试'))
   } finally {
@@ -431,6 +565,15 @@ watch(
   { immediate: true },
 )
 
+/** 归属地区变化时清空业务员并按地区级联重载业务员选项。 */
+watch(
+  () => filters.regionCode,
+  (value) => {
+    filters.ownerEmployeeCode = ''
+    void searchEmployees('', value)
+  },
+)
+
 onMounted(() => {
   void loadOptions()
   if (!route.query.orderNo) void loadPayments()
@@ -439,21 +582,163 @@ onMounted(() => {
 
 <style scoped>
 .order-register-page {
-  min-height: 0;
-}
-.order-register-coverage {
-  margin-bottom: 12px;
-}
-.result-totals {
   display: flex;
-  gap: 18px;
-  color: var(--el-text-color-regular);
-  flex-wrap: wrap;
+  min-height: 0;
+  flex-direction: column;
 }
-.result-totals strong {
-  color: var(--el-text-color-primary);
+
+/* 查询区不加卡片外框：条件与操作按钮直接落在页面背景上，留白更宽敞。 */
+.supply-page.order-register-page > .filter-card {
+  margin-bottom: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.supply-page.order-register-page > .filter-card :deep(.el-card__body) {
+  padding: 0;
+}
+
+/* 金额统计条与订单列表同一套视觉：指标条紧贴表格卡片上沿。 */
+.order-summary {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 60px;
+  padding: 14px 20px;
+  border: 1px solid var(--supply-border);
+  border-bottom: 0;
+  border-radius: var(--supply-radius) var(--supply-radius) 0 0;
+  background: var(--supply-surface);
+}
+
+.order-summary__metric {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 28px;
+  border-left: 1px solid var(--supply-border);
+}
+
+.order-summary__metric:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.order-summary__label {
+  color: var(--supply-text);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.order-summary__value {
+  font-size: 21px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.order-summary__metric:nth-child(1) .order-summary__value {
+  color: #2563eb;
+}
+
+.order-summary__metric:nth-child(2) .order-summary__value {
+  color: #059669;
+}
+
+.order-summary__metric:nth-child(3) .order-summary__value {
+  color: #d97706;
+}
+
+.order-summary__metric:nth-child(4) .order-summary__value {
+  color: #64748b;
+}
+
+.supply-page.order-register-page > .list-card {
+  border-radius: 0 0 var(--supply-radius) var(--supply-radius);
+}
+
+/* 表头加粗放大，长列表滚动时更容易定位列。 */
+.order-register-table :deep(.el-table__header-wrapper tr th.el-table__cell) {
+  color: var(--supply-text);
+  font-size: 13px;
+  font-weight: 700;
 }
 .order-no-cell {
   font-weight: 600;
+}
+
+/* 核对按钮与订单列表行操作同一套浅底语义色。 */
+.order-action {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.order-action .el-icon {
+  margin-right: 4px;
+  font-size: 13px;
+}
+
+.order-action--check {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.order-action:hover {
+  filter: brightness(0.96);
+}
+
+.payment-check-state {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.column-header-hint {
+  border-bottom: 1px dashed var(--el-border-color);
+  cursor: help;
+}
+
+/* 状态用语义色圆点 + 文本，与订单列表同一套视觉；颜色只承担状态含义。 */
+.status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--supply-text);
+  font-size: 13px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.status-dot--success {
+  background: #059669;
+}
+
+.status-dot--primary {
+  background: #2563eb;
+}
+
+.status-dot--warning {
+  background: #d97706;
+}
+
+.status-dot--danger {
+  background: #dc2626;
+}
+
+.status-dot--info {
+  background: #94a3b8;
 }
 </style>

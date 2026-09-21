@@ -33,9 +33,12 @@
               check-strictly
               filterable
               clearable
-              placeholder="全部部门（含下级）"
+              placeholder="全部部门"
               @change="selectDepartment(departmentId ?? null)"
             />
+          </el-form-item>
+          <el-form-item label="包含子部门">
+            <el-switch v-model="includeSubDepartments" @change="search" />
           </el-form-item>
           <el-form-item label="岗位">
             <el-select v-model="positionCode" filterable clearable placeholder="全部岗位">
@@ -316,6 +319,7 @@ import {
 } from '@/utils/hr-employee-profile'
 const { can } = useSupplyPermissions()
 const departmentId = ref<number | null>(null),
+  includeSubDepartments = ref(true),
   departments = ref<HrDepartmentOption[]>([]),
   directoryError = ref('')
 const departmentChoices = computed(() =>
@@ -365,6 +369,7 @@ async function load() {
       keyword: keyword.value || undefined,
       employmentStatus: status.value || undefined,
       departmentId: departmentId.value ?? undefined,
+      includeSubDepartments: includeSubDepartments.value,
       positionCode: positionCode.value || undefined,
       jobGrade: jobGrade.value.trim() || undefined,
     })
@@ -391,6 +396,7 @@ function reset() {
   status.value = ''
   positionCode.value = ''
   jobGrade.value = ''
+  includeSubDepartments.value = true
   departmentId.value = null
   search()
 }

@@ -94,6 +94,8 @@ export interface HrEmployeeQuery {
   positionCode?: string
   jobGrade?: string
   departmentId?: number
+  /** 是否包含子部门员工；缺省按包含处理。 */
+  includeSubDepartments?: boolean
   begin: number
   step: number
   keyword?: string

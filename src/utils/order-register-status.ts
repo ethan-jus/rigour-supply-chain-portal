@@ -5,6 +5,7 @@
  * 未命中映射时回退展示原值，不猜测含义。
  */
 export const orderStatusLabels: Record<string, string> = {
+  DRAFT: '草稿',
   PENDING_OUTBOUND: '待出库',
   PENDING_SHIPPED: '待发货',
   RECEIVED: '已收货',

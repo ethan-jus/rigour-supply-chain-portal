@@ -115,6 +115,7 @@ describe('订单与回款统计页', () => {
       dateFrom: '2026-09-01',
       dateTo: '2026-09-10',
       groupBy: 'employee',
+      includeSubDepartments: true,
     })
     expect(wrapper.text()).toContain('期间订单额')
     expect(wrapper.text()).toContain('期间实收金额')
@@ -140,6 +141,7 @@ describe('订单与回款统计页', () => {
     expect(mocks.getReceivables).toHaveBeenCalledWith({
       asOfDate: '2026-09-10',
       hasUnpaid: true,
+      includeSubDepartments: true,
     })
     expect(wrapper.text()).toContain('截至 2026-09-10 未回款')
     expect(wrapper.text()).toContain('未提供')

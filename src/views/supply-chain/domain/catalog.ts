@@ -131,7 +131,7 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'sales-orders', title: '销售订单' },
     { key: 'fulfillments', title: '订单出库' },
     { key: 'shipments', title: '发货单' },
-    { key: 'sales-payments', title: '销售回款' },
+    { key: 'sales-payments', title: '订单回款' },
     { key: 'fund-documents', title: '客户资金流水' },
     { key: 'sales-refunds', title: '销售退款' },
   ]),
