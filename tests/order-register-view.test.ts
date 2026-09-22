@@ -144,6 +144,29 @@ describe('订单列表页', () => {
     wrapper.unmount()
   })
 
+  it('清空输入后再查询，旧条件不再带上', async () => {
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const customer = wrapper.find('input[aria-label="客户名称"]')
+    await customer.setValue('测试客户')
+    await customer.trigger('keyup.enter')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0]).toMatchObject({ customerName: '测试客户' })
+
+    // 删除输入内容（查询框为空）后再查询：必须真的不带这个条件
+    await customer.setValue('')
+    await customer.trigger('keyup.enter')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].customerName).toBeUndefined()
+
+    // 空白字符同样视为未填写
+    await customer.setValue('   ')
+    await customer.trigger('keyup.enter')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].customerName).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('导出与查询同筛选，不带分页参数，文件名带日期', async () => {
     const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()

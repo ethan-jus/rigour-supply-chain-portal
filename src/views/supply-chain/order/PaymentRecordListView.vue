@@ -35,6 +35,7 @@
         <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 160px" @keyup.enter="search" />
         <el-tree-select
           v-model="filters.departmentId"
+          v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
           :data="departmentOptionsTree"
           :props="departmentTreeProps"
           node-key="id"
@@ -55,6 +56,7 @@
         </el-select>
         <el-tree-select
           v-model="filters.regionCode"
+          v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
           :data="areaTree"
           :props="areaTreeProps"
           node-key="code"
@@ -70,6 +72,7 @@
         />
         <el-select
           v-model="filters.ownerEmployeeCode"
+          v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
           aria-label="业务员"
           clearable
           filterable
@@ -90,7 +93,15 @@
       </template>
       <template #extra>
         <el-input v-model="pageFilters.transactionNo" aria-label="交易单号" clearable placeholder="交易单号" style="width: 170px" @keyup.enter="search" />
-        <el-select v-model="filters.createdBy" aria-label="创建人" clearable filterable placeholder="创建人" style="width: 150px">
+        <el-select
+          v-model="filters.createdBy"
+          v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
+          aria-label="创建人"
+          clearable
+          filterable
+          placeholder="创建人"
+          style="width: 150px"
+        >
           <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
         </el-select>
         <el-input v-model="pageFilters.paymentNo" aria-label="收款编码" clearable placeholder="收款编码" style="width: 160px" @keyup.enter="search" />
@@ -332,6 +343,7 @@ import {
 } from '@/utils/order-register-status'
 import { dateRangeParams, empty, orderRegisterDateParams } from '@/utils/order-register-query'
 import { csvFilename, downloadBlob } from '@/utils/file-download'
+import { vClearFilterOnEmptyInput } from '@/utils/filter-select-clear'
 import { auditActorLabel } from '@/utils/audit-actor'
 import {
   exportOrderRegisterCsv,

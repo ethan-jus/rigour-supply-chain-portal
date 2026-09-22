@@ -27,6 +27,7 @@
         <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 220px" @keyup.enter="search" />
         <el-tree-select
           v-model="filters.regionCode"
+          v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
           :data="areaTree"
           :props="areaTreeProps"
           node-key="code"
@@ -42,6 +43,7 @@
         />
         <el-select
           v-model="filters.ownerEmployeeCode"
+          v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
           aria-label="业务员"
           clearable
           filterable
@@ -61,6 +63,7 @@
         </el-select>
         <el-tree-select
           v-model="filters.departmentId"
+          v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
           :data="departmentOptionsTree"
           :props="departmentTreeProps"
           node-key="id"
@@ -88,9 +91,18 @@
         <el-select v-model="pageFilters.invoiceStatusCode" aria-label="发票状态" clearable placeholder="发票状态" style="width: 115px">
           <el-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
-        <el-select v-model="filters.createdBy" aria-label="创建人" clearable filterable placeholder="创建人" style="width: 125px">
+        <el-select
+          v-model="filters.createdBy"
+          v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
+          aria-label="创建人"
+          clearable
+          filterable
+          placeholder="创建人"
+          style="width: 125px"
+        >
           <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
-        </el-select>      </template>
+        </el-select>
+      </template>
     </OrderRegisterFilterCard>
 
     <div class="order-summary" aria-label="金额统计">
@@ -360,6 +372,7 @@ import {
 } from '@/api/core/order-register'
 import { deleteSalesOrder } from '@/api/core/order-sales'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
+import { vClearFilterOnEmptyInput } from '@/utils/filter-select-clear'
 import { useOrderRegisterCommonFilters } from '@/composables/useOrderRegisterQuery'
 import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
 import { useColumnSettings } from '@/composables/useColumnSettings'

@@ -16,6 +16,7 @@
         <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 190px" @keyup.enter="search" />
         <el-tree-select
           v-model="filters.regionCode"
+          v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
           :data="areaTree"
           :props="areaTreeProps"
           node-key="code"
@@ -31,6 +32,7 @@
         />
         <el-select
           v-model="filters.ownerEmployeeCode"
+          v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
           aria-label="业务员"
           clearable
           filterable
@@ -50,6 +52,7 @@
         </el-select>
         <el-tree-select
           v-model="filters.departmentId"
+          v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
           :data="departmentOptionsTree"
           :props="departmentTreeProps"
           node-key="id"
@@ -66,6 +69,7 @@
         <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
         <el-tree-select
           v-model="pageFilters.categoryId"
+          v-clear-filter-on-empty-input="() => (pageFilters.categoryId = '')"
           :data="categoryTree"
           :props="categoryTreeProps"
           node-key="id"
@@ -82,6 +86,7 @@
         />
         <el-select
           v-model="pageFilters.productId"
+          v-clear-filter-on-empty-input="() => (pageFilters.productId = '')"
           aria-label="商品"
           clearable
           filterable
@@ -316,6 +321,7 @@ import { businessDictionaryLabel, loadBusinessDictionaries } from '@/utils/busin
 import { convertLine, type ConvertedLineQuantity } from '@/utils/product-unit'
 import { empty, orderRegisterDateParams } from '@/utils/order-register-query'
 import { csvFilename, downloadBlob } from '@/utils/file-download'
+import { vClearFilterOnEmptyInput } from '@/utils/filter-select-clear'
 import {
   exportOrderRegisterCsv,
   getOrderRegisterLines,

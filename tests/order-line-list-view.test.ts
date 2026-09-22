@@ -146,6 +146,22 @@ describe('订单明细页', () => {
     wrapper.unmount()
   })
 
+  it('清空筛选后再查询，旧条件不再带上', async () => {
+    const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const orderNo = wrapper.find('input[aria-label="订单号"]')
+    await orderNo.setValue('A001')
+    await orderNo.trigger('keyup.enter')
+    await flushPromises()
+    expect(mocks.getLines.mock.calls.at(-1)![0]).toMatchObject({ orderNo: 'A001' })
+
+    await orderNo.setValue('')
+    await orderNo.trigger('keyup.enter')
+    await flushPromises()
+    expect(mocks.getLines.mock.calls.at(-1)![0].orderNo).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('统计条并列展示明细金额、订单金额、回款金额、客户数与数量合计', async () => {
     mocks.getLines.mockResolvedValue({
       ...linePage(),
