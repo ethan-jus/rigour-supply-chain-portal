@@ -90,6 +90,46 @@
             :value="item.employeeCode"
           />
         </el-select>
+        <el-tree-select
+          v-model="pageFilters.categoryId"
+          v-clear-filter-on-empty-input="() => (pageFilters.categoryId = '')"
+          :data="categoryTree"
+          :props="categoryTreeProps"
+          node-key="id"
+          check-strictly
+          :render-after-expand="false"
+          :loading="categoryLoading"
+          :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
+          @visible-change="onCategoryVisibleChange"
+          aria-label="商品分类"
+          clearable
+          filterable
+          placeholder="商品分类"
+          popper-class="order-register-tree-popper"
+          style="width: 180px"
+          @change="onCategoryChange"
+        />
+        <el-select
+          v-model="pageFilters.productId"
+          v-clear-filter-on-empty-input="() => (pageFilters.productId = '')"
+          aria-label="商品"
+          clearable
+          filterable
+          remote
+          reserve-keyword
+          :remote-method="searchProductOptions"
+          :loading="productSearching"
+          placeholder="搜索商品名称/编码"
+          style="width: 220px"
+        >
+          <el-option
+            v-for="item in productOptions"
+            :key="item.id"
+            :label="`${item.productName} · ${item.productCode}`"
+            :value="String(item.id)"
+          />
+        </el-select>
+
       </template>
       <template #extra>
         <el-input v-model="pageFilters.transactionNo" aria-label="交易单号" clearable placeholder="交易单号" style="width: 170px" @keyup.enter="search" />
@@ -108,21 +148,27 @@
       </template>
     </OrderRegisterFilterCard>
 
+    <p v-if="allocationActive" class="allocation-note">
+      当前金额按筛选商品占整单订货金额的比例分摊；每笔回款仍只展示一行。展开可查看商品分摊明细。
+    </p>
+    <el-alert v-if="pageData.totals.unallocatedCount" type="warning" :closable="false"
+      :title="`${pageData.totals.unallocatedCount} 笔回款无法分摊，未计入金额统计，请检查订单明细和订货金额。`" />
+    <el-alert v-if="loadFailed" title="回款加载失败，请重新查询" type="error" :closable="false" />
     <div class="order-summary order-summary--payments" aria-label="回款统计">
       <div class="order-summary__metric order-summary__metric--payable" title="筛选命中的订单去重后合计订单金额。">
-        <span class="order-summary__label">订单金额</span>
+        <span class="order-summary__label">{{ allocationActive ? '订单金额（分摊）' : '订单金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.relatedOrderAmount) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--paid" title="当前筛选范围内的有效收款合计，不含待收与取消。">
-        <span class="order-summary__label">收款金额</span>
+        <span class="order-summary__label">{{ allocationActive ? '筛选商品回款金额' : '收款金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--unpaid" title="命中订单的全部有效收款及历史期初扣除后的待收余额，不受回款日期截断。">
-        <span class="order-summary__label">待收金额</span>
+        <span class="order-summary__label">{{ allocationActive ? '待收金额（分摊）' : '待收金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.unpaidAmount) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已审核收款合计。">
-        <span class="order-summary__label">审核金额</span>
+        <span class="order-summary__label">{{ allocationActive ? '审核金额（分摊）' : '审核金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--count" title="筛选命中的订单客户去重数量。">
@@ -142,6 +188,27 @@
           :default-sort="{ prop: 'paymentTime', order: 'descending' }"
           @sort-change="changeSort"
         >
+          <el-table-column type="expand" width="44" fixed="left">
+            <template #default="{ row }">
+              <div class="allocation-detail">
+                <p>商品分摊明细 · 按整单订货金额比例计算，分币尾差已计入。</p>
+                <el-table v-if="row.productAllocations?.length" :data="row.productAllocations" size="small">
+                  <el-table-column prop="productCode" label="商品编码" width="170" />
+                  <el-table-column prop="productName" label="商品" min-width="220" />
+                  <el-table-column label="订货金额" width="150" align="right">
+                    <template #default="{ row: line }">{{ moneyText(line.originalAmount) }}</template>
+                  </el-table-column>
+                  <el-table-column label="本笔回款分摊" width="160" align="right">
+                    <template #default="{ row: line }">{{ allocationMoney(line.allocatedAmount) }}</template>
+                  </el-table-column>
+                  <el-table-column v-if="allocationActive" label="筛选命中" width="100">
+                    <template #default="{ row: line }"><el-tag v-if="line.matched" type="success" size="small">已命中</el-tag><span v-else>—</span></template>
+                  </el-table-column>
+                </el-table>
+                <el-empty v-else description="缺少订单明细，无法分摊" :image-size="48" />
+              </div>
+            </template>
+          </el-table-column>
           <!-- @vue-generic {OrderRegisterPaymentItem} -->
           <el-table-column type="index" label="序号" width="70" fixed="left" :index="tableRowIndex" />
           <el-table-column prop="paymentNo" label="收款编码" width="160" fixed="left" show-overflow-tooltip>
@@ -182,6 +249,9 @@
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('paidAmount')" label="收款金额" width="120" align="right" prop="paidAmount">
             <template #default="{ row }">{{ moneyText(row.paidAmount) }}</template>
+          </el-table-column>
+          <el-table-column v-if="allocationActive" label="筛选商品分摊金额" width="170" align="right">
+            <template #default="{ row }"><strong class="allocation-value">{{ allocationMoney(row.allocatedPaymentAmount) }}</strong></template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('paymentTime')" label="收款时间" width="170" sortable="custom" prop="paymentTime">
             <template #default="{ row }">{{ displayDateTime(row.paymentTime) }}</template>
@@ -343,6 +413,8 @@ import {
 } from '@/api/core/order-register'
 import { useOrderRegisterCommonFilters } from '@/composables/useOrderRegisterQuery'
 import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
+import { getErpProductCategories, type ErpProductCategoryView } from '@/api/core/erp-internal'
+import { getErpManagedProducts, type ErpManagedProductSummary } from '@/api/core/erp-product'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
 const route = useRoute()
@@ -384,11 +456,50 @@ const {
 } = useOrderRegisterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
+  categoryId: '' as string | undefined,
+  productId: '' as string | undefined,
   paymentNo: '',
   transactionNo: '',
   paymentStatusCode: '',
   paymentTimeRange: null as [string, string] | null,
 })
+
+const categoryOptions = ref<ErpProductCategoryView[]>([])
+const categoryLoading = ref(false)
+const categoryLoadFailed = ref(false)
+interface CategoryTreeNode {
+  id: string
+  categoryName: string
+  children: CategoryTreeNode[]
+}
+const categoryTreeProps = { label: 'categoryName', children: 'children' }
+const categoryTree = computed<CategoryTreeNode[]>(() => {
+  const nodes = new Map<string, CategoryTreeNode>()
+  categoryOptions.value.forEach((row) => {
+    nodes.set(String(row.id), { id: String(row.id), categoryName: row.categoryName, children: [] })
+  })
+  const roots: CategoryTreeNode[] = []
+  categoryOptions.value.forEach((row) => {
+    const node = nodes.get(String(row.id))
+    if (!node) return
+    const parent = row.parentId == null ? undefined : nodes.get(String(row.parentId))
+    if (parent) parent.children.push(node)
+    else roots.push(node)
+  })
+  return roots
+})
+const productOptions = ref<ErpManagedProductSummary[]>([])
+const productSearching = ref(false)
+/** 分类 → 商品ID集合；分类筛选在订单侧只能按商品过滤。 */
+const CATEGORY_PRODUCT_LIMIT = 500
+
+const allocationActive = ref(false)
+const loadFailed = ref(false)
+let paymentRequest = 0
+
+function allocationMoney(amount: number | null | undefined) {
+  return amount == null ? '无法分摊' : moneyText(amount)
+}
 
 const paymentStatusOptions = [
   { value: 'PENDING', label: '待收款' },
@@ -449,7 +560,96 @@ function errorMessage(reason: unknown, fallback: string) {
   return fallback
 }
 
-function buildQuery() {
+/** 分类筛选先解析成商品集合，再按商品过滤明细。 */
+async function loadCategoryProductIds(categoryId: string): Promise<number[]> {
+  const categories = new Set([categoryId])
+  for (const id of categories) {
+    categoryOptions.value.forEach(row => {
+      if (row.parentId != null && String(row.parentId) === id) categories.add(String(row.id))
+    })
+  }
+  const ids = new Set<number>()
+  for (const id of categories) {
+    for (let begin = 0; ; begin += 200) {
+      const page = await getErpManagedProducts({ begin, step: 200, categoryId: id })
+      page.items.forEach(item => ids.add(Number(item.id)))
+      if (page.total > CATEGORY_PRODUCT_LIMIT || ids.size > CATEGORY_PRODUCT_LIMIT) {
+        throw new Error(`分类下商品超过 ${CATEGORY_PRODUCT_LIMIT} 个，请缩小分类范围后查询，避免统计不完整`)
+      }
+      if (begin + page.items.length >= page.total || !page.items.length) break
+    }
+  }
+  return [...ids]
+}
+
+async function resolveProductIds(): Promise<number[] | undefined> {
+  const productId = empty(pageFilters.productId)
+  const categoryId = empty(pageFilters.categoryId)
+  if (!categoryId) return productId ? [Number(productId)] : undefined
+  // Refresh category metadata if its first load failed; never silently omit descendants.
+  if (!categoryOptions.value.length || categoryLoadFailed.value) await loadCategoryOptions()
+  if (categoryLoadFailed.value) throw new Error('商品分类加载失败，请重试')
+  const ids = await loadCategoryProductIds(categoryId)
+  const matching = productId ? ids.filter(id => id === Number(productId)) : ids
+  // 0 is a non-existent product ID: an empty category must never become an unfiltered query.
+  return matching.length ? matching : [0]
+}
+
+function onCategoryChange() {
+  // 商品级联在分类范围内：切换分类后清空已选商品并预载该分类商品。
+  pageFilters.productId = ''
+  productOptions.value = []
+  void searchProductOptions('')
+}
+
+async function searchProductOptions(keyword: string) {
+  const value = keyword?.trim() || ''
+  productSearching.value = true
+  try {
+    const looksLikeCode = value.length > 0 && !/[\u4e00-\u9fa5]/.test(value)
+    const categoryIds = empty(pageFilters.categoryId) ? await loadCategoryProductIds(pageFilters.categoryId!) : undefined
+    if (categoryIds && !categoryIds.length) { productOptions.value = []; return }
+    const page = await getErpManagedProducts({
+      begin: 0,
+      step: 20,
+      productIds: categoryIds,
+      productName: looksLikeCode ? undefined : value || undefined,
+      productCode: looksLikeCode ? value : undefined,
+    })
+    productOptions.value = page.items
+  } catch {
+    productOptions.value = []
+  } finally {
+    productSearching.value = false
+  }
+}
+
+function onCategoryVisibleChange(visible: boolean) {
+  if (visible && (categoryLoadFailed.value || !categoryOptions.value.length)) void loadCategoryOptions()
+}
+
+async function loadCategoryOptions() {
+  if (categoryLoading.value) return
+  categoryLoading.value = true
+  categoryLoadFailed.value = false
+  try {
+    const rows: ErpProductCategoryView[] = []
+    for (let begin = 0; ; begin += 200) {
+      const page = await getErpProductCategories({ begin, step: 200 })
+      rows.push(...page.items)
+      if (rows.length >= page.total || !page.items.length || begin >= 9800) break
+    }
+    categoryOptions.value = rows
+  } catch {
+    categoryLoadFailed.value = true
+  } finally {
+    categoryLoading.value = false
+  }
+}
+
+
+async function buildQuery() {
+  const productIds = await resolveProductIds()
   const orderDate = orderRegisterDateParams(filters.orderDateRange)
   const paymentDate = dateRangeParams(
     pageFilters.paymentTimeRange,
@@ -457,6 +657,7 @@ function buildQuery() {
     'paymentTimeTo',
   )
   return {
+    productIds,
     begin: (currentPage.value - 1) * pageSize.value,
     step: pageSize.value,
     orderNo: empty(filters.orderNo),
@@ -478,13 +679,25 @@ function buildQuery() {
 }
 
 async function loadPayments() {
+  const request = ++paymentRequest
   loading.value = true
+  loadFailed.value = false
   try {
-    pageData.value = await getOrderRegisterPayments(buildQuery())
+    const query = await buildQuery()
+    const data = await getOrderRegisterPayments(query)
+    if (request !== paymentRequest) return
+    if (query.productIds && data.items.some(row => row.allocatedPaymentAmount === undefined)) {
+      throw new Error('订单服务尚未加载商品分摊功能，请重启订单服务后重试')
+    }
+    pageData.value = data
+    allocationActive.value = query.productIds != null
   } catch (reason) {
+    if (request !== paymentRequest) return
+    loadFailed.value = true
+    pageData.value = { ...pageData.value, total: 0, items: [], totals: {} as OrderRegisterPaymentPage['totals'] }
     ElMessage.error(errorMessage(reason, '订单回款加载失败，请稍后重试'))
   } finally {
-    loading.value = false
+    if (request === paymentRequest) loading.value = false
   }
 }
 
@@ -495,6 +708,8 @@ function search() {
 
 function resetFilters() {
   resetCommonFilters()
+  pageFilters.categoryId = ''
+  pageFilters.productId = ''
   pageFilters.paymentNo = ''
   pageFilters.transactionNo = ''
   pageFilters.paymentStatusCode = ''
@@ -538,7 +753,7 @@ function openPaymentDetail(row: OrderRegisterPaymentItem) {
 async function exportCsv() {
   exporting.value = true
   try {
-    const query = buildQuery()
+    const query = await buildQuery()
     const params: Record<string, unknown> = { ...query }
     delete params.begin
     delete params.step
@@ -573,11 +788,16 @@ watch(
 
 onMounted(() => {
   void loadOptions()
+  void loadCategoryOptions()
   if (!route.query.orderNo) void loadPayments()
 })
 </script>
 
 <style scoped>
+.allocation-note { margin: 0 0 10px; color: #64748b; font-size: 12px; }
+.allocation-detail { padding: 16px 28px; background: #f8fafc; }
+.allocation-detail > p { color: #64748b; margin: 0 0 12px; font-size: 12px; }
+.allocation-value { color: #047857; }
 .order-register-page {
   display: flex;
   min-height: 0;

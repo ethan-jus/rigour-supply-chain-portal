@@ -55,6 +55,7 @@ export interface OrderRegisterLineQuery extends OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterPaymentQuery extends OrderRegisterCommonQuery {
+  productIds?: Array<string | number>
   paymentNo?: string
   transactionNo?: string
   paymentStatusCode?: string
@@ -198,7 +199,19 @@ export interface OrderRegisterLinePage {
   coverage: OrderRegisterCoverage | null
 }
 
+export interface PaymentProductAllocation {
+  lineId: string | number
+  productId: string | number | null
+  productCode: string | null
+  productName: string | null
+  originalAmount: number
+  allocatedAmount: number | null
+  matched: boolean
+}
+
 export interface OrderRegisterPaymentItem {
+  allocatedPaymentAmount?: number | null
+  productAllocations?: PaymentProductAllocation[]
   id: string
   paymentNo: string
   sourceRecordId: string | null
@@ -234,6 +247,7 @@ export interface OrderRegisterPaymentItem {
 }
 
 export interface OrderRegisterPaymentTotals {
+  unallocatedCount?: number
   receivedAmount: number
   checkedAmount: number
   pendingDocumentAmount: number
@@ -357,7 +371,7 @@ export const getOrderRegisterLines = (params: OrderRegisterLineQuery) =>
 
 export const getOrderRegisterPayments = (params: OrderRegisterPaymentQuery) =>
   apiClient.get<OrderRegisterPaymentPage>(`${ORDER_REGISTER_BASE_PATH}/payments`, {
-    params,
+    params: { ...params, ...(params.productIds ? { productIds: params.productIds.join(',') } : {}) },
     ...readOptions,
   })
 
