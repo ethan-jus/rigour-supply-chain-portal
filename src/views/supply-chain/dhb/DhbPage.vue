@@ -759,6 +759,20 @@ defineExpose({
   min-height: 0;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  // 本页是多张分组卡片，不适用单卡片撑满布局：卡片按内容高度排布，页面自身滚动。
+  &.supply-page--integration {
+    :deep(.el-card) {
+      flex: none;
+    }
+
+    :deep(.el-card > .el-card__body) {
+      flex: none;
+      overflow: visible;
+    }
+  }
 }
 
 .sync-heading {
