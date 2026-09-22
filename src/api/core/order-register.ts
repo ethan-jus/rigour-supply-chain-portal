@@ -143,6 +143,8 @@ export interface OrderRegisterLineItem {
   quantity: number
   unitPrice: number
   lineAmount: number
+  /** 分摊到本明细的回款金额：订单实收按「明细金额 / 订单应收」比例分摊，部分回款同样按比例。 */
+  receivedAmount: number
   /** 来源系统真实创建/修改人（取所属订单）；无来源时为本系统记录人。 */
   createdBy: string | null
   createdTime: string | null
@@ -155,6 +157,8 @@ export interface OrderRegisterLineItem {
 export interface OrderRegisterLineTotals {
   /** 明细金额：单价×数量逐行合计（折前）。 */
   lineAmount: number
+  /** 回款金额：命中明细分摊后的回款合计（订单实收按明细金额比例分摊，部分回款同样按比例）。 */
+  receivedAmount?: number
   /** 订单金额：命中订单去重后的折后应收合计。 */
   orderAmount?: number
   /** 客户数：命中明细去重后的客户数。 */

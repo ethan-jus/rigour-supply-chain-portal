@@ -146,16 +146,26 @@ describe('订单明细页', () => {
     wrapper.unmount()
   })
 
-  it('统计条并列展示明细金额、订单金额、客户数与商品数', async () => {
+  it('统计条并列展示明细金额、订单金额、回款金额、客户数与数量合计', async () => {
     mocks.getLines.mockResolvedValue({
       ...linePage(),
-      totals: { lineAmount: 100, orderAmount: 120, customerCount: 1, productCount: 2, quantitySum: 34 },
+      totals: {
+        lineAmount: 100,
+        receivedAmount: 50,
+        orderAmount: 120,
+        customerCount: 1,
+        productCount: 2,
+        quantitySum: 34,
+      },
     })
     const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     const text = wrapper.text()
     expect(text).toContain('明细金额')
     expect(text).toContain('订单金额')
+    // 回款金额：按明细金额比例分摊后的回款合计（部分回款同样按比例）
+    expect(text).toContain('回款金额')
+    expect(text).toContain('¥50.00')
     expect(text).toContain('客户数')
     expect(text).toContain('数量合计')
     expect(text).toContain('34')

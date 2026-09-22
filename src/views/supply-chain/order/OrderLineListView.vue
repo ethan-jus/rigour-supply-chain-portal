@@ -126,6 +126,15 @@
         <strong class="order-summary__value">{{ moneyText(pageData.totals.orderAmount) }}</strong>
       </div>
       <div class="order-summary__metric">
+        <el-tooltip
+          content="按明细金额占订单应收的比例分摊订单实收；部分回款的订单同样按比例分摊，筛选商品/分类即可看到对应回款。"
+          placement="top"
+        >
+          <span class="order-summary__label">回款金额</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric">
         <span class="order-summary__label">客户数</span>
         <strong class="order-summary__value">{{ numberText(pageData.totals.customerCount) }}</strong>
       </div>
@@ -404,7 +413,7 @@ const pageData = ref<OrderRegisterLinePage>({
   begin: 0,
   step: 20,
   items: [],
-  totals: { lineAmount: 0, orderAmount: 0, customerCount: 0, productCount: 0, quantitySum: 0 },
+  totals: { lineAmount: 0, receivedAmount: 0, orderAmount: 0, customerCount: 0, productCount: 0, quantitySum: 0 },
   coverage: null,
 })
 
@@ -751,10 +760,14 @@ onMounted(() => {
 }
 
 .order-summary__metric:nth-child(3) .order-summary__value {
-  color: #d97706;
+  color: #047857;
 }
 
 .order-summary__metric:nth-child(4) .order-summary__value {
+  color: #d97706;
+}
+
+.order-summary__metric:nth-child(5) .order-summary__value {
   color: #64748b;
 }
 
