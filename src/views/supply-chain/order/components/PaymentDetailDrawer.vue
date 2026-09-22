@@ -37,9 +37,9 @@
             <strong class="summary-text">{{ displayDateTime(payment.paymentTime) }}</strong>
           </div>
           <div class="summary-card">
-            <span class="summary-card__label">核对记录</span>
+            <span class="summary-card__label">审核记录</span>
             <strong class="summary-text">
-              {{ payment.checkedBy ? `${payment.checkedBy} · ${displayDateTime(payment.checkedAt)}` : '未核对' }}
+              {{ payment.checkedBy ? `${payment.checkedBy} · ${displayDateTime(payment.checkedAt)}` : '未审核' }}
             </strong>
           </div>
         </div>

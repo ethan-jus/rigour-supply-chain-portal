@@ -108,22 +108,26 @@
       </template>
     </OrderRegisterFilterCard>
 
-    <div class="order-summary" aria-label="金额统计">
-      <div class="order-summary__metric" title="当前查询条件下订单表的订单金额合计（订单侧条件，不受付款条件影响）">
-        <span class="order-summary__label">应收金额</span>
+    <div class="order-summary order-summary--payments" aria-label="回款统计">
+      <div class="order-summary__metric order-summary__metric--payable" title="筛选命中的订单去重后合计订单金额。">
+        <span class="order-summary__label">订单金额</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.relatedOrderAmount) }}</strong>
       </div>
-      <div class="order-summary__metric" title="当前查询条件下已回款金额（不含待收款与已取消）">
-        <span class="order-summary__label">实收金额</span>
+      <div class="order-summary__metric order-summary__metric--paid" title="当前筛选范围内的有效收款合计，不含待收与取消。">
+        <span class="order-summary__label">收款金额</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
       </div>
-      <div class="order-summary__metric" title="应收金额 - 实收金额">
+      <div class="order-summary__metric order-summary__metric--unpaid" title="命中订单的全部有效收款及历史期初扣除后的待收余额，不受回款日期截断。">
         <span class="order-summary__label">待收金额</span>
-        <strong class="order-summary__value">{{ moneyText(receivablePending) }}</strong>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.unpaidAmount) }}</strong>
       </div>
-      <div class="order-summary__metric" title="财务核对通过（已核对）的收款单额度合计">
-        <span class="order-summary__label">核对金额</span>
+      <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已审核收款合计。">
+        <span class="order-summary__label">审核金额</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--count" title="筛选命中的订单客户去重数量。">
+        <span class="order-summary__label">客户数</span>
+        <strong class="order-summary__value">{{ pageData.totals.customerCount?.toLocaleString() ?? '-' }}</strong>
       </div>
     </div>
 
@@ -158,6 +162,7 @@
             v-if="paymentColumns.isVisible('customerName')"
             prop="customerName"
             label="客户名称"
+            fixed="left"
             min-width="240"
             show-overflow-tooltip
           >
@@ -183,28 +188,20 @@
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('paymentStatus')" label="收款状态" width="100">
             <template #default="{ row }">
-              <span class="status-cell">
-                <i
-                  class="status-dot"
-                  :class="`status-dot--${paymentRecordStatusTag(row.paymentStatusCode)}`"
-                />
-                {{ paymentRecordStatusLabel(row.paymentStatusCode) }}
-              </span>
+              <el-tag class="order-status-tag" :type="paymentRecordStatusTag(row.paymentStatusCode)" effect="light">
+                {{ row.paymentStatusCode === 'CHECKED' ? '已收款' : paymentRecordStatusLabel(row.paymentStatusCode) }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedStatus')" label="核对状态" width="100">
+          <el-table-column v-if="paymentColumns.isVisible('checkedStatus')" label="审核状态" width="100">
             <template #default="{ row }">
-              <span class="status-cell">
-                <i
-                  class="status-dot"
-                  :class="`status-dot--${row.checkedAt || row.checkedBy ? 'success' : 'warning'}`"
-                />
-                {{ row.checkedAt || row.checkedBy ? '已核对' : '未核对' }}
-              </span>
+              <el-tag class="order-status-tag" :type="row.paymentStatusCode === 'CHECKED' ? 'success' : row.paymentStatusCode === 'CANCELLED' ? 'info' : 'warning'" effect="light">
+                {{ row.paymentStatusCode === 'CHECKED' ? '已审核' : row.paymentStatusCode === 'CANCELLED' ? '-' : '未审核' }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedBy')" label="核对人" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.checkedAt || row.checkedBy ? auditActorLabel(row.checkedBy) : '-' }}</template>
+          <el-table-column v-if="paymentColumns.isVisible('checkedBy')" label="审核人" width="110" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.paymentStatusCode === 'CHECKED' ? auditActorLabel(row.checkedBy) : '-' }}</template>
           </el-table-column>
           <el-table-column
             v-if="paymentColumns.isVisible('transactionNo')"
@@ -263,43 +260,36 @@
             <template #default="{ row }">{{ displayDateTime(row.syncedAt) }}</template>
           </el-table-column>
           <el-table-column
-            v-if="paymentColumns.isVisible('sourceRecordId')"
+            v-if="paymentColumns.isVisible('sourcePaymentCode')"
             prop="sourceRecordId"
-            label="来源回款号"
+            label="来源付款编码"
             width="170"
             show-overflow-tooltip
           >
             <template #default="{ row }">{{ row.sourceRecordId || '-' }}</template>
           </el-table-column>
-          <el-table-column
-            v-if="paymentColumns.isVisible('dhbOrderNo')"
-            prop="dhbOrderNo"
-            label="订货宝订单号"
-            width="160"
-            show-overflow-tooltip
-          >
-            <template #default="{ row }">{{ row.dhbOrderNo || '-' }}</template>
-          </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedAt')" label="核对时间" width="170">
+          <el-table-column v-if="paymentColumns.isVisible('checkedAt')" label="审核时间" width="170">
             <template #default="{ row }">{{ displayDateTime(row.checkedAt) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="110" fixed="right" class-name="order-actions-cell">
+          <el-table-column label="操作" width="120" align="center" fixed="right" class-name="order-actions-cell">
             <template #default="{ row }">
               <el-button
                 v-if="
                   canCheckPayments &&
-                  row.paymentStatusCode !== 'CHECKED' &&
-                  row.paymentStatusCode !== 'CANCELLED'
+                  row.paymentStatusCode === 'RECEIVED'
                 "
                 class="order-action order-action--check"
                 size="small"
+                type="primary"
+                plain
                 @click="openCheck(row as OrderRegisterPaymentItem)"
               >
-                <el-icon><CircleCheck /></el-icon>核对
+                <el-icon><CircleCheck /></el-icon>审核
               </el-button>
-              <span v-else class="payment-check-state">
-                {{ row.paymentStatusCode === 'CHECKED' ? '已核对' : '-' }}
+              <span v-else-if="row.paymentStatusCode === 'CHECKED'" class="payment-check-state payment-check-state--done">
+                <el-icon><CircleCheck /></el-icon>已审核
               </span>
+              <span v-else class="payment-check-state">—</span>
             </template>
           </el-table-column>
         </el-table>
@@ -365,8 +355,8 @@ const paymentColumns = useColumnSettings('order-payments', [
   { key: 'paidAmount', label: '收款金额' },
   { key: 'paymentTime', label: '收款时间' },
   { key: 'paymentStatus', label: '收款状态' },
-  { key: 'checkedStatus', label: '核对状态' },
-  { key: 'checkedBy', label: '核对人' },
+  { key: 'checkedStatus', label: '审核状态' },
+  { key: 'checkedBy', label: '审核人' },
   { key: 'transactionNo', label: '交易单号' },
   { key: 'attachments', label: '付款凭证' },
   { key: 'createdBy', label: '创建人', defaultVisible: false },
@@ -375,9 +365,8 @@ const paymentColumns = useColumnSettings('order-payments', [
   { key: 'updatedTime', label: '修改时间', defaultVisible: false },
   { key: 'syncedBy', label: '同步人', defaultVisible: false },
   { key: 'syncedAt', label: '同步时间', defaultVisible: false },
-  { key: 'sourceRecordId', label: '来源回款号', defaultVisible: false },
-  { key: 'dhbOrderNo', label: '订货宝订单号', defaultVisible: false },
-  { key: 'checkedAt', label: '核对时间', defaultVisible: false },
+  { key: 'sourcePaymentCode', label: '来源付款编码' },
+  { key: 'checkedAt', label: '审核时间', defaultVisible: false },
 ])
 const {
   areaTree,
@@ -404,7 +393,7 @@ const pageFilters = reactive({
 const paymentStatusOptions = [
   { value: 'PENDING', label: '待收款' },
   { value: 'CONFIRMED', label: '已收款' },
-  { value: 'CHECKED', label: '已核对' },
+  { value: 'CHECKED', label: '已审核' },
   { value: 'CANCELLED', label: '已取消' },
 ]
 
@@ -425,6 +414,8 @@ const pageData = ref<OrderRegisterPaymentPage>({
     pendingDocumentAmount: 0,
     cancelledDocumentAmount: 0,
     relatedOrderAmount: 0,
+    unpaidAmount: 0,
+    customerCount: 0,
   },
   coverage: null,
 })
@@ -440,12 +431,6 @@ const canCheckPayments = computed(() => can('order:payment:check'))
 const checkVisible = ref(false)
 const checkTarget = ref<OrderRegisterPaymentItem | null>(null)
 
-/** 待收金额 = 应收（当前条件下订单金额） - 实收（已回款）。 */
-const receivablePending = computed(
-  () =>
-    Number(pageData.value.totals.relatedOrderAmount || 0) -
-    Number(pageData.value.totals.receivedAmount || 0),
-)
 
 function openCheck(row: OrderRegisterPaymentItem) {
   checkTarget.value = row
@@ -612,63 +597,6 @@ onMounted(() => {
   padding: 0;
 }
 
-/* 金额统计条与订单列表同一套视觉：指标条紧贴表格卡片上沿。 */
-.order-summary {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  min-height: 60px;
-  padding: 14px 20px;
-  border: 1px solid var(--supply-border);
-  border-bottom: 0;
-  border-radius: var(--supply-radius) var(--supply-radius) 0 0;
-  background: var(--supply-surface);
-}
-
-.order-summary__metric {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 0 28px;
-  border-left: 1px solid var(--supply-border);
-}
-
-.order-summary__metric:first-child {
-  padding-left: 0;
-  border-left: 0;
-}
-
-.order-summary__label {
-  color: var(--supply-text);
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.order-summary__value {
-  font-size: 21px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.order-summary__metric:nth-child(1) .order-summary__value {
-  color: #2563eb;
-}
-
-.order-summary__metric:nth-child(2) .order-summary__value {
-  color: #059669;
-}
-
-.order-summary__metric:nth-child(3) .order-summary__value {
-  color: #d97706;
-}
-
-.order-summary__metric:nth-child(4) .order-summary__value {
-  color: #64748b;
-}
-
 .supply-page.order-register-page > .list-card {
   border-radius: 0 0 var(--supply-radius) var(--supply-radius);
 }
@@ -683,34 +611,52 @@ onMounted(() => {
   font-weight: 600;
 }
 
-/* 核对按钮与订单列表行操作同一套浅底语义色。 */
+/* 操作按钮与完成态保持一致的尺寸，区分可操作与已完成。 */
 .order-action {
-  height: 26px;
-  min-height: 26px;
-  padding: 0 8px;
-  border: 1px solid transparent;
+  height: 28px;
+  min-width: 76px;
+  padding: 0 12px;
   border-radius: 6px;
   font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.15s, border-color 0.15s;
 }
 
 .order-action .el-icon {
-  margin-right: 4px;
-  font-size: 13px;
+  margin-right: 5px;
+  font-size: 14px;
 }
 
 .order-action--check {
-  border-color: #a7f3d0;
-  background: #ecfdf5;
-  color: #047857;
+  --el-button-text-color: #2563eb;
+  --el-button-bg-color: #eff6ff;
+  --el-button-border-color: #bfdbfe;
+  --el-button-hover-text-color: #1d4ed8;
+  --el-button-hover-bg-color: #dbeafe;
+  --el-button-hover-border-color: #93c5fd;
+  --el-button-active-text-color: #1e40af;
+  --el-button-active-bg-color: #bfdbfe;
+  --el-button-active-border-color: #60a5fa;
 }
 
-.order-action:hover {
-  filter: brightness(0.96);
+.order-action:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .payment-check-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 76px;
+  height: 28px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+.payment-check-state--done {
+  color: #047857;
 }
 
 .column-header-hint {
@@ -718,39 +664,8 @@ onMounted(() => {
   cursor: help;
 }
 
-/* 状态用语义色圆点 + 文本，与订单列表同一套视觉；颜色只承担状态含义。 */
-.status-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--supply-text);
-  font-size: 13px;
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-}
-
-.status-dot--success {
-  background: #059669;
-}
-
-.status-dot--primary {
-  background: #2563eb;
-}
-
-.status-dot--warning {
-  background: #d97706;
-}
-
-.status-dot--danger {
-  background: #dc2626;
-}
-
-.status-dot--info {
-  background: #94a3b8;
-}
 </style>
+
+<style scoped src="./order-status.css"></style>
+
+<style scoped src="./order-summary.css"></style>

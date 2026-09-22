@@ -12,6 +12,16 @@
         />
       </template>
       <template #primary>
+        <el-date-picker
+          v-model="filters.orderDateRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          range-separator="~"
+          start-placeholder="订单开始日期"
+          end-placeholder="订单结束日期"
+          aria-label="下单时间"
+          style="width: 280px"
+        />
         <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 190px" @keyup.enter="search" />
         <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 190px" @keyup.enter="search" />
         <el-tree-select
@@ -76,6 +86,8 @@
           check-strictly
           :render-after-expand="false"
           :loading="categoryLoading"
+          :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
+          @visible-change="onCategoryVisibleChange"
           aria-label="商品分类"
           clearable
           filterable
@@ -104,53 +116,79 @@
             :value="String(item.id)"
           />
         </el-select>
-        <el-date-picker
-          v-model="filters.orderDateRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="~"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
-          aria-label="下单时间"
-          style="width: 230px"
-        />
+        <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况" style="width: 130px">
+          <el-option label="全部" value="" />
+          <el-option label="有优惠" value="true" />
+          <el-option label="无优惠" value="false" />
+        </el-select>
+        <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态" style="width: 130px">
+          <el-option label="未收款" value="UNPAID" />
+          <el-option label="部分收款" value="PARTIAL_PAID" />
+          <el-option label="已收款" value="PAID" />
+        </el-select>
       </template>
     </OrderRegisterFilterCard>
 
-    <div class="order-summary" aria-label="明细统计">
-      <div class="order-summary__metric">
-        <el-tooltip content="逐行「单价×数量」合计，未扣订单折扣与分摊。" placement="top">
-          <span class="order-summary__label">明细金额</span>
+    <el-alert v-if="pageData.totals.missingLineOrderCount" :closable="false" type="warning"
+      :title="`当前筛选有 ${pageData.totals.missingLineOrderCount} 笔订单缺少明细，订货金额、优惠额及优惠率暂无法完整计算。`" />
+    <el-alert v-if="pageData.totals.unallocatableOrderCount" :closable="false" type="warning"
+      :title="`${pageData.totals.unallocatableOrderCount} 笔订单订货金额为零但存在财务金额，无法按商品比例分摊，相关统计暂不展示。`" />
+    <p v-if="pageFilters.productId || pageFilters.categoryId" class="order-summary-note">已筛选商品：优惠、应收、已收及待收按商品订货金额占整单的比例分摊，分币尾差已计入。</p>
+    <div class="order-summary order-summary--lines" aria-label="明细统计">
+      <div class="order-summary__metric order-summary__metric--ordered">
+        <el-tooltip content="筛选命中的有效明细单价×数量合计。" placement="top">
+          <span class="order-summary__label">订货金额</span>
         </el-tooltip>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.lineAmount) }}</strong>
       </div>
-      <div class="order-summary__metric">
-        <el-tooltip content="命中订单去重后的折后应收合计；与明细金额的差额来自订单折扣与分摊。" placement="top">
+      <div class="order-summary__metric order-summary__metric--payable">
+        <el-tooltip content="商品条件下按明细订货金额占整单比例分摊实际应收；未筛选商品时与订单列表一致。" placement="top">
           <span class="order-summary__label">订单金额</span>
         </el-tooltip>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.orderAmount) }}</strong>
       </div>
-      <div class="order-summary__metric">
-        <el-tooltip
-          content="按明细金额占订单应收的比例分摊订单实收；部分回款的订单同样按比例分摊，筛选商品/分类即可看到对应回款。"
-          placement="top"
-        >
+      <div class="order-summary__metric order-summary__metric--discount">
+        <el-tooltip content="订货金额减对应实际应收；商品条件下为分摊后的优惠额。" placement="top">
+          <span class="order-summary__label">优惠额</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.discountAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--discount">
+        <el-tooltip content="当前范围优惠额合计÷订货金额合计；不是各订单优惠率平均值。" placement="top">
+          <span class="order-summary__label">优惠率</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ discountRateText(pageData.totals.discountRate) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--paid">
+        <el-tooltip content="订单账本已收金额（含历史期初），商品条件下按订货金额比例分摊。" placement="top">
           <span class="order-summary__label">回款金额</span>
         </el-tooltip>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
       </div>
-      <div class="order-summary__metric">
-        <span class="order-summary__label">客户数</span>
-        <strong class="order-summary__value">{{ numberText(pageData.totals.customerCount) }}</strong>
+      <div class="order-summary__metric order-summary__metric--paid">
+        <el-tooltip content="当前筛选范围回款金额合计÷订单金额合计；订单金额为零时不计算。" placement="top">
+          <span class="order-summary__label">回款率</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ repaymentRateText(pageData.totals.receivedAmount, pageData.totals.orderAmount) }}</strong>
       </div>
-      <div class="order-summary__metric">
-        <el-tooltip content="行数量按来源单位直接合计，不做单位换算。" placement="top">
-          <span class="order-summary__label">数量合计</span>
+      <div class="order-summary__metric order-summary__metric--unpaid">
+        <el-tooltip content="订单账本未收余额，商品条件下按订货金额比例分摊。" placement="top">
+          <span class="order-summary__label">待收金额</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.unpaidAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--count">
+        <el-tooltip content="当前查询条件下全部有效明细的销售数量合计，按明细交易单位累加，不按商品或SKU去重。" placement="top">
+          <span class="order-summary__label">商品数</span>
         </el-tooltip>
         <strong class="order-summary__value">{{ numberText(pageData.totals.quantitySum) }}</strong>
       </div>
     </div>
 
+    <el-alert v-if="productInfoFailed" type="warning" :closable="false" show-icon>
+      商品图片与单位信息加载失败
+      <el-button link type="primary" @click="loadProductInfo">重新加载商品信息</el-button>
+    </el-alert>
     <el-card class="list-card" shadow="never">
       <div class="table-viewport">
         <el-table
@@ -243,16 +281,38 @@
               </el-tooltip>
             </template>
           </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('lineAmount')" label="明细金额" width="130" align="right" sortable="custom" prop="lineAmount">
+          <el-table-column v-if="lineColumns.isVisible('lineAmount')" label="订货金额" width="130" align="right" sortable="custom" prop="lineAmount">
             <template #default="{ row }">
               <span class="amount amount--muted">{{ moneyText(row.lineAmount) }}</span>
             </template>
           </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('orderAmount')" label="订单金额（分摊后）" width="175" align="right">
+            <template #header>
+              <el-tooltip content="整单实际应收按本明细订货金额比例分摊。" placement="top"><span>订单金额（分摊后）</span></el-tooltip>
+            </template>
+            <template #default="{ row }"><span class="amount amount--strong">{{ moneyText(row.orderAmount) }}</span></template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('discountAmount')" label="优惠额" width="130" align="right" sortable="custom" prop="discountAmount">
+            <template #header>
+              <el-tooltip content="明细订货金额减分摊订单金额，包含整单优惠分摊，不代表来源单独对该商品打折。" placement="top"><span>优惠额</span></el-tooltip>
+            </template>
+            <template #default="{ row }"><span class="amount line-discount-amount">{{ moneyText(row.discountAmount) }}</span></template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('discountRate')" label="优惠率" width="115" align="right" sortable="custom" prop="discountRate">
+            <template #header>
+              <el-tooltip content="分摊优惠额÷明细订货金额；订货金额为零时不计算。" placement="top"><span>优惠率</span></el-tooltip>
+            </template>
+            <template #default="{ row }"><span class="line-discount-amount">{{ discountRateText(row.discountRate) }}</span></template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('paymentStatus')" label="收款状态" width="110">
+            <template #default="{ row }">
+              <el-tag class="order-status-tag" :type="orderPaymentStatusTag(row.paymentStatusCode)" effect="light">
+                {{ row.paymentStatusCode === 'UNPAID' ? '未收款' : orderPaymentStatusLabel(row.paymentStatusCode) }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('orderDate')" label="下单时间" width="170" sortable="custom" prop="orderDate">
             <template #default="{ row }">{{ displayDateTime(row.orderDate) }}</template>
-          </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('dhbOrderNo')" label="订货宝订单号" width="160" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.dhbOrderNo || '-' }}</template>
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('sourceLineId')" label="来源明细号" width="170" show-overflow-tooltip>
             <template #default="{ row }">{{ row.sourceLineId || '-' }}</template>
@@ -316,7 +376,7 @@ import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
 import { displayDateTime } from '@/utils/business-date'
-import { moneyText, numberText } from '@/utils/order-register-status'
+import { moneyText, numberText, repaymentRateText, orderPaymentStatusLabel, orderPaymentStatusTag } from '@/utils/order-register-status'
 import { businessDictionaryLabel, loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { convertLine, type ConvertedLineQuantity } from '@/utils/product-unit'
 import { empty, orderRegisterDateParams } from '@/utils/order-register-query'
@@ -346,9 +406,12 @@ const lineColumns = useColumnSettings('order-lines', [
   { key: 'unitCode', label: '单位' },
   { key: 'quantity', label: '数量' },
   { key: 'unitPrice', label: '单价' },
-  { key: 'lineAmount', label: '明细金额' },
+  { key: 'lineAmount', label: '订货金额' },
+  { key: 'orderAmount', label: '订单金额（分摊后）' },
+  { key: 'discountAmount', label: '优惠额' },
+  { key: 'discountRate', label: '优惠率' },
+  { key: 'paymentStatus', label: '收款状态' },
   { key: 'orderDate', label: '下单时间' },
-  { key: 'dhbOrderNo', label: '订货宝订单号' },
   { key: 'sourceLineId', label: '来源明细号' },
   { key: 'createdBy', label: '创建人', defaultVisible: false },
   { key: 'createdTime', label: '创建时间', defaultVisible: false },
@@ -372,12 +435,15 @@ const {
 } = useOrderRegisterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
-  categoryId: '',
-  productId: '',
+  discountStatus: '' as string | undefined,
+  paymentStatusCode: '' as string | undefined,
+  categoryId: '' as string | undefined,
+  productId: '' as string | undefined,
 })
 
 const categoryOptions = ref<ErpProductCategoryView[]>([])
 const categoryLoading = ref(false)
+const categoryLoadFailed = ref(false)
 interface CategoryTreeNode {
   id: string
   categoryName: string
@@ -405,6 +471,8 @@ const productSearching = ref(false)
 const categoryProductCache = new Map<string, number[]>()
 const CATEGORY_PRODUCT_LIMIT = 500
 /** 当前页商品的 ERP 档案：主图与单位配置。 */
+const productInfoFailed = ref(false)
+let productInfoRequest = 0
 const productInfo = ref(new Map<string, ErpManagedProductSummary>())
 
 const loading = ref(false)
@@ -412,7 +480,7 @@ const loadFailed = ref(false)
 const exporting = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
-const sortBy = ref<'orderDate' | 'lineAmount' | 'orderNo'>('orderDate')
+const sortBy = ref<'orderDate' | 'lineAmount' | 'orderNo' | 'discountAmount' | 'discountRate'>('orderDate')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 const pageData = ref<OrderRegisterLinePage>({
   total: 0,
@@ -426,6 +494,10 @@ const pageData = ref<OrderRegisterLinePage>({
 const detailVisible = ref(false)
 const detailOrderId = ref<string | number | null>(null)
 const detailTab = ref('overview')
+
+function discountRateText(value: number | null | undefined): string {
+  return value == null ? '-' : `${(value * 100).toFixed(2)}%`
+}
 
 function coverageText(coverage: OrderRegisterCoverage | null): string {
   if (!coverage) return ''
@@ -477,30 +549,37 @@ function sourceUnitPriceHint(row: OrderRegisterLineItem) {
 
 /** 分类筛选先解析成商品集合，再按商品过滤明细。 */
 async function loadCategoryProductIds(categoryId: string): Promise<number[]> {
-  const ids: number[] = []
-  for (let begin = 0; ; begin += 200) {
-    const page = await getErpManagedProducts({ begin, step: 200, categoryId })
-    ids.push(...page.items.map((item) => Number(item.id)))
-    if (ids.length >= page.total || !page.items.length) break
-    if (ids.length >= CATEGORY_PRODUCT_LIMIT) break
+  const categories = new Set([categoryId])
+  for (const id of categories) {
+    categoryOptions.value.forEach(row => {
+      if (row.parentId != null && String(row.parentId) === id) categories.add(String(row.id))
+    })
   }
-  if (ids.length > CATEGORY_PRODUCT_LIMIT) ids.length = CATEGORY_PRODUCT_LIMIT
-  return ids
+  const ids = new Set<number>()
+  for (const id of categories) {
+    for (let begin = 0; ; begin += 200) {
+      const page = await getErpManagedProducts({ begin, step: 200, categoryId: id })
+      page.items.forEach(item => ids.add(Number(item.id)))
+      if (page.total > CATEGORY_PRODUCT_LIMIT || ids.size > CATEGORY_PRODUCT_LIMIT) {
+        throw new Error(`分类下商品超过 ${CATEGORY_PRODUCT_LIMIT} 个，请缩小分类范围后查询，避免统计不完整`)
+      }
+      if (begin + page.items.length >= page.total || !page.items.length) break
+    }
+  }
+  return [...ids]
 }
 
 async function resolveProductIds(): Promise<number[] | undefined> {
-  const productId = pageFilters.productId.trim()
+  // 下拉清除后可能是 undefined，这里统一按空处理，避免清空条件时报错导致列表停在旧数据。
+  const productId = empty(pageFilters.productId)
   if (productId) return [Number(productId)]
-  const categoryId = pageFilters.categoryId.trim()
+  const categoryId = empty(pageFilters.categoryId)
   if (!categoryId) return undefined
   const cached = categoryProductCache.get(categoryId)
-  if (cached) return cached.length ? cached : undefined
+  if (cached) return cached
   const ids = await loadCategoryProductIds(categoryId)
   categoryProductCache.set(categoryId, ids)
-  if (ids.length >= CATEGORY_PRODUCT_LIMIT) {
-    ElMessage.warning(`分类下商品超过 ${CATEGORY_PRODUCT_LIMIT} 个，仅按前 ${CATEGORY_PRODUCT_LIMIT} 个商品筛选`)
-  }
-  return ids.length ? ids : undefined
+  return ids
 }
 
 function onCategoryChange() {
@@ -543,6 +622,8 @@ async function buildQuery() {
     departmentId: filters.departmentId ?? undefined,
     includeSubDepartments: filters.includeSubDepartments,
     productIds,
+    paymentStatusCode: empty(pageFilters.paymentStatusCode),
+    hasDiscount: empty(pageFilters.discountStatus) == null ? undefined : pageFilters.discountStatus === 'true',
     sortBy: sortBy.value,
     sortDirection: sortDirection.value,
     ...dateParams,
@@ -551,6 +632,8 @@ async function buildQuery() {
 
 /** 当前页商品主图与单位配置：一次批量核对，失败不阻断列表。 */
 async function loadProductInfo() {
+  const request = ++productInfoRequest
+  productInfoFailed.value = false
   const ids = [
     ...new Set(
       pageData.value.items
@@ -564,9 +647,10 @@ async function loadProductInfo() {
   }
   try {
     const page = await getErpManagedProducts({ begin: 0, step: 200, productIds: ids })
+    if (request !== productInfoRequest) return
     productInfo.value = new Map(page.items.map((item) => [String(item.id), item]))
   } catch {
-    productInfo.value = new Map()
+    if (request === productInfoRequest) productInfoFailed.value = true
   }
 }
 
@@ -574,11 +658,16 @@ async function loadLines() {
   loading.value = true
   loadFailed.value = false
   try {
-    pageData.value = await getOrderRegisterLines(await buildQuery())
+    const query = await buildQuery()
+    pageData.value = query.productIds?.length === 0
+      ? { total: 0, begin: query.begin, step: query.step, items: [], coverage: null,
+          totals: { lineAmount: 0, orderAmount: 0, discountAmount: 0, receivedAmount: 0, unpaidAmount: 0, productCount: 0, quantitySum: 0 } }
+      : await getOrderRegisterLines(query)
     notifyCoverage(pageData.value.coverage)
     void loadProductInfo()
   } catch (reason) {
     loadFailed.value = true
+    pageData.value = { total: 0, begin: 0, step: pageSize.value, items: [], totals: {}, coverage: null }
     ElMessage.error({
       message: errorMessage(reason, '订单明细加载失败，请稍后重试'),
       showClose: true,
@@ -596,6 +685,8 @@ function search() {
 
 function resetFilters() {
   resetCommonFilters()
+  pageFilters.discountStatus = ''
+  pageFilters.paymentStatusCode = ''
   pageFilters.categoryId = ''
   pageFilters.productId = ''
   sortBy.value = 'orderDate'
@@ -613,7 +704,7 @@ function tableRowIndex(index: number): number {
 }
 
 function changeSort({ prop, order }: { prop: string | null; order: string | null }) {
-  const allowed = new Set(['orderDate', 'lineAmount', 'orderNo'])
+  const allowed = new Set(['orderDate', 'lineAmount', 'orderNo', 'discountAmount', 'discountRate'])
   if (prop && allowed.has(prop)) {
     sortBy.value = prop as typeof sortBy.value
     sortDirection.value = order === 'ascending' ? 'asc' : 'desc'
@@ -641,6 +732,10 @@ async function exportCsv() {
   exporting.value = true
   try {
     const query = await buildQuery()
+    if (query.productIds?.length === 0) {
+      ElMessage.info('当前分类没有商品，无可导出明细')
+      return
+    }
     const params: Record<string, unknown> = { ...query }
     delete params.begin
     delete params.step
@@ -653,8 +748,14 @@ async function exportCsv() {
   }
 }
 
+function onCategoryVisibleChange(visible: boolean) {
+  if (visible && (categoryLoadFailed.value || !categoryOptions.value.length)) void loadCategoryOptions()
+}
+
 async function loadCategoryOptions() {
+  if (categoryLoading.value) return
   categoryLoading.value = true
+  categoryLoadFailed.value = false
   try {
     const rows: ErpProductCategoryView[] = []
     for (let begin = 0; ; begin += 200) {
@@ -663,8 +764,9 @@ async function loadCategoryOptions() {
       if (rows.length >= page.total || !page.items.length || begin >= 9800) break
     }
     categoryOptions.value = rows
+    categoryProductCache.clear()
   } catch {
-    categoryOptions.value = []
+    categoryLoadFailed.value = true
   } finally {
     categoryLoading.value = false
   }
@@ -699,6 +801,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.line-discount-amount { color: #7c3aed; font-variant-numeric: tabular-nums; }
 .order-register-page {
   display: flex;
   min-height: 0;
@@ -716,65 +819,6 @@ onMounted(() => {
 
 .supply-page.order-register-page > .filter-card :deep(.el-card__body) {
   padding: 0;
-}
-
-.order-summary {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  min-height: 60px;
-  padding: 14px 20px;
-  border: 1px solid var(--supply-border);
-  border-bottom: 0;
-  border-radius: var(--supply-radius) var(--supply-radius) 0 0;
-  background: var(--supply-surface);
-}
-
-.order-summary__metric {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 0 28px;
-  border-left: 1px solid var(--supply-border);
-}
-
-.order-summary__metric:first-child {
-  padding-left: 0;
-  border-left: 0;
-}
-
-.order-summary__label {
-  color: var(--supply-text-muted);
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.order-summary__value {
-  font-size: 21px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.order-summary__metric:nth-child(1) .order-summary__value {
-  color: #2563eb;
-}
-
-.order-summary__metric:nth-child(2) .order-summary__value {
-  color: #047857;
-}
-
-.order-summary__metric:nth-child(3) .order-summary__value {
-  color: #047857;
-}
-
-.order-summary__metric:nth-child(4) .order-summary__value {
-  color: #d97706;
-}
-
-.order-summary__metric:nth-child(5) .order-summary__value {
-  color: #64748b;
 }
 
 .supply-page.order-register-page > .list-card {
@@ -867,18 +911,14 @@ onMounted(() => {
   font-weight: 600;
 }
 
-@media (max-width: 720px) {
-  .order-summary {
-    padding: 8px 12px;
-  }
 
-  .order-summary__metric {
-    padding: 4px 14px 4px 0;
-  }
-}
 
 .column-header-hint {
   border-bottom: 1px dashed var(--el-border-color);
   cursor: help;
 }
 </style>
+
+<style scoped src="./order-summary.css"></style>
+
+<style scoped src="./order-status.css"></style>

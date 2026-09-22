@@ -18,12 +18,13 @@
           type="daterange"
           value-format="YYYY-MM-DD"
           range-separator="~"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
+          start-placeholder="下单开始日期"
+          end-placeholder="下单结束日期"
           aria-label="下单时间"
-          style="width: 230px"
+          style="width: 280px"
         />
         <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 190px" @keyup.enter="search" />
+        <el-input v-model="pageFilters.dhbOrderNo" aria-label="订货宝单号" clearable placeholder="订货宝单号" style="width: 220px" @keyup.enter="search" />
         <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 220px" @keyup.enter="search" />
         <el-tree-select
           v-model="filters.regionCode"
@@ -78,6 +79,11 @@
           style="width: 180px"
         />
         <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
+        <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况" style="width: 115px">
+          <el-option label="全部" value="" />
+          <el-option label="有优惠" value="true" />
+          <el-option label="无优惠" value="false" />
+        </el-select>
         <el-select v-model="pageFilters.orderStatusCode" aria-label="订单状态" clearable placeholder="订单状态" style="width: 115px">
           <el-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
@@ -105,22 +111,48 @@
       </template>
     </OrderRegisterFilterCard>
 
+    <el-alert v-if="totals.missingLineOrderCount" :closable="false" type="warning"
+      :title="`当前筛选有 ${totals.missingLineOrderCount} 笔订单缺少明细，订货金额、优惠额及优惠率暂无法完整计算。`" />
     <div class="order-summary" aria-label="金额统计">
-      <div class="order-summary__metric">
+      <div class="order-summary__metric order-summary__metric--ordered">
+        <el-tooltip content="当前筛选全部订单的有效明细：单价×数量合计。" placement="top">
+          <span class="order-summary__label">订货金额</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ moneyText(totals.originalAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--payable">
         <span class="order-summary__label">订单金额</span>
         <strong class="order-summary__value">{{ moneyText(totals.payableAmount) }}</strong>
       </div>
-      <div class="order-summary__metric">
+      <div class="order-summary__metric order-summary__metric--discount">
+        <span class="order-summary__label">优惠额</span>
+        <strong class="order-summary__value">{{ moneyText(totals.discountAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--discount">
+        <el-tooltip content="（订货金额合计－订单金额合计）÷订货金额合计；不平均各订单优惠率。订货金额为零时不计算。" placement="top">
+          <span class="order-summary__label">优惠率</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ discountRateText(totals.discountRate) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--paid">
         <span class="order-summary__label">回款金额</span>
         <strong class="order-summary__value">{{ moneyText(totals.paidAmount) }}</strong>
       </div>
-      <div class="order-summary__metric">
+      <div class="order-summary__metric order-summary__metric--paid">
+        <el-tooltip content="当前筛选范围回款金额合计÷订单金额合计；订单金额为零时不计算。" placement="top">
+          <span class="order-summary__label">回款率</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ repaymentRateText(totals.paidAmount, totals.payableAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--unpaid">
         <span class="order-summary__label">待收金额</span>
         <strong class="order-summary__value">{{ moneyText(totals.unpaidAmount) }}</strong>
       </div>
-      <div class="order-summary__metric">
-        <span class="order-summary__label">已核金额</span>
-        <strong class="order-summary__value">{{ moneyText(totals.checkedAmount) }}</strong>
+      <div class="order-summary__metric order-summary__metric--count">
+        <el-tooltip content="当前筛选全部下单客户，按客户ID去重；未关联客户不计入。" placement="top">
+          <span class="order-summary__label">客户数</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ totals.customerCount ?? '-' }}</strong>
       </div>
     </div>
 
@@ -169,32 +201,29 @@
                 :content="orderStatusHint(row as OrderRegisterOrderItem)"
                 placement="top"
               >
-                <span class="status-cell">
-                  <i class="status-dot" :class="`status-dot--${orderStatusTone(row as OrderRegisterOrderItem)}`" />
-                  <span>{{ orderStatusText(row as OrderRegisterOrderItem) }}</span>
-                </span>
+                <el-tag class="order-status-tag" :type="orderStatusTone(row as OrderRegisterOrderItem)" effect="light">
+                {{ orderStatusText(row as OrderRegisterOrderItem) }}
+              </el-tag>
               </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column v-if="orderColumns.isVisible('paymentStatus')" label="收款状态" width="110">
             <template #default="{ row }">
-              <span class="status-cell">
-                <i class="status-dot" :class="`status-dot--${orderPaymentStatusTag(row.paymentStatusCode)}`" />
-                <span>{{ orderPaymentStatusLabel(row.paymentStatusCode) }}</span>
-              </span>
+              <el-tag class="order-status-tag" :type="orderPaymentStatusTag(row.paymentStatusCode)" effect="light">
+                {{ orderPaymentStatusLabel(row.paymentStatusCode) }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column v-if="orderColumns.isVisible('invoiceStatus')" label="发票状态" width="110">
             <template #default="{ row }">
-              <span class="status-cell">
-                <i class="status-dot" :class="`status-dot--${orderInvoiceStatusTag(row.invoiceStatusCode)}`" />
-                <span>{{ orderInvoiceStatusText(row as OrderRegisterOrderItem) }}</span>
-              </span>
+              <el-tag class="order-status-tag" :type="orderInvoiceStatusTag(row.invoiceStatusCode)" effect="light">
+                {{ orderInvoiceStatusText(row as OrderRegisterOrderItem) }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column v-if="orderColumns.isVisible('originalAmount')" label="订货金额" width="120" align="right" prop="originalAmount">
             <template #header>
-              <el-tooltip content="来源原始成交口径（来源单据上的订货金额），未做折算。" placement="top">
+              <el-tooltip content="所有有效订单明细的单价×数量合计；缺少明细时不以订单头金额代替。" placement="top">
                 <span class="column-header-hint">订货金额</span>
               </el-tooltip>
             </template>
@@ -202,9 +231,9 @@
               <span class="amount amount--muted">{{ moneyText(row.originalAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('payableAmount')" label="订单金额" width="120" align="right" prop="payableAmount">
+          <el-table-column v-if="orderColumns.isVisible('payableAmount')" label="订单金额" width="120" align="right" prop="payableAmount" sortable="custom">
             <template #header>
-              <el-tooltip content="折算后的有效应收口径（含折扣与分摊），回款与待收金额以本口径为准。" placement="top">
+              <el-tooltip content="折扣、优惠后真实下单的实际应收金额。" placement="top">
                 <span class="column-header-hint">订单金额</span>
               </el-tooltip>
             </template>
@@ -212,7 +241,13 @@
               <span class="amount amount--strong">{{ moneyText(row.payableAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('paidAmount')" label="回款金额" width="120" align="right" prop="paidAmount">
+          <el-table-column v-if="orderColumns.isVisible('discountAmount')" label="优惠额" width="120" align="right" prop="discountAmount" sortable="custom">
+            <template #default="{ row }">{{ moneyText(row.discountAmount) }}</template>
+          </el-table-column>
+          <el-table-column v-if="orderColumns.isVisible('discountRate')" label="优惠率" width="100" align="right" prop="discountRate" sortable="custom">
+            <template #default="{ row }">{{ discountRateText(row.discountRate) }}</template>
+          </el-table-column>
+          <el-table-column v-if="orderColumns.isVisible('paidAmount')" label="收款金额" width="120" align="right" prop="paidAmount">
             <template #default="{ row }">
               <span class="amount amount--paid">{{ moneyText(row.paidAmount) }}</span>
             </template>
@@ -355,6 +390,7 @@ import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
 import { displayDateTime } from '@/utils/business-date'
 import {
   moneyText,
+  repaymentRateText,
   orderPaymentStatusLabel,
   orderPaymentStatusTag,
   orderStatusLabel,
@@ -392,7 +428,9 @@ const orderColumns = useColumnSettings('order-list', [
   { key: 'invoiceStatus', label: '发票状态' },
   { key: 'originalAmount', label: '订货金额' },
   { key: 'payableAmount', label: '订单金额' },
-  { key: 'paidAmount', label: '回款金额' },
+  { key: 'discountAmount', label: '优惠额' },
+  { key: 'discountRate', label: '优惠率' },
+  { key: 'paidAmount', label: '收款金额' },
   { key: 'unpaidAmount', label: '待收金额' },
   { key: 'checkedAmount', label: '已核金额' },
   { key: 'orderDate', label: '下单时间' },
@@ -422,6 +460,8 @@ const {
 } = useOrderRegisterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
+  discountStatus: '' as string | undefined,
+  dhbOrderNo: '',
   orderStatusCode: '',
   paymentStatusCode: '',
   invoiceStatusCode: '',
@@ -459,7 +499,7 @@ const loadFailed = ref(false)
 const exporting = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
-const sortBy = ref<'createdTime' | 'orderDate' | 'syncedAt' | 'orderNo'>('createdTime')
+const sortBy = ref<'createdTime' | 'orderDate' | 'syncedAt' | 'orderNo' | 'payableAmount' | 'discountAmount' | 'discountRate'>('createdTime')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 const pageData = ref<OrderRegisterOrderPage>({
   total: 0,
@@ -476,6 +516,10 @@ const pageData = ref<OrderRegisterOrderPage>({
   coverage: null,
 })
 const totals = computed(() => pageData.value.totals)
+
+function discountRateText(value: number | null | undefined): string {
+  return value == null ? '-' : `${(value * 100).toFixed(2)}%`
+}
 
 const detailVisible = ref(false)
 const detailOrderId = ref<string | number | null>(null)
@@ -544,6 +588,7 @@ function buildQuery() {
     begin: (currentPage.value - 1) * pageSize.value,
     step: pageSize.value,
     orderNo: empty(filters.orderNo),
+    dhbOrderNo: empty(pageFilters.dhbOrderNo),
     customerName: empty(filters.customerName),
     regionCode: empty(filters.regionCode),
     ownerEmployeeCode: empty(filters.ownerEmployeeCode),
@@ -553,7 +598,8 @@ function buildQuery() {
     orderStatusCode: empty(pageFilters.orderStatusCode),
     paymentStatusCode: empty(pageFilters.paymentStatusCode),
     invoiceStatusCode: empty(pageFilters.invoiceStatusCode),
-    dhbLinked: pageFilters.dhbLinked === '' ? undefined : pageFilters.dhbLinked === 'true',
+    dhbLinked: empty(pageFilters.dhbLinked) == null ? undefined : pageFilters.dhbLinked === 'true',
+    hasDiscount: empty(pageFilters.discountStatus) == null ? undefined : pageFilters.discountStatus === 'true',
     sortBy: sortBy.value,
     sortDirection: sortDirection.value,
     ...dateParams,
@@ -584,11 +630,13 @@ function search() {
 }
 
 function resetFilters() {
+  pageFilters.discountStatus = ''
   resetCommonFilters()
   pageFilters.orderStatusCode = ''
   pageFilters.paymentStatusCode = ''
   pageFilters.invoiceStatusCode = ''
   pageFilters.dhbLinked = ''
+  pageFilters.dhbOrderNo = ''
   sortBy.value = 'createdTime'
   sortDirection.value = 'desc'
   search()
@@ -604,8 +652,8 @@ function tableRowIndex(index: number): number {
 }
 
 function changeSort({ prop, order }: { prop: string | null; order: string | null }) {
-  const allowed = new Set(['createdTime', 'orderDate', 'syncedAt', 'orderNo'])
-  if (prop && allowed.has(prop)) {
+  const allowed = new Set(['createdTime', 'orderDate', 'syncedAt', 'orderNo', 'payableAmount', 'discountAmount', 'discountRate'])
+  if (prop && order && allowed.has(prop)) {
     sortBy.value = prop as typeof sortBy.value
     sortDirection.value = order === 'ascending' ? 'asc' : 'desc'
   } else {
@@ -737,61 +785,6 @@ watch(
   padding: 0;
 }
 
-.order-summary {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  min-height: 60px;
-  padding: 14px 20px;
-  border: 1px solid var(--supply-border);
-  border-bottom: 0;
-  border-radius: var(--supply-radius) var(--supply-radius) 0 0;
-  background: var(--supply-surface);
-}
-
-.order-summary__metric {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 0 28px;
-  border-left: 1px solid var(--supply-border);
-}
-
-.order-summary__metric:first-child {
-  padding-left: 0;
-  border-left: 0;
-}
-
-.order-summary__label {
-  color: var(--supply-text-muted);
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.order-summary__value {
-  font-size: 21px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.order-summary__metric:nth-child(1) .order-summary__value {
-  color: #2563eb;
-}
-
-.order-summary__metric:nth-child(2) .order-summary__value {
-  color: #059669;
-}
-
-.order-summary__metric:nth-child(3) .order-summary__value {
-  color: #d97706;
-}
-
-.order-summary__metric:nth-child(4) .order-summary__value {
-  color: #64748b;
-}
-
 .supply-page.order-register-page > .list-card {
   border-radius: 0 0 var(--supply-radius) var(--supply-radius);
 }
@@ -894,41 +887,6 @@ watch(
   filter: brightness(0.96);
 }
 
-/* 状态用语义色圆点 + 文本，比彩色标签更清晰克制；颜色只承担状态含义。 */
-.status-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--supply-text);
-  font-size: 13px;
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-}
-
-.status-dot--success {
-  background: #059669;
-}
-
-.status-dot--primary {
-  background: #2563eb;
-}
-
-.status-dot--warning {
-  background: #d97706;
-}
-
-.status-dot--danger {
-  background: #dc2626;
-}
-
-.status-dot--info {
-  background: #94a3b8;
-}
 
 .order-no-cell {
   font-weight: 600;
@@ -939,13 +897,9 @@ watch(
   cursor: help;
 }
 
-@media (max-width: 720px) {
-  .order-summary {
-    padding: 8px 12px;
-  }
 
-  .order-summary__metric {
-    padding: 4px 14px 4px 0;
-  }
-}
 </style>
+
+<style scoped src="./order-summary.css"></style>
+
+<style scoped src="./order-status.css"></style>

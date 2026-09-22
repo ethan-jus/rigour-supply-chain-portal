@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ElementPlus, { ElMessage } from 'element-plus'
+import ElementPlus, { ElMessage, ElSelect } from 'element-plus'
 
 const mocks = vi.hoisted(() => ({
   getOrders: vi.fn(),
@@ -126,9 +126,69 @@ describe('订单列表页', () => {
     })
     expect(wrapper.text()).toContain('3')
     expect(wrapper.text()).toContain('¥1,000.00')
-    expect(wrapper.text()).toContain('回款金额')
+    expect(wrapper.text()).toContain('收款金额')
     expect(wrapper.text()).toContain('待收金额')
     expect(wrapper.text()).toContain('已核金额')
+    wrapper.unmount()
+  })
+
+  it('金额和回款率取全部筛选汇总，移除已核金额统计', async () => {
+    const page = pageResponse()
+    mocks.getOrders.mockResolvedValue({ ...page, totals: {
+      originalAmount: 400, payableAmount: 350, discountAmount: 50, discountRate: 0.125,
+      paidAmount: 120, unpaidAmount: 230, checkedAmount: 20, customerCount: 7,
+    } })
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const summary = wrapper.find('[aria-label="金额统计"]').text()
+    expect(summary).not.toContain('已核金额')
+    for (const text of ['订货金额', '¥400.00', '订单金额', '¥350.00', '优惠额', '¥50.00', '优惠率', '12.50%', '回款金额', '回款率', '34.29%', '¥120.00', '待收金额', '¥230.00']) {
+      expect(summary).toContain(text)
+    }
+    expect(summary).not.toContain('¥900.00')
+    const last = wrapper.findAll('.order-summary__metric').at(-1)!
+    expect(last.text()).toContain('客户数')
+    expect(last.text()).toContain('7')
+    wrapper.unmount()
+  })
+
+  it('缺明细时不显示虚假的订货金额和优惠率', async () => {
+    mocks.getOrders.mockResolvedValue({ ...pageResponse(), totals: {
+      missingLineOrderCount: 2, payableAmount: 100, paidAmount: 20, unpaidAmount: 80, checkedAmount: 0,
+    } })
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('2 笔订单缺少明细')
+    expect(wrapper.find('[aria-label="金额统计"]').text()).not.toContain('NaN')
+    expect(wrapper.findAll('.order-summary__metric--discount .order-summary__value').map(item => item.text())).toEqual(['-', '-'])
+    expect(wrapper.find('[aria-label="金额统计"]').text()).toContain('回款率20.00%')
+    wrapper.unmount()
+  })
+
+  it('优惠条件和三种金额排序传到后端及导出，清空恢复全部', async () => {
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const discount = wrapper.findAllComponents(ElSelect).find(item => item.props('ariaLabel') === '优惠情况')!
+    discount.vm.$emit('update:modelValue', 'true')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].hasDiscount).toBe(true)
+    for (const prop of ['payableAmount', 'discountAmount', 'discountRate']) {
+      wrapper.findAllComponents({ name: 'ElTable' })[0]!.vm.$emit('sort-change', { prop, order: 'descending' })
+      await flushPromises()
+      expect(mocks.getOrders.mock.calls.at(-1)![0]).toMatchObject({ hasDiscount: true, sortBy: prop, sortDirection: 'desc', begin: 0 })
+    }
+    await wrapper.findAll('button').find(button => button.text() === '导出')!.trigger('click')
+    await flushPromises()
+    expect(mocks.exportCsv).toHaveBeenLastCalledWith('orders', expect.objectContaining({ hasDiscount: true, sortBy: 'discountRate', sortDirection: 'desc' }))
+    discount.vm.$emit('update:modelValue', 'false')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].hasDiscount).toBe(false)
+    discount.vm.$emit('update:modelValue', undefined)
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].hasDiscount).toBeUndefined()
     wrapper.unmount()
   })
 
@@ -141,6 +201,21 @@ describe('订单列表页', () => {
     const lastCall = mocks.getOrders.mock.calls.at(-1)![0]
     expect(lastCall).toMatchObject({ customerName: '测试客户', begin: 0, includeSubDepartments: true })
     expect(lastCall.orderNo).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('订货宝关联条件清空后不变成未关联查询', async () => {
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const linked = wrapper.findAllComponents(ElSelect).find(item => item.props('ariaLabel') === '订货宝关联单')!
+    linked.vm.$emit('update:modelValue', 'true')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].dhbLinked).toBe(true)
+    linked.vm.$emit('update:modelValue', undefined)
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].dhbLinked).toBeUndefined()
     wrapper.unmount()
   })
 
@@ -167,10 +242,26 @@ describe('订单列表页', () => {
     wrapper.unmount()
   })
 
+  it('订货宝单号支持查询、清空后重新查询', async () => {
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const input = wrapper.find('input[aria-label="订货宝单号"]')
+    await input.setValue('  20260920.0988  ')
+    await input.trigger('keyup.enter')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].dhbOrderNo).toBe('20260920.0988')
+    await input.setValue('')
+    await input.trigger('keyup.enter')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].dhbOrderNo).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('导出与查询同筛选，不带分页参数，文件名带日期', async () => {
     const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     await wrapper.find('input[aria-label="订单号"]').setValue('A001')
+    await wrapper.find('input[aria-label="订货宝单号"]').setValue('0988')
     const exportButton = wrapper
       .findAll('button')
       .find((node) => node.text() === '导出')
@@ -179,6 +270,7 @@ describe('订单列表页', () => {
     expect(mocks.exportCsv).toHaveBeenCalledTimes(1)
     const params = mocks.exportCsv.mock.calls[0][1]
     expect(params.orderNo).toBe('A001')
+    expect(params.dhbOrderNo).toBe('0988')
     expect(params.begin).toBeUndefined()
     expect(params.step).toBeUndefined()
     expect(mocks.downloadBlob).toHaveBeenCalledWith(expect.any(Blob), '订单列表-20260918.csv')
@@ -230,7 +322,8 @@ describe('订单列表页', () => {
     expect(wrapper.find('.order-register-filter__fields').text()).toContain('创建人')
     const dateEditor = wrapper.find('.order-register-filter__fields .el-date-editor')
     expect(dateEditor.exists()).toBe(true)
-    expect(dateEditor.attributes('style') || '').toContain('width: 230px')
+    expect(wrapper.find('input[placeholder="下单开始日期"]').exists()).toBe(true)
+    expect(wrapper.find('input[placeholder="下单结束日期"]').exists()).toBe(true)
     wrapper.unmount()
   })
 

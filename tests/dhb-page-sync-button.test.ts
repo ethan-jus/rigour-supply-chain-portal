@@ -7,7 +7,16 @@ vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => mocks.allowed }),
 }))
 vi.mock('@/api/core/dhb-orchestration', () => ({ getDhbSyncTasks: mocks.tasks }))
-vi.mock('@/api/core/dhb-page-sync', () => ({ syncDhbPage: mocks.sync }))
+vi.mock('@/api/core/dhb-page-sync', () => ({
+  syncDhbPage: mocks.sync,
+  latestDhbPageSyncJob: vi.fn().mockResolvedValue(null),
+  getDhbPageSyncJob: vi.fn(),
+  startDhbPageSyncJob: async (id: string, command: unknown) => ({
+    jobId: id, connectorId: 'connector-1', scope: 'CUSTOMER', status: 'SUCCEEDED',
+    stage: '结束', startedAt: new Date().toISOString(), heartbeatAt: new Date().toISOString(),
+    result: await mocks.sync(command),
+  }),
+}))
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.allowed = true

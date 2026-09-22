@@ -1,21 +1,20 @@
 <template>
-  <el-button v-if="can('integration:dhb:write')" :plain="plain" :loading="busy" @click="open"
-    >同步订单</el-button
+  <el-button v-if="can('integration:dhb:write')" :plain="plain" :loading="loading" @click="open"
+    >{{ jobBusy ? '查看同步进度' : '同步订单' }}</el-button
   >
   <el-dialog
     v-model="visible"
     title="同步订货宝订单"
     width="780px"
-    :close-on-click-modal="!busy"
-    :close-on-press-escape="!busy"
-    :show-close="!busy"
+    :close-on-click-modal="false"
   >
     <el-alert
       title="按依赖顺序同步订货宝订单（含明细）、收款和付款，使用服务端增量游标，并重新核对本地待处理记录。订单、明细、收款沿用来源业务创建/修改人和时间。"
       type="info"
       :closable="false"
     />
-    <div v-if="busy" role="status" class="package-sync-status">正在同步订单、明细和回款，请稍候…</div>
+    <DhbSyncJobProgress :job="job" :notice="notice" />
+    <el-alert v-if="jobError" :title="jobError" type="error" :closable="false" />
     <el-alert v-if="error" :title="error" type="error" :closable="false" class="package-sync-status" />
     <div v-if="result" aria-live="polite">
       <el-alert
@@ -70,7 +69,7 @@
       </p>
     </div>
     <template #footer>
-      <el-button :disabled="busy" @click="visible = false">关闭</el-button>
+      <el-button @click="visible = false">关闭</el-button>
       <el-button type="primary" :loading="busy" :disabled="busy || !connectorId" @click="run">
         开始同步
       </el-button>
@@ -85,7 +84,8 @@ import {
   getDhbSyncTasks,
   type DhbSyncOrchestrationResult,
 } from '@/api/core/dhb-orchestration'
-import { syncDhbPage } from '@/api/core/dhb-page-sync'
+import { useDhbSyncJob } from '@/composables/useDhbSyncJob'
+import DhbSyncJobProgress from './DhbSyncJobProgress.vue'
 
 defineProps<{
   /** 与查询区其他次级按钮保持一致的浅底样式。 */
@@ -95,10 +95,15 @@ const emit = defineEmits<{ completed: [result: DhbSyncOrchestrationResult] }>()
 const { can } = useSupplyPermissions()
 
 const visible = ref(false)
-const busy = ref(false)
+const loading = ref(false)
 const error = ref('')
 const connectorId = ref('')
 const result = ref<DhbSyncOrchestrationResult | null>(null)
+const { job, busy: jobBusy, notice, error: jobError, start } = useDhbSyncJob((value) => {
+  result.value = value
+  emit('completed', value)
+})
+const busy = computed(() => loading.value || jobBusy.value)
 
 const packageObjectTypes = new Set(['SALES_ORDER', 'ORDER_LINE', 'RECEIPT', 'PAYMENT'])
 const steps = computed(() => result.value?.tenants.flatMap((item) => item.steps) ?? [])
@@ -159,12 +164,13 @@ const resultTitle = computed(() => {
 })
 
 async function open() {
-  if (busy.value) return
+  if (loading.value) return
   visible.value = true
+  if (jobBusy.value) return
   error.value = ''
   result.value = null
   connectorId.value = ''
-  busy.value = true
+  loading.value = true
   try {
     const connectors = [...new Set((await getDhbSyncTasks()).map((item) => item.connectorId))]
     if (connectors.length === 1) {
@@ -177,29 +183,25 @@ async function open() {
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '无法读取订货宝同步配置'
   } finally {
-    busy.value = false
+    loading.value = false
   }
   if (connectorId.value && !error.value) await run()
 }
 
 async function run() {
   if (!connectorId.value || busy.value) return
-  busy.value = true
   error.value = ''
   result.value = null
   try {
-    result.value = await syncDhbPage({
+    await start({
       scope: 'ORDER_SALES_PACKAGE',
       connectorId: connectorId.value,
       incremental: true,
       maxPages: 500,
     })
-    emit('completed', result.value)
   } catch (reason) {
     error.value =
       reason instanceof Error ? reason.message : '同步请求未取得完整结果，请核对后台批次后重试'
-  } finally {
-    busy.value = false
   }
 }
 </script>

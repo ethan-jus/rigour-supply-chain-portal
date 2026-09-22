@@ -35,15 +35,19 @@ export interface OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterOrderQuery extends OrderRegisterCommonQuery {
+  hasDiscount?: boolean
   orderStatusCode?: string
   paymentStatusCode?: string
   hasUnpaid?: boolean
   invoiceStatusCode?: string
   /** 订货宝关联单：true=已关联，false=未关联。 */
   dhbLinked?: boolean
+  dhbOrderNo?: string
 }
 
 export interface OrderRegisterLineQuery extends OrderRegisterCommonQuery {
+  hasDiscount?: boolean
+  paymentStatusCode?: string
   productKeyword?: string
   productCode?: string
   /** 商品集合过滤：商品下拉选中的单个商品，或商品分类解析出的商品ID集合。 */
@@ -82,6 +86,8 @@ export interface OrderRegisterOrderItem {
   invoiceStatusCode: string | null
   invoiceStatusName: string | null
   originalAmount: number | null
+  discountAmount?: number | null
+  discountRate?: number | null
   payableAmount: number | null
   paidAmount: number | null
   unpaidAmount: number | null
@@ -98,7 +104,11 @@ export interface OrderRegisterOrderItem {
 }
 
 export interface OrderRegisterOrderTotals {
-  originalAmount: number
+  customerCount?: number
+  missingLineOrderCount?: number
+  discountAmount?: number
+  discountRate?: number
+  originalAmount?: number
   payableAmount: number
   paidAmount: number
   unpaidAmount: number
@@ -115,6 +125,7 @@ export interface OrderRegisterOrderPage {
 }
 
 export interface OrderRegisterLineItem {
+  paymentStatusCode: string
   id: string
   orderId: string
   orderNo: string
@@ -143,7 +154,11 @@ export interface OrderRegisterLineItem {
   quantity: number
   unitPrice: number
   lineAmount: number
-  /** 分摊到本明细的回款金额：订单实收按「明细金额 / 订单应收」比例分摊，部分回款同样按比例。 */
+  /** 按整单订货金额比例分摊，无法分摊时为空。 */
+  orderAmount?: number | null
+  discountAmount?: number | null
+  discountRate?: number | null
+  /** 分摊到本明细的收款金额：按明细订货金额占整单订货金额的比例分摊，累计差额处理分币尾差。 */
   receivedAmount: number
   /** 来源系统真实创建/修改人（取所属订单）；无来源时为本系统记录人。 */
   createdBy: string | null
@@ -155,11 +170,16 @@ export interface OrderRegisterLineItem {
 }
 
 export interface OrderRegisterLineTotals {
-  /** 明细金额：单价×数量逐行合计（折前）。 */
-  lineAmount: number
-  /** 回款金额：命中明细分摊后的回款合计（订单实收按明细金额比例分摊，部分回款同样按比例）。 */
+  unallocatableOrderCount?: number
+  discountAmount?: number
+  discountRate?: number
+  unpaidAmount?: number
+  missingLineOrderCount?: number
+  /** 订货金额：单价×数量逐行合计（折前）。 */
+  lineAmount?: number
+  /** 收款金额：订单账本已收金额（含历史期初），商品条件下按明细订货金额占比分摊。 */
   receivedAmount?: number
-  /** 订单金额：命中订单去重后的折后应收合计。 */
+  /** 订单金额：未筛商品时为整单实际应收合计，商品条件下按明细订货金额占比分摊。 */
   orderAmount?: number
   /** 客户数：命中明细去重后的客户数。 */
   customerCount?: number
@@ -218,6 +238,8 @@ export interface OrderRegisterPaymentTotals {
   checkedAmount: number
   pendingDocumentAmount: number
   cancelledDocumentAmount: number
+  unpaidAmount?: number
+  customerCount?: number
   relatedOrderAmount: number
 }
 
@@ -329,7 +351,7 @@ export const getOrderRegisterOrders = (params: OrderRegisterOrderQuery) =>
 
 export const getOrderRegisterLines = (params: OrderRegisterLineQuery) =>
   apiClient.get<OrderRegisterLinePage>(`${ORDER_REGISTER_BASE_PATH}/lines`, {
-    params,
+    params: { ...params, ...(params.productIds ? { productIds: params.productIds.join(',') } : {}) },
     ...readOptions,
   })
 
@@ -367,7 +389,7 @@ export function exportOrderRegisterCsv(
       ? `${ORDER_REGISTER_BASE_PATH}/statistics/receivables/export`
       : `${ORDER_REGISTER_BASE_PATH}/${kind}/export`
   return apiClient.get<Blob>(path, {
-    params,
+    params: { ...params, ...(Array.isArray(params.productIds) ? { productIds: params.productIds.join(',') } : {}) },
     responseType: 'blob',
     timeout: 180000,
     stayOnUnauthorized: true,

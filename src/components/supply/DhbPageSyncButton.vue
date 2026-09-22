@@ -1,14 +1,12 @@
 <template>
-  <el-button v-if="can('integration:dhb:write')" :loading="busy" @click="open">{{
-    buttonLabel || syncLabel
+  <el-button v-if="can('integration:dhb:write')" :loading="loading" @click="open">{{
+    jobBusy ? '查看同步进度' : buttonLabel || syncLabel
   }}</el-button>
   <el-dialog
     v-model="visible"
     :title="syncLabel"
     :width="incrementalCustomer ? '760px' : '600px'"
-    :close-on-click-modal="!busy"
-    :close-on-press-escape="!busy"
-    :show-close="!busy"
+    :close-on-click-modal="false"
   >
     <el-alert
       :title="
@@ -34,6 +32,8 @@
       /></el-form-item>
     </el-form>
     <div v-if="busy" role="status" class="sync-status">正在同步{{ label }}，请稍候…</div>
+    <DhbSyncJobProgress v-if="incrementalCustomer" :job="job" :notice="notice" />
+    <el-alert v-if="jobError" :title="jobError" type="error" :closable="false" />
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <div v-if="result" aria-live="polite">
       <el-alert
@@ -91,7 +91,7 @@
       </el-table>
     </div>
     <template #footer
-      ><el-button :disabled="busy" @click="visible = false">关闭</el-button
+      ><el-button @click="visible = false">关闭</el-button
       ><el-button
         v-if="!incrementalCustomer"
         type="primary"
@@ -108,18 +108,25 @@ import { computed, ref } from 'vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { getDhbSyncTasks, type DhbSyncOrchestrationResult } from '@/api/core/dhb-orchestration'
 import { syncDhbPage, type DhbPageScope } from '@/api/core/dhb-page-sync'
+import { useDhbSyncJob } from '@/composables/useDhbSyncJob'
+import DhbSyncJobProgress from './DhbSyncJobProgress.vue'
 const props = defineProps<{ scope: DhbPageScope; label: string; buttonLabel?: string }>()
 const incrementalCustomer = computed(() => props.scope === 'CUSTOMER')
 const syncLabel = computed(() => (incrementalCustomer.value ? '同步' : `同步${props.label}`))
 const emit = defineEmits<{ completed: [result: DhbSyncOrchestrationResult] }>()
 const { can } = useSupplyPermissions()
 const visible = ref(false),
-  busy = ref(false),
+  loading = ref(false),
   error = ref(''),
   connectorId = ref('')
 const connectors = ref<string[]>([]),
   range = ref<[Date, Date] | null>(null)
 const result = ref<DhbSyncOrchestrationResult | null>(null)
+const { job, busy: jobBusy, notice, error: jobError, start } = useDhbSyncJob((value) => {
+  result.value = value
+  emit('completed', value)
+})
+const busy = computed(() => loading.value || jobBusy.value)
 const steps = computed(() => result.value?.tenants.flatMap((t) => t.steps) ?? [])
 const success = computed(() => result.value?.status === 'SUCCEEDED' && steps.value.length > 0)
 const customerMetrics = computed(() => {
@@ -153,10 +160,11 @@ const resultTitle = computed(() => {
   return `同步完成：${customerMetrics.value.map((metric) => `${metric.label} ${metric.value} ${metric.label === '问题' ? '项' : '条'}`).join('，')}`
 })
 async function open() {
-  if (busy.value) return
+  if (loading.value) return
   visible.value = true
+  if (jobBusy.value) return
   connectorId.value = ''
-  busy.value = true
+  loading.value = true
   error.value = ''
   result.value = null
   // 首次范围显式展示；历史匹配需要时由操作者向前调整，不能悄悄触发全部对象。
@@ -172,16 +180,20 @@ async function open() {
   } catch (e) {
     error.value = e instanceof Error ? e.message : '无法读取订货宝同步配置'
   } finally {
-    busy.value = false
+    loading.value = false
   }
   if (incrementalCustomer.value && connectorId.value && !error.value) await run()
 }
 async function run() {
   if ((!incrementalCustomer.value && !range.value) || !connectorId.value || busy.value) return
-  busy.value = true
+  loading.value = true
   error.value = ''
   result.value = null
   try {
+    if (incrementalCustomer.value) {
+      await start({ scope: props.scope, connectorId: connectorId.value, incremental: true, maxPages: 100 })
+      return
+    }
     result.value = await syncDhbPage({
       scope: props.scope,
       connectorId: connectorId.value,
@@ -194,7 +206,7 @@ async function run() {
   } catch (e) {
     error.value = e instanceof Error ? e.message : '同步请求未取得完整结果，请核对后台批次后重试'
   } finally {
-    busy.value = false
+    loading.value = false
   }
 }
 </script>

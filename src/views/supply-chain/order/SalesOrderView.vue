@@ -1341,6 +1341,7 @@ const filters = reactive({
 })
 
 interface SalesOrderLineForm {
+  sourceLineId?: string | null
   localId: string
   productId: string | null
   productVariantId: string | null
@@ -1678,6 +1679,7 @@ async function openEdit(row: SalesOrderSummary) {
       unitPrice: Number(line.unitPrice),
       discountAmount: Number(line.discountAmount || 0),
       remark: line.remark,
+      sourceLineId: line.sourceLineId,
       variants: [],
     }))
     editorVisible.value = true
@@ -2155,6 +2157,7 @@ function buildCommand(submit: boolean): SalesOrderCommand | null {
     unitPrice: line.unitPrice,
     discountAmount: line.discountAmount || 0,
     remark: line.remark,
+      sourceLineId: line.sourceLineId,
   }))
   if (
     !allowPartialDraft &&

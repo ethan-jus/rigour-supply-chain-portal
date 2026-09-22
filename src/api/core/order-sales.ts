@@ -33,6 +33,7 @@ export interface SalesOrderQuery {
 }
 
 export interface SalesOrderLineCommand {
+  sourceLineId?: string | null
   productId?: string | number | null
   productVariantId?: string | number | null
   productCodeSnapshot?: string | null
@@ -124,6 +125,7 @@ export interface SalesOrderTotals {
 }
 
 export interface SalesOrderLineView {
+  sourceLineId?: string | null
   id: string
   lineNo: number
   productId: string | null

@@ -13,7 +13,15 @@ vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => mocks.allowed }),
 }))
 vi.mock('@/api/core/dhb-orchestration', () => ({ getDhbSyncTasks: mocks.tasks }))
-vi.mock('@/api/core/dhb-page-sync', () => ({ syncDhbPage: mocks.sync }))
+vi.mock('@/api/core/dhb-page-sync', () => ({
+  latestDhbPageSyncJob: vi.fn().mockResolvedValue(null),
+  getDhbPageSyncJob: vi.fn(),
+  startDhbPageSyncJob: async (id: string, command: unknown) => ({
+    jobId: id, connectorId: 'connector-1', scope: 'ORDER_SALES_PACKAGE', status: 'SUCCEEDED',
+    stage: '结束', startedAt: new Date().toISOString(), heartbeatAt: new Date().toISOString(),
+    result: await mocks.sync(command),
+  }),
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -93,7 +101,7 @@ describe('订单包同步按钮', () => {
   })
 
   it('失败不发出完成事件，不吞错误信息', async () => {
-    mocks.sync.mockRejectedValue(new Error('连接器忙碌'))
+    mocks.sync.mockRejectedValue({ code: 'SYNC_ALREADY_RUNNING', message: '连接器忙碌' })
     const wrapper = mount(OrderPackageSyncButton, { global: { plugins: [ElementPlus] } })
     await wrapper.get('button').trigger('click')
     await flushPromises()

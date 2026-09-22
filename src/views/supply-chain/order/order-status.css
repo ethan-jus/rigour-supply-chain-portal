@@ -1,0 +1,31 @@
+.order-status-tag {
+  min-width: 64px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 22px;
+  letter-spacing: .02em;
+  border-color: color-mix(in srgb, var(--el-tag-text-color) 18%, transparent);
+}
+.order-status-tag.el-tag--success {
+  --el-tag-text-color: #047857;
+  --el-tag-bg-color: #ecfdf5;
+}
+.order-status-tag.el-tag--primary {
+  --el-tag-text-color: #1d4ed8;
+  --el-tag-bg-color: #eff6ff;
+}
+.order-status-tag.el-tag--warning {
+  --el-tag-text-color: #a16207;
+  --el-tag-bg-color: #fffbeb;
+}
+.order-status-tag.el-tag--danger {
+  --el-tag-text-color: #b91c1c;
+  --el-tag-bg-color: #fef2f2;
+}
+.order-status-tag.el-tag--info {
+  --el-tag-text-color: #64748b;
+  --el-tag-bg-color: #f1f5f9;
+}

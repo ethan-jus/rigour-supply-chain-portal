@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="核对回款" width="680px" :close-on-click-modal="false">
+  <el-dialog v-model="visible" title="审核回款" width="680px" :close-on-click-modal="false">
     <template v-if="payment">
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="订单号">{{ payment.orderNo || '-' }}</el-descriptions-item>
@@ -118,9 +118,9 @@ async function submit() {
     })
     emit('checked', updated)
     visible.value = false
-    ElMessage.success('回款已核对')
+    ElMessage.success('回款已审核')
   } catch (reason) {
-    checkError.value = errorMessage(reason, '核对失败，请稍后重试')
+    checkError.value = errorMessage(reason, '审核失败，请稍后重试')
   } finally {
     submitting.value = false
   }

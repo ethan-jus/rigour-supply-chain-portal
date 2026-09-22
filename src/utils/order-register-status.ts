@@ -29,7 +29,7 @@ export const paymentRecordStatusLabels: Record<string, string> = {
   CONFIRMED: '已收款',
   RECEIVED: '已收款',
   CANCELLED: '已取消',
-  CHECKED: '已核对',
+  CHECKED: '已审核',
 }
 
 function mappedLabel(
@@ -72,7 +72,7 @@ export function orderPaymentStatusTag(
   if (raw === 'PAID' || raw === 'COMPLETED') return 'success'
   if (raw === 'CANCELLED' || raw === 'REFUNDED') return 'info'
   if (raw === 'PARTIAL_PAID') return 'warning'
-  if (raw === 'UNPAID') return 'danger'
+  if (raw === 'UNPAID') return 'warning'
   return 'primary'
 }
 
@@ -109,4 +109,10 @@ export function numberText(value: number | null | undefined): string {
 /** 页面合计使用；null 明确显示“未提供”，不用 0 冒充已知为零。 */
 export function totalsText(value: number | null | undefined): string {
   return value === null || value === undefined ? '未提供' : moneyText(value)
+}
+
+/** 按筛选范围内的金额合计计算，不平均各订单回款率。 */
+export function repaymentRateText(received: number | null | undefined, payable: number | null | undefined): string {
+  if (received == null || payable == null || !Number.isFinite(received) || !Number.isFinite(payable) || payable === 0) return '-'
+  return `${((received / payable) * 100).toFixed(2)}%`
 }

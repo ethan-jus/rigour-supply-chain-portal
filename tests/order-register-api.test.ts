@@ -19,10 +19,21 @@ import {
   getOrderRegisterReceivables,
 } from '@/api/core/order-register'
 
+import { getErpManagedProducts } from '@/api/core/erp-product'
+
 describe('订单注册读接口契约', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.get.mockResolvedValue({})
+  })
+
+  it('商品集合用单个逗号参数，保持网关签名与后端解析一致', () => {
+    void getErpManagedProducts({ begin: 0, step: 200, productIds: [15, 14, 21] })
+    expect(mocks.get.mock.calls.at(-1)![1].params.productIds).toBe('15,14,21')
+    void getOrderRegisterLines({ begin: 0, step: 20, productIds: [15, 14] })
+    expect(mocks.get.mock.calls.at(-1)![1].params.productIds).toBe('15,14')
+    void exportOrderRegisterCsv('lines', { productIds: [15, 14] })
+    expect(mocks.get.mock.calls.at(-1)![1].params.productIds).toBe('15,14')
   })
 
   it('订单/明细/收款/统计使用同一 BASE 和 stayOnUnauthorized', () => {

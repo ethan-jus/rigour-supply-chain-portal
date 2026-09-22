@@ -164,7 +164,7 @@ const ERP_BASE_PATH = '/erp'
 
 export function getErpManagedProducts(params: ErpManagedProductQuery) {
   return apiClient.get<ErpPage<ErpManagedProductSummary>>(`${ERP_BASE_PATH}/product-management/products`, {
-    params,
+    params: { ...params, ...(params.productIds ? { productIds: params.productIds.join(',') } : {}) },
     stayOnUnauthorized: true,
   })
 }
