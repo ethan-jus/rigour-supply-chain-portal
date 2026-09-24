@@ -1,22 +1,9 @@
 <template>
   <div
     class="console"
-    :class="{ 'console--supply-chain': applicationCode === 'SUPPLY_CHAIN' }"
+    :class="{ 'console--supply-chain': applicationCode === 'SUPPLY_CHAIN', 'console--collapsed': workspace.collapsed, 'console--home': route.path === '/supply-chain', 'console--dashboard': ['overview', 'city-operating', 'sales'].includes(String(route.meta.dashboardSection)) }"
   >
-    <aside class="sidebar">
-      <router-link class="sidebar__brand" to="/supply-chain">
-        <img src="@/assets/brand/scdp-logo.png" alt="瑞盖供应链数字化平台">
-        <span class="sidebar__brand-copy">
-          <strong>瑞盖供应链</strong>
-          <small>数字化平台</small>
-        </span>
-      </router-link>
-
-      <nav class="sidebar__nav" aria-label="应用菜单">
-        <ConsoleNavTree :nodes="navigation" />
-      </nav>
-
-    </aside>
+    <ConsoleSidebar :nodes="navigation" />
 
     <section class="console__main">
       <header class="topbar">
@@ -48,12 +35,9 @@
           </div>
         </div>
         <div class="topbar__right">
-          <span class="tenant-pill">{{ tenantLabel }}</span>
-          <div class="account">
-            <span class="account__avatar">{{ authStore.user?.displayName?.slice(0, 1) || '用' }}</span>
-            <span class="account__name">{{ authStore.user?.displayName || '当前用户' }}</span>
-            <el-button class="logout" text @click="logout">退出</el-button>
-          </div>
+          <ConsoleEntrySearch :entries="entries" />
+          <span class="tenant-pill"><OfficeBuilding />{{ tenantLabel }}</span>
+          <ConsoleAccountMenu />
         </div>
       </header>
       <main ref="contentViewport" class="console__content">
@@ -78,10 +62,12 @@
 </template>
 
 <script setup lang="ts">
+import { isPageRenderFailure } from '@/utils/page-error'
+import { publishRequestFailure } from '@/utils/request-feedback'
 /**
  * 供应链数字化平台主框架
  *
- * 职责：深色分组侧栏 + 顶栏 + 内容区的统一骨架。
+ * 职责：双层业务导航 + 顶栏 + 内容区的统一骨架。
  * 菜单数据由 navigationStore 按应用编码从 IAM 实时加载，
  * 菜单树由递归导航组件渲染，支持业务分组、二级菜单和三级页面。
  */
@@ -94,7 +80,12 @@ import {
 } from 'vue-router'
 import { useAuthStore, useNavigationStore } from '@/stores'
 import type { NavigationNode } from '@/types/management'
-import ConsoleNavTree from '@/components/console/ConsoleNavTree.vue'
+import ConsoleSidebar from '@/components/console/ConsoleSidebar.vue'
+import ConsoleEntrySearch from '@/components/console/ConsoleEntrySearch.vue'
+import { OfficeBuilding } from '@element-plus/icons-vue'
+import ConsoleAccountMenu from '@/components/console/ConsoleAccountMenu.vue'
+import { consoleEntries } from '@/utils/console-navigation'
+import { useConsoleWorkspace } from '@/stores/console-workspace'
 import ConsoleTabPane from '@/components/console/ConsoleTabPane.vue'
 import { supplyPageName } from '@/utils/supply-page-title'
 
@@ -112,6 +103,9 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const navigationStore = useNavigationStore()
+const workspace = useConsoleWorkspace()
+const entries = computed(() => consoleEntries(navigation.value))
+watch(() => `${authStore.user?.tenantId || ''}:${authStore.user?.id || ''}`, key => workspace.setSession(key), { immediate: true })
 const workspaceTabs = shallowRef<WorkspaceTab[]>([])
 const workspaceTabErrors = reactive<Record<string, string>>({})
 const tabStrip = ref<HTMLElement | null>(null)
@@ -246,12 +240,9 @@ function restoreActivePageScroll() {
   if (activeTab && contentViewport.value) contentViewport.value.scrollTop = activeTab.scrollTop
 }
 
-function logout(): void {
-  authStore.logout()
-}
-
-onErrorCaptured((error) => {
-  workspaceTabErrors[activeTabId.value] = error instanceof Error ? error.message : String(error)
+onErrorCaptured((error, _instance, info) => {
+  if (isPageRenderFailure(info)) workspaceTabErrors[activeTabId.value] = '页面暂时无法显示，请关闭后重新打开该菜单。'
+  else publishRequestFailure(error)
   return false
 })
 
@@ -259,7 +250,8 @@ watch(
   () => [route.fullPath, currentPageName.value] as const,
   ([, pageTitle]) => {
     upsertWorkspaceTab(route, pageTitle)
-    if (applicationCode.value === 'SUPPLY_CHAIN') document.title = `${pageTitle} - 瑞盖供应链数字化平台`
+    if (entries.value.some(entry => entry.path === route.path)) workspace.visit(route.path)
+    if (applicationCode.value === 'SUPPLY_CHAIN') document.title = `${pageTitle} - 供应链数字化平台`
   },
   { immediate: true },
 )
@@ -277,7 +269,7 @@ onBeforeRouteUpdate((_to, from) => {
 
 onMounted(() => {
   if (applicationCode.value && !navigationStore.isLoaded(applicationCode.value)) {
-    void navigationStore.fetchNavigation(applicationCode.value)
+    void navigationStore.fetchNavigation(applicationCode.value).catch(() => {})
   }
 })
 </script>
@@ -287,62 +279,9 @@ onMounted(() => {
 
 .console {
   display: grid;
-  grid-template-columns: $sidebar-width 1fr;
+  grid-template-columns: 296px minmax(0, 1fr);
   min-height: 100vh;
   background: $color-bg-base;
-}
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background: $color-ink;
-  border-right: 1px solid rgba(148, 163, 184, 0.1);
-
-  &__brand {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    height: 72px;
-    padding: 0 18px;
-    color: #fff;
-    text-decoration: none;
-
-    img {
-      width: 52px;
-      height: 52px;
-      object-fit: contain;
-      border-radius: 8px;
-    }
-
-    strong {
-      font-size: 18px;
-      font-weight: 650;
-      letter-spacing: 0.01em;
-    }
-  }
-
-  &__brand-copy {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 2px;
-
-    small {
-      color: #a9bad1;
-      font-size: 12px;
-      font-weight: 500;
-    }
-  }
-
-  &__nav {
-    flex: 1;
-    padding: 12px 12px 20px;
-    overflow-y: auto;
-    scrollbar-color: rgba(148, 163, 184, 0.24) transparent;
-    scrollbar-width: thin;
-  }
-
 }
 
 .console__main {
@@ -350,6 +289,7 @@ onMounted(() => {
 }
 
 .topbar {
+  position: relative;
   display: flex;
   gap: $spacing-md;
   justify-content: space-between;
@@ -475,33 +415,6 @@ onMounted(() => {
   font-size: $font-size-sm;
 }
 
-.account {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-
-  &__avatar {
-    display: grid;
-    width: 30px;
-    height: 30px;
-    color: $color-primary;
-    background: #eff6ff;
-    border-radius: 50%;
-    font-size: $font-size-sm;
-    font-weight: 600;
-    place-items: center;
-  }
-
-  &__name {
-    font-size: $font-size-sm;
-    font-weight: 500;
-  }
-}
-
-.logout {
-  color: $color-text-secondary;
-}
-
 .console__content {
   padding: 28px;
 }
@@ -528,43 +441,22 @@ onMounted(() => {
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 900px) {
-  .console {
-    grid-template-columns: 64px 1fr;
-  }
-
-  .sidebar__brand {
-    justify-content: center;
-    padding: 0;
-
-    .sidebar__brand-copy {
-      display: none;
-    }
-  }
-
-  .sidebar__nav {
-    padding: 8px;
-  }
-
-  :deep(.nav-branch__text),
-  :deep(.nav-item span),
-  :deep(.nav-item),
-  :deep(.nav-branch) {
-    justify-content: center;
-    padding: 0;
-  }
-
-  .topbar {
-    padding: 0 16px;
-  }
-
-  .tenant-pill,
-  .account__name {
-    display: none;
-  }
-
-  .console__content {
-    padding: 20px 16px;
-  }
+.console--collapsed { grid-template-columns: 76px minmax(0, 1fr); }
+.console--supply-chain .topbar { height: 70px; flex-basis: 70px; padding: 0 28px; }
+.console--home .topbar { justify-content: space-between; }
+.console--home { background: #f3f8ff; }
+.topbar__right svg { width: 18px; height: 18px; }
+.tenant-pill { display: flex; gap: 8px; align-items: center; background: transparent; }
+.console--home .console__content { padding: 24px; }
+@media (max-width: 1100px) { .tenant-pill { display: none; } }
+@media (max-width: 760px) {
+  .console, .console--collapsed { grid-template-columns: 64px minmax(0, 1fr); }
+  .console--supply-chain .topbar { padding: 0 10px; gap: 8px; }
+  .topbar__right { gap: 8px; }
+  .console--home .console__content { padding: 18px 14px; }
 }
+.console--dashboard { height: 100dvh; overflow: hidden; }
+.console--dashboard .console__main { display: flex; flex-direction: column; min-height: 0; }
+.console--dashboard .topbar { flex-shrink: 0; }
+.console--dashboard .console__content { flex: 1; min-height: 0; padding: 0; overflow: hidden; }
 </style>

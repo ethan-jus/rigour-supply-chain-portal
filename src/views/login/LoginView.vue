@@ -17,13 +17,10 @@
           <p class="form-eyebrow">欢迎回来</p>
           <h2 id="login-title">登录工作空间</h2>
           <p class="subtitle">使用企业账号，开启今天的工作。</p>
+          <p v-if="tenantName" class="tenant-name" aria-label="登录企业">{{ tenantName }}</p>
           <p v-if="notice" class="notice" role="status">{{ notice }}</p>
           <p v-if="errorMsg" class="error" role="alert">{{ errorMsg }}</p>
           <form :aria-busy="pending || checking" @submit.prevent="submit">
-            <div class="form-field">
-              <label for="tenant-code">企业编码</label>
-              <input id="tenant-code" v-model.trim="credentials.tenantCode" name="tenantCode" required maxlength="32" autocomplete="organization" placeholder="请输入企业编码" :disabled="pending">
-            </div>
             <div class="form-field">
               <label for="username">用户名</label>
               <input id="username" v-model.trim="credentials.username" name="username" required maxlength="64" autocomplete="username" placeholder="请输入用户名" :disabled="pending">
@@ -54,9 +51,10 @@ import { useAuthStore } from '@/stores'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const credentials = reactive({ tenantCode: '', username: '', password: '' })
+const credentials = reactive({ username: '', password: '' })
 const errorMsg = ref('')
 const notice = ref('')
+const tenantName = ref('')
 const showPassword = ref(false)
 const pending = ref(false)
 const checking = ref(true)
@@ -67,6 +65,7 @@ onMounted(async () => {
   const loggedOut = route.query.reason === 'logout'
   const manualLogin = loggedOut || Boolean(route.query.reason)
   if (loggedOut) notice.value = '已安全退出，请重新登录。'
+  if (route.query.reason === 'password_changed') notice.value = '密码修改成功，请使用新密码重新登录。'
   if (route.query.reason === 'oidc_callback_failed') errorMsg.value = '登录验证未完成，请重新登录。'
   if (['reauthenticate', 'session_expired'].includes(String(route.query.reason))) notice.value = '登录状态已过期，请重新登录。'
   try {
@@ -76,6 +75,7 @@ onMounted(async () => {
       return
     }
     const session = await readBrowserSession()
+    if (active) tenantName.value = session.tenantName || ''
     // 初次访问留在前端表单；只有仍然有效的既有会话才自动续期。
     if (active && session.authenticated && !manualLogin) await authStore.login()
   } catch (error) {
@@ -104,6 +104,13 @@ async function submit() {
 
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
+
+.tenant-name {
+  margin: 0 0 24px;
+  color: $color-primary;
+  font-size: 16px;
+  font-weight: 600;
+}
 
 .login-page {
   display: grid;
@@ -170,7 +177,14 @@ button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; }
 .help { margin: 32px 0 0; padding-top: 24px; color: $color-text-secondary; font-size: 13px; line-height: 1.9; border-top: 1px solid $color-border-base; }
 
 @media (width <= 1100px) {
-  .login-page { padding: 24px; }
+  .tenant-name {
+  margin: 0 0 24px;
+  color: $color-primary;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.login-page { padding: 24px; }
   .login-frame { min-height: calc(100svh - 48px); }
   .brand-panel, .login-panel { padding: 40px; }
   h1 { font-size: 42px; }
@@ -180,7 +194,14 @@ button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; }
 }
 
 @media (width <= 860px) {
-  .login-page { padding: 0; background: #fff; }
+  .tenant-name {
+  margin: 0 0 24px;
+  color: $color-primary;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.login-page { padding: 0; background: #fff; }
   .login-frame { grid-template-columns: 1fr; min-height: 100svh; border: 0; border-radius: 0; box-shadow: none; }
   .brand-panel { padding: 28px 32px; }
   .introduction { display: grid; grid-template-columns: 88px 1fr; column-gap: 18px; align-items: center; width: min(480px, 100%); margin: 0 auto; padding: 0; }

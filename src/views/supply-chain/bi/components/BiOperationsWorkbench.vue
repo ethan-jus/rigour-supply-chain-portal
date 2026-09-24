@@ -68,8 +68,11 @@ const value = ref('')
 const remark = ref('')
 const metrics: Record<BiTargetMetric, string> = {
   SALES_AMOUNT: '销售额',
-  PAID_AMOUNT: '回款额',
+  PAID_AMOUNT: '本期回款额（按订单日期）',
+  RECEIPT_AMOUNT: '本期到账额（按收款日期）',
   CONTACTED_CUSTOMER: '留资客户数',
+  NEW_CUSTOMER: '新增合作客户',
+  REPEAT_CUSTOMER: '复购客户',
   COOPERATED_CUSTOMER: '合作客户数',
 }
 const statusLabels: Record<BiActionStatus, string> = {

@@ -12,7 +12,12 @@ import {
   type ScopeRule,
 } from '@/api/core/supply-settings'
 import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
-vi.mock('@/stores/navigation', () => ({ useNavigationStore: () => ({ invalidate: vi.fn() }) }))
+vi.mock('@/stores/navigation', () => ({
+  useNavigationStore: () => ({
+    invalidate: vi.fn(),
+    fetchNavigation: vi.fn().mockResolvedValue([]),
+  }),
+}))
 vi.mock('@/api/core/supply-settings', () => ({
   supplyAccessApi: { roles: vi.fn(), menus: vi.fn(), saveRole: vi.fn() },
   supplySettingsApi: { context: vi.fn() },
@@ -85,7 +90,7 @@ const rule = (): ScopeRule => ({
 let wrapper: VueWrapper
 const button = (text: string) => wrapper.findAll('button').find((b) => b.text() === text)!
 const tree = () => wrapper.getComponent(ElTree)
-async function render(role?: Partial<SupplyRole>) {
+async function render(role?: Partial<SupplyRole>, selectScope = true) {
   const pinia = createPinia()
   vi.mocked(supplyAccessApi.roles).mockResolvedValue(
     role
@@ -117,6 +122,12 @@ async function render(role?: Partial<SupplyRole>) {
   await flushPromises()
   await button(role ? '编辑授权' : '新增角色').trigger('click')
   await flushPromises()
+  if (selectScope) {
+    await scopes()
+    await wrapper.get('.scope-options input[value="SELF"]').setValue(true)
+    await wrapper.get('[id="tab-menus"]').trigger('click')
+    await flushPromises()
+  }
 }
 async function check(id: string, value: boolean) {
   const target = tree().find(`[data-key="${id}"] > .el-tree-node__content input[type="checkbox"]`)
@@ -154,6 +165,48 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 describe('角色真实权限树与数据范围', () => {
+  it('小写角色编码保存为大写，保留全部勾选授权', async () => {
+    await render()
+    await check('root', true)
+    const inputs = wrapper.findAll('.el-drawer .el-input__inner')
+    await inputs[0].setValue('系统开发者')
+    await inputs[1].setValue('sys_dev')
+    await button('保存角色及授权').trigger('click')
+    await flushPromises()
+    expect(supplyAccessApi.saveRole).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        code: 'SYS_DEV',
+        name: '系统开发者',
+        menuNodeIds: expect.arrayContaining(['root', 'stock', 'read', 'write']),
+      }),
+    )
+  })
+  it('保存失败在抽屉内持续显示后端原因，保留输入和勾选并允许重试', async () => {
+    await render()
+    await check('root', true)
+    vi.mocked(supplyAccessApi.saveRole).mockRejectedValueOnce({
+      code: 'CONFLICT',
+      message: '角色编码已存在，请换一个编码',
+    })
+    await save()
+    expect(wrapper.get('.role-save-error').text()).toContain('角色编码已存在，请换一个编码')
+    expect(tree().vm.getCheckedKeys()).toContain('read')
+    expect(button('保存角色及授权').attributes('disabled')).toBeUndefined()
+    await button('保存角色及授权').trigger('click')
+    await flushPromises()
+    expect(supplyAccessApi.saveRole).toHaveBeenCalledTimes(2)
+  })
+  it('非法角色编码在页面就地提示，不发出保存请求', async () => {
+    await render()
+    const inputs = wrapper.findAll('.el-drawer .el-input__inner')
+    await inputs[0].setValue('系统开发者')
+    await inputs[1].setValue('123bad')
+    await button('保存角色及授权').trigger('click')
+    await flushPromises()
+    expect(supplyAccessApi.saveRole).not.toHaveBeenCalled()
+    expect(wrapper.get('.role-save-error').text()).toContain('以字母开头')
+  })
   it('勾选父级包含全部启用下级，取消父级清空下级', async () => {
     await render()
     await check('root', true)
@@ -178,7 +231,8 @@ describe('角色真实权限树与数据范围', () => {
     await flushPromises()
     const payload = vi.mocked(supplyAccessApi.saveRole).mock.calls[0][1]
     expect(payload.menuNodeIds.sort()).toEqual(['read', 'root', 'stock'])
-    expect(payload.rules).toHaveLength(1)
+    expect(payload.rules).toEqual([])
+    expect(payload.dataScope).toEqual({ mode: 'SELF', departmentIds: [] })
   })
   it('撤销父级同时移除对应数据规则，避免保存失效规则', async () => {
     await render({ menuNodeIds: ['root', 'stock', 'read', 'write'], rules: [rule()] })
@@ -190,52 +244,57 @@ describe('角色真实权限树与数据范围', () => {
       expect.objectContaining({ menuNodeIds: [], rules: [] }),
     )
   })
-  it('未选功能解释空列表并禁用新增规则，准备阶段明确未生效', async () => {
+  it('全部菜单勾选全部启用节点，虚拟根节点不保存到数据库', async () => {
     await render()
-    await scopes()
-    expect(wrapper.text()).toContain('当前处于配置准备阶段')
-    expect(wrapper.text()).toContain('尚未选择可配置数据范围的功能')
-    expect(button('新增数据规则').attributes('disabled')).toBeDefined()
+    await check('__all_menus__', true)
+    await save()
+    const payload = vi.mocked(supplyAccessApi.saveRole).mock.calls[0][1]
+    expect(payload.menuNodeIds.sort()).toEqual(['read', 'root', 'stock', 'write'])
+    expect(payload.menuNodeIds).not.toContain('__all_menus__')
+    expect(payload.menuNodeIds).not.toContain('off')
   })
-  it('选父级后操作可选，并且仓库操作仅显示相符的数据范围', async () => {
-    await render()
-    await check('root', true)
-    await scopes()
-    await button('新增数据规则').trigger('click')
-    await flushPromises()
-    const action = wrapper.get('.rule select')
-    expect(action.text()).toContain('ERP / 库存管理 / 查看库存')
-    await action.setValue('erp:stock:read')
-    await flushPromises()
-    const mode = wrapper.findAll('.rule select')[1]
-    expect(mode.text()).toContain('仓库范围')
-    expect(mode.text()).not.toContain('部门范围')
-    await mode.setValue('WAREHOUSE')
-    await flushPromises()
-    expect(wrapper.findAll<HTMLSelectElement>('.rule select')[2].element.value).toBe('MEMBER')
-    expect(wrapper.findAll('.rule select')[2].text()).not.toContain('不额外限制')
+  it('新增角色默认全部数据，保存后不再需要启用', async () => {
+    await render(undefined, false)
+    await check('__all_menus__', true)
     await save()
     expect(supplyAccessApi.saveRole).toHaveBeenCalledWith(
       null,
+      expect.objectContaining({ dataScope: { mode: 'ALL', departmentIds: [] } }),
+    )
+    expect(wrapper.text()).not.toContain('数据范围尚未启用')
+  })
+  it('只有四个范围，选择部门不能为空，切换到全部时清除旧部门', async () => {
+    await render(undefined, false)
+    await scopes()
+    expect(wrapper.findAll('.scope-options input')).toHaveLength(4)
+    await wrapper.get('.scope-options input[value="CUSTOM"]').setValue(true)
+    await save()
+    expect(supplyAccessApi.saveRole).not.toHaveBeenCalled()
+    expect(wrapper.get('.role-save-error').text()).toContain('请至少选择一个部门')
+    const picker = wrapper.findComponent({ name: 'ScopeReferencePicker' })
+    picker.vm.$emit('update:modelValue', ['10', '20'])
+    await flushPromises()
+    await save()
+    expect(supplyAccessApi.saveRole).toHaveBeenLastCalledWith(
+      null,
       expect.objectContaining({
-        rules: [
-          expect.objectContaining({
-            actionCode: 'erp:stock:read',
-            scopeMode: 'WAREHOUSE',
-            warehouseMode: 'MEMBER',
-          }),
-        ],
+        dataScope: { mode: 'CUSTOM', departmentIds: ['10', '20'] },
+        rules: [],
       }),
     )
   })
-  it('空规则不保存，也不会擅自赋予全部数据权限', async () => {
-    await render()
-    await check('root', true)
+  it('重新编辑回显数据库范围，切换范围清除指定部门', async () => {
+    await render({ dataScope: { mode: 'CUSTOM', departmentIds: ['10'] } }, false)
     await scopes()
-    await button('新增数据规则').trigger('click')
-    await flushPromises()
+    expect(
+      wrapper.get<HTMLInputElement>('.scope-options input[value="CUSTOM"]').element.checked,
+    ).toBe(true)
+    await wrapper.get('.scope-options input[value="ALL"]').setValue(true)
     await save()
-    expect(supplyAccessApi.saveRole).not.toHaveBeenCalled()
-    expect(ElMessage.warning).toHaveBeenCalledWith('请为每条数据规则选择操作，或删除空规则')
+    expect(supplyAccessApi.saveRole).toHaveBeenLastCalledWith(
+      'r1',
+      expect.objectContaining({ dataScope: { mode: 'ALL', departmentIds: [] } }),
+    )
+    expect(wrapper.text()).not.toContain('仓库范围')
   })
 })

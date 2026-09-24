@@ -1,13 +1,8 @@
 <template>
-  <el-button v-if="can('integration:dhb:write')" :plain="plain" :loading="loading" @click="open"
-    >{{ jobBusy ? '查看同步进度' : '同步订单' }}</el-button
-  >
-  <el-dialog
-    v-model="visible"
-    title="同步订货宝订单"
-    width="780px"
-    :close-on-click-modal="false"
-  >
+  <el-button v-if="can('integration:dhb:write')" :plain="plain" :loading="loading" @click="open">{{
+    jobBusy ? '查看同步进度' : '同步订单'
+  }}</el-button>
+  <el-dialog v-model="visible" title="同步订货宝订单" width="780px" :close-on-click-modal="false">
     <el-alert
       title="按依赖顺序同步订货宝订单（含明细）、收款和付款，使用服务端增量游标，并重新核对本地待处理记录。订单、明细、收款沿用来源业务创建/修改人和时间。"
       type="info"
@@ -15,7 +10,13 @@
     />
     <DhbSyncJobProgress :job="job" :notice="notice" />
     <el-alert v-if="jobError" :title="jobError" type="error" :closable="false" />
-    <el-alert v-if="error" :title="error" type="error" :closable="false" class="package-sync-status" />
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      :closable="false"
+      class="package-sync-status"
+    />
     <div v-if="result" aria-live="polite">
       <el-alert
         :title="resultTitle"
@@ -51,9 +52,7 @@
         </el-table-column>
         <el-table-column label="问题">
           <template #default="{ row }">
-            {{
-              stepIssues(row) === null ? '—' : stepIssues(row)
-            }}
+            {{ stepIssues(row) === null ? '—' : stepIssues(row) }}
           </template>
         </el-table-column>
       </el-table>
@@ -70,9 +69,6 @@
     </div>
     <template #footer>
       <el-button @click="visible = false">关闭</el-button>
-      <el-button type="primary" :loading="busy" :disabled="busy || !connectorId" @click="run">
-        开始同步
-      </el-button>
     </template>
   </el-dialog>
 </template>
@@ -80,10 +76,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
-import {
-  getDhbSyncTasks,
-  type DhbSyncOrchestrationResult,
-} from '@/api/core/dhb-orchestration'
+import { getDhbSyncTasks, type DhbSyncOrchestrationResult } from '@/api/core/dhb-orchestration'
 import { useDhbSyncJob } from '@/composables/useDhbSyncJob'
 import DhbSyncJobProgress from './DhbSyncJobProgress.vue'
 
@@ -99,7 +92,13 @@ const loading = ref(false)
 const error = ref('')
 const connectorId = ref('')
 const result = ref<DhbSyncOrchestrationResult | null>(null)
-const { job, busy: jobBusy, notice, error: jobError, start } = useDhbSyncJob((value) => {
+const {
+  job,
+  busy: jobBusy,
+  notice,
+  error: jobError,
+  start,
+} = useDhbSyncJob((value) => {
   result.value = value
   emit('completed', value)
 })
@@ -142,10 +141,7 @@ const totalMetrics = computed(() => {
   const rejected = packageSteps.value.every((item) => item.rejected != null)
     ? packageSteps.value.reduce((total, item) => total + item.rejected!, 0)
     : null
-  const unmapped = packageSteps.value.reduce(
-    (total, item) => total + (item.unmapped || 0),
-    0,
-  )
+  const unmapped = packageSteps.value.reduce((total, item) => total + (item.unmapped || 0), 0)
   return [
     { label: '新增', value: sumMetric('created') },
     { label: '修改', value: sumMetric('updated') },

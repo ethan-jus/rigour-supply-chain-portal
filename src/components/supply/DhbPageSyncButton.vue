@@ -69,7 +69,7 @@
           >
         </el-table>
         <p class="sync-explanation">
-          列表“未关联”按本系统客户计数；同步按订货宝客户编码核对，同一门店的多个编码分别统计。核对记录还包含历史待处理重试，修复记录不代表新增客户。
+          列表“未关联”按本系统客户计数；同步核对记录还包含历史待处理重试，修复记录不代表新增客户。
         </p>
         <p
           v-for="(step, index) in steps.filter((s) => s.message)"
@@ -122,7 +122,13 @@ const visible = ref(false),
 const connectors = ref<string[]>([]),
   range = ref<[Date, Date] | null>(null)
 const result = ref<DhbSyncOrchestrationResult | null>(null)
-const { job, busy: jobBusy, notice, error: jobError, start } = useDhbSyncJob((value) => {
+const {
+  job,
+  busy: jobBusy,
+  notice,
+  error: jobError,
+  start,
+} = useDhbSyncJob((value) => {
   result.value = value
   emit('completed', value)
 })
@@ -191,7 +197,12 @@ async function run() {
   result.value = null
   try {
     if (incrementalCustomer.value) {
-      await start({ scope: props.scope, connectorId: connectorId.value, incremental: true, maxPages: 100 })
+      await start({
+        scope: props.scope,
+        connectorId: connectorId.value,
+        incremental: true,
+        maxPages: 100,
+      })
       return
     }
     result.value = await syncDhbPage({

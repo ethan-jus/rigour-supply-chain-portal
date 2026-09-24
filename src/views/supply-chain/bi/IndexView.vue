@@ -11,6 +11,20 @@
         <span class="scope-date">{{ rangeLabel }}</span>
       </div>
       <div class="cockpit-tools">
+        <el-button
+          v-if="section === 'sales' || section === 'sales-collection'"
+          type="primary"
+          :icon="FullScreen"
+          :disabled="loading || !overview"
+          @click="salesMeetingOpen = true">销售业绩看板</el-button>
+        <el-button
+          v-if="section === 'overview' || section === 'city-operating'"
+          type="primary"
+          :icon="FullScreen"
+          :disabled="loading || !overview"
+          @click="meetingOpen = true"
+          >{{ section === 'city-operating' ? '城市看板' : '会议大屏' }}</el-button
+        >
         <span v-if="lastUpdated" class="updated-time">查询 {{ lastUpdated }}</span>
         <el-tooltip content="运营跟进" placement="bottom"
           ><el-button
@@ -710,6 +724,20 @@
         </el-tab-pane>
       </el-tabs>
     </el-drawer>
+    <BiMeetingPresentation
+      v-if="meetingOpen"
+      :query="queryFor(appliedFilters)"
+      :scope-label="meetingScopeLabel"
+      :initial-city="section === 'city-operating'"
+      @close="meetingOpen = false"
+      @report="openMeetingReport"
+    />
+    <BiSalesMeetingPresentation
+      v-if="salesMeetingOpen"
+      :query="queryFor(appliedFilters)"
+      :scope-label="meetingScopeLabel"
+      @close="salesMeetingOpen = false"
+    />
   </main>
 </template>
 
@@ -724,6 +752,7 @@ import {
 } from '@/utils/business-date'
 import {
   computed,
+  defineAsyncComponent,
   nextTick,
   onActivated,
   onBeforeUnmount,
@@ -804,6 +833,41 @@ import { analysisSections } from './cockpit-analysis'
 import { cockpitLayout } from './cockpit-layout'
 import { getBiComparison, type BiComparison } from '@/api/core/bi-comparison'
 import { comparisonLabel, comparisonSections, growthFigure } from './cockpit-comparison'
+
+const BiMeetingPresentation = defineAsyncComponent(
+  () => import('./components/BiMeetingPresentation.vue'),
+)
+const meetingOpen = ref(false)
+const BiSalesMeetingPresentation = defineAsyncComponent(
+  () => import('./components/BiSalesMeetingPresentation.vue'),
+)
+const salesMeetingOpen = ref(false)
+const meetingScopeLabel = computed(() =>
+  [
+    appliedFilters.value.regionCode ? filterDisplayValue('regionCode') : '授权城市范围',
+    appliedFilters.value.ownerStaffCode ? filterDisplayValue('ownerStaffCode') : '',
+    appliedFilters.value.customerTypeCode ? filterDisplayValue('customerTypeCode') : '',
+    appliedFilters.value.sourceSystemCode ? filterDisplayValue('sourceSystemCode') : '',
+  ].filter(Boolean).join(' · '),
+)
+function openMeetingReport(page: number, query: SupplyDashboardQuery) {
+  const dateRange = [businessDate(query.from!), businessDate(query.to!)]
+  quickPeriod.value = 'custom'
+  filters.dateRange = dateRange
+  filters.regionCode = query.regionCode || ''
+  appliedFilters.value = { ...appliedFilters.value, dateRange, regionCode: query.regionCode || '' }
+  meetingOpen.value = false
+  if (page === 1) {
+    openOperations('targets')
+    void loadDashboard()
+    return
+  }
+  if (page === 0) {
+    void loadDashboard()
+    return
+  }
+  openSection(page === 2 ? 'city-operating' : page === 3 ? 'product-sales' : 'sales-collection')
+}
 
 interface Filters {
   dateRange: string[] | null
@@ -1922,7 +1986,8 @@ function startTimer() {
   stopTimer()
   if (autoRefresh.value)
     refreshTimer = setInterval(() => {
-      if (!document.hidden && !loading.value && !refreshing.value) void refreshDashboard()
+      if (!meetingOpen.value && !salesMeetingOpen.value && !document.hidden && !loading.value && !refreshing.value)
+        void refreshDashboard()
     }, 60000)
 }
 watch(autoRefresh, startTimer)
@@ -1942,7 +2007,11 @@ onMounted(() => {
   void loadDashboard().then(() => loadFilterOptions())
 })
 onActivated(startTimer)
-onDeactivated(stopTimer)
+onDeactivated(() => {
+  meetingOpen.value = false
+  salesMeetingOpen.value = false
+  stopTimer()
+})
 onBeforeUnmount(() => {
   stopTimer()
   requestSequence += 1

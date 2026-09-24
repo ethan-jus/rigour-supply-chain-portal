@@ -55,5 +55,5 @@
   .order-summary__metric { padding: 10px; }
 }
 
-.order-summary--payments { --summary-columns: 5; }
+.order-summary--payments { --summary-columns: 6; }
 .order-summary__metric--checked { --metric-color: #0e7490; }

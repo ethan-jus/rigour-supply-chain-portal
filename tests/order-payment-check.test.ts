@@ -96,14 +96,14 @@ describe('核对回款弹窗', () => {
     mountDialog()
     await flushPromises()
 
-    bodyButton('审核通过').click()
+    bodyButton('核对通过').click()
     await flushPromises()
 
     expect(mocks.check).not.toHaveBeenCalled()
     expect(document.body.textContent).toContain('请填写交易单号')
   })
 
-  it('填写流水号审核通过：调用接口并回传已核对视图', async () => {
+  it('填写流水号核对通过：调用接口并回传已核对视图', async () => {
     const wrapper = mountDialog()
     await flushPromises()
 
@@ -112,7 +112,7 @@ describe('核对回款弹窗', () => {
     input.dispatchEvent(new Event('input'))
     await flushPromises()
 
-    bodyButton('审核通过').click()
+    bodyButton('核对通过').click()
     await flushPromises()
 
     // 核对命令带页面版本，服务端按版本做乐观锁
@@ -135,7 +135,7 @@ describe('核对回款弹窗', () => {
     input.dispatchEvent(new Event('input'))
     await flushPromises()
 
-    bodyButton('审核通过').click()
+    bodyButton('核对通过').click()
     await flushPromises()
 
     expect(document.body.textContent).toContain('交易单号已被其他回款单使用')

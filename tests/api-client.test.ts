@@ -136,10 +136,10 @@ describe('API响应解包', () => {
 
   it('非OK业务错误仍拒绝，网络错误保持统一错误契约', async () => {
     const failure = { ...envelope(null), code: 'BUSINESS_REJECTED', message: '业务拒绝' }
-    await expect(apiClient.post('/invoice', {}, { adapter: adapter(failure) })).rejects.toEqual(failure)
+    await expect(apiClient.post('/invoice', {}, { adapter: adapter(failure) })).rejects.toMatchObject({ code: failure.code, message: failure.message, requestId: failure.requestId })
     await expect(apiClient.get('/offline', {
       adapter: async (config) => { throw new AxiosError('Network unavailable', 'ERR_NETWORK', config) },
-    })).rejects.toMatchObject({ code: 'NETWORK_ERROR', message: 'Network unavailable' })
+    })).rejects.toMatchObject({ code: 'NETWORK_ERROR', message: '网络连接失败，请检查网络后重试' })
   })
 
   it('不把业务对象自身的code字段误判为错误码', async () => {

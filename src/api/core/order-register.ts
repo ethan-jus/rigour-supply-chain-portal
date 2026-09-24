@@ -46,6 +46,7 @@ export interface OrderRegisterOrderQuery extends OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterLineQuery extends OrderRegisterCommonQuery {
+  productVariantId?: string | number
   hasDiscount?: boolean
   paymentStatusCode?: string
   productKeyword?: string
@@ -55,6 +56,7 @@ export interface OrderRegisterLineQuery extends OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterPaymentQuery extends OrderRegisterCommonQuery {
+  productVariantId?: string | number
   productIds?: Array<string | number>
   paymentNo?: string
   transactionNo?: string
@@ -200,6 +202,9 @@ export interface OrderRegisterLinePage {
 }
 
 export interface PaymentProductAllocation {
+  productVariantId?: string | number | null
+  skuCode?: string | null
+  specification?: string | null
   lineId: string | number
   productId: string | number | null
   productCode: string | null
@@ -247,6 +252,7 @@ export interface OrderRegisterPaymentItem {
 }
 
 export interface OrderRegisterPaymentTotals {
+  quantitySum?: number
   unallocatedCount?: number
   receivedAmount: number
   checkedAmount: number
@@ -568,3 +574,22 @@ export const getOrderInvoiceProfiles = (orderNo: string) =>
     params: { orderNo },
     ...readOptions,
   })
+
+export interface MonthlyPerformanceRow {
+  month: string
+  regionCode: string | null
+  regionName: string | null
+  employeeCode: string | null
+  employeeName: string | null
+  transactionAmount: number
+  receivedAmount: number
+  unpaidAmount: number
+}
+export interface MonthlyPerformanceReport {
+  monthFrom: string
+  monthTo: string
+  generatedAt: string
+  rows: MonthlyPerformanceRow[]
+}
+export const getMonthlyPerformance = (params: { monthFrom: string; monthTo: string }) =>
+  apiClient.get<MonthlyPerformanceReport>(`${ORDER_REGISTER_BASE_PATH}/statistics/monthly-performance`, { params, ...readOptions })

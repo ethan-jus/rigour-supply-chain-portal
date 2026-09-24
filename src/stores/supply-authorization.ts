@@ -9,8 +9,12 @@ export const useSupplyAuthorizationStore = defineStore('supply-authorization', (
   function can(action: string) { return context.value?.permissions.includes(action) === true }
   async function refresh() {
     const next = await supplySettingsApi.context()
-    if (context.value?.version !== next.version || context.value?.initialized !== next.initialized)
-      useNavigationStore().invalidate('SUPPLY_CHAIN')
+    if (context.value?.version !== next.version || context.value?.initialized !== next.initialized) {
+      const navigation = useNavigationStore()
+      navigation.invalidate('SUPPLY_CHAIN')
+      // 保存用户/角色后仍停留在当前页，不能依赖下一次路由跳转补载菜单。
+      await navigation.fetchNavigation('SUPPLY_CHAIN', { deferSessionRecovery: true })
+    }
     context.value = next
     return next
   }

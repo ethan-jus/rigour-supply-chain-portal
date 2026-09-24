@@ -6,6 +6,7 @@ import { apiClient, registerUnauthorizedSessionHandler } from '@/api/core/client
 import { clearOidcTokens, completeOidcCallback, ensureAccessToken, getAccessToken, hasRefreshToken } from '@/auth/oidc'
 import { useAuthStore } from '@/stores/auth'
 import { setupPermissionGuard } from '@/router/permissionGuard'
+import { requestFailureNotices, dismissRequestFailure } from '@/utils/request-feedback'
 import { verifyRs256 } from '@/auth/oidc-crypto'
 
 vi.mock('@/auth/oidc-crypto', async importOriginal => ({
@@ -48,6 +49,7 @@ async function login() {
 }
 
 beforeEach(() => {
+  for (const notice of requestFailureNotices.value) dismissRequestFailure(notice.id)
   vi.mocked(verifyRs256).mockResolvedValue(true)
   clearOidcTokens()
   localStorage.clear()
@@ -112,6 +114,7 @@ describe('标准双 Token 自动续期', () => {
     await first
     rejected[1]!()
     await late
+    expect(requestFailureNotices.value).toHaveLength(0)
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
@@ -124,6 +127,8 @@ describe('标准双 Token 自动续期', () => {
     apiClient.defaults.adapter = adapter
     await expect(apiClient.get('/me')).rejects.toMatchObject({ code: 'IAM_TOKEN_INVALID' })
     expect(adapter).toHaveBeenCalledTimes(2)
+    expect(requestFailureNotices.value).toHaveLength(1)
+    expect(requestFailureNotices.value[0]?.count).toBe(1)
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(expired).toHaveBeenCalledTimes(1)
     expect(hasRefreshToken()).toBe(false)

@@ -2,10 +2,10 @@ export interface BrowserSession {
   authenticated: boolean
   csrfParameter: string
   csrfToken: string
+  tenantName?: string | null
 }
 
 export interface LoginCredentials {
-  tenantCode: string
   username: string
   password: string
 }
@@ -41,7 +41,7 @@ export async function submitBrowserLogin(credentials: LoginCredentials): Promise
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams({ ...credentials, [session.csrfParameter]: session.csrfToken }),
   })
-  if (response.status === 401) throw new Error('企业编码、用户名或密码不正确，请重新输入。')
+  if (response.status === 401) throw new Error('用户名或密码不正确，请重新输入。')
   if (response.status === 403) throw new Error('登录页面已过期，请重新提交。')
   if (response.status !== 204) throw new Error(UNAVAILABLE)
 }

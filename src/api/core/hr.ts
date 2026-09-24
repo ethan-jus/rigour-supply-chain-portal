@@ -33,6 +33,9 @@ export interface HrDepartmentOption {
   statusCode: string
 }
 export interface HrEmployeeRecord {
+  dhbReviewCount?: number
+  dhbStaffIds?: string[]
+  dhbAccountNames?: string[]
   jobGrade?: string | null
   departmentId?: number | null
   departmentLeaderName?: string | null
@@ -91,6 +94,8 @@ export interface HrPositionCommand {
 }
 
 export interface HrEmployeeQuery {
+  sortBy?: string
+  sortDirection?: 'asc' | 'desc'
   positionCode?: string
   jobGrade?: string
   departmentId?: number
@@ -280,4 +285,25 @@ export const hrOrganizationApi = {
     }),
   assignments: (id: string) =>
     apiClient.get<HrAssignment[]>(`/hr/employees/${encodeURIComponent(id)}/assignments`),
+}
+
+export interface DhbBindingRisk {
+  bindingId: number
+  version: number
+  employeeId: string
+  employeeCode: string
+  employeeName: string
+  mobile: string | null
+  departmentName: string | null
+  sourceStaffId: string
+  accountName: string | null
+  sourceEmployeeName: string | null
+  sourceMobile: string | null
+  reason: string
+}
+export function getDhbBindingRisks() {
+  return apiClient.get<DhbBindingRisk[]>('/hr/employees/dhb-link-risks', { stayOnUnauthorized: true })
+}
+export function confirmDhbBinding(id: number, expectedVersion: number, targetEmployeeId: string) {
+  return apiClient.post<boolean>(`/hr/employees/dhb-link-risks/${id}/confirm`, { expectedVersion, targetEmployeeId }, { stayOnUnauthorized: true })
 }

@@ -174,6 +174,11 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     path: '/supply-chain/integration', owner: 'integration-migration-service',
   },
   {
+    domainKey: 'integration', domainTitle: '外部同步', groupTitle: '同步控制', title: '定时任务',
+    routeKey: 'supply.integration.schedules',
+    path: '/supply-chain/integration/schedules', owner: 'integration-migration-service',
+  },
+  {
     domainKey: 'integration', domainTitle: '外部同步', groupTitle: '同步控制', title: '飞书导入中心',
     routeKey: 'supply.integration.feishu-import',
     path: '/supply-chain/integration/feishu-import', owner: 'integration-migration-service',

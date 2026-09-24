@@ -1,7 +1,7 @@
 import { apiClient } from './client'
 
 export type BiTargetDimension = 'CITY' | 'SALES_OWNER'
-export type BiTargetMetric = 'SALES_AMOUNT' | 'PAID_AMOUNT' | 'CONTACTED_CUSTOMER' | 'COOPERATED_CUSTOMER'
+export type BiTargetMetric = 'SALES_AMOUNT' | 'PAID_AMOUNT' | 'RECEIPT_AMOUNT' | 'CONTACTED_CUSTOMER' | 'COOPERATED_CUSTOMER' | 'NEW_CUSTOMER' | 'REPEAT_CUSTOMER'
 export interface BiTargetCommand {
   month: string
   dimensionType: BiTargetDimension

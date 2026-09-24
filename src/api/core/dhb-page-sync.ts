@@ -1,6 +1,7 @@
 import { apiClient } from './client'
 import type { DhbSyncOrchestrationResult } from './dhb-orchestration'
 export type DhbPageScope =
+  | 'SALESPERSON'
   | 'ORDER_SALES_PACKAGE'
   | 'SALES_ORDER'
   | 'RECEIPT'
@@ -42,14 +43,19 @@ export interface DhbPageSyncJob {
   result?: DhbSyncOrchestrationResult | null
 }
 export function startDhbPageSyncJob(requestId: string, command: PageSyncCommand) {
-  return apiClient.post<DhbPageSyncJob>(`/integration/dhb/page-sync/jobs/${requestId}`, command, { timeout: 15000 })
+  return apiClient.post<DhbPageSyncJob>(`/integration/dhb/page-sync/jobs/${requestId}`, command, {
+    timeout: 15000,
+  })
 }
 export function getDhbPageSyncJob(jobId: string) {
-  return apiClient.get<DhbPageSyncJob>(`/integration/dhb/page-sync/jobs/${jobId}`, { timeout: 15000 })
+  return apiClient.get<DhbPageSyncJob>(`/integration/dhb/page-sync/jobs/${jobId}`, {
+    timeout: 15000,
+  })
 }
 export function latestDhbPageSyncJob(connectorId: string, scope: DhbPageScope) {
   return apiClient.get<DhbPageSyncJob | null>('/integration/dhb/page-sync/jobs', {
-    params: { connectorId, scope }, timeout: 15000,
+    params: { connectorId, scope },
+    timeout: 15000,
   })
 }
 /** 客户采用服务端增量游标；其他对象仍须显式提供范围。 */

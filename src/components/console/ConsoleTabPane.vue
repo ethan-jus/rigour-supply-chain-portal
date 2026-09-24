@@ -21,6 +21,8 @@
  */
 import { onErrorCaptured, provide, ref, watch } from 'vue'
 import { routeLocationKey, type RouteLocationNormalizedLoaded } from 'vue-router'
+import { isPageRenderFailure } from '@/utils/page-error'
+import { publishRequestFailure } from '@/utils/request-feedback'
 
 const props = defineProps<{
   active: boolean
@@ -38,8 +40,9 @@ watch(
   },
 )
 
-onErrorCaptured((error) => {
-  renderError.value = error instanceof Error ? error.message : String(error)
+onErrorCaptured((error, _instance, info) => {
+  if (isPageRenderFailure(info)) renderError.value = '页面暂时无法显示，请关闭后重新打开该菜单。'
+  else publishRequestFailure(error)
   return false
 })
 </script>

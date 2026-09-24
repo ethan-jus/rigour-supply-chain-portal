@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ElementPlus, { ElMessage, ElSelect } from 'element-plus'
 
 const mocks = vi.hoisted(() => ({
+  routeQuery: {} as Record<string, string>,
   getOrders: vi.fn(),
+  getMonthly: vi.fn(),
+  monthlyBlob: vi.fn(),
   exportCsv: vi.fn(),
   getCreators: vi.fn(),
   getInvoice: vi.fn(),
@@ -18,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/api/core/order-register', () => ({
   getOrderRegisterOrders: mocks.getOrders,
+  getMonthlyPerformance: mocks.getMonthly,
   exportOrderRegisterCsv: mocks.exportCsv,
   getOrderRegisterCreators: mocks.getCreators,
   getOrderInvoice: mocks.getInvoice,
@@ -32,6 +36,10 @@ vi.mock('@/api/core/hr', () => ({
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => true }),
 }))
+vi.mock('@/utils/monthly-performance-export', () => ({
+  performanceMonths: () => ['2026-04', '2026-05'],
+  monthlyPerformanceBlob: mocks.monthlyBlob,
+}))
 vi.mock('@/utils/file-download', () => ({
   downloadBlob: mocks.downloadBlob,
   csvFilename: () => '订单列表-20260918.csv',
@@ -41,7 +49,7 @@ vi.mock('vue-router', async (importOriginal) => {
   return {
     ...actual,
     useRouter: () => ({ push: mocks.push }),
-    useRoute: () => ({ query: {} }),
+    useRoute: () => ({ query: mocks.routeQuery }),
   }
 })
 
@@ -104,6 +112,7 @@ function pageResponse() {
 describe('订单列表页', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.routeQuery = {}
     mocks.getOrders.mockResolvedValue(pageResponse())
     mocks.getAllAreas.mockResolvedValue([])
     mocks.getDepartments.mockResolvedValue([])
@@ -112,6 +121,25 @@ describe('订单列表页', () => {
     mocks.exportCsv.mockResolvedValue(new Blob(['a,b']))
     mocks.getInvoice.mockResolvedValue(null)
     mocks.getProfiles.mockResolvedValue([])
+  })
+
+  it('月业绩导出使用独立月份范围，生成双表Excel，不被列表筛选或分页截断', async () => {
+    const report = { monthFrom: '2026-04', monthTo: '2026-05', generatedAt: '2026-09-22T00:00:00Z', rows: [] }
+    mocks.getMonthly.mockResolvedValue(report)
+    mocks.monthlyBlob.mockResolvedValue(new Blob(['xlsx']))
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === '月业绩导出')!.trigger('click')
+    await flushPromises()
+    const picker = wrapper.findAllComponents({ name: 'ElDatePicker' }).find(p => p.attributes('aria-label') === '业绩月份' || p.props('type') === 'monthrange')!
+    picker.vm.$emit('update:modelValue', ['2026-04','2026-05'])
+    await flushPromises()
+    const button = [...document.body.querySelectorAll('button')].find(b => b.textContent?.trim() === '导出 Excel')!
+    button.click(); await flushPromises()
+    expect(mocks.getMonthly).toHaveBeenCalledWith({ monthFrom: '2026-04', monthTo: '2026-05' })
+    expect(mocks.monthlyBlob).toHaveBeenCalledWith(report)
+    expect(mocks.downloadBlob).toHaveBeenCalledWith(expect.any(Blob),'月业绩汇总_2026-04_2026-05.xlsx')
+    wrapper.unmount(); document.body.innerHTML = ''
   })
 
   it('默认按创建时间倒序加载，汇总来自服务端 totals', async () => {
@@ -128,11 +156,11 @@ describe('订单列表页', () => {
     expect(wrapper.text()).toContain('¥1,000.00')
     expect(wrapper.text()).toContain('收款金额')
     expect(wrapper.text()).toContain('待收金额')
-    expect(wrapper.text()).toContain('已核金额')
+    expect(wrapper.text()).toContain('已核对金额')
     wrapper.unmount()
   })
 
-  it('金额和回款率取全部筛选汇总，移除已核金额统计', async () => {
+  it('金额和回款率取全部筛选汇总，移除已核对金额统计', async () => {
     const page = pageResponse()
     mocks.getOrders.mockResolvedValue({ ...page, totals: {
       originalAmount: 400, payableAmount: 350, discountAmount: 50, discountRate: 0.125,
@@ -141,8 +169,8 @@ describe('订单列表页', () => {
     const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     const summary = wrapper.find('[aria-label="金额统计"]').text()
-    expect(summary).not.toContain('已核金额')
-    for (const text of ['订货金额', '¥400.00', '订单金额', '¥350.00', '优惠额', '¥50.00', '优惠率', '12.50%', '回款金额', '回款率', '34.29%', '¥120.00', '待收金额', '¥230.00']) {
+    expect(summary).not.toContain('已核对金额')
+    for (const text of ['订货金额', '¥400.00', '订单金额', '¥350.00', '优惠额', '¥50.00', '优惠率', '12.50%', '本期回款', '本期回款率', '34.29%', '¥120.00', '待收金额', '¥230.00']) {
       expect(summary).toContain(text)
     }
     expect(summary).not.toContain('¥900.00')
@@ -316,7 +344,7 @@ describe('订单列表页', () => {
     const actions = wrapper
       .findAll('.order-register-filter__actions button')
       .map((node) => node.text())
-    expect(actions).toEqual(['重置', '查询', '导出', '列设置', '同步订单'])
+    expect(actions).toEqual(['重置', '查询', '导出', '月业绩导出', '列设置', '同步订单'])
     // 不再使用折叠行，全部条件在条件行内按宽度自然换行。
     expect(wrapper.find('.order-register-filter__line--extra').exists()).toBe(false)
     expect(wrapper.find('.order-register-filter__fields').text()).toContain('创建人')
@@ -435,4 +463,19 @@ describe('订单列表页', () => {
     expect(text).not.toContain('NEEDS_REVIEW')
     wrapper.unmount()
   })
+  it.each(['shipment', 'unpaid'])('首页待办 %s 带入可清空的筛选且只请求一次', async task => {
+    mocks.routeQuery = { homeTask: task, orderNo: 'FROM-HOME' }
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(mocks.getOrders).toHaveBeenCalledTimes(1)
+    expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining({
+      orderNo: 'FROM-HOME', orderStatusCode: task === 'shipment' ? 'PENDING_SHIPPED' : undefined,
+      hasUnpaid: task === 'unpaid' ? true : undefined,
+    }))
+    await wrapper.findAll('button').find(button => button.text() === '重置')!.trigger('click')
+    await flushPromises()
+    expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining({ orderNo: undefined, orderStatusCode: undefined, hasUnpaid: undefined }))
+    wrapper.unmount()
+  })
+
 })

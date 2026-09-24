@@ -119,6 +119,8 @@
           reserve-keyword
           :remote-method="searchProductOptions"
           :loading="productSearching"
+          :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
+          @visible-change="visible => visible && searchProductOptions('')"
           placeholder="搜索商品名称/编码"
           style="width: 220px"
         >
@@ -128,6 +130,14 @@
             :label="`${item.productName} · ${item.productCode}`"
             :value="String(item.id)"
           />
+        </el-select>
+        <el-select v-model="pageFilters.productVariantId" aria-label="商品规格" clearable filterable
+          :disabled="!pageFilters.productId" :loading="variantLoading"
+          :placeholder="pageFilters.productId ? '商品规格' : '请先选择商品'"
+          :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'"
+          style="width: 200px" @visible-change="visible => visible && variantLoadFailed && loadVariants()">
+          <el-option v-for="variant in variantOptions" :key="variant.id" :value="String(variant.id)"
+            :label="`${variant.specificationSnapshot || '默认规格'} · ${variant.variantCode}`" />
         </el-select>
 
       </template>
@@ -159,21 +169,25 @@
         <span class="order-summary__label">{{ allocationActive ? '订单金额（分摊）' : '订单金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.relatedOrderAmount) }}</strong>
       </div>
-      <div class="order-summary__metric order-summary__metric--paid" title="当前筛选范围内的有效收款合计，不含待收与取消。">
-        <span class="order-summary__label">{{ allocationActive ? '筛选商品回款金额' : '收款金额' }}</span>
+      <div class="order-summary__metric order-summary__metric--paid" title="按筛选的到账日期汇总回款，包含订货宝待财务确认及已确认金额，排除待收款和已取消记录。">
+        <span class="order-summary__label">{{ allocationActive ? '本期到账（分摊）' : '本期到账' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--unpaid" title="命中订单的全部有效收款及历史期初扣除后的待收余额，不受回款日期截断。">
         <span class="order-summary__label">{{ allocationActive ? '待收金额（分摊）' : '待收金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.unpaidAmount) }}</strong>
       </div>
-      <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已审核收款合计。">
-        <span class="order-summary__label">{{ allocationActive ? '审核金额（分摊）' : '审核金额' }}</span>
+      <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已核对收款合计。">
+        <span class="order-summary__label">{{ allocationActive ? '已核对金额（分摊）' : '已核对金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--count" title="筛选命中的订单客户去重数量。">
         <span class="order-summary__label">客户数</span>
         <strong class="order-summary__value">{{ pageData.totals.customerCount?.toLocaleString() ?? '-' }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--count" title="当前筛选命中的订单去重后，合计符合商品分类、商品及规格条件的明细数量；同一订单多笔回款不重复计算，不按回款比例分摊数量。">
+        <span class="order-summary__label">商品数</span>
+        <strong class="order-summary__value">{{ pageData.totals.quantitySum?.toLocaleString('zh-CN', { maximumFractionDigits: 6 }) ?? '-' }}</strong>
       </div>
     </div>
 
@@ -195,6 +209,8 @@
                 <el-table v-if="row.productAllocations?.length" :data="row.productAllocations" size="small">
                   <el-table-column prop="productCode" label="商品编码" width="170" />
                   <el-table-column prop="productName" label="商品" min-width="220" />
+                  <el-table-column prop="specification" label="规格" min-width="140" />
+                  <el-table-column prop="skuCode" label="SKU编码" min-width="160" />
                   <el-table-column label="订货金额" width="150" align="right">
                     <template #default="{ row: line }">{{ moneyText(line.originalAmount) }}</template>
                   </el-table-column>
@@ -263,14 +279,14 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedStatus')" label="审核状态" width="100">
+          <el-table-column v-if="paymentColumns.isVisible('checkedStatus')" label="核对状态" width="100">
             <template #default="{ row }">
               <el-tag class="order-status-tag" :type="row.paymentStatusCode === 'CHECKED' ? 'success' : row.paymentStatusCode === 'CANCELLED' ? 'info' : 'warning'" effect="light">
-                {{ row.paymentStatusCode === 'CHECKED' ? '已审核' : row.paymentStatusCode === 'CANCELLED' ? '-' : '未审核' }}
+                {{ row.paymentStatusCode === 'CHECKED' ? '已核对' : row.paymentStatusCode === 'CANCELLED' ? '-' : '未核对' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedBy')" label="审核人" width="110" show-overflow-tooltip>
+          <el-table-column v-if="paymentColumns.isVisible('checkedBy')" label="核对人" width="110" show-overflow-tooltip>
             <template #default="{ row }">{{ row.paymentStatusCode === 'CHECKED' ? auditActorLabel(row.checkedBy) : '-' }}</template>
           </el-table-column>
           <el-table-column
@@ -338,7 +354,7 @@
           >
             <template #default="{ row }">{{ row.sourceRecordId || '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedAt')" label="审核时间" width="170">
+          <el-table-column v-if="paymentColumns.isVisible('checkedAt')" label="核对时间" width="170">
             <template #default="{ row }">{{ displayDateTime(row.checkedAt) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="120" align="center" fixed="right" class-name="order-actions-cell">
@@ -354,10 +370,10 @@
                 plain
                 @click="openCheck(row as OrderRegisterPaymentItem)"
               >
-                <el-icon><CircleCheck /></el-icon>审核
+                <el-icon><CircleCheck /></el-icon>核对
               </el-button>
               <span v-else-if="row.paymentStatusCode === 'CHECKED'" class="payment-check-state payment-check-state--done">
-                <el-icon><CircleCheck /></el-icon>已审核
+                <el-icon><CircleCheck /></el-icon>已核对
               </span>
               <span v-else class="payment-check-state">—</span>
             </template>
@@ -413,8 +429,7 @@ import {
 } from '@/api/core/order-register'
 import { useOrderRegisterCommonFilters } from '@/composables/useOrderRegisterQuery'
 import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
-import { getErpProductCategories, type ErpProductCategoryView } from '@/api/core/erp-internal'
-import { getErpManagedProducts, type ErpManagedProductSummary } from '@/api/core/erp-product'
+import { useOrderProductFilters } from '@/composables/useOrderProductFilters'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
 const route = useRoute()
@@ -427,8 +442,8 @@ const paymentColumns = useColumnSettings('order-payments', [
   { key: 'paidAmount', label: '收款金额' },
   { key: 'paymentTime', label: '收款时间' },
   { key: 'paymentStatus', label: '收款状态' },
-  { key: 'checkedStatus', label: '审核状态' },
-  { key: 'checkedBy', label: '审核人' },
+  { key: 'checkedStatus', label: '核对状态' },
+  { key: 'checkedBy', label: '核对人' },
   { key: 'transactionNo', label: '交易单号' },
   { key: 'attachments', label: '付款凭证' },
   { key: 'createdBy', label: '创建人', defaultVisible: false },
@@ -438,7 +453,7 @@ const paymentColumns = useColumnSettings('order-payments', [
   { key: 'syncedBy', label: '同步人', defaultVisible: false },
   { key: 'syncedAt', label: '同步时间', defaultVisible: false },
   { key: 'sourcePaymentCode', label: '来源付款编码' },
-  { key: 'checkedAt', label: '审核时间', defaultVisible: false },
+  { key: 'checkedAt', label: '核对时间', defaultVisible: false },
 ])
 const {
   areaTree,
@@ -458,41 +473,19 @@ const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
   categoryId: '' as string | undefined,
   productId: '' as string | undefined,
+  productVariantId: '' as string | undefined,
   paymentNo: '',
   transactionNo: '',
   paymentStatusCode: '',
   paymentTimeRange: null as [string, string] | null,
 })
 
-const categoryOptions = ref<ErpProductCategoryView[]>([])
-const categoryLoading = ref(false)
-const categoryLoadFailed = ref(false)
-interface CategoryTreeNode {
-  id: string
-  categoryName: string
-  children: CategoryTreeNode[]
-}
-const categoryTreeProps = { label: 'categoryName', children: 'children' }
-const categoryTree = computed<CategoryTreeNode[]>(() => {
-  const nodes = new Map<string, CategoryTreeNode>()
-  categoryOptions.value.forEach((row) => {
-    nodes.set(String(row.id), { id: String(row.id), categoryName: row.categoryName, children: [] })
-  })
-  const roots: CategoryTreeNode[] = []
-  categoryOptions.value.forEach((row) => {
-    const node = nodes.get(String(row.id))
-    if (!node) return
-    const parent = row.parentId == null ? undefined : nodes.get(String(row.parentId))
-    if (parent) parent.children.push(node)
-    else roots.push(node)
-  })
-  return roots
-})
-const productOptions = ref<ErpManagedProductSummary[]>([])
-const productSearching = ref(false)
-/** 分类 → 商品ID集合；分类筛选在订单侧只能按商品过滤。 */
-const CATEGORY_PRODUCT_LIMIT = 500
-
+const {
+  categoryTree, categoryTreeProps, categoryLoading, categoryLoadFailed,
+  productOptions, productSearching, productLoadFailed, variantOptions, variantLoading, variantLoadFailed,
+  loadCategoryOptions, resolveProductIds, searchProductOptions, loadVariants,
+  onCategoryChange, onCategoryVisibleChange,
+} = useOrderProductFilters(pageFilters)
 const allocationActive = ref(false)
 const loadFailed = ref(false)
 let paymentRequest = 0
@@ -504,7 +497,8 @@ function allocationMoney(amount: number | null | undefined) {
 const paymentStatusOptions = [
   { value: 'PENDING', label: '待收款' },
   { value: 'CONFIRMED', label: '已收款' },
-  { value: 'CHECKED', label: '已审核' },
+  { value: 'RECEIVED', label: '已回款（未核对）' },
+  { value: 'CHECKED', label: '已核对' },
   { value: 'CANCELLED', label: '已取消' },
 ]
 
@@ -527,6 +521,7 @@ const pageData = ref<OrderRegisterPaymentPage>({
     relatedOrderAmount: 0,
     unpaidAmount: 0,
     customerCount: 0,
+    quantitySum: 0,
   },
   coverage: null,
 })
@@ -560,94 +555,6 @@ function errorMessage(reason: unknown, fallback: string) {
   return fallback
 }
 
-/** 分类筛选先解析成商品集合，再按商品过滤明细。 */
-async function loadCategoryProductIds(categoryId: string): Promise<number[]> {
-  const categories = new Set([categoryId])
-  for (const id of categories) {
-    categoryOptions.value.forEach(row => {
-      if (row.parentId != null && String(row.parentId) === id) categories.add(String(row.id))
-    })
-  }
-  const ids = new Set<number>()
-  for (const id of categories) {
-    for (let begin = 0; ; begin += 200) {
-      const page = await getErpManagedProducts({ begin, step: 200, categoryId: id })
-      page.items.forEach(item => ids.add(Number(item.id)))
-      if (page.total > CATEGORY_PRODUCT_LIMIT || ids.size > CATEGORY_PRODUCT_LIMIT) {
-        throw new Error(`分类下商品超过 ${CATEGORY_PRODUCT_LIMIT} 个，请缩小分类范围后查询，避免统计不完整`)
-      }
-      if (begin + page.items.length >= page.total || !page.items.length) break
-    }
-  }
-  return [...ids]
-}
-
-async function resolveProductIds(): Promise<number[] | undefined> {
-  const productId = empty(pageFilters.productId)
-  const categoryId = empty(pageFilters.categoryId)
-  if (!categoryId) return productId ? [Number(productId)] : undefined
-  // Refresh category metadata if its first load failed; never silently omit descendants.
-  if (!categoryOptions.value.length || categoryLoadFailed.value) await loadCategoryOptions()
-  if (categoryLoadFailed.value) throw new Error('商品分类加载失败，请重试')
-  const ids = await loadCategoryProductIds(categoryId)
-  const matching = productId ? ids.filter(id => id === Number(productId)) : ids
-  // 0 is a non-existent product ID: an empty category must never become an unfiltered query.
-  return matching.length ? matching : [0]
-}
-
-function onCategoryChange() {
-  // 商品级联在分类范围内：切换分类后清空已选商品并预载该分类商品。
-  pageFilters.productId = ''
-  productOptions.value = []
-  void searchProductOptions('')
-}
-
-async function searchProductOptions(keyword: string) {
-  const value = keyword?.trim() || ''
-  productSearching.value = true
-  try {
-    const looksLikeCode = value.length > 0 && !/[\u4e00-\u9fa5]/.test(value)
-    const categoryIds = empty(pageFilters.categoryId) ? await loadCategoryProductIds(pageFilters.categoryId!) : undefined
-    if (categoryIds && !categoryIds.length) { productOptions.value = []; return }
-    const page = await getErpManagedProducts({
-      begin: 0,
-      step: 20,
-      productIds: categoryIds,
-      productName: looksLikeCode ? undefined : value || undefined,
-      productCode: looksLikeCode ? value : undefined,
-    })
-    productOptions.value = page.items
-  } catch {
-    productOptions.value = []
-  } finally {
-    productSearching.value = false
-  }
-}
-
-function onCategoryVisibleChange(visible: boolean) {
-  if (visible && (categoryLoadFailed.value || !categoryOptions.value.length)) void loadCategoryOptions()
-}
-
-async function loadCategoryOptions() {
-  if (categoryLoading.value) return
-  categoryLoading.value = true
-  categoryLoadFailed.value = false
-  try {
-    const rows: ErpProductCategoryView[] = []
-    for (let begin = 0; ; begin += 200) {
-      const page = await getErpProductCategories({ begin, step: 200 })
-      rows.push(...page.items)
-      if (rows.length >= page.total || !page.items.length || begin >= 9800) break
-    }
-    categoryOptions.value = rows
-  } catch {
-    categoryLoadFailed.value = true
-  } finally {
-    categoryLoading.value = false
-  }
-}
-
-
 async function buildQuery() {
   const productIds = await resolveProductIds()
   const orderDate = orderRegisterDateParams(filters.orderDateRange)
@@ -657,7 +564,8 @@ async function buildQuery() {
     'paymentTimeTo',
   )
   return {
-    productIds,
+    productIds: productIds?.length === 0 ? [0] : productIds,
+    productVariantId: pageFilters.productId ? empty(pageFilters.productVariantId) : undefined,
     begin: (currentPage.value - 1) * pageSize.value,
     step: pageSize.value,
     orderNo: empty(filters.orderNo),
@@ -706,18 +614,20 @@ function search() {
   void loadPayments()
 }
 
-function resetFilters() {
+function clearFilters() {
   resetCommonFilters()
   pageFilters.categoryId = ''
   pageFilters.productId = ''
+  pageFilters.productVariantId = ''
   pageFilters.paymentNo = ''
   pageFilters.transactionNo = ''
   pageFilters.paymentStatusCode = ''
   pageFilters.paymentTimeRange = null
   sortBy.value = 'paymentTime'
   sortDirection.value = 'desc'
-  search()
 }
+
+function resetFilters() { clearFilters(); search() }
 
 function onPageSizeChange() {
   currentPage.value = 1
@@ -767,9 +677,14 @@ async function exportCsv() {
 }
 
 watch(
-  () => route.query.orderNo,
-  (value) => {
-    if (typeof value === 'string' && value.trim()) {
+  () => [route.query.homeTask, route.query.orderNo],
+  ([task, value]) => {
+    if (task === 'payment') {
+      clearFilters()
+      pageFilters.paymentStatusCode = 'RECEIVED'
+      filters.orderNo = typeof value === 'string' ? value.trim() : ''
+      search()
+    } else if (typeof value === 'string' && value.trim()) {
       filters.orderNo = value.trim()
       search()
     }
@@ -789,7 +704,7 @@ watch(
 onMounted(() => {
   void loadOptions()
   void loadCategoryOptions()
-  if (!route.query.orderNo) void loadPayments()
+  if (!route.query.orderNo && route.query.homeTask !== 'payment') void loadPayments()
 })
 </script>
 

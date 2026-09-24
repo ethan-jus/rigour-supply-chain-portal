@@ -64,27 +64,11 @@ export interface SettingsAuditPage {
   page: number
   pageSize: number
 }
-export interface CutoverIssue {
-  code: string
-  severity: string
-  count: number
-  message: string
-}
-export interface CutoverReport {
-  mode: string
-  version: number
-  fingerprint: string
-  ready: boolean
-  issues: CutoverIssue[]
-}
 export interface SupplyPermissionPreview {
   userId: string
   username: string
   applicationVersion: number
-  legacyPermissions: string[]
-  proposedPermissions: string[]
-  added: string[]
-  removed: string[]
+  permissions: string[]
   selectedAction: string | null
   unavailableReason: string | null
   policy: null | {
@@ -103,66 +87,11 @@ export interface SupplyPermissionPreview {
     warehouseLimit: { mode: string; references: string[] }
   }
 }
-export interface SupplyAuthorizationObservation {
-  userId: string
-  username: string
-  applicationVersion: number
-  action: string
-  legacyAction: string
-  legacyAllowed: boolean
-  proposedAllowed: boolean
-  policyJson: string
-  sampleCount: number
-  observedAt: string
-}
-export interface SupplyDataObservation extends Omit<
-  SupplyAuthorizationObservation,
-  'legacyAction'
-> {
-  domain: string
-  recordKey: string
-}
-export interface LegacySupplyRole {
-  id: string
-  code: string
-  name: string
-  status: string
-  applicationVersion: number
-  fingerprint: string
-  menuNodeIds: string[]
-  permissions: string[]
-  importedRoleId: string | null
-}
 export const supplySettingsApi = {
-  dataObservations: (page: number) =>
-    apiClient.get<{
-      items: SupplyDataObservation[]
-      total: number
-      page: number
-      pageSize: number
-    }>(SUPPLY_SETTINGS_BASE + '/data-observations', { params: { page, size: 20 } }),
-  legacyRoles: () =>
-    apiClient.get(SUPPLY_SETTINGS_BASE + '/legacy-roles') as Promise<LegacySupplyRole[]>,
-  importLegacyRole: (source: LegacySupplyRole, name: string) =>
-    apiClient.post(
-      SUPPLY_SETTINGS_BASE + '/legacy-roles/' + encodeURIComponent(source.id) + '/import',
-      { name, applicationVersion: source.applicationVersion, fingerprint: source.fingerprint },
-    ) as Promise<SupplyRole>,
-  observations: (page: number) =>
-    apiClient.get(SUPPLY_SETTINGS_BASE + '/authorization-observations', {
-      params: { page, size: 20 },
-    }) as Promise<{ items: SupplyAuthorizationObservation[]; total: number }>,
   permissionPreview: (userId: string, action?: string) =>
     apiClient.get(SUPPLY_SETTINGS_BASE + '/permission-preview', {
       params: { userId, action },
     }) as Promise<SupplyPermissionPreview>,
-  readiness: () => apiClient.get(SUPPLY_SETTINGS_BASE + '/readiness') as Promise<CutoverReport>,
-  activate: (data: {
-    version: number
-    fingerprint: string
-    reason: string
-    acknowledgeWarnings: boolean
-  }) => apiClient.post(SUPPLY_SETTINGS_BASE + '/activate', data) as Promise<SupplyContext>,
   context: () => apiClient.get(SUPPLY_SETTINGS_BASE + '/context') as Promise<SupplyContext>,
   initialize: () => apiClient.post(SUPPLY_SETTINGS_BASE + '/initialize') as Promise<SupplyContext>,
   menus: () => apiClient.get(SUPPLY_SETTINGS_BASE + '/menus') as Promise<SupplyMenuNode[]>,
@@ -202,6 +131,10 @@ export interface ScopeRule {
   includeDescendants: boolean
   references: Partial<Record<ScopeDimension, string[]>>
 }
+export interface RoleDataScope {
+  mode: 'ALL' | 'CUSTOM' | 'DEPARTMENT' | 'SELF'
+  departmentIds: string[]
+}
 export interface SupplyRole {
   id: string
   code: string
@@ -213,15 +146,13 @@ export interface SupplyRole {
   userCount: number
   menuNodeIds: string[]
   rules: ScopeRule[]
+  dataScope?: RoleDataScope | null
 }
 export type SupplyRoleCommand = Pick<
   SupplyRole,
   'code' | 'name' | 'description' | 'status' | 'version' | 'menuNodeIds' | 'rules'
->
-export interface ScopeLimit {
-  mode: 'NONE' | 'SPECIFIED' | 'ALL'
-  references: string[]
-}
+> & { dataScope: RoleDataScope }
+
 export interface RoleAssignment {
   roleId: string
   parameters: Record<string, Partial<Record<ScopeDimension, string[]>>>
@@ -266,8 +197,6 @@ export interface SupplyMember {
   employeeCode: string | null
   employee: SupplyEmployee | null
   roles: RoleAssignment[]
-  regionLimit: ScopeLimit
-  warehouseLimit: ScopeLimit
   usable: boolean
   unavailableReason: string | null
 }
@@ -280,8 +209,6 @@ export interface SupplyMemberCommand {
   remark: string | null
   version: number
   roles: RoleAssignment[]
-  regionLimit: ScopeLimit
-  warehouseLimit: ScopeLimit
   bindingReason: string | null
 }
 export interface BatchRoleCommand {
@@ -300,8 +227,8 @@ export const supplyAccessApi = {
   menus: () => apiClient.get<SupplyMenuNode[]>(SUPPLY_SETTINGS_BASE + '/role-menu-catalog'),
   saveRole: (id: string | null, data: SupplyRoleCommand) =>
     id
-      ? apiClient.put<SupplyRole>(SUPPLY_SETTINGS_BASE + '/roles/' + id, data)
-      : apiClient.post<SupplyRole>(SUPPLY_SETTINGS_BASE + '/roles', data),
+      ? apiClient.put<SupplyRole>(SUPPLY_SETTINGS_BASE + '/roles/' + id + '/unified', data)
+      : apiClient.post<SupplyRole>(SUPPLY_SETTINGS_BASE + '/roles/unified', data),
   roleImpact: (id: string) =>
     apiClient.get<SupplyRoleImpact>(SUPPLY_SETTINGS_BASE + '/roles/' + id + '/impact'),
   deleteRole: (id: string, version: number) =>

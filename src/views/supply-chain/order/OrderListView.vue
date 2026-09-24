@@ -3,6 +3,7 @@
     <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="resetFilters">
       <template #actions>
         <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+        <el-button type="primary" @click="monthlyExportVisible = true">月业绩导出</el-button>
         <TableColumnSettings
           plain
           :columns="orderColumns.columns"
@@ -94,6 +95,7 @@
           <el-option label="已关联" value="true" />
           <el-option label="未关联" value="false" />
         </el-select>
+        <el-checkbox v-model="pageFilters.hasUnpaid">仅看待回款</el-checkbox>
         <el-select v-model="pageFilters.invoiceStatusCode" aria-label="发票状态" clearable placeholder="发票状态" style="width: 115px">
           <el-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
@@ -135,12 +137,14 @@
         <strong class="order-summary__value">{{ discountRateText(totals.discountRate) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--paid">
-        <span class="order-summary__label">回款金额</span>
+        <el-tooltip content="所选订单累计回款，包含订货宝待财务确认和已确认金额；已取消回款不计入。" placement="top">
+          <span class="order-summary__label">本期回款</span>
+        </el-tooltip>
         <strong class="order-summary__value">{{ moneyText(totals.paidAmount) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--paid">
-        <el-tooltip content="当前筛选范围回款金额合计÷订单金额合计；订单金额为零时不计算。" placement="top">
-          <span class="order-summary__label">回款率</span>
+        <el-tooltip content="本期按筛选的订单日期确定；这些订单累计回款÷订单金额，包含后续月份收到的款；订单金额为零时不计算。" placement="top">
+          <span class="order-summary__label">本期回款率</span>
         </el-tooltip>
         <strong class="order-summary__value">{{ repaymentRateText(totals.paidAmount, totals.payableAmount) }}</strong>
       </div>
@@ -259,7 +263,7 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('checkedAmount')" label="已核金额" width="120" align="right" prop="checkedAmount">
+          <el-table-column v-if="orderColumns.isVisible('checkedAmount')" label="已核对金额" width="120" align="right" prop="checkedAmount">
             <template #default="{ row }">
               <span class="amount amount--muted">{{ moneyText(row.checkedAmount) }}</span>
             </template>
@@ -363,6 +367,17 @@
       </div>
     </el-card>
 
+    <el-dialog v-model="monthlyExportVisible" title="月业绩导出" width="580px">
+      <p>导出城市、销售两张汇总表，包含所选月份的交易额、回款额和未回款额。</p>
+      <el-date-picker v-model="monthlyRange" type="monthrange" value-format="YYYY-MM"
+        start-placeholder="开始月份" end-placeholder="结束月份" range-separator="至" aria-label="业绩月份"
+        :disabled-date="(date: Date) => date.getTime() > Date.now()" style="width: 100%" />
+      <p class="monthly-export-note">交易额按下单月份、回款额按实际回款月份，未回款额为月末累计欠款（当前月截至导出时）。导出全部可见订单，不受列表筛选和分页影响。</p>
+      <template #footer>
+        <el-button @click="monthlyExportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="monthlyExporting" @click="exportMonthlyPerformance">导出 Excel</el-button>
+      </template>
+    </el-dialog>
     <OrderRegisterDetailDrawer
       v-model="detailVisible"
       :order-id="detailOrderId"
@@ -379,7 +394,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { businessMonth } from '@/utils/business-date'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Document, DocumentAdd, Money, View } from '@element-plus/icons-vue'
 import OrderPackageSyncButton from '@/components/supply/OrderPackageSyncButton.vue'
@@ -401,6 +417,7 @@ import { empty, orderRegisterDateParams } from '@/utils/order-register-query'
 import { csvFilename, downloadBlob } from '@/utils/file-download'
 import {
   exportOrderRegisterCsv,
+  getMonthlyPerformance,
   getOrderRegisterOrders,
   type OrderRegisterCoverage,
   type OrderRegisterOrderItem,
@@ -414,6 +431,7 @@ import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
 const router = useRouter()
+const route = useRoute()
 const { can } = useSupplyPermissions()
 const canViewOrders = computed(() => can('order:read'))
 const canInvoiceOrders = computed(() => can('order:invoice:write'))
@@ -432,7 +450,7 @@ const orderColumns = useColumnSettings('order-list', [
   { key: 'discountRate', label: '优惠率' },
   { key: 'paidAmount', label: '收款金额' },
   { key: 'unpaidAmount', label: '待收金额' },
-  { key: 'checkedAmount', label: '已核金额' },
+  { key: 'checkedAmount', label: '已核对金额' },
   { key: 'orderDate', label: '下单时间' },
   { key: 'shipmentTime', label: '发货时间' },
   { key: 'dhbOrderNo', label: '订货宝订单号' },
@@ -460,6 +478,7 @@ const {
 } = useOrderRegisterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
+  hasUnpaid: false,
   discountStatus: '' as string | undefined,
   dhbOrderNo: '',
   orderStatusCode: '',
@@ -519,6 +538,29 @@ const totals = computed(() => pageData.value.totals)
 
 function discountRateText(value: number | null | undefined): string {
   return value == null ? '-' : `${(value * 100).toFixed(2)}%`
+}
+
+const monthlyExportVisible = ref(false)
+const monthlyExporting = ref(false)
+const reportNow = businessMonth(new Date())
+const reportYear = Number(reportNow.slice(0, 4))
+const reportMonth = Number(reportNow.slice(5))
+const monthlyRange = ref<[string, string] | null>([
+  `${reportMonth < 4 ? reportYear - 1 : reportYear}-04`, `${reportYear}-${String(reportMonth).padStart(2, '0')}`,
+])
+async function exportMonthlyPerformance() {
+  if (!monthlyRange.value?.[0] || !monthlyRange.value?.[1]) { ElMessage.warning('请选择业绩月份'); return }
+  monthlyExporting.value = true
+  try {
+    const { performanceMonths, monthlyPerformanceBlob } = await import('@/utils/monthly-performance-export')
+    const [monthFrom, monthTo] = monthlyRange.value
+    performanceMonths(monthFrom, monthTo)
+    const report = await getMonthlyPerformance({ monthFrom, monthTo })
+    const blob = await monthlyPerformanceBlob(report)
+    downloadBlob(blob, `月业绩汇总_${monthFrom}_${monthTo}.xlsx`)
+    monthlyExportVisible.value = false
+  } catch (reason) { ElMessage.error(errorMessage(reason, '月业绩导出失败，请重试')) }
+  finally { monthlyExporting.value = false }
 }
 
 const detailVisible = ref(false)
@@ -599,6 +641,7 @@ function buildQuery() {
     paymentStatusCode: empty(pageFilters.paymentStatusCode),
     invoiceStatusCode: empty(pageFilters.invoiceStatusCode),
     dhbLinked: empty(pageFilters.dhbLinked) == null ? undefined : pageFilters.dhbLinked === 'true',
+    hasUnpaid: pageFilters.hasUnpaid || undefined,
     hasDiscount: empty(pageFilters.discountStatus) == null ? undefined : pageFilters.discountStatus === 'true',
     sortBy: sortBy.value,
     sortDirection: sortDirection.value,
@@ -629,7 +672,8 @@ function search() {
   void loadOrders()
 }
 
-function resetFilters() {
+function clearFilters() {
+  pageFilters.hasUnpaid = false
   pageFilters.discountStatus = ''
   resetCommonFilters()
   pageFilters.orderStatusCode = ''
@@ -639,8 +683,9 @@ function resetFilters() {
   pageFilters.dhbOrderNo = ''
   sortBy.value = 'createdTime'
   sortDirection.value = 'desc'
-  search()
 }
+
+function resetFilters() { clearFilters(); search() }
 
 function onPageSizeChange() {
   currentPage.value = 1
@@ -748,9 +793,21 @@ async function exportCsv() {
   }
 }
 
+watch(
+  () => [route.query.homeTask, route.query.orderNo],
+  ([task, orderNo]) => {
+    if (task !== 'shipment' && task !== 'unpaid' && typeof orderNo !== 'string') return
+    clearFilters()
+    pageFilters.orderStatusCode = task === 'shipment' ? 'PENDING_SHIPPED' : ''
+    pageFilters.hasUnpaid = task === 'unpaid'
+    filters.orderNo = typeof orderNo === 'string' ? orderNo.trim() : ''
+    search()
+  },
+  { immediate: true },
+)
 onMounted(() => {
   void loadOptions()
-  void loadOrders()
+  if (!route.query.orderNo && !['shipment', 'unpaid'].includes(String(route.query.homeTask))) void loadOrders()
 })
 
 
@@ -766,6 +823,7 @@ watch(
 </script>
 
 <style scoped>
+.monthly-export-note { color: #64748b; font-size: 13px; line-height: 1.7; }
 .order-register-page {
   display: flex;
   min-height: 0;

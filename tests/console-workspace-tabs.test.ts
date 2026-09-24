@@ -199,11 +199,11 @@ describe('ConsoleShell 工作页签', () => {
     expect(tabByTitle(wrapper, '自定义甲').exists()).toBe(true)
     expect(tabByTitle(wrapper, '自定义乙').exists()).toBe(true)
     expect(wrapper.findAll('h1').find(h => h.isVisible())?.text()).toBe('自定义乙')
-    expect(document.title).toBe('自定义乙 - 瑞盖供应链数字化平台')
+    expect(document.title).toBe('自定义乙 - 供应链数字化平台')
     await tabByTitle(wrapper, '自定义甲').trigger('click')
     await flushPromises()
     expect(wrapper.findAll('h1').find(h => h.isVisible())?.text()).toBe('自定义甲')
-    expect(document.title).toBe('自定义甲 - 瑞盖供应链数字化平台')
+    expect(document.title).toBe('自定义甲 - 供应链数字化平台')
     wrapper.unmount()
   })
 

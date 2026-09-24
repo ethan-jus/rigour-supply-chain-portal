@@ -431,6 +431,37 @@ export interface SupplyDashboardOperatingAnalysis {
     orderingCustomerCount: number
     repeatCustomerCount: number
   }[]
+  /** Payment-date totals; includes receipts for orders from earlier months. */
+  cityReceipts?: {
+    regionCode: string
+    regionName: string | null
+    receiptAmount: number
+    paymentCount: number
+    customerCount: number
+  }[]
+  /** Current-period buyers with a valid order before the period started. */
+  customerRetention?: {
+    orderingCustomerCount: number
+    returningCustomerCount: number
+    newCustomerCount?: number | null
+    annualReturningCustomerCount?: number | null
+  } | null
+  cityMonthlyGoals?: {
+    regionCode: string
+    regionName: string
+    month: number
+    salesTarget: number
+    receiptTarget: number
+    newCustomerTarget: number
+    repeatCustomerTarget: number
+    configuredCount: number
+  }[]
+  /** Scoped HR roster, including current city staff with zero performance. */
+  salesPeople?: {
+    ownerStaffCode: string
+    ownerStaffName: string
+    employmentStatus: string | null
+  }[]
   salesReceipts: {
     ownerStaffCode: string
     ownerStaffName: string

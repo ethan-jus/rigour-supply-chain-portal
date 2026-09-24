@@ -106,6 +106,8 @@
           reserve-keyword
           :remote-method="searchProductOptions"
           :loading="productSearching"
+          :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
+          @visible-change="visible => visible && searchProductOptions('')"
           placeholder="搜索商品名称/编码"
           style="width: 220px"
         >
@@ -115,6 +117,14 @@
             :label="`${item.productName} · ${item.productCode}`"
             :value="String(item.id)"
           />
+        </el-select>
+        <el-select v-model="pageFilters.productVariantId" aria-label="商品规格" clearable filterable
+          :disabled="!pageFilters.productId" :loading="variantLoading"
+          :placeholder="pageFilters.productId ? '商品规格' : '请先选择商品'"
+          :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'"
+          style="width: 200px" @visible-change="visible => visible && variantLoadFailed && loadVariants()">
+          <el-option v-for="variant in variantOptions" :key="variant.id" :value="String(variant.id)"
+            :label="`${variant.specificationSnapshot || '默认规格'} · ${variant.variantCode}`" />
         </el-select>
         <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况" style="width: 130px">
           <el-option label="全部" value="" />
@@ -160,14 +170,14 @@
         <strong class="order-summary__value">{{ discountRateText(pageData.totals.discountRate) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--paid">
-        <el-tooltip content="订单账本已收金额（含历史期初），商品条件下按订货金额比例分摊。" placement="top">
-          <span class="order-summary__label">回款金额</span>
+        <el-tooltip content="所选订单累计回款（含历史期初），包含订货宝待财务确认和已确认金额；商品条件下按订货金额比例分摊，已取消回款不计入。" placement="top">
+          <span class="order-summary__label">本期回款</span>
         </el-tooltip>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--paid">
-        <el-tooltip content="当前筛选范围回款金额合计÷订单金额合计；订单金额为零时不计算。" placement="top">
-          <span class="order-summary__label">回款率</span>
+        <el-tooltip content="本期按筛选的订单日期确定；这些订单累计回款÷订单金额，包含后续月份收到的款；订单金额为零时不计算。" placement="top">
+          <span class="order-summary__label">本期回款率</span>
         </el-tooltip>
         <strong class="order-summary__value">{{ repaymentRateText(pageData.totals.receivedAmount, pageData.totals.orderAmount) }}</strong>
       </div>
@@ -369,7 +379,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
@@ -390,7 +400,7 @@ import {
   type OrderRegisterLinePage,
 } from '@/api/core/order-register'
 import { getErpManagedProducts, type ErpManagedProductSummary } from '@/api/core/erp-product'
-import { getErpProductCategories, type ErpProductCategoryView } from '@/api/core/erp-internal'
+import { useOrderProductFilters } from '@/composables/useOrderProductFilters'
 import { useOrderRegisterCommonFilters } from '@/composables/useOrderRegisterQuery'
 import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
 import { useColumnSettings } from '@/composables/useColumnSettings'
@@ -439,37 +449,15 @@ const pageFilters = reactive({
   paymentStatusCode: '' as string | undefined,
   categoryId: '' as string | undefined,
   productId: '' as string | undefined,
+  productVariantId: '' as string | undefined,
 })
 
-const categoryOptions = ref<ErpProductCategoryView[]>([])
-const categoryLoading = ref(false)
-const categoryLoadFailed = ref(false)
-interface CategoryTreeNode {
-  id: string
-  categoryName: string
-  children: CategoryTreeNode[]
-}
-const categoryTreeProps = { label: 'categoryName', children: 'children' }
-const categoryTree = computed<CategoryTreeNode[]>(() => {
-  const nodes = new Map<string, CategoryTreeNode>()
-  categoryOptions.value.forEach((row) => {
-    nodes.set(String(row.id), { id: String(row.id), categoryName: row.categoryName, children: [] })
-  })
-  const roots: CategoryTreeNode[] = []
-  categoryOptions.value.forEach((row) => {
-    const node = nodes.get(String(row.id))
-    if (!node) return
-    const parent = row.parentId == null ? undefined : nodes.get(String(row.parentId))
-    if (parent) parent.children.push(node)
-    else roots.push(node)
-  })
-  return roots
-})
-const productOptions = ref<ErpManagedProductSummary[]>([])
-const productSearching = ref(false)
-/** 分类 → 商品ID集合；分类筛选在订单侧只能按商品过滤。 */
-const categoryProductCache = new Map<string, number[]>()
-const CATEGORY_PRODUCT_LIMIT = 500
+const {
+  categoryTree, categoryTreeProps, categoryLoading, categoryLoadFailed,
+  productOptions, productSearching, productLoadFailed, variantOptions, variantLoading, variantLoadFailed,
+  loadCategoryOptions, resolveProductIds, searchProductOptions, loadVariants,
+  onCategoryChange, onCategoryVisibleChange,
+} = useOrderProductFilters(pageFilters)
 /** 当前页商品的 ERP 档案：主图与单位配置。 */
 const productInfoFailed = ref(false)
 let productInfoRequest = 0
@@ -547,68 +535,6 @@ function sourceUnitPriceHint(row: OrderRegisterLineItem) {
   return `来源单价：${moneyText(row.unitPrice)} / ${unitLabel(row.unitCode)}`
 }
 
-/** 分类筛选先解析成商品集合，再按商品过滤明细。 */
-async function loadCategoryProductIds(categoryId: string): Promise<number[]> {
-  const categories = new Set([categoryId])
-  for (const id of categories) {
-    categoryOptions.value.forEach(row => {
-      if (row.parentId != null && String(row.parentId) === id) categories.add(String(row.id))
-    })
-  }
-  const ids = new Set<number>()
-  for (const id of categories) {
-    for (let begin = 0; ; begin += 200) {
-      const page = await getErpManagedProducts({ begin, step: 200, categoryId: id })
-      page.items.forEach(item => ids.add(Number(item.id)))
-      if (page.total > CATEGORY_PRODUCT_LIMIT || ids.size > CATEGORY_PRODUCT_LIMIT) {
-        throw new Error(`分类下商品超过 ${CATEGORY_PRODUCT_LIMIT} 个，请缩小分类范围后查询，避免统计不完整`)
-      }
-      if (begin + page.items.length >= page.total || !page.items.length) break
-    }
-  }
-  return [...ids]
-}
-
-async function resolveProductIds(): Promise<number[] | undefined> {
-  // 下拉清除后可能是 undefined，这里统一按空处理，避免清空条件时报错导致列表停在旧数据。
-  const productId = empty(pageFilters.productId)
-  if (productId) return [Number(productId)]
-  const categoryId = empty(pageFilters.categoryId)
-  if (!categoryId) return undefined
-  const cached = categoryProductCache.get(categoryId)
-  if (cached) return cached
-  const ids = await loadCategoryProductIds(categoryId)
-  categoryProductCache.set(categoryId, ids)
-  return ids
-}
-
-function onCategoryChange() {
-  // 商品级联在分类范围内：切换分类后清空已选商品并预载该分类商品。
-  pageFilters.productId = ''
-  productOptions.value = []
-  void searchProductOptions('')
-}
-
-async function searchProductOptions(keyword: string) {
-  const value = keyword?.trim() || ''
-  productSearching.value = true
-  try {
-    const looksLikeCode = value.length > 0 && !/[\u4e00-\u9fa5]/.test(value)
-    const page = await getErpManagedProducts({
-      begin: 0,
-      step: 20,
-      categoryId: empty(pageFilters.categoryId),
-      productName: looksLikeCode ? undefined : value || undefined,
-      productCode: looksLikeCode ? value : undefined,
-    })
-    productOptions.value = page.items
-  } catch {
-    productOptions.value = []
-  } finally {
-    productSearching.value = false
-  }
-}
-
 async function buildQuery() {
   const dateParams = orderRegisterDateParams(filters.orderDateRange)
   const productIds = await resolveProductIds()
@@ -622,6 +548,7 @@ async function buildQuery() {
     departmentId: filters.departmentId ?? undefined,
     includeSubDepartments: filters.includeSubDepartments,
     productIds,
+    productVariantId: pageFilters.productId ? empty(pageFilters.productVariantId) : undefined,
     paymentStatusCode: empty(pageFilters.paymentStatusCode),
     hasDiscount: empty(pageFilters.discountStatus) == null ? undefined : pageFilters.discountStatus === 'true',
     sortBy: sortBy.value,
@@ -689,6 +616,7 @@ function resetFilters() {
   pageFilters.paymentStatusCode = ''
   pageFilters.categoryId = ''
   pageFilters.productId = ''
+  pageFilters.productVariantId = ''
   sortBy.value = 'orderDate'
   sortDirection.value = 'desc'
   search()
@@ -745,30 +673,6 @@ async function exportCsv() {
     ElMessage.error({ message: errorMessage(reason, '导出失败，请稍后重试'), showClose: true, grouping: true })
   } finally {
     exporting.value = false
-  }
-}
-
-function onCategoryVisibleChange(visible: boolean) {
-  if (visible && (categoryLoadFailed.value || !categoryOptions.value.length)) void loadCategoryOptions()
-}
-
-async function loadCategoryOptions() {
-  if (categoryLoading.value) return
-  categoryLoading.value = true
-  categoryLoadFailed.value = false
-  try {
-    const rows: ErpProductCategoryView[] = []
-    for (let begin = 0; ; begin += 200) {
-      const page = await getErpProductCategories({ begin, step: 200 })
-      rows.push(...page.items)
-      if (rows.length >= page.total || !page.items.length || begin >= 9800) break
-    }
-    categoryOptions.value = rows
-    categoryProductCache.clear()
-  } catch {
-    categoryLoadFailed.value = true
-  } finally {
-    categoryLoading.value = false
   }
 }
 

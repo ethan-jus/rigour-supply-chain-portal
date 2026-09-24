@@ -9,7 +9,7 @@ describe('Web 同源认证边界', () => {
   it('携带 CSRF 和同源会话 cookie 登录，不使用密码换取 Token', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetcher)
-    await submitBrowserLogin({ tenantCode: 'tenant', username: 'user', password: 'password' })
+    await submitBrowserLogin({ username: 'user', password: 'password' })
     expect(fetcher.mock.calls[0]![0]).toBe('/auth/scdp/session')
     const [url, options] = fetcher.mock.calls[1]!
     expect(url).toBe('/auth/scdp/login')
@@ -17,6 +17,7 @@ describe('Web 同源认证边界', () => {
     expect(options.redirect).toBe('error')
     expect(options.body.get('_csrf')).toBe('masked-token')
     expect(options.body.get('grant_type')).toBeNull()
+    expect(options.body.get('tenantCode')).toBeNull()
   })
   it('即使没有内存 Token，退出仍携带 CSRF 撤销服务器会话', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(new Response(null, { status: 204 }))
@@ -29,7 +30,7 @@ describe('Web 同源认证边界', () => {
   })
   it.each([[401, '不正确'], [403, '已过期'], [500, '暂时不可用']])('失败状态 %s 给出可理解的提示', async (status, message) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(new Response(null, { status })))
-    await expect(submitBrowserLogin({ tenantCode: 't', username: 'u', password: 'p' })).rejects.toThrow(message)
+    await expect(submitBrowserLogin({ username: 'u', password: 'p' })).rejects.toThrow(message)
   })
   it('未知代理路径返回的 HTML 不能当作成功会话', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>Web</html>')))

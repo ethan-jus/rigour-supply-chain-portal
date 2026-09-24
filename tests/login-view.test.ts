@@ -14,11 +14,10 @@ vi.mock('vue-router', () => ({ useRoute: () => ({ query: mocks.query }), useRout
 beforeEach(() => {
   vi.resetAllMocks()
   mocks.query = {}; mocks.authenticated = false
-  mocks.session.mockResolvedValue({ authenticated: false })
+  mocks.session.mockResolvedValue({ authenticated: false, tenantName: '瑞盖文化传媒' })
 })
 
 async function fillAndSubmit(wrapper: ReturnType<typeof mount>) {
-  await wrapper.get('input[name="tenantCode"]').setValue('test-tenant')
   await wrapper.get('input[name="username"]').setValue('sales')
   await wrapper.get('input[name="password"]').setValue('test-password')
   await wrapper.get('form').trigger('submit')
@@ -28,7 +27,9 @@ async function fillAndSubmit(wrapper: ReturnType<typeof mount>) {
 describe('SCDP 常规登录流程', () => {
   it('首次访问直接显示前端登录表单，不发起授权跳转', async () => {
     const wrapper = mount(LoginView); await flushPromises()
-    expect(wrapper.findAll('input')).toHaveLength(3)
+    expect(wrapper.findAll('input')).toHaveLength(2)
+    expect(wrapper.find('input[name="tenantCode"]').exists()).toBe(false)
+    expect(wrapper.get('[aria-label="登录企业"]').text()).toBe('瑞盖文化传媒')
     expect(wrapper.text()).toContain('瑞盖供应链数字化平台')
     expect(mocks.login).not.toHaveBeenCalled()
     wrapper.unmount()
@@ -44,13 +45,13 @@ describe('SCDP 常规登录流程', () => {
   it('密码校验成功后才完成授权，忽略旧跳转目标并清空密码', async () => {
     mocks.query.redirect = '/supply-chain/bi'
     const wrapper = mount(LoginView); await flushPromises(); await fillAndSubmit(wrapper)
-    expect(mocks.submit).toHaveBeenCalledWith({ tenantCode: 'test-tenant', username: 'sales', password: 'test-password' })
+    expect(mocks.submit).toHaveBeenCalledWith({ username: 'sales', password: 'test-password' })
     expect(mocks.login).toHaveBeenCalledWith()
     expect((wrapper.get('input[name="password"]').element as HTMLInputElement).value).toBe('')
     wrapper.unmount()
   })
   it('账号错误停留在表单，清空密码且不发起授权', async () => {
-    mocks.submit.mockRejectedValue(new Error('企业编码、用户名或密码不正确'))
+    mocks.submit.mockRejectedValue(new Error('用户名或密码不正确'))
     const wrapper = mount(LoginView); await flushPromises(); await fillAndSubmit(wrapper)
     expect(wrapper.get('[role="alert"]').text()).toContain('不正确')
     expect(mocks.login).not.toHaveBeenCalled()

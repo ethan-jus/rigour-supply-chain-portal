@@ -4,6 +4,7 @@ import ElementPlus, { ElSelect, ElTreeSelect } from 'element-plus'
 import { reactive } from 'vue'
 
 const mocks = vi.hoisted(() => ({
+  routeQuery: {} as Record<string, string>,
   getPayments: vi.fn(),
   getCategories: vi.fn().mockResolvedValue({ total: 0, items: [] }),
   getProducts: vi.fn().mockResolvedValue({ total: 0, begin: 0, step: 200, items: [] }),
@@ -60,7 +61,7 @@ vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
   return {
     ...actual,
-    useRoute: () => ({ query: {} }),
+    useRoute: () => ({ query: mocks.routeQuery }),
   }
 })
 
@@ -69,7 +70,7 @@ vi.mock('@/composables/useSupplyPermissions', () => ({ useSupplyPermissions: () 
 import PaymentRecordListView from '@/views/supply-chain/order/PaymentRecordListView.vue'
 function paymentPage() {
   return { total: 1, begin: 0, step: 20, coverage: null,
-    totals: { receivedAmount: 10, checkedAmount: 10, relatedOrderAmount: 16, unpaidAmount: 2, customerCount: 1 },
+    totals: { receivedAmount: 10, checkedAmount: 10, relatedOrderAmount: 16, unpaidAmount: 2, customerCount: 1, quantitySum: 1234.5 },
     items: [{ id: '1', orderId: '2', paymentNo: 'P1', orderNo: 'O1', customerName: '客户', paidAmount: 50,
       allocatedPaymentAmount: 10, paymentStatusCode: 'CHECKED', attachments: [], productAllocations: [
         { lineId: 1, productName: '方便面', originalAmount: 20, allocatedAmount: 10, matched: true },
@@ -83,11 +84,25 @@ function mountPage() { return mount(PaymentRecordListView, { global: { plugins: 
 describe('回款商品分摊', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.routeQuery = {}
     mocks.getPayments.mockResolvedValue(paymentPage())
     mocks.getCategories.mockResolvedValue({ total: 2, items: [
       { id: 1, categoryName: '商品', parentId: null }, { id: 2, categoryName: '食品', parentId: 1 },
     ] })
     mocks.getProducts.mockImplementation(async (q: { categoryId?: string }) => ({ total: q.categoryId === '2' ? 1 : 0, items: q.categoryId === '2' ? [{ id: 101 }] : [] }))
+  })
+  it('商品规格随商品联动，查询和导出保留规格条件', async () => {
+    const wrapper=mountPage(); await flushPromises()
+    const variant=wrapper.findAllComponents(ElSelect).find(c => c.props('ariaLabel') === '商品规格')!
+    expect(variant.props('disabled')).toBe(true)
+    wrapper.findAllComponents(ElSelect).find(c => c.props('ariaLabel') === '商品')!.vm.$emit('update:modelValue','101')
+    await flushPromises()
+    variant.vm.$emit('update:modelValue','1001')
+    await wrapper.find('form').trigger('submit'); await flushPromises()
+    expect(mocks.getPayments.mock.calls.at(-1)![0]).toMatchObject({ productIds: [101], productVariantId: '1001' })
+    await wrapper.findAll('button').find(b => b.text() === '导出')!.trigger('click'); await flushPromises()
+    expect(mocks.exportCsv).toHaveBeenLastCalledWith('payments',expect.objectContaining({ productVariantId: '1001' }))
+    wrapper.unmount()
   })
   it('保留真实回款，父分类包含子类，汇总与导出使用同一筛选', async () => {
     const wrapper = mountPage(); await flushPromises()
@@ -99,6 +114,7 @@ describe('回款商品分摊', () => {
     expect(wrapper.text()).toContain('筛选商品分摊金额')
     expect(wrapper.text()).toContain('¥50.00')
     expect(wrapper.find('[aria-label="回款统计"]').text()).toContain('¥10.00')
+    expect(wrapper.find('[aria-label="回款统计"]').text()).toContain('商品数1,234.5')
     await wrapper.findAll('button').find(b => b.text() === '导出')!.trigger('click'); await flushPromises()
     expect(mocks.exportCsv).toHaveBeenLastCalledWith('payments', expect.objectContaining({ productIds: [101] }))
     category.vm.$emit('update:modelValue', undefined)
@@ -137,4 +153,18 @@ describe('回款商品分摊', () => {
     expect(wrapper.text()).not.toContain('¥50.00')
     wrapper.unmount()
   })
+  it('首页待核回款按到账未审核条件进入列表，重置后清除状态', async () => {
+    mocks.routeQuery = { homeTask: 'payment', orderNo: 'OLD-ORDER' }
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(mocks.getPayments).toHaveBeenCalledTimes(1)
+    expect(mocks.getPayments).toHaveBeenLastCalledWith(expect.objectContaining({ orderNo: 'OLD-ORDER', paymentStatusCode: 'RECEIVED' }))
+    const status = wrapper.findAllComponents(ElSelect).find(c => c.props('ariaLabel') === '收款状态')!
+    expect(status.props('modelValue')).toBe('RECEIVED')
+    await wrapper.findAll('button').find(button => button.text() === '重置')!.trigger('click')
+    await flushPromises()
+    expect(mocks.getPayments.mock.calls.at(-1)![0].paymentStatusCode).toBeUndefined()
+    wrapper.unmount()
+  })
+
 })

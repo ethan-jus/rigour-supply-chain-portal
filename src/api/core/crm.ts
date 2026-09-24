@@ -29,8 +29,7 @@ export interface InternalCrmCustomerSummary {
   statusCode: string
   sourceSystemCode?: string | null
   sourceDocumentNo?: string | null
-  dhbCustomerCode?: string | null
-  dhbCustomerCodes?: string[]
+  dhbLinked?: boolean
   syncedAt?: string | null
   syncedBy?: string | null
   remark?: string | null
@@ -75,11 +74,10 @@ export interface InternalCrmCustomerCommand {
 export interface InternalCrmCustomerQuery {
   loginAccount?: string
   createdFrom?: string
-  dhbCustomerCode?: string
   dhbLinkStatus?: 'LINKED' | 'UNLINKED'
   creatorName?: string
   createdTo?: string
-  sortBy?: 'businessCreatedAt' | 'syncedAt' | 'dhbCustomerCode'
+  sortBy?: 'businessCreatedAt' | 'syncedAt'
   sortDirection?: 'asc' | 'desc'
   begin: number
   step: number

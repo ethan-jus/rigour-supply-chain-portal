@@ -8,7 +8,7 @@ import { builtinMenuIcon } from '@/utils/menu-icons'
 import {
   Avatar, Box, Briefcase, Connection, DataAnalysis, Document,
   Goods, House, List, Location, OfficeBuilding, Setting, Shop,
-  TrendCharts, UserFilled, Warning,
+  TrendCharts, UserFilled, Warning, Refresh,
 } from '@element-plus/icons-vue'
 
 const props = defineProps<{ iconKey: string | null }>()
@@ -16,6 +16,7 @@ const iconComponent = computed(() => {
   const builtin = builtinMenuIcon(props.iconKey)
   if (builtin) return builtin
   const value = (props.iconKey || '').toLowerCase()
+  if (value.includes('refresh') || value.includes('sync')) return Refresh
   if (value.includes('home') || value.includes('dashboard') || value.includes('odometer')) return House
   if (value.includes('erp') || value.includes('product') || value.includes('goods')) return Goods
   if (value.includes('inventory') || value.includes('stock') || value.includes('warehouse')) return Box

@@ -17,8 +17,13 @@ vi.mock('@/api/core/dhb-page-sync', () => ({
   latestDhbPageSyncJob: vi.fn().mockResolvedValue(null),
   getDhbPageSyncJob: vi.fn(),
   startDhbPageSyncJob: async (id: string, command: unknown) => ({
-    jobId: id, connectorId: 'connector-1', scope: 'ORDER_SALES_PACKAGE', status: 'SUCCEEDED',
-    stage: '结束', startedAt: new Date().toISOString(), heartbeatAt: new Date().toISOString(),
+    jobId: id,
+    connectorId: 'connector-1',
+    scope: 'ORDER_SALES_PACKAGE',
+    status: 'SUCCEEDED',
+    stage: '结束',
+    startedAt: new Date().toISOString(),
+    heartbeatAt: new Date().toISOString(),
     result: await mocks.sync(command),
   }),
 }))
@@ -36,9 +41,36 @@ describe('订单包同步按钮', () => {
       tenants: [
         {
           steps: [
-            { objectType: 'SALES_ORDER', status: 'SUCCEEDED', fetched: 3, created: 2, updated: 1, repaired: 0, rejected: 0, unmapped: 1 },
-            { objectType: 'RECEIPT', status: 'SUCCEEDED', fetched: 2, created: 1, updated: 1, repaired: 0, rejected: 0, unmapped: 0 },
-            { objectType: 'PAYMENT', status: 'SUCCEEDED', fetched: 1, created: 0, updated: 0, repaired: 0, rejected: 0, unmapped: 0 },
+            {
+              objectType: 'SALES_ORDER',
+              status: 'SUCCEEDED',
+              fetched: 3,
+              created: 2,
+              updated: 1,
+              repaired: 0,
+              rejected: 0,
+              unmapped: 1,
+            },
+            {
+              objectType: 'RECEIPT',
+              status: 'SUCCEEDED',
+              fetched: 2,
+              created: 1,
+              updated: 1,
+              repaired: 0,
+              rejected: 0,
+              unmapped: 0,
+            },
+            {
+              objectType: 'PAYMENT',
+              status: 'SUCCEEDED',
+              fetched: 1,
+              created: 0,
+              updated: 0,
+              repaired: 0,
+              rejected: 0,
+              unmapped: 0,
+            },
           ],
         },
       ],
@@ -62,6 +94,36 @@ describe('订单包同步按钮', () => {
     expect(wrapper.text()).toContain('收款')
     expect(wrapper.text()).toContain('付款')
     expect(wrapper.emitted('completed')).toHaveLength(1)
+    expect(wrapper.findAll('.el-dialog__footer button').map((button) => button.text())).toEqual([
+      '关闭',
+    ])
+    wrapper.unmount()
+  })
+
+  it('部分完成也只显示关闭，关闭结果不会再次提交，重新点击列表入口才开始下一次同步', async () => {
+    mocks.sync.mockResolvedValue({
+      status: 'PARTIAL',
+      tenants: [
+        {
+          steps: [
+            { objectType: 'SALES_ORDER', status: 'PARTIAL', fetched: 4, rejected: 4, unmapped: 4 },
+          ],
+        },
+      ],
+    })
+    const wrapper = mount(OrderPackageSyncButton, { global: { plugins: [ElementPlus] } })
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('同步未全部完成')
+    expect(wrapper.findAll('.el-dialog__footer button').map((button) => button.text())).toEqual([
+      '关闭',
+    ])
+    await wrapper.get('.el-dialog__footer button').trigger('click')
+    await flushPromises()
+    expect(mocks.sync).toHaveBeenCalledTimes(1)
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(mocks.sync).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
 

@@ -249,7 +249,7 @@ describe('数据库导航注册表', () => {
       'supply.hr.payroll-commission', 'supply.hr.performance',
     ]))
     expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(11)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(74)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(75)
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
@@ -273,7 +273,7 @@ describe('数据库导航注册表', () => {
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.domainKey === 'bi').map((item) => item.title))
       .toEqual(['销售看板', '城市经营看板', '客户看板', '活动看板', '商品/库存看板', '商品销售统计', '销售毛利分析', '回款风险看板', '城市成本看板', '库存风险看板'])
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '同步控制').map((item) => item.title))
-      .toEqual(['订货宝同步中心', '飞书导入中心'])
+      .toEqual(['订货宝同步中心', '定时任务', '飞书导入中心'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
       .not.toContain('supply.erp.master-data.skus')
     expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '商品中心').map((item) => item.title))

@@ -4,18 +4,47 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDhbSyncJob } from '@/composables/useDhbSyncJob'
 const api = vi.hoisted(() => ({ start: vi.fn(), get: vi.fn(), latest: vi.fn() }))
 vi.mock('@/api/core/dhb-page-sync', () => ({
-  startDhbPageSyncJob: api.start, getDhbPageSyncJob: api.get, latestDhbPageSyncJob: api.latest,
+  startDhbPageSyncJob: api.start,
+  getDhbPageSyncJob: api.get,
+  latestDhbPageSyncJob: api.latest,
 }))
-const command = { connectorId: 'c1', scope: 'ORDER_SALES_PACKAGE' as const, incremental: true, maxPages: 500 }
-const running = { jobId: 'j1', connectorId: 'c1', scope: command.scope, status: 'RUNNING', stage: '正在同步订单', startedAt: '2026-09-22T00:00:00Z', heartbeatAt: '2026-09-22T00:00:00Z' }
+const command = {
+  connectorId: 'c1',
+  scope: 'ORDER_SALES_PACKAGE' as const,
+  incremental: true,
+  maxPages: 500,
+}
+const running = {
+  jobId: 'j1',
+  connectorId: 'c1',
+  scope: command.scope,
+  status: 'RUNNING',
+  stage: '正在同步订单',
+  startedAt: '2026-09-22T00:00:00Z',
+  heartbeatAt: '2026-09-22T00:00:00Z',
+}
 function setup() {
   const completed = vi.fn()
   let state!: ReturnType<typeof useDhbSyncJob>
-  const wrapper = mount(defineComponent({ setup() { state = useDhbSyncJob(completed); return () => h('div') } }))
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        state = useDhbSyncJob(completed)
+        return () => h('div')
+      },
+    }),
+  )
   return { state, wrapper, completed }
 }
-beforeEach(() => { vi.useFakeTimers(); vi.resetAllMocks(); api.latest.mockResolvedValue(null); api.start.mockResolvedValue(running) })
-afterEach(() => { vi.useRealTimers() })
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.resetAllMocks()
+  api.latest.mockResolvedValue(null)
+  api.start.mockResolvedValue(running)
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('后台同步状态恢复', () => {
   it('提交立即返回并查询状态，长任务不占一个 HTTP 请求', async () => {
@@ -23,7 +52,11 @@ describe('后台同步状态恢复', () => {
     await state.start(command)
     expect(state.busy.value).toBe(true)
     expect(completed).not.toHaveBeenCalled()
-    api.get.mockResolvedValue({ ...running, status: 'SUCCEEDED', result: { status: 'SUCCEEDED', tenants: [] } })
+    api.get.mockResolvedValue({
+      ...running,
+      status: 'SUCCEEDED',
+      result: { status: 'SUCCEEDED', tenants: [] },
+    })
     await vi.advanceTimersByTimeAsync(2000)
     expect(state.busy.value).toBe(false)
     expect(completed).toHaveBeenCalledTimes(1)
@@ -71,6 +104,33 @@ describe('后台同步状态恢复', () => {
     expect(state.error.value).toBe('')
     wrapper.unmount()
   })
+  it('客户同步占用连接时只展示其进度，不误报订单同步完成', async () => {
+    api.latest.mockResolvedValue({ ...running, scope: 'CUSTOMER' })
+    const { state, wrapper, completed } = setup()
+    await state.start(command)
+    expect(state.notice.value).toContain('客户同步')
+    api.get.mockResolvedValue({
+      ...running,
+      scope: 'CUSTOMER',
+      status: 'SUCCEEDED',
+      result: { status: 'SUCCEEDED', tenants: [] },
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(state.busy.value).toBe(false)
+    expect(completed).not.toHaveBeenCalled()
+    expect(api.start).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+  it('定时业务链占用连接时接续观察，不重新提交手动任务', async () => {
+    api.latest.mockResolvedValue({ ...running, scope: 'BUSINESS_CHAIN' })
+    const { state, wrapper } = setup()
+    await state.start(command)
+    expect(state.notice.value).toContain('业务串行同步')
+    expect(state.error.value).toBe('')
+    expect(state.busy.value).toBe(true)
+    expect(api.start).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
   it('明确的校验失败保留错误，不进入无效任务轮询', async () => {
     api.start.mockRejectedValue({ code: 'BAD_REQUEST', message: '连接器未配置' })
     const { state, wrapper } = setup()
@@ -83,7 +143,11 @@ describe('后台同步状态恢复', () => {
   })
   it('关闭页面停止轮询，不发取消请求，也不响应迟到的结果', async () => {
     let resolve!: (v: unknown) => void
-    api.get.mockReturnValue(new Promise(r => { resolve = r }))
+    api.get.mockReturnValue(
+      new Promise((r) => {
+        resolve = r
+      }),
+    )
     const { state, wrapper, completed } = setup()
     await state.start(command)
     await vi.advanceTimersByTimeAsync(2000)

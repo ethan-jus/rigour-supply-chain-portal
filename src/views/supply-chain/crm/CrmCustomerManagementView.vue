@@ -109,14 +109,6 @@
             >
               <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
             </el-select>
-            <el-input
-              v-else-if="field.key === 'dhbCode'"
-              v-model="filters.dhbCustomerCode"
-              aria-label="订货宝客户编码"
-              clearable
-              placeholder="订货宝客户编码"
-              @keyup.enter="submitSearch"
-            />
             <el-select
               v-else-if="field.key === 'dhbLink'"
               v-model="filters.dhbLinkStatus"
@@ -271,16 +263,9 @@
             ></el-table-column
           >
           <el-table-column prop="remark" label="备注" min-width="220" show-overflow-tooltip />
-          <el-table-column
-            prop="dhbCustomerCode"
-            sortable="custom"
-            label="订货宝客户编码"
-            width="180"
-            show-overflow-tooltip
-            ><template #default="{ row }">{{
-              customerDhbCodes(row).join(' / ') || '未关联'
-            }}</template></el-table-column
-          >
+          <el-table-column prop="dhbLinked" label="订货宝关联状态" width="140">
+            <template #default="{ row }">{{ row.dhbLinked === true ? '已关联' : row.dhbLinked === false ? '未关联' : '待刷新' }}</template>
+          </el-table-column>
           <!-- @vue-generic {InternalCrmCustomerSummary} -->
           <el-table-column label="创建人" width="140"
             ><template #default="{ row }">{{
@@ -378,8 +363,8 @@
             <el-descriptions-item label="客户账号">{{
               detail.loginAccount || '待补充'
             }}</el-descriptions-item>
-            <el-descriptions-item label="订货宝客户编码">{{
-              customerDhbCodes(detail).join(' / ') || '未关联'
+            <el-descriptions-item label="订货宝关联状态">{{
+              detail.dhbLinked === true ? '已关联' : detail.dhbLinked === false ? '未关联' : '待刷新'
             }}</el-descriptions-item>
             <el-descriptions-item label="同步时间">{{
               detail.syncedAt ? formatTime(detail.syncedAt) : '未同步'
@@ -702,7 +687,6 @@ const creatorOptions = ref<string[]>([])
 const queryFields = [
   { key: 'name', width: 200 },
   { key: 'account', width: 180 },
-  { key: 'dhbCode', width: 170 },
   { key: 'dhbLink', width: 150 },
   { key: 'type', width: 150 },
   { key: 'region', width: 160 },
@@ -763,11 +747,11 @@ const detail = ref<InternalCrmCustomerDetail | null>(null)
 const editingId = ref<string | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
-const sortBy = ref<'businessCreatedAt' | 'syncedAt' | 'dhbCustomerCode'>('businessCreatedAt')
+const sortBy = ref<'businessCreatedAt' | 'syncedAt'>('businessCreatedAt')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 function changeSort({ prop, order }: { prop: string | null; order: string | null }) {
   sortBy.value =
-    order && (prop === 'syncedAt' || prop === 'dhbCustomerCode') ? prop : 'businessCreatedAt'
+    order && prop === 'syncedAt' ? prop : 'businessCreatedAt'
   sortDirection.value = order === 'ascending' ? 'asc' : 'desc'
   currentPage.value = 1
   void loadCustomers()
@@ -792,7 +776,6 @@ const filters = reactive({
   loginAccount: '',
   createdRange: null as [string, string] | null,
   creatorName: '',
-  dhbCustomerCode: '',
   dhbLinkStatus: '',
   customerTypeCode: '',
   regionCode: '',
@@ -833,10 +816,6 @@ const editorRules: FormRules = {
   statusCode: [{ required: true, message: '请选择客户状态', trigger: 'change' }],
   regionCode: [{ required: true, message: '请选择归属地区', trigger: 'change' }],
   ownerEmployeeCode: [{ required: true, message: '请选择所属业务员', trigger: 'change' }],
-}
-
-function customerDhbCodes(row: Partial<InternalCrmCustomerSummary>) {
-  return row.dhbCustomerCodes?.length ? row.dhbCustomerCodes : row.dhbCustomerCode ? [row.dhbCustomerCode] : []
 }
 
 async function copyCustomerName(name: string) {
@@ -890,7 +869,6 @@ async function loadCustomers() {
       createdFrom: filters.createdRange?.[0],
       createdTo: filters.createdRange?.[1],
       creatorName: empty(filters.creatorName),
-      dhbCustomerCode: empty(filters.dhbCustomerCode),
       dhbLinkStatus: empty(filters.dhbLinkStatus) as 'LINKED' | 'UNLINKED' | undefined,
       customerTypeCode: empty(filters.customerTypeCode),
       regionCode: empty(filters.regionCode),
@@ -909,7 +887,6 @@ function resetFilters() {
   filters.loginAccount = ''
   filters.createdRange = null
   filters.creatorName = ''
-  filters.dhbCustomerCode = ''
   filters.dhbLinkStatus = ''
   filters.customerTypeCode = ''
   filters.regionCode = ''

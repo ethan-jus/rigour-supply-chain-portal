@@ -1,6 +1,6 @@
 <template>
   <aside class="department-sidebar" aria-label="部门筛选">
-    <h3>部门</h3>
+    <div class="department-heading"><h3>部门</h3><slot name="heading-actions" /></div>
     <el-input v-model="keyword" placeholder="搜索部门名称" clearable aria-label="搜索部门名称" />
     <el-tree
       ref="tree"
@@ -14,7 +14,7 @@
       :filter-node-method="filterNode"
       @node-click="select"
     />
-    <p>选择部门包含下级部门</p>
+    <p v-if="showAll">选择部门包含下级部门</p>
   </aside>
 </template>
 <script setup lang="ts">
@@ -25,7 +25,7 @@ export interface DepartmentChoice {
   parentId: number | null
   label: string
 }
-const props = defineProps<{ departments: DepartmentChoice[]; modelValue: number | null }>()
+const props = withDefaults(defineProps<{ departments: DepartmentChoice[]; modelValue: number | null; showAll?: boolean }>(), { showAll: true })
 const emit = defineEmits<{ 'update:modelValue': [id: number | null] }>()
 type Node = { id: number | string; label: string; children: Node[] }
 const keyword = ref(''),
@@ -41,7 +41,7 @@ const nodes = computed(() => {
     if (parent && d.parentId !== d.id) parent.children.push(node)
     else roots.push(node)
   }
-  return [{ id: 'ALL', label: '全部部门', children: roots }]
+  return props.showAll ? [{ id: 'ALL', label: '全部部门', children: roots }] : roots
 })
 watch(keyword, (value) => tree.value?.filter(value))
 function filterNode(value: string, node: TreeNodeData) {
@@ -61,6 +61,8 @@ function select(node: Node) {
   border-radius: 8px;
   align-self: stretch;
 }
+.department-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.department-heading h3 { margin: 0; }
 h3 {
   font-size: 15px;
   margin: 0 0 14px;

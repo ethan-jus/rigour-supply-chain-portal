@@ -437,6 +437,7 @@
         </el-form>
       </div>
       <template #footer>
+        <el-alert v-if="saveError" class="menu-save-error" :title="saveError" type="error" show-icon :closable="false" />
         <el-button @click="editing = false">取 消</el-button>
         <el-button type="primary" :loading="saving" @click="save">确 定</el-button>
       </template>
@@ -447,6 +448,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { errorMessage } from '@/api/core/error'
 import {
   ArrowDown,
   CircleClose,
@@ -487,6 +489,7 @@ const nodes = ref<SupplyMenuNode[]>([]),
 const loading = ref(false),
   saving = ref(false),
   editing = ref(false)
+const saveError = ref('')
 /** 查询条件：面板上正在编辑的值，点「查询」后才写入 activeQuery 生效。 */
 type MenuQuery = {
   name: string
@@ -656,6 +659,7 @@ async function load() {
   }
 }
 function openEditor(node?: SupplyMenuNode, parent?: SupplyMenuNode) {
+  saveError.value = ''
   editingId.value = node?.id || null
   protectedNode.value = node?.protectedNode || false
   pageSource.value = node && isCustomPage(node) ? 'CUSTOM' : 'BOUND'
@@ -719,14 +723,16 @@ async function refreshNavigation() {
   await navigation.fetchNavigation('SUPPLY_CHAIN')
 }
 async function save() {
+  if (saving.value) return
+  saveError.value = ''
   if (!form.name.trim()) {
-    ElMessage.warning('请填写菜单名称')
+    saveError.value = '请填写菜单名称'
     return
   }
   if (usesBoundFeature.value && !form.resourceId) {
-    ElMessage.warning(form.type === 'BUTTON'
+    saveError.value = form.type === 'BUTTON'
       ? '请选择已注册功能的操作权限'
-      : '请选择已注册功能，或把「页面来源」切换为「自定义页面」')
+      : '请选择已注册功能，或把「页面来源」切换为「自定义页面」'
     return
   }
   let routePath: string | null = null
@@ -737,15 +743,15 @@ async function save() {
     componentPath = form.componentPath?.trim() || null
     permissionCode = form.permissionCode?.trim() || null
     if (!routePath || !CUSTOM_ROUTE_PATH_PATTERN.test(routePath)) {
-      ElMessage.warning('路由地址需以 /supply-chain/ 开头，例如 /supply-chain/reports/custom-report')
+      saveError.value = '路由地址需以 /supply-chain/ 开头，例如 /supply-chain/reports/custom-report'
       return
     }
     if (!componentPath || !CUSTOM_COMPONENT_PATH_PATTERN.test(componentPath)) {
-      ElMessage.warning('组件路径需形如 supply-chain/xxx/YyyView.vue')
+      saveError.value = '组件路径需形如 supply-chain/xxx/YyyView.vue'
       return
     }
     if (resolveView(componentPath) === null) {
-      ElMessage.warning('该组件路径不在已编译页面清单中，请从候选项选择，或确认文件位于 src/views 下')
+      saveError.value = '该组件路径不在已编译页面清单中，请从候选项选择，或确认文件位于 src/views 下'
       return
     }
   }
@@ -756,7 +762,7 @@ async function save() {
       parentId: form.parentId || null,
       iconKey: form.iconKey || null,
       name: form.name.trim(),
-      resourceId: usesBoundFeature.value ? form.resourceId : null,
+      resourceId: editingId.value || usesBoundFeature.value ? form.resourceId : null,
       routeKey: isCustomPageForm.value ? form.routeKey : null,
       routePath,
       componentPath,
@@ -766,6 +772,8 @@ async function save() {
     await load()
     await refreshNavigation()
     ElMessage.success('菜单已保存')
+  } catch (error) {
+    saveError.value = errorMessage(error, '菜单保存失败，请重试')
   } finally {
     saving.value = false
   }
@@ -800,6 +808,7 @@ onMounted(load)
 </script>
 
 <style scoped>
+.menu-save-error { margin-bottom: 12px; text-align: left; }
 /* 页面骨架来自 supply-page--business-main：工具栏与表头固定，只有表格区滚动。 */
 .menu-settings-page {
   min-height: 0;

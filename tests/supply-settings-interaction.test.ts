@@ -10,8 +10,6 @@ import FulfillmentView from '@/views/supply-chain/order/FulfillmentView.vue'
 import {
   supplySettingsApi,
   supplyAccessApi,
-  type LegacySupplyRole,
-  type SupplyRole,
   type SupplyMenuNode,
   type SupplyMenuCommand,
 } from '@/api/core/supply-settings'
@@ -94,6 +92,7 @@ async function render(
       stubs: {
         teleport: true,
         ConsoleNavIcon: true,
+        RoleMembersDrawer: true,
         RouterLink: true,
         ElSelect: SelectStub,
         ElOption: OptionStub,
@@ -146,6 +145,43 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 describe('供应链菜单实际交互', () => {
+  it('只改已绑定目录的排序，保留类型和绑定资源', async () => {
+    rows[0].resourceId = 'implemented-directory'
+    await render(MenuView)
+    const row = wrapper.findAll('.el-table__row').find((r) => r.text().includes('业务设置'))!
+    await row
+      .findAll('button')
+      .find((b) => b.text() === '编辑')!
+      .trigger('click')
+    await flushPromises()
+    await item('显示排序').get('input').setValue('15')
+    await button('确 定').trigger('click')
+    await flushPromises()
+    expect(supplySettingsApi.saveMenu).toHaveBeenCalledWith(
+      'd1',
+      expect.objectContaining({
+        type: 'MENU',
+        resourceId: 'implemented-directory',
+        sortOrder: 15,
+        parentId: null,
+      }),
+    )
+  })
+  it('菜单保存失败保留列表和表单，并在按钮旁显示原因', async () => {
+    vi.mocked(supplySettingsApi.saveMenu).mockRejectedValueOnce({ message: '菜单已被修改，请刷新' })
+    await render(MenuView)
+    const row = wrapper.findAll('.el-table__row').find((r) => r.text().includes('业务设置'))!
+    await row
+      .findAll('button')
+      .find((b) => b.text() === '编辑')!
+      .trigger('click')
+    await flushPromises()
+    await button('确 定').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.menu-save-error').text()).toContain('菜单已被修改，请刷新')
+    expect(wrapper.findAll('.el-table__row').length).toBeGreaterThan(0)
+    expect(item('菜单名称').get('input').element.value).toBe('业务设置')
+  })
   it('重命名与移动后重新读取服务器菜单并刷新导航', async () => {
     vi.mocked(supplySettingsApi.saveMenu).mockImplementation(async (id, c) => {
       rows = rows.map((n) => (n.id === id ? { ...n, ...c, version: 4 } : n))
@@ -300,148 +336,42 @@ describe('仓管订单出库交互', () => {
   })
 })
 
-describe('实际请求功能授权对比', () => {
-  it('显示旧新差异与配置版本，并明确数据范围还需单独核验', async () => {
-    vi.mocked(supplySettingsApi.context).mockResolvedValue({
-      initialized: true,
-      canInitialize: false,
-      mode: 'PREPARING',
-      version: 9,
-      permissions: ['supply:role:grant'],
-    })
-    vi.mocked(supplySettingsApi.observations).mockResolvedValue({
-      items: [
-        {
-          userId: 'u1',
-          username: 'sales-a',
-          applicationVersion: 9,
-          action: 'order:create',
-          legacyAction: 'order:write',
-          legacyAllowed: true,
-          proposedAllowed: false,
-          policyJson: '{"policy":null}',
-          sampleCount: 3,
-          observedAt: '2026-09-15T01:00:00Z',
-        },
-      ],
-      total: 1,
-    })
-    await render(SettingsHome)
-    await button('功能授权对比').trigger('click')
-    await flushPromises()
-    expect(supplySettingsApi.observations).toHaveBeenCalledWith(1)
-    expect(wrapper.text()).toContain('sales-a')
-    expect(wrapper.text()).toContain('order:create')
-    expect(wrapper.text()).toContain('业务数据记录范围需要另行验收')
-    expect(wrapper.text()).toContain('拒绝')
-  })
-})
-
-describe('旧角色迁入流程', () => {
-  it('预览来源后迁入停用角色并打开该角色授权编辑', async () => {
-    vi.mocked(supplySettingsApi.context).mockResolvedValue({
-      initialized: true,
-      canInitialize: false,
-      mode: 'PREPARING',
-      version: 3,
-      permissions: ['supply:role:read', 'supply:role:grant', 'supply:role:update'],
-    })
-    const source: LegacySupplyRole = {
-      id: 'legacy',
-      code: 'SALES',
-      name: '业务员',
-      status: 'ACTIVE',
-      applicationVersion: 3,
-      fingerprint: 'source-fingerprint',
-      menuNodeIds: ['p1'],
-      permissions: ['order:read'],
-      importedRoleId: null,
-    }
-    const role: SupplyRole = {
-      id: 'new-role',
-      code: 'SCM_IMPORT_TEST',
-      name: '杭州业务员',
-      description: null,
-      status: 'DISABLED',
-      protectedRole: false,
-      version: 1,
-      userCount: 0,
-      menuNodeIds: ['p1'],
-      rules: [],
-    }
-    vi.mocked(supplySettingsApi.legacyRoles).mockResolvedValue([source])
-    vi.mocked(supplySettingsApi.importLegacyRole).mockResolvedValue(role)
-    vi.mocked(supplyAccessApi.roles).mockResolvedValueOnce([]).mockResolvedValue([role])
-    vi.mocked(supplyAccessApi.menus).mockResolvedValue(rows)
-    vi.spyOn(ElMessageBox, 'prompt').mockResolvedValue({
-      value: '杭州业务员',
-      action: 'confirm',
-    } as Awaited<ReturnType<typeof ElMessageBox.prompt>>)
-    await render(RoleView)
-    await useSupplyAuthorizationStore().refresh()
-    await flushPromises()
-    await button('从旧角色迁入 / 查看来源').trigger('click')
-    await flushPromises()
-    expect(wrapper.text()).toContain('迁入角色保持停用')
-    await button('预览并迁入').trigger('click')
-    await flushPromises()
-    expect(supplySettingsApi.importLegacyRole).toHaveBeenCalledWith(source, '杭州业务员')
-    expect(supplyAccessApi.roles).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('.el-drawer').text()).toContain('编辑角色')
-    expect(item('角色名称').get('input').element.value).toBe('杭州业务员')
-    expect(
-      wrapper.find<HTMLInputElement>('.el-drawer input[value="DISABLED"]').element.checked,
-    ).toBe(true)
-  })
-})
-
-it('数据权限对比显示实际记录及新旧决定，并保留采样范围说明', async () => {
+it('系统设置只有配置入口，不再提供授权准备和启用流程', async () => {
   vi.mocked(supplySettingsApi.context).mockResolvedValue({
     initialized: true,
     canInitialize: false,
-    mode: 'PREPARING',
+    mode: 'ACTIVE',
     version: 3,
     permissions: ['supply:role:grant'],
   })
-  vi.mocked(supplySettingsApi.dataObservations).mockResolvedValue({
-    items: [
-      {
-        userId: 'u1',
-        username: 'sales',
-        applicationVersion: 3,
-        action: 'order:read',
-        domain: 'ORDER',
-        recordKey: '123',
-        legacyAllowed: true,
-        proposedAllowed: false,
-        policyJson: '{}',
-        sampleCount: 1,
-        observedAt: '2026-09-15T00:00:00Z',
-      },
-    ],
-    total: 1,
-    page: 1,
-    pageSize: 20,
-  })
   await render(SettingsHome)
-  await button('数据权限对比').trigger('click')
-  await flushPromises()
-  expect(wrapper.text()).toContain('最多采样20条')
-  expect(wrapper.text()).toContain('order:read')
-  expect(wrapper.text()).toContain('拒绝')
-  expect(supplySettingsApi.dataObservations).toHaveBeenCalledWith(1)
+  expect(wrapper.text()).toContain('权限配置保存后立即生效')
+  expect(wrapper.text()).not.toContain('检查并启用')
+  expect(wrapper.text()).not.toContain('数据权限对比')
 })
-
 
 it('内置管理员显示动态全部权限说明，不用旧授权勾选快照误导用户', async () => {
   vi.mocked(supplySettingsApi.context).mockResolvedValue({
-    initialized: true, canInitialize: false, mode: 'ACTIVE', version: 4,
+    initialized: true,
+    canInitialize: false,
+    mode: 'ACTIVE',
+    version: 4,
     permissions: ['supply:role:read', 'supply:role:update', 'supply:role:grant'],
   })
-  vi.mocked(supplyAccessApi.roles).mockResolvedValue([{
-    id: 'builtin', code: 'SUPPLY_BOOTSTRAP_ADMIN', name: '管理员', description: null,
-    status: 'ACTIVE', protectedRole: true, version: 0, userCount: 1, menuNodeIds: [], rules: [],
-  }])
+  vi.mocked(supplyAccessApi.roles).mockResolvedValue([
+    {
+      id: 'builtin',
+      code: 'SUPPLY_BOOTSTRAP_ADMIN',
+      name: '管理员',
+      description: null,
+      status: 'ACTIVE',
+      protectedRole: true,
+      version: 0,
+      userCount: 1,
+      menuNodeIds: [],
+      rules: [],
+    },
+  ])
   vi.mocked(supplyAccessApi.menus).mockResolvedValue(rows)
   await render(RoleView)
   await useSupplyAuthorizationStore().refresh()
@@ -450,7 +380,7 @@ it('内置管理员显示动态全部权限说明，不用旧授权勾选快照�
   await flushPromises()
   const drawer = wrapper.get('.el-drawer')
   expect(drawer.text()).toContain('自动拥有本企业全部已启用功能与业务数据权限')
-  expect(drawer.text()).toContain('后续新增功能自动生效')
+  expect(drawer.text()).toContain('可使用全部菜单、按钮和当前企业的全部数据')
   expect(drawer.find('.el-tree').exists()).toBe(false)
   expect(drawer.text()).not.toContain('保存角色及授权')
 })

@@ -3,7 +3,7 @@
     <header class="heading">
       <div>
         <SupplyPageTitle>用户管理</SupplyPageTitle>
-        <p>普通业务用户关联 HR 员工，并配置供应链角色和适用范围。</p>
+        <p>关联 HR 员工并分配角色，菜单、按钮及数据范围随角色生效。</p>
       </div>
       <div>
         <el-button
@@ -133,8 +133,14 @@
                   >重置密码</el-button
                 ><el-button
                   v-if="access.can('supply:user:delete')"
-                  :disabled="isSelf(row.id)"
-                  :title="isSelf(row.id) ? '不能删除当前登录用户' : undefined"
+                  :disabled="isSelf(row.id) || row.status !== 'DISABLED'"
+                  :title="
+                    isSelf(row.id)
+                      ? '不能删除当前登录用户'
+                      : row.status !== 'DISABLED'
+                        ? '请先禁用用户，再删除'
+                        : undefined
+                  "
                   link
                   type="danger"
                   @click="remove(row)"
@@ -160,7 +166,7 @@
           {{ permissionPreview.username }} · 应用版本 {{ permissionPreview.applicationVersion }}
         </p>
         <el-alert
-          title="这里展示已保存的新配置；准备阶段仍执行旧授权。数据范围由各业务接口结合实际记录校验。"
+          title="这里展示当前已生效的角色权限和数据范围。修改角色或用户配置并保存后，后续请求立即按新配置执行。"
           type="info"
           :closable="false"
         />
@@ -170,8 +176,6 @@
           type="warning"
           :closable="false"
         />
-        <p>新增权限标识：{{ permissionPreview.added.join('、') || '无' }}</p>
-        <p>移除权限标识：{{ permissionPreview.removed.join('、') || '无' }}</p>
         <el-select
           :model-value="permissionPreview.selectedAction"
           style="width: 100%"
@@ -180,7 +184,7 @@
           @change="(action) => previewPermissions(permissionPreview!.userId, String(action))"
         >
           <el-option
-            v-for="action in permissionPreview.proposedPermissions"
+            v-for="action in permissionPreview.permissions"
             :key="action"
             :value="action"
             :label="action"
@@ -190,11 +194,6 @@
           <p>
             关联员工：{{ permissionPreview.policy.employeeCode || '受保护账号' }} · 功能授权：{{
               permissionPreview.policy.functionAllowed ? '允许' : '拒绝'
-            }}
-          </p>
-          <p>
-            个人地区上限：{{ formatLimit(permissionPreview.policy.regionLimit) }}；仓库上限：{{
-              formatLimit(permissionPreview.policy.warehouseLimit)
             }}
           </p>
           <el-table :data="permissionPreview.policy.clauses">
@@ -212,20 +211,8 @@
                 formatLimit(row.departments)
               }}</template></el-table-column
             >
-            <el-table-column label="客户地区"
-              ><template #default="{ row }">{{
-                formatLimit(row.regions)
-              }}</template></el-table-column
-            >
-            <el-table-column label="仓库"
-              ><template #default="{ row }">{{
-                formatLimit(row.warehouses)
-              }}</template></el-table-column
-            >
           </el-table>
-          <p>
-            每行内部条件同时满足；满足任一完整角色行后，再受个人地区和仓库上限限制。没有数据范围行时，不授予业务数据。
-          </p>
+          <p>多个角色的数据范围合并，只计算拥有当前功能权限的角色。</p>
         </template>
       </template>
     </el-dialog>
@@ -251,7 +238,11 @@
                 type="password"
                 show-password
                 autocomplete="new-password"
-                placeholder="14 至 128 位" /></el-form-item></template
+                placeholder="8 至 12 位"
+                minlength="8"
+                maxlength="12"
+              /><small>{{ MEMBER_PASSWORD_HINT }}</small></el-form-item
+            ></template
           ><el-form-item v-else label="已有登录账号" required
             ><el-select
               v-model="form.existingUserId"
@@ -276,6 +267,7 @@
             remote
             :remote-method="searchEmployees"
             :loading="employeeLoading"
+            :no-data-text="employeeSearchError ? '员工检索失败，请稍后重试' : '未找到匹配员工'"
             :disabled="!!editingId && !access.can('supply:user:rebind')"
             style="width: 100%"
             placeholder="按姓名或编码搜索已维护的员工"
@@ -294,6 +286,12 @@
             ></el-select
           ></el-form-item
         >
+        <el-alert
+          v-if="employeeSearchError"
+          :title="employeeSearchError"
+          type="error"
+          :closable="false"
+        />
         <el-descriptions :column="2" border
           ><el-descriptions-item label="真实姓名">{{
             employee?.employeeName || '—'
@@ -320,32 +318,6 @@
             :roles="roles"
             :disabled="!access.can('supply:user:assign-role')"
         /></el-form-item>
-        <el-form-item label="客户地区适用上限"
-          ><el-radio-group
-            v-model="form.regionLimit.mode"
-            :disabled="!access.can('supply:user:assign-role')"
-            @change="form.regionLimit.references = []"
-            ><el-radio value="NONE">无</el-radio><el-radio value="SPECIFIED">指定地区</el-radio
-            ><el-radio value="ALL">全部地区</el-radio></el-radio-group
-          ><ScopeReferencePicker
-            v-if="form.regionLimit.mode === 'SPECIFIED'"
-            v-model="form.regionLimit.references"
-            dimension="REGION"
-            :disabled="!access.can('supply:user:assign-role')"
-        /></el-form-item>
-        <el-form-item label="仓库适用上限"
-          ><el-radio-group
-            v-model="form.warehouseLimit.mode"
-            :disabled="!access.can('supply:user:assign-role')"
-            @change="form.warehouseLimit.references = []"
-            ><el-radio value="NONE">无</el-radio><el-radio value="SPECIFIED">指定仓库</el-radio
-            ><el-radio value="ALL">全部仓库</el-radio></el-radio-group
-          ><ScopeReferencePicker
-            v-if="form.warehouseLimit.mode === 'SPECIFIED'"
-            v-model="form.warehouseLimit.references"
-            dimension="WAREHOUSE"
-            :disabled="!access.can('supply:user:assign-role')"
-        /></el-form-item>
         <el-form-item label="供应链账号状态"
           ><el-radio-group
             v-model="form.status"
@@ -365,8 +337,16 @@
         ><el-form-item label="备注"
           ><el-input v-model="form.remark" maxlength="500" type="textarea"
         /></el-form-item> </el-form
-      ><template #footer
-        ><el-button @click="visible = false">取消</el-button
+      ><template #footer>
+        <el-alert
+          v-if="saveError"
+          class="user-save-error"
+          :title="saveError"
+          type="error"
+          show-icon
+          :closable="false"
+        />
+        <el-button @click="visible = false">取消</el-button
         ><el-button type="primary" :loading="saving" @click="save">保存用户</el-button></template
       >
     </el-drawer>
@@ -390,9 +370,11 @@
   </div>
 </template>
 <script setup lang="ts">
+import { errorMessage } from '@/api/core/error'
+import { MEMBER_PASSWORD_HINT, memberPasswordError } from '@/utils/member-password'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
 import type { ScopeReference } from '@/api/core/supply-settings'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -409,7 +391,6 @@ import {
 } from '@/api/core/supply-settings'
 import { useAuthStore } from '@/stores/auth'
 import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
-import ScopeReferencePicker from './ScopeReferencePicker.vue'
 import RoleAssignmentEditor from './RoleAssignmentEditor.vue'
 import MemberCustomersDrawer from './MemberCustomersDrawer.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
@@ -471,6 +452,7 @@ const rows = ref<SupplyMember[]>([]),
   employeeLoading = ref(false),
   accountLoading = ref(false),
   accountMode = ref<'NEW' | 'EXISTING'>('NEW')
+const saveError = ref('')
 const editingOriginalStatus = ref('ACTIVE')
 const batchVisible = ref(false),
   batchMode = ref<BatchRoleCommand['mode']>('APPEND'),
@@ -484,8 +466,7 @@ const empty = (): SupplyMemberCommand => ({
   remark: null,
   version: 0,
   roles: [],
-  regionLimit: { mode: 'NONE', references: [] },
-  warehouseLimit: { mode: 'NONE', references: [] },
+
   bindingReason: null,
 })
 const form = reactive<SupplyMemberCommand>(empty()),
@@ -523,18 +504,30 @@ async function load() {
     if (request === listRequest) loading.value = false
   }
 }
+let employeeRequest = 0
+const employeeSearchError = ref('')
+watch(visible, (open) => {
+  if (!open) employeeRequest += 1
+})
 async function searchEmployees(keyword: string) {
+  const request = ++employeeRequest
+  const current = candidates.value.find((e) => e.employeeCode === form.employeeCode)
+  candidates.value = current ? [current] : []
+  employeeSearchError.value = ''
   employeeLoading.value = true
   try {
     const data = await supplyAccessApi.employees(keyword)
-    const current = candidates.value.find((e) => e.employeeCode === form.employeeCode)
+    if (request !== employeeRequest) return
     candidates.value = data.items
     if (current && !candidates.value.some((e) => e.employeeCode === current.employeeCode))
       candidates.value.unshift(current)
   } catch (e) {
-    error(e, '员工检索失败')
+    if (request === employeeRequest) {
+      const message = e instanceof Error ? e.message : (e as { message?: string })?.message
+      employeeSearchError.value = `员工检索失败：${message || '请稍后重试'}`
+    }
   } finally {
-    employeeLoading.value = false
+    if (request === employeeRequest) employeeLoading.value = false
   }
 }
 async function searchAccounts(keyword: string) {
@@ -548,6 +541,10 @@ async function searchAccounts(keyword: string) {
   }
 }
 async function edit(row?: SupplyMember) {
+  saveError.value = ''
+  employeeRequest += 1
+  employeeSearchError.value = ''
+  employeeLoading.value = false
   Object.assign(form, empty())
   editingId.value = row?.id ?? null
   editingOriginalStatus.value = row?.status ?? 'ACTIVE'
@@ -564,8 +561,6 @@ async function edit(row?: SupplyMember) {
           remark: row.remark,
           version: row.version,
           roles: row.roles,
-          regionLimit: row.regionLimit,
-          warehouseLimit: row.warehouseLimit,
         }),
       ),
     )
@@ -573,12 +568,21 @@ async function edit(row?: SupplyMember) {
   if (!row) await Promise.all([searchEmployees(''), searchAccounts('')])
 }
 async function save() {
-  if (!form.employeeCode || !form.roles.length) {
-    ElMessage.warning('请选择关联员工和角色')
+  if (saving.value) return
+  saveError.value = ''
+  if (!editingId.value && accountMode.value === 'NEW') {
+    const message = memberPasswordError(form.initialPassword)
+    if (message) {
+      saveError.value = message
+      return
+    }
+  }
+  if (!form.employeeCode || (form.status === 'ACTIVE' && !form.roles.length)) {
+    saveError.value = '请选择关联员工，启用用户至少分配一个角色'
     return
   }
   if (!editingId.value && accountMode.value === 'EXISTING' && !form.existingUserId) {
-    ElMessage.warning('请选择已有登录账号')
+    saveError.value = '请选择已有登录账号'
     return
   }
   saving.value = true
@@ -591,7 +595,7 @@ async function save() {
     await Promise.all([load(), access.refresh()])
     ElMessage.success('供应链用户已保存')
   } catch (e) {
-    error(e, '保存失败')
+    saveError.value = errorMessage(e, '用户保存失败，请重试')
   } finally {
     saving.value = false
   }
@@ -638,12 +642,11 @@ async function remove(row: SupplyMember) {
 async function password(row: SupplyMember) {
   try {
     const result = await ElMessageBox.prompt(
-      '此操作重置统一登录密码，并使原有会话失效。请输入 14 至 128 位新密码。',
+      `此操作重置统一登录密码，并使原有会话失效。${MEMBER_PASSWORD_HINT}。`,
       `重置 ${row.username} 的密码`,
       {
         inputType: 'password',
-        inputValidator: (value) =>
-          (!!value && value.length >= 14 && value.length <= 128) || '密码长度需为 14 至 128 位',
+        inputValidator: (value) => memberPasswordError(value) || true,
       },
     )
     await supplyAccessApi.resetPassword(row.id, result.value, row.version)
@@ -659,6 +662,7 @@ function openBatch() {
   batchVisible.value = true
 }
 async function applyBatch() {
+  if (saving.value) return
   saving.value = true
   try {
     const command: BatchRoleCommand = {
@@ -687,7 +691,7 @@ async function applyBatch() {
   }
 }
 function error(e: unknown, fallback: string) {
-  if (e !== 'cancel' && e !== 'close') ElMessage.error(e instanceof Error ? e.message : fallback)
+  if (e !== 'cancel' && e !== 'close') ElMessage.error(errorMessage(e, fallback))
 }
 onMounted(async () => {
   await Promise.all([
@@ -710,6 +714,10 @@ onMounted(async () => {
 })
 </script>
 <style scoped>
+.user-save-error {
+  margin-bottom: 12px;
+  text-align: left;
+}
 .user-directory-layout {
   display: flex;
   gap: 18px;

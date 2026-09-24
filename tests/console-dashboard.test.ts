@@ -6,17 +6,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NavigationNode } from '@/types/management'
 import { useNavigationStore } from '@/stores/navigation'
 import ConsoleDashboard from '@/components/console/ConsoleDashboard.vue'
+import ConsoleSidebar from '@/components/console/ConsoleSidebar.vue'
+import ConsoleEntrySearch from '@/components/console/ConsoleEntrySearch.vue'
+import { consoleEntries } from '@/utils/console-navigation'
+import { meetingFixture } from './fixtures/bi-meeting-data'
 
-const { get } = vi.hoisted(() => ({ get: vi.fn() }))
-vi.mock('@/api', () => ({ apiClient: { get } }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { displayName: '用户甲' } }) }))
-
+const mocks = vi.hoisted(() => ({
+  get: vi.fn(),
+  overview: vi.fn(),
+  analysis: vi.fn(),
+  scope: vi.fn(),
+  orders: vi.fn(),
+  payments: vi.fn(),
+}))
+vi.mock('@/api', () => ({ apiClient: { get: mocks.get } }))
+vi.mock('@/api/core/bi', () => ({
+  getSupplyDashboardOverview: mocks.overview,
+  getSupplyDashboardOperatingAnalysis: mocks.analysis,
+}))
+vi.mock('@/api/core/bi-access', () => ({ getBiEffectiveScope: mocks.scope }))
+vi.mock('@/api/core/order-register', () => ({
+  getOrderRegisterOrders: mocks.orders,
+  getOrderRegisterPayments: mocks.payments,
+}))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: '1', tenantId: 'demo' } }) }))
 function node(
   id: string,
   displayName: string,
   routePath: string | null,
   children: NavigationNode[] = [],
-  overrides: Partial<NavigationNode> = {},
+  visible = true,
 ): NavigationNode {
   return {
     id,
@@ -28,181 +47,188 @@ function node(
     type: routePath ? 'PAGE' : 'MENU',
     permissionCode: null,
     routeKey: id,
-    iconKey: 'order',
+    iconKey: 'Document',
     sortOrder: 0,
-    visible: true,
+    visible,
     keepAlive: true,
-    ...overrides,
   }
 }
-const order = () =>
-  node('supply.order.sales-orders', '销售订单', '/supply-chain/order/sales-orders')
-const home = () => node('supply.dashboard', '供应链首页', '/supply-chain')
+const home = node('supply.dashboard', '工作首页', '/supply-chain')
+const order = node('supply.order.sales-orders', '销售订单', '/supply-chain/order/sales-orders')
+const payments = node(
+  'supply.order.sales-payments',
+  '收款记录',
+  '/supply-chain/order/sales-payments',
+)
+const bi = node('supply.bi.overview', '经营总览', '/supply-chain/bi')
 const wrappers: ReturnType<typeof mount>[] = []
-async function render(
-  applicationCode = 'SUPPLY_CHAIN',
-  nodes: NavigationNode[] | null = [home(), order()],
-) {
-  const roots: Record<string, string> = {
-    SUPPLY_CHAIN: '/supply-chain',
-    PLATFORM_ADMIN: '/platform-admin',
-    SYSTEM_ADMIN: '/system-admin',
-  }
+async function render(nodes: NavigationNode[] | null = [home, order, payments, bi]) {
   const pinia = createPinia()
   const navigation = useNavigationStore(pinia)
   if (nodes) {
-    navigation.navigationByApplication[applicationCode] = nodes
-    navigation.loadedApplications.push(applicationCode)
+    navigation.navigationByApplication.SUPPLY_CHAIN = nodes
+    navigation.loadedApplications.push('SUPPLY_CHAIN')
   }
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: Object.entries(roots).map(([code, path]) => ({
-      path: `${path}/:rest(.*)*`,
-      component: { template: '<div />' },
-      meta: { applicationCode: code, title: '业务首页' },
-    })),
+    routes: [
+      {
+        path: '/supply-chain/:rest(.*)*',
+        component: { template: '<div />' },
+        meta: { applicationCode: 'SUPPLY_CHAIN', title: '工作首页' },
+      },
+    ],
   })
-  await router.push(roots[applicationCode])
+  await router.push('/supply-chain')
   await router.isReady()
-  const wrapper = mount(ConsoleDashboard, { global: { plugins: [pinia, router, ElementPlus] } })
+  const global = { plugins: [pinia, router, ElementPlus] }
+  const wrapper = mount(ConsoleDashboard, { global })
   wrappers.push(wrapper)
   await flushPromises()
-  return { wrapper, navigation, router }
-}
-function pending() {
-  let resolve!: (nodes: NavigationNode[]) => void
-  let reject!: (reason: unknown) => void
-  const promise = new Promise<NavigationNode[]>((yes, no) => {
-    resolve = yes
-    reject = no
-  })
-  return { promise, resolve, reject }
+  return { wrapper, navigation, router, global }
 }
 beforeEach(() => {
-  get.mockReset().mockResolvedValue([])
+  Object.values(mocks).forEach((mock) => mock.mockReset())
+  const fixture = meetingFixture()
+  mocks.get.mockResolvedValue([])
+  mocks.scope.mockResolvedValue({ accessLevel: 'TENANT' })
+  mocks.overview.mockResolvedValue(fixture.current)
+  mocks.analysis.mockResolvedValue(fixture.analysis)
+  mocks.orders.mockResolvedValue({ total: 12, items: [] })
+  mocks.payments.mockResolvedValue({
+    total: 8,
+    items: [
+      {
+        id: 'pay-1',
+        orderNo: 'OLDER-ORDER',
+        customerName: '测试客户',
+        paidAmount: 500,
+        paymentTime: '2026-09-23T08:00:00+08:00',
+      },
+    ],
+  })
 })
-afterEach(() => {
-  wrappers.splice(0).forEach((wrapper) => wrapper.unmount())
-})
+afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()))
 
-describe('console dashboard authorized navigation', () => {
-  it('recurses visible groups, excludes the current home and hidden branches, and keeps only authorized exact links', async () => {
-    const { wrapper, router } = await render('SUPPLY_CHAIN', [
-      home(),
-      node('orders', '订单管理', null, [
-        order(),
-        node('nested', '售后业务', null, [
-          node('refunds', '销售退款', '/supply-chain/order/sales-refunds'),
-        ]),
-      ]),
-      node(
-        'hidden-parent',
-        '隐藏管理',
-        null,
-        [node('secret', '秘密页面', '/supply-chain/secret')],
-        { visible: false },
-      ),
-      node('hidden', '隐藏页面', '/supply-chain/hidden', [], { visible: false }),
-      node('empty', '空分组', null),
-      order(),
-    ])
-    expect(wrapper.findAll('a').map((link) => link.attributes('href'))).toEqual([
-      '/supply-chain/order/sales-orders',
-      '/supply-chain/order/sales-refunds',
-    ])
-    expect(wrapper.get('h1').text()).toBe('供应链首页')
-    expect(wrapper.text()).toContain('订单管理')
-    expect(wrapper.text()).toContain('售后业务')
-    expect(wrapper.text()).not.toMatch(
-      /隐藏|秘密页面|空分组|新业务主流程|当前落地范围|下一步|接口未接入|今日订单金额|待办/,
+describe('供应链工作台', () => {
+  it('reads actual receipts separately from order collections, calculates cohort repurchase and uses matching task filters', async () => {
+    const { wrapper } = await render()
+    expect(wrapper.get('h1').text()).toBe('工作台')
+    expect(wrapper.get('.summary-metric--receipts strong').text()).toBe('¥106.2万')
+    expect(wrapper.get('.summary-metric--retention strong').text()).toBe('44.9%')
+    expect(wrapper.get('.summary-metric--retention > b').text()).toBe('218 / 486')
+    expect(mocks.overview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: expect.stringMatching(/-01T00:00:00\+08:00$/),
+        to: expect.stringMatching(/T23:59:59\.999999\+08:00$/),
+      }),
     )
-    expect(get).not.toHaveBeenCalled()
-    await wrapper.get('a[href="/supply-chain/order/sales-orders"]').trigger('click')
+    expect(mocks.orders).toHaveBeenCalledWith(
+      expect.objectContaining({ orderStatusCode: 'PENDING_SHIPPED', step: 5 }),
+    )
+    expect(mocks.orders).toHaveBeenCalledWith(expect.objectContaining({ hasUnpaid: true }))
+    expect(mocks.payments).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentStatusCode: 'RECEIVED' }),
+    )
+    expect(wrapper.get('.task-row-action').attributes('href')).toContain(
+      'homeTask=payment&orderNo=OLDER-ORDER',
+    )
+    await wrapper.get('#home-task-unpaid').trigger('click')
+    expect(wrapper.get('.task-footer a').attributes('href')).toContain('homeTask=unpaid')
+  })
+  it('does not request unauthorized data or promote descendants of hidden menu groups', async () => {
+    const hidden = node('hidden', '隐藏业务', null, [order, payments, bi], false)
+    const { wrapper } = await render([home, hidden])
+    expect(consoleEntries([home, hidden]).map((item) => item.path)).toEqual(['/supply-chain'])
+    expect(wrapper.text()).toContain('暂无经营数据访问权限')
+    expect(wrapper.text()).toContain('暂无已授权的业务待办')
+    expect(mocks.scope).not.toHaveBeenCalled()
+    expect(mocks.orders).not.toHaveBeenCalled()
+    expect(mocks.payments).not.toHaveBeenCalled()
+  })
+  it('shows missing targets and failures as unavailable rather than fabricated zero results', async () => {
+    const fixture = meetingFixture()
+    fixture.current.cityTargetCompletions = []
+    mocks.overview.mockResolvedValue(fixture.current)
+    mocks.analysis.mockRejectedValue(new Error('unavailable'))
+    mocks.payments.mockRejectedValue(new Error('private details'))
+    const { wrapper } = await render()
+    expect(wrapper.text()).toContain('尚未设置目标')
+    expect(wrapper.get('.summary-metric--retention strong').text()).toBe('—')
+    expect(wrapper.text()).toContain('复购数据暂不可用')
+    expect(wrapper.text()).toContain('待办加载失败')
+    expect(wrapper.text()).not.toContain('private details')
+    expect(wrapper.text()).not.toContain('暂无待核回款事项')
+  })
+  it('blocks BI queries when the server effective scope denies access', async () => {
+    mocks.scope.mockResolvedValue({ accessLevel: 'DENIED' })
+    const { wrapper } = await render()
+    expect(mocks.overview).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('经营数据暂不可用')
+  })
+  it('discards in-flight business responses after permission removal', async () => {
+    let resolve!: (data: unknown) => void
+    mocks.payments.mockReturnValue(
+      new Promise((yes) => {
+        resolve = yes
+      }),
+    )
+    const { wrapper, navigation } = await render()
+    navigation.navigationByApplication.SUPPLY_CHAIN = [home]
     await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/supply-chain/order/sales-orders')
+    resolve({
+      total: 999,
+      items: [{ id: 'secret', customerName: '不应显示的客户', paidAmount: 123 }],
+    })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('不应显示的客户')
+    expect(wrapper.text()).not.toContain('999')
   })
-
-  it('searches entry names and group names without exposing hidden entries or requesting navigation', async () => {
-    const { wrapper } = await render('SUPPLY_CHAIN', [
-      node('erp', '商品中心', null, [node('products', '商品管理', '/supply-chain/erp/products')]),
-      node('orders', '订单管理', null, [order()]),
-    ])
-    const search = wrapper.get('input[aria-label="搜索业务入口"]')
-    await search.setValue('  商品中心 ')
-    expect(wrapper.findAll('a').map((link) => link.text())).toEqual(['商品管理'])
-    await search.setValue('销售订单')
-    expect(wrapper.findAll('a').map((link) => link.text())).toEqual(['销售订单'])
-    await search.setValue('无匹配')
-    expect(wrapper.text()).toContain('没有匹配的业务入口')
-    expect(wrapper.text()).not.toContain('暂无已授权')
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === '清空搜索')!
-      .trigger('click')
-    expect(wrapper.findAll('a')).toHaveLength(2)
-    expect(get).not.toHaveBeenCalled()
-  })
-  it('waits for the Shell request without fetching twice and updates when that request succeeds', async () => {
-    const { wrapper, navigation } = await render('SUPPLY_CHAIN', null)
+  it('waits for Shell navigation, retries failures and retains route validation', async () => {
+    const { wrapper, navigation } = await render(null)
     expect(wrapper.text()).toContain('业务入口尚未加载')
-    expect(wrapper.text()).not.toContain('暂无已授权')
-    expect(get).not.toHaveBeenCalled()
-    const request = pending()
-    get.mockReturnValueOnce(request.promise)
-    const shellRequest = navigation.fetchNavigation('SUPPLY_CHAIN')
+    expect(mocks.get).not.toHaveBeenCalled()
+    mocks.get.mockResolvedValueOnce([home, order])
+    await navigation.fetchNavigation('SUPPLY_CHAIN')
     await flushPromises()
-    expect(wrapper.text()).toContain('正在加载业务入口')
-    expect(wrapper.findAll('button').some((button) => button.text() === '重新加载')).toBe(false)
-    request.resolve([home(), order()])
-    await shellRequest
-    await flushPromises()
-    expect(wrapper.get('nav').text()).toContain('销售订单')
-    expect(get).toHaveBeenCalledTimes(1)
-  })
-  it.each([new Error('network failure'), { code: 'FORBIDDEN' }])(
-    'shows a retryable failed navigation read without stale authorized links: %j',
-    async (reason) => {
-      const { wrapper, navigation } = await render()
-      get.mockRejectedValueOnce(reason)
-      await navigation.fetchNavigation('SUPPLY_CHAIN').catch(() => {})
-      await flushPromises()
-      expect(wrapper.find('[role="alert"]').exists()).toBe(true)
-      expect(wrapper.find('a').exists()).toBe(false)
-      expect(wrapper.text()).not.toContain('network failure')
-      get.mockResolvedValueOnce([order()])
-      await wrapper
-        .findAll('button')
-        .find((button) => button.text() === '重新加载')!
-        .trigger('click')
-      await flushPromises()
-      expect(wrapper.get('nav').text()).toContain('销售订单')
-      expect(get).toHaveBeenCalledTimes(2)
-    },
-  )
-  it('offers a permission refresh for an empty authorized menu and prevents concurrent retries', async () => {
-    const { wrapper } = await render('SUPPLY_CHAIN', [home()])
-    expect(wrapper.text()).toContain('暂无已授权的业务入口')
-    const request = pending()
-    get.mockReturnValueOnce(request.promise)
-    const retry = wrapper.findAll('button').find((button) => button.text() === '重新加载')!
-    await retry.trigger('click')
-    await retry.trigger('click')
-    expect(get).toHaveBeenCalledTimes(1)
-    request.resolve([order()])
-    await flushPromises()
-    expect(wrapper.get('nav').text()).toContain('销售订单')
-  })
-
-  it('keeps the existing route registry validation on manual retries', async () => {
-    const { wrapper } = await render('SUPPLY_CHAIN', null)
-    get.mockResolvedValueOnce([node('unknown-route', '不应出现', '/unregistered')])
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === '重新加载')!
-      .trigger('click')
+    expect(wrapper.get('.home-shortcuts').text()).toContain('销售订单')
+    mocks.get.mockRejectedValueOnce(new Error('network'))
+    await navigation.fetchNavigation('SUPPLY_CHAIN').catch(() => {})
     await flushPromises()
     expect(wrapper.text()).toContain('业务入口加载失败')
     expect(wrapper.find('a').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('unknown-route')
+    mocks.get.mockResolvedValueOnce([node('unknown', '非法页面', '/unregistered')])
+    await wrapper.get('.home-state button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('业务入口加载失败')
+    expect(wrapper.text()).not.toContain('非法页面')
+  })
+  it('collapses the secondary column, reopens modules and searches the same authorized tree with keyboard navigation', async () => {
+    const nodes = [home, node('supply.order.menu', '订单管理', null, [order, payments])]
+    const { global, router } = await render(nodes)
+    const sidebar = mount(ConsoleSidebar, { props: { nodes }, global })
+    wrappers.push(sidebar)
+    await sidebar.get('[aria-label="收起二级菜单"]').trigger('click')
+    expect(sidebar.classes()).toContain('is-collapsed')
+    await sidebar.get('button[aria-label="订单管理"]').trigger('click')
+    expect(sidebar.classes()).not.toContain('is-collapsed')
+    expect(sidebar.get('.secondary-nav').text()).toContain('销售订单')
+    const search = mount(ConsoleEntrySearch, { props: { entries: consoleEntries(nodes) }, global })
+    wrappers.push(search)
+    expect(search.find('input').exists()).toBe(false)
+    await search.get('[aria-label="打开入口搜索"]').trigger('click')
+    await search.get('input').setValue('临时搜索')
+    await search.get('input').trigger('keydown.esc')
+    expect(search.find('input').exists()).toBe(false)
+    await search.get('[aria-label="打开入口搜索"]').trigger('click')
+    expect((search.get('input').element as HTMLInputElement).value).toBe('')
+    await search.get('input').setValue('订单管理')
+    expect(search.findAll('a')).toHaveLength(2)
+    await search.get('input').setValue('销售订单')
+    await search.get('input').trigger('keydown.enter')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe(order.routePath)
+    expect(search.find('.entry-search__results').exists()).toBe(false)
+    expect(search.find('input').exists()).toBe(false)
   })
 })

@@ -4,7 +4,8 @@ import { getAuthorizationHeader, removeToken } from '@/utils/token'
 import { ensureAccessToken, getSessionGeneration, hasRefreshToken, TokenRefreshError } from '@/auth/oidc'
 import { generateRequestId } from '@/utils/request-id'
 import { devInfo, devWarn } from '@/utils/dev-log'
-import { getErrorMessage } from './error'
+import { ApiError, getErrorMessage } from './error'
+import { publishRequestFailure } from '@/utils/request-feedback'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -89,16 +90,8 @@ function isApiResponse(value: unknown): value is ApiResponse {
     && typeof candidate.message === 'string'
     && typeof candidate.requestId === 'string'
     && typeof candidate.timestamp === 'string'
-    && 'data' in candidate
 }
 
-interface UnauthorizedFailure {
-  code: string
-  message: string
-  requestId: string
-  timestamp: string
-  response?: AxiosResponse
-}
 
 function responseMarker(error: AxiosError<ApiResponse>): string | undefined {
   const headers = error.response?.headers
@@ -122,19 +115,19 @@ function isIamSessionEndpoint(value: string | undefined): boolean {
 
 function unauthorizedFailure(
   error: AxiosError<ApiResponse>, marker?: string, codeOverride?: string,
-): UnauthorizedFailure {
+): ApiError {
   const requestId = error.config?.headers?.['X-Request-Id']
   const body = error.response?.data
   const code = codeOverride || marker || 'BUSINESS_UNAUTHORIZED'
-  return {
+  return new ApiError({
     code,
     message: body?.message
       ? getErrorMessage(code, body.message)
       : '当前业务接口暂时无法访问，请稍后重试；如持续出现，请提供请求 ID 排查',
-    requestId: requestId ? String(requestId) : '',
+    requestId: body?.requestId || String(error.response?.headers?.['x-request-id'] || requestId || ''),
     timestamp: body?.timestamp || new Date().toISOString(),
-    response: error.response,
-  }
+    details: body?.details,
+  }, error.response?.status, undefined, undefined, error.config?.skipSessionRecovery)
 }
 
 function isSessionInvalidFailure(error: unknown): boolean {
@@ -193,6 +186,7 @@ function createClient(): ApiClient {
     headers: {
       'Content-Type': 'application/json',
       'Accept-Language': 'zh-CN',
+      Accept: 'application/vnd.rigour.api+json, application/json, */*;q=0.5',
     },
   })
 
@@ -243,17 +237,23 @@ function createClient(): ApiClient {
       const body = response.data
       if (!isApiResponse(body)) return body
       if (body.code !== 'OK') {
-        return Promise.reject(body)
+        return Promise.reject(new ApiError(body, response.status, undefined, undefined, response.config.skipSessionRecovery))
       }
-      return body.data
+      // 后端 NON_NULL 会省略空 data；响应外壳不能被当作业务对象。
+      return body.data ?? null
     },
     async (error: AxiosError<ApiResponse>) => {
+      if (axios.isCancel(error)) return Promise.reject(error)
       if (error instanceof TokenRefreshError) return Promise.reject(error)
       if (error.config?.tokenSessionGeneration !== undefined
         && error.config.tokenSessionGeneration !== getSessionGeneration()) {
         return Promise.reject(new TokenRefreshError('REQUEST_CANCELLED', '会话已变更'))
       }
-      const requestId = error.config?.headers?.['X-Request-Id']
+      if (error.response?.data instanceof Blob && error.response.data.size <= 1024 * 1024
+        && error.response.data.type.includes('json')) {
+        try { error.response.data = JSON.parse(await error.response.data.text()) } catch { /* 使用 HTTP 状态兜底 */ }
+      }
+      const requestId = error.response?.headers?.['x-request-id'] || error.config?.headers?.['X-Request-Id']
       const marker = responseMarker(error)
       devWarn('接口请求失败', {
         requestId,
@@ -314,26 +314,18 @@ function createClient(): ApiClient {
       }
 
       const errorBody = error.response?.data
-      if (errorBody?.code) {
-        const message = getErrorMessage(errorBody.code, errorBody.message)
-        return Promise.reject({ ...errorBody, message })
-      }
-
-      // 后端稳定协议允许marker仅由响应头携带；保留Axios response
-      // 供路由守卫区分IAM_FORBIDDEN与身份服务暂时不可用。
-      if (marker) {
-        return Promise.reject(unauthorizedFailure(error, marker))
-      }
-
-      return Promise.reject({
-        code: 'NETWORK_ERROR',
-        message: error.message || '网络异常',
-        requestId: requestId ? String(requestId) : '',
-        timestamp: new Date().toISOString(),
-      })
+      const body = errorBody && typeof errorBody === 'object' && typeof errorBody.code === 'string'
+        ? errorBody : marker ? { code: marker } : {}
+      return Promise.reject(new ApiError(body, error.response?.status,
+        requestId ? String(requestId) : '', error.code, error.config?.skipSessionRecovery))
     },
   )
 
+  // 等认证恢复和重试最终失败后再提示，避免成功重试也留下错误。
+  client.interceptors.response.use(undefined, (failure: unknown) => {
+    if (!(failure instanceof ApiError && failure.silent)) publishRequestFailure(failure)
+    return Promise.reject(failure)
+  })
   return client as ApiClient
 }
 

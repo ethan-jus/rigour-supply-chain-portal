@@ -4,8 +4,11 @@ import { exactAmount, heatmap, percent, ratio } from './cockpit-charts'
 
 const metricNames: Record<string, string> = {
   SALES_AMOUNT: '销售额',
-  PAID_AMOUNT: '回款额',
+  PAID_AMOUNT: '本期回款额（按订单日期）',
+  RECEIPT_AMOUNT: '本期到账额（按收款日期）',
   CONTACTED_CUSTOMER: '留资客户',
+  NEW_CUSTOMER: '新增合作客户',
+  REPEAT_CUSTOMER: '复购客户',
   COOPERATED_CUSTOMER: '合作客户',
 }
 
@@ -127,7 +130,9 @@ export function targetCompletionFigure(
                     ? '已配置月份内去重下单客户'
                     : metric === 'PAID_AMOUNT'
                       ? '已配置月份内订单的累计回款'
-                      : '已配置月份内订单销售额',
+                      : metric === 'RECEIPT_AMOUNT'
+                        ? '按到账日期统计，包含历史订单在已配置月份内到账'
+                        : '已配置月份内订单销售额',
               缺口:
                 value.target > 0
                   ? value.actual == null

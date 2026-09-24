@@ -125,10 +125,10 @@ it('复制客户名称只写入剪贴板，不打开详情', async () => {
   w.unmount()
 })
 
-it('订货宝编码、关联状态和树形地区独立筛选，编码排序交给后端', async () => {
+it('客户账号、关联状态和树形地区独立筛选，同步时间排序交给后端', async () => {
   const w = mountView()
   await flushPromises()
-  await w.get('input[placeholder="订货宝客户编码"]').setValue('343')
+  await w.get('input[placeholder="客户账号"]').setValue('343')
   w.findAllComponents({ name: 'ElSelect' })
     .find((c) => c.props('placeholder') === '订货宝关联状态')!
     .vm.$emit('update:modelValue', 'UNLINKED')
@@ -142,18 +142,18 @@ it('订货宝编码、关联状态和树形地区独立筛选，编码排序交�
   await flushPromises()
   expect(mocks.list).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      dhbCustomerCode: '343',
+      loginAccount: '343',
       dhbLinkStatus: 'UNLINKED',
       regionCode: 'ZJ',
     }),
   )
   w.findComponent({ name: 'ElTable' }).vm.$emit('sort-change', {
-    prop: 'dhbCustomerCode',
+    prop: 'syncedAt',
     order: 'ascending',
   })
   await flushPromises()
   expect(mocks.list).toHaveBeenLastCalledWith(
-    expect.objectContaining({ sortBy: 'dhbCustomerCode', sortDirection: 'asc', begin: 0 }),
+    expect.objectContaining({ sortBy: 'syncedAt', sortDirection: 'asc', begin: 0 }),
   )
   await w
     .findAll('button')
@@ -162,7 +162,7 @@ it('订货宝编码、关联状态和树形地区独立筛选，编码排序交�
   await flushPromises()
   expect(mocks.list).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      dhbCustomerCode: undefined,
+      loginAccount: undefined,
       dhbLinkStatus: undefined,
       regionCode: undefined,
     }),
@@ -204,16 +204,19 @@ it.each(['新增客户', '编辑'])('%s 的必填项缺失时不发送保存请�
   w.unmount()
 })
 
-it('一个客户展示多个订货宝编码，详情保持全部关联', async () => {
-  const linked = { ...row, dhbCustomerCode: '31668', dhbCustomerCodes: ['31668', '32048', '32052'] }
+it('客户列表和详情展示账号及关联状态，不展示来源编码', async () => {
+  const linked = { ...row, loginAccount: '15232814753', dhbLinked: true }
   mocks.list.mockResolvedValue({ total: 1, items: [linked] })
   mocks.detail.mockResolvedValue(linked)
   const w = mountView()
   await flushPromises()
-  expect(w.text()).toContain('31668 / 32048 / 32052')
+  expect(w.text()).toContain('15232814753')
+  expect(w.text()).toContain('已关联')
+  expect(w.text()).not.toContain('订货宝客户编码')
   await w.get('.customer-name-link').trigger('click')
   await flushPromises()
-  expect(w.findComponent({ name: 'ElDrawer' }).text()).toContain('31668 / 32048 / 32052')
+  expect(w.findComponent({ name: 'ElDrawer' }).text()).toContain('15232814753')
+  expect(w.findComponent({ name: 'ElDrawer' }).text()).not.toContain('订货宝客户编码')
   w.unmount()
 })
 it('删除确认显示客户名称，取消不会删除客户', async () => {

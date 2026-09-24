@@ -1,47 +1,36 @@
 <template>
   <div class="supply-page employee-page">
-    <header class="heading">
-      <div>
-        <SupplyPageTitle>员工档案</SupplyPageTitle>
-        <p>按部门维护员工档案，选择部门包含其下级部门。</p>
-      </div>
-      <div>
-        <el-button @click="refresh" :loading="loading">刷新</el-button
-        ><el-button v-if="can('hr:employee:create')" type="primary" @click="openEditor()"
-          >新增员工</el-button
-        >
-      </div>
-    </header>
     <el-alert v-if="directoryError" :title="directoryError" type="error" :closable="false" />
     <div class="directory-layout">
       <DepartmentSidebar
         :departments="departmentChoices"
+        :show-all="false"
         :model-value="departmentId"
         @update:model-value="selectDepartment"
-      />
+        ><template #heading-actions
+          ><el-checkbox v-model="includeSubDepartments" @change="search"
+            >含子部门</el-checkbox
+          ></template
+        ></DepartmentSidebar
+      >
       <section class="employee-results">
-        <el-form class="employee-filters" label-position="top" @submit.prevent="search"
-          ><el-form-item label="关键词"
-            ><el-input v-model="keyword" clearable placeholder="员工编号 / 姓名 / 手机号"
-          /></el-form-item>
-          <el-form-item label="部门">
-            <el-tree-select
-              v-model="departmentId"
-              :data="departmentTree"
-              node-key="id"
-              :props="{ label: 'label', children: 'children' }"
-              check-strictly
+        <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="reset">
+          <template #primary>
+            <el-input
+              v-model="keyword"
+              clearable
+              aria-label="关键词"
+              placeholder="姓名 / 手机号 / 员工编号 / 订货宝账号"
+              style="width: 300px"
+            />
+            <el-select
+              v-model="positionCode"
               filterable
               clearable
-              placeholder="全部部门"
-              @change="selectDepartment(departmentId ?? null)"
-            />
-          </el-form-item>
-          <el-form-item label="包含子部门">
-            <el-switch v-model="includeSubDepartments" @change="search" />
-          </el-form-item>
-          <el-form-item label="岗位">
-            <el-select v-model="positionCode" filterable clearable placeholder="全部岗位">
+              aria-label="岗位"
+              placeholder="全部岗位"
+              style="width: 125px"
+            >
               <el-option
                 v-for="p in positions"
                 :key="p.positionCode"
@@ -49,23 +38,41 @@
                 :value="p.positionCode"
               />
             </el-select>
-          </el-form-item>
-          <el-form-item label="职级"
-            ><el-input v-model="jobGrade" clearable placeholder="例如 S1"
-          /></el-form-item>
-          <el-form-item label="在职状态"
-            ><el-select v-model="status" clearable placeholder="全部状态"
-              ><el-option label="在职" value="ACTIVE" /><el-option
-                label="离职"
-                value="LEFT" /><el-option label="停用" value="INACTIVE" /><el-option
+            <el-select
+              v-model="status"
+              clearable
+              aria-label="在职状态"
+              placeholder="在职状态"
+              style="width: 125px"
+            >
+              <el-option label="在职" value="ACTIVE" /><el-option label="离职" value="LEFT" />
+              <el-option label="停用" value="INACTIVE" /><el-option
                 label="待确认"
-                value="PENDING" /></el-select
-          ></el-form-item>
-          <div class="filter-actions">
-            <el-button type="primary" native-type="submit">查询</el-button
-            ><el-button @click="reset">重置</el-button>
-          </div></el-form
-        >
+                value="PENDING"
+              />
+            </el-select>
+            <el-input
+              v-model="jobGrade"
+              clearable
+              aria-label="职级"
+              placeholder="职级"
+              style="width: 110px"
+            />
+          </template>
+          <template #actions>
+            <DhbSalespersonSyncButton @completed="refresh" />
+            <el-button :loading="loading" @click="refresh">刷新</el-button>
+            <el-button v-if="can('hr:employee:create')" type="primary" @click="openEditor()"
+              >新增员工</el-button
+            >
+          </template>
+        </OrderRegisterFilterCard>
+        <el-alert v-if="riskError" :title="riskError" type="error" :closable="false" />
+        <div v-if="risks.length" class="binding-risk-banner" role="status">
+          <el-icon><WarningFilled /></el-icon><strong>{{ risks.length }} 条关联待确认</strong>
+          <span>来源姓名或手机号与员工档案不一致，请核对关联</span>
+          <el-button link type="primary" @click="openReviews()">查看并处理</el-button>
+        </div>
         <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
         <div class="employee-table-viewport">
           <el-table
@@ -74,69 +81,84 @@
             row-key="id"
             border
             height="100%"
+            :default-sort="{ prop: 'createdTime', order: 'descending' }"
+            :row-class-name="employeeRowClass"
+            @sort-change="sortChanged"
             @row-click="openDetail"
           >
             <el-table-column
               prop="employeeCode"
+              sortable="custom"
               label="员工编号"
-              width="180"
+              width="160"
               fixed="left"
               show-overflow-tooltip
             />
             <el-table-column
               prop="employeeName"
+              sortable="custom"
               label="姓名"
-              width="110"
+              width="80"
               fixed="left"
               show-overflow-tooltip
             />
-            <el-table-column prop="employmentStatus" label="在职状态" width="104" align="center">
-              <template #default="{ row }">
-                <el-tag
-                  :type="statusTagType(row.employmentStatus)"
-                  class="employment-status"
-                  :class="`employment-status--${row.employmentStatus.toLowerCase()}`"
-                  >{{ statusLabel(row.employmentStatus) }}</el-tag
-                >
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="departmentName"
-              label="部门"
-              min-width="170"
-              show-overflow-tooltip
+            <el-table-column prop="departmentName" label="部门" min-width="81" show-overflow-tooltip
               ><template #default="{ row }">{{
                 row.departmentName || '未分配部门'
               }}</template></el-table-column
             >
-            <el-table-column prop="mobile" label="手机号" width="140" />
-            <el-table-column prop="positionName" label="岗位" min-width="130" />
-            <el-table-column prop="jobGrade" label="职级" width="100" />
-            <el-table-column prop="departmentLeaderName" label="部门负责人" width="130" />
-            <el-table-column label="创建人" min-width="140" show-overflow-tooltip
+            <el-table-column prop="mobile" label="手机号" width="125" show-overflow-tooltip />
+            <!-- @vue-generic {HrEmployeeRecord} -->
+            <el-table-column label="订货宝账号" min-width="176" show-overflow-tooltip>
+              <template #default="{ row }"
+                ><span class="dhb-account">{{ row.dhbAccountNames?.join('、') || '—' }}</span>
+                <el-button
+                  v-if="row.dhbAccountNames?.length"
+                  link
+                  aria-label="复制订货宝账号"
+                  @click.stop="copyAccount(row)"
+                  ><el-icon><CopyDocument /></el-icon
+                ></el-button>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="positionName"
+              label="岗位"
+              min-width="90"
+              show-overflow-tooltip
+            />
+            <el-table-column prop="entryDate" label="入职时间" sortable="custom" width="110"
               ><template #default="{ row }">{{
-                auditActor(row.createdByName, row.createdBy)
+                dateOnly(row.entryDate) || '—'
               }}</template></el-table-column
             >
-            <el-table-column label="创建时间" width="185"
+            <el-table-column
+              prop="createdTime"
+              label="创建时间"
+              sortable="custom"
+              width="183"
+              show-overflow-tooltip
               ><template #default="{ row }">{{
                 auditTime(row.createdTime)
               }}</template></el-table-column
             >
-            <el-table-column label="修改人" min-width="140" show-overflow-tooltip
-              ><template #default="{ row }">{{
-                auditActor(row.updatedByName, row.updatedBy)
-              }}</template></el-table-column
-            >
-            <el-table-column label="修改时间" width="185"
-              ><template #default="{ row }">{{
-                auditTime(row.updatedTime)
-              }}</template></el-table-column
+            <el-table-column label="关联状态" width="128"
+              ><template #default="{ row }">
+                <el-tag v-if="row.dhbReviewCount" type="warning">已关联·待确认</el-tag>
+                <el-tag v-else-if="row.dhbStaffIds?.length" type="success">已关联</el-tag
+                ><span v-else class="muted">未关联</span>
+              </template></el-table-column
             >
             <!-- @vue-generic {HrEmployeeRecord} -->
             <el-table-column label="操作" width="135" fixed="right"
               ><template #default="{ row }"
-                ><el-button link type="primary" @click.stop="openDetail(row)">详情</el-button
+                ><el-button
+                  v-if="row.dhbReviewCount"
+                  link
+                  type="primary"
+                  @click.stop="openReviews(row.id)"
+                  >查看关联</el-button
+                ><el-button v-else link type="primary" @click.stop="openDetail(row)">详情</el-button
                 ><el-button
                   v-if="can('hr:employee:update')"
                   link
@@ -159,6 +181,12 @@
         />
       </section>
     </div>
+    <DhbBindingReviewDrawer
+      v-model="reviewVisible"
+      :risks="risks"
+      :employee-id="reviewEmployeeId"
+      @resolved="refresh"
+    />
     <HrEmployeeEditor
       v-model="editorVisible"
       :record="editing"
@@ -294,12 +322,18 @@
   </div>
 </template>
 <script setup lang="ts">
+import DhbSalespersonSyncButton from '@/components/supply/DhbSalespersonSyncButton.vue'
 import { computed, onMounted, ref } from 'vue'
-import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
+import DhbBindingReviewDrawer from './DhbBindingReviewDrawer.vue'
+import { CopyDocument, WarningFilled } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
 import HrEmployeeEditor from './HrEmployeeEditor.vue'
 import {
   getHrEmployee,
+  getDhbBindingRisks,
+  type DhbBindingRisk,
   getHrPositions,
   type HrPositionRecord,
   getHrEmployees,
@@ -325,20 +359,12 @@ const departmentId = ref<number | null>(null),
 const departmentChoices = computed(() =>
   departments.value.map((d) => ({ id: d.id, parentId: d.parentId, label: d.departmentName })),
 )
-type DepartmentNode = { id: number; label: string; children: DepartmentNode[] }
-const departmentTree = computed(() => {
-  const map = new Map(
-    departmentChoices.value.map((d) => [d.id, { ...d, children: [] as DepartmentNode[] }]),
-  )
-  const roots: DepartmentNode[] = []
-  for (const d of departmentChoices.value) {
-    const node = map.get(d.id)!
-    const parent = d.parentId == null ? null : map.get(d.parentId)
-    if (parent) parent.children.push(node)
-    else roots.push(node)
-  }
-  return roots
-})
+const risks = ref<DhbBindingRisk[]>([])
+const riskError = ref(''),
+  reviewVisible = ref(false),
+  reviewEmployeeId = ref<string | null>(null)
+const sortBy = ref('createdTime'),
+  sortDirection = ref<'asc' | 'desc'>('desc')
 const positions = ref<HrPositionRecord[]>([])
 const positionCode = ref(''),
   jobGrade = ref('')
@@ -372,6 +398,8 @@ async function load() {
       includeSubDepartments: includeSubDepartments.value,
       positionCode: positionCode.value || undefined,
       jobGrade: jobGrade.value.trim() || undefined,
+      sortBy: sortBy.value,
+      sortDirection: sortDirection.value,
     })
     if (request === requestId) data.value = result
   } catch (e) {
@@ -397,15 +425,49 @@ function reset() {
   positionCode.value = ''
   jobGrade.value = ''
   includeSubDepartments.value = true
-  departmentId.value = null
+  departmentId.value = rootDepartmentId()
   search()
 }
 function openEditor(row?: HrEmployeeRecord) {
   editing.value = row ?? null
   editorVisible.value = true
 }
+function rootDepartmentId() {
+  const ids = new Set(departments.value.map((d) => d.id))
+  return departments.value.find((d) => d.parentId == null || !ids.has(d.parentId))?.id ?? null
+}
+function openReviews(id?: string) {
+  reviewEmployeeId.value = id == null ? null : String(id)
+  reviewVisible.value = true
+}
+function employeeRowClass({ row }: { row: HrEmployeeRecord }) {
+  return row.dhbReviewCount ? 'employee-risk-row' : ''
+}
+function sortChanged({ prop, order }: { prop?: string | null; order?: string | null }) {
+  sortBy.value = prop && order ? prop : 'createdTime'
+  sortDirection.value = order === 'ascending' ? 'asc' : 'desc'
+  search()
+}
+async function copyAccount(row: HrEmployeeRecord) {
+  try {
+    await navigator.clipboard.writeText(row.dhbAccountNames?.join('、') || '')
+    ElMessage.success('账号已复制')
+  } catch {
+    ElMessage.error('复制失败，请手动复制账号')
+  }
+}
+async function loadRisks() {
+  riskError.value = ''
+  try {
+    risks.value = await getDhbBindingRisks()
+  } catch (e) {
+    riskError.value = e instanceof Error ? e.message : '关联风险加载失败'
+  }
+}
 async function refresh() {
-  await Promise.all([load(), loadDepartments()])
+  await loadDepartments()
+  if (departmentId.value == null) departmentId.value = rootDepartmentId()
+  await Promise.all([load(), loadRisks()])
 }
 async function loadDepartments() {
   directoryError.value = ''
@@ -444,18 +506,6 @@ async function openDetail(row: HrEmployeeRecord) {
       detailError.value = e instanceof Error ? e.message : '员工详情加载失败'
   }
 }
-function statusTagType(value: string) {
-  switch (value) {
-    case 'ACTIVE':
-      return 'success'
-    case 'LEFT':
-      return 'info'
-    case 'INACTIVE':
-      return 'danger'
-    default:
-      return 'warning'
-  }
-}
 function statusLabel(value: string) {
   return (
     (
@@ -469,20 +519,44 @@ function statusLabel(value: string) {
 onMounted(refresh)
 </script>
 <style scoped>
-.employment-status {
-  min-width: 56px;
-  font-weight: 600;
+.employee-page :deep(.department-sidebar) {
+  width: 218px;
+  flex-basis: 218px;
+  overflow: auto;
 }
-.employment-status--active {
-  --el-tag-bg-color: #f0fdf4;
-  --el-tag-border-color: #bbf7d0;
-  --el-tag-text-color: #15803d;
+.employee-page :deep(.order-register-filter) {
+  flex: none;
+  border: 0;
+  background: transparent;
 }
-.employment-status--left {
-  --el-tag-bg-color: #f1f5f9;
-  --el-tag-border-color: #cbd5e1;
-  --el-tag-text-color: #475569;
+.employee-page :deep(.order-register-filter .el-card__body) {
+  padding: 0 0 12px;
 }
+.binding-risk-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  color: #92400e;
+}
+.binding-risk-banner .el-button {
+  margin-left: auto;
+}
+.dhb-account {
+  font-variant-numeric: tabular-nums;
+}
+.muted {
+  color: #94a3b8;
+}
+.employee-page :deep(.employee-risk-row) {
+  --el-table-tr-bg-color: #fffbeb;
+}
+
 :global(.employee-detail.el-dialog) {
   display: flex;
   flex-direction: column;
@@ -505,34 +579,16 @@ onMounted(refresh)
   overflow: hidden;
   font-size: 14px;
 }
-.employee-filters {
-  display: grid;
-  grid-template-columns: minmax(210px, 1.3fr) repeat(4, minmax(130px, 1fr)) auto;
-  gap: 12px 16px;
-  align-items: end;
-  flex: none;
-}
-.employee-filters :deep(.el-form-item) {
-  margin: 0;
-}
-.employee-page :deep(.el-form-item__label) {
-  font-size: 14px;
-}
-.employee-filters :deep(.el-select),
-.employee-filters :deep(.el-tree-select) {
-  width: 100%;
-}
-.filter-actions {
-  display: flex;
-  padding-bottom: 1px;
-}
 .employee-table-viewport {
   flex: 1;
   min-height: 0;
-  margin-top: 18px;
+  margin-top: 12px;
 }
 .employee-table-viewport :deep(.el-table) {
   font-size: 14px;
+}
+.employee-table-viewport :deep(.cell) {
+  white-space: nowrap;
 }
 .employee-table-viewport :deep(.el-table__cell) {
   padding: 12px 0;
@@ -541,28 +597,10 @@ onMounted(refresh)
   overflow: auto;
   min-height: 0;
 }
-@media (max-width: 1600px) {
-  .employee-filters {
-    grid-template-columns: repeat(3, minmax(140px, 1fr));
-  }
-}
-
-.heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0;
-  flex: none;
-}
-.heading p {
-  color: #64748b;
-  font-size: 13px;
-  margin-top: 8px;
-}
 .directory-layout {
   display: flex;
-  gap: 18px;
-  margin-top: 18px;
+  gap: 16px;
+  margin-top: 0;
   min-width: 0;
   flex: 1;
   min-height: 0;
@@ -573,10 +611,9 @@ onMounted(refresh)
   min-height: 0;
   flex: 1;
   min-width: 0;
-  padding: 18px;
+  padding: 0;
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 0;
 }
 .el-pagination {
   margin-top: 16px;
@@ -590,6 +627,11 @@ h3 {
   margin: 24px 0 12px;
 }
 @media (max-width: 900px) {
+  .directory-layout :deep(.department-sidebar) {
+    width: auto;
+    flex: 0 0 auto;
+    max-height: 220px;
+  }
   .supply-page.employee-page {
     height: auto;
     min-height: 100%;
@@ -599,15 +641,8 @@ h3 {
     flex: none;
     height: 65dvh;
   }
-  .employee-filters {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
-  }
   .directory-layout {
     flex-direction: column;
-  }
-  .heading {
-    align-items: flex-start;
-    gap: 12px;
   }
 }
 </style>

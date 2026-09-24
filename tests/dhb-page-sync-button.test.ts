@@ -12,8 +12,13 @@ vi.mock('@/api/core/dhb-page-sync', () => ({
   latestDhbPageSyncJob: vi.fn().mockResolvedValue(null),
   getDhbPageSyncJob: vi.fn(),
   startDhbPageSyncJob: async (id: string, command: unknown) => ({
-    jobId: id, connectorId: 'connector-1', scope: 'CUSTOMER', status: 'SUCCEEDED',
-    stage: '结束', startedAt: new Date().toISOString(), heartbeatAt: new Date().toISOString(),
+    jobId: id,
+    connectorId: 'connector-1',
+    scope: 'CUSTOMER',
+    status: 'SUCCEEDED',
+    stage: '结束',
+    startedAt: new Date().toISOString(),
+    heartbeatAt: new Date().toISOString(),
     result: await mocks.sync(command),
   }),
 }))

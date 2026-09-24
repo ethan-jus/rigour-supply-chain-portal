@@ -140,6 +140,25 @@ describe('订单明细页', () => {
     mocks.getLines.mockResolvedValue(linePage())
   })
 
+  it('商品规格必须先选商品，列表和导出都传递规格条件', async () => {
+    const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const variant = wrapper.findAllComponents(ElSelect).find(item => item.props('ariaLabel') === '商品规格')!
+    expect(variant.props('disabled')).toBe(true)
+    const product = wrapper.findAllComponents(ElSelect).find(item => item.props('ariaLabel') === '商品')!
+    product.vm.$emit('update:modelValue', '9'); await flushPromises()
+    expect(variant.props('disabled')).toBe(false)
+    variant.vm.$emit('update:modelValue', '99')
+    await wrapper.find('form').trigger('submit'); await flushPromises()
+    expect(mocks.getLines.mock.calls.at(-1)![0]).toMatchObject({ productIds: [9], productVariantId: '99' })
+    await wrapper.findAll('button').find(button => button.text() === '导出')!.trigger('click'); await flushPromises()
+    expect(mocks.exportCsv).toHaveBeenLastCalledWith('lines', expect.objectContaining({ productIds: [9], productVariantId: '99' }))
+    product.vm.$emit('update:modelValue', undefined); await flushPromises()
+    expect(variant.props('disabled')).toBe(true)
+    expect(variant.props('modelValue')).toBe('')
+    wrapper.unmount()
+  })
+
   it('展示 SKU/型号与单位，缺关联的行给出未关联提示', async () => {
     const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
@@ -323,7 +342,7 @@ describe('订单明细页', () => {
     expect(text).toContain('订货金额')
     expect(text).toContain('订单金额')
     // 收款金额按命中订单去重后的账本金额统计。
-    expect(text).toContain('回款金额')
+    expect(text).toContain('本期回款')
     expect(text).toContain('回款率')
     expect(text).toContain('62.50%')
     expect(wrapper.find('.order-summary__metric--count .order-summary__value').text()).toBe('34')
