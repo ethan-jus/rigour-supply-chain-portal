@@ -182,7 +182,7 @@ async function probeCurrentSession(): Promise<boolean> {
 function createClient(): ApiClient {
   const client = axios.create({
     baseURL: BASE_URL,
-    timeout: 30000,
+    timeout: 60000,
     headers: {
       'Content-Type': 'application/json',
       'Accept-Language': 'zh-CN',
