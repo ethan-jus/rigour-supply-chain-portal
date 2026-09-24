@@ -11,7 +11,7 @@ export VITE_APP_ENV=development
 export VITE_API_BASE_URL=/api/v1
 export VITE_OIDC_ISSUER=http://127.0.0.1:26881
 export VITE_OIDC_CLIENT_ID=rigour-scdp-browser
-export VITE_OIDC_REDIRECT_URI=http://8.140.247.79:5100/oidc/callback
+export VITE_OIDC_REDIRECT_URI=http://8.140.247.79:2026/oidc/callback
 
 pnpm typecheck
-pnpm exec vite build --mode desktop
+pnpm exec vite build --mode desktop --outDir rgscdp_dist

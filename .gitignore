@@ -1,6 +1,7 @@
 # Dependencies and build outputs
 node_modules/
 dist/
+rgscdp_dist/
 coverage/
 .nyc_output/
 reports/
