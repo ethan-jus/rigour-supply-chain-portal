@@ -50,7 +50,7 @@ beforeEach(() => {
     cityReceipts: [],
     customerRetention: { orderingCustomerCount: 10, returningCustomerCount: 5 },
   })
-  mocks.access.mockResolvedValue({ accessLevel: 'TENANT' })
+  mocks.access.mockResolvedValue({ accessLevel: 'TENANT', globalGovernance: true })
   mocks.overview.mockImplementation(async (query) =>
     query.from.includes('2026-09') ? meetingFixture().current : meetingFixture().previous,
   )
@@ -58,9 +58,23 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 describe('会议数据加载与隔离', () => {
+  it.each(['CITY', 'SELF', 'SCOPED'])('受限范围 %s 不请求全公司同步状态，仍展示经营数据', async (accessLevel) => {
+    mocks.access.mockResolvedValue({ accessLevel, globalGovernance: false })
+    const wrapper = render()
+    await flushPromises()
+    expect(mocks.trust).not.toHaveBeenCalled()
+    expect(mocks.overview).toHaveBeenCalledTimes(2)
+    const snapshot = wrapper.getComponent({ name: 'BiMeetingBoard' }).props('snapshot')
+    expect(snapshot.current).toBeTruthy()
+    expect(snapshot.trust).toBeNull()
+    expect(snapshot.trustError).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('保留所有业务筛选并独立请求上月同期，不误用相邻等长区间', async () => {
     const wrapper = render()
     await flushPromises()
+    expect(mocks.trust).toHaveBeenCalledOnce()
     expect(mocks.overview).toHaveBeenCalledTimes(2)
     expect(mocks.overview.mock.calls[0][0]).toMatchObject({
       from: '2026-09-01T00:00:00+08:00',

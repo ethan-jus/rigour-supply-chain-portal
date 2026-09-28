@@ -143,7 +143,7 @@ async function load() {
       await Promise.allSettled([
         getSupplyDashboardOverview(query),
         getSupplyDashboardOverview(previousQuery),
-        getSupplyDashboardDataTrust(),
+        access.globalGovernance ? getSupplyDashboardDataTrust() : Promise.resolve(null),
         getSupplyDashboardOperatingAnalysis(query),
         props.embedded && !cityMode.value
           ? getSupplyDashboardOperatingAnalysis(previousQuery)
