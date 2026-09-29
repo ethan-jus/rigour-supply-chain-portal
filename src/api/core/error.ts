@@ -10,7 +10,7 @@
 
 /** 业务错误码 → 用户可见消息 */
 const ERROR_MESSAGES: Record<string, string> = {
-  IAM_FORBIDDEN: '无权访问当前数据范围',
+  IAM_FORBIDDEN: '没有执行该操作或访问该资源的权限',
   IAM_TOKEN_INVALID: '登录已过期，请重新登录',
   IAM_UNAUTHORIZED: '登录已过期，请重新登录',
   IAM_INVALID_TOKEN: '无效的访问令牌',
