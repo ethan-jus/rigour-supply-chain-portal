@@ -189,7 +189,7 @@ export function operatingAnalysisFigures(
           客户数: String(row.customerCount),
         },
       })),
-      note: '按发生时间、BI归属销售汇总（可回退至客户销售或收款人）；人员筛选含经办回款',
+      note: '按到账日期汇总；归属优先回款经办人，缺失时按客户当前归属业务员；人员筛选使用同一归属',
       empty: '当前范围没有已归属销售的回款记录',
     })
   }

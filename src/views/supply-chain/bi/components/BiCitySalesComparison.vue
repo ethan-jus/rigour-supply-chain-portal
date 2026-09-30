@@ -100,7 +100,7 @@
     <div class="ranking-footer">
       <span>{{
         receipt
-          ? '按到账日期统计；业绩归属优先客户当前销售，其次回款经办人，最后订单销售。'
+          ? '按到账日期统计；业绩归属优先回款经办人，缺失时按客户当前归属业务员。'
           : '本期回款按本期订单累计统计，包含后续月份回款；回款和到账均包含待财务确认及已确认金额。'
       }}</span>
       <div class="table-pager">
@@ -117,7 +117,7 @@
       </div>
     </div>
     <p v-if="unlistedReceipts != null && unlistedReceipts > 0.01" class="sales-target-note">
-      归属异常待核对：{{ money(unlistedReceipts) }} 元（三个来源均未能确定销售，需补齐业务归属）。
+      归属异常待核对：{{ money(unlistedReceipts) }} 元（回款经办人和客户当前归属业务员均缺失）。
     </p>
     <p class="sales-target-note">
       个人月默认目标：交易额40,000元、到账20,000元；已配置目标优先，年度按12个月累计。

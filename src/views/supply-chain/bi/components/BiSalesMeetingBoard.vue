@@ -580,7 +580,7 @@
     </template>
     <footer class="sales-dashboard-footer">
       <span>{{
-        active?.notice || '交易按订单销售归属；到账优先客户当前销售，其次经办人，最后订单销售。'
+        active?.notice || '交易按订单销售归属；到账优先回款经办人，缺失时按客户当前归属业务员。'
       }}</span
       ><button class="sales-link" @click="showDefinitions = !showDefinitions">
         {{ showDefinitions ? '收起' : '查看' }}统计口径

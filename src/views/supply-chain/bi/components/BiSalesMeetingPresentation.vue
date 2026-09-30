@@ -100,8 +100,8 @@ async function fetchSnapshot(owner?: string): Promise<SalesDashboardSnapshot> {
   const [current, previous, analysis, sales, previousSales] = results
   if (current.status === 'rejected') throw current.reason
   if (sales.status === 'rejected') throw sales.reason
-  // The legacy overview cash series belongs to receipt handlers. Replace it only in this
-  // salesperson dashboard with the scoped, order-owner cash series from sales-analysis.
+  // Use the sales-analysis series so the summary and ranking share the same scoped payment facts.
+  // Payment ownership prefers the receipt handler, falling back to the current customer salesperson.
   function ownerCash(overview: SupplyDashboardOverview, source: SalesAnalysis) {
     const ready =
       overview.freshness.find((f) => f.sourceCode === 'ORDER_PAYMENT_RECORD')?.status === 'READY'
