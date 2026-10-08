@@ -585,6 +585,33 @@
     font-size: 13px;
     font-weight: 500;
   }
+  .sales-product-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sales-product-image {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .sales-product-image-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+    color: #b0c7da;
+    background: #112e40;
+    font-size: 10px;
+    font-weight: 400;
+  }
+  .sales-products tfoot {
+    background: #112e40;
+    border-top: 2px solid #35556a;
+  }
   @media (min-width: 1800px) {
     .sales-donut-content {
       grid-template-columns: 165px minmax(0, 1fr);

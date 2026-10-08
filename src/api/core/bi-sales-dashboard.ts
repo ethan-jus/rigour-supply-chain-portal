@@ -18,6 +18,7 @@ export interface SalesAnalysis {
     category: string
     productId: string
     product: string
+    imageUrl?: string | null
     sku: string
     quantity: number | null
     sales: number

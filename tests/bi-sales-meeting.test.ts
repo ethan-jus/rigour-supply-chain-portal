@@ -5,6 +5,7 @@ import {
   personalGoal,
   salesDashboardRows,
   salesCustomerStats,
+  salesProductTotals,
 } from '@/views/supply-chain/bi/sales-dashboard-model'
 import { salesDashboardFixture } from './fixtures/bi-sales-dashboard-data'
 Element.prototype.scrollIntoView = vi.fn()
@@ -87,6 +88,70 @@ describe('销售经营看板', () => {
     const w = render({ selectedCode: 'S1', detail })
     const rows = w.findAll('.sales-products tbody tr')
     expect(rows.map((r) => r.findAll('td')[1]!.text())).toEqual(['12.5', '0', '—'])
+    expect(w.get('.sales-products tfoot td').text()).toBe('—')
+    w.unmount()
+  })
+  it('商品合计覆盖筛选全部结果，翻页不变，品类商品型号筛选同步更新', async () => {
+    const detail = salesDashboardFixture()
+    const first = detail.sales!.products[0]!
+    detail.sales!.products = Array.from({ length: 6 }, (_, i) => ({
+      ...first,
+      sku: `A${i}`,
+      quantity: i + 1,
+      sales: 100 + i,
+      receipts: 20 + i,
+      received: 50 + i,
+    }))
+    detail.sales!.products.push({
+      ...first,
+      categoryId: 'other',
+      productId: 'P2',
+      sku: 'B1',
+      quantity: 99,
+      sales: 999,
+      receipts: 999,
+      received: 999,
+    })
+    const w = render({ selectedCode: 'S1', detail })
+    await w.get('[aria-label="商品品类"]').setValue('cloth')
+    const cells = () =>
+      w
+        .get('.sales-products tfoot tr')
+        .findAll('th, td')
+        .map((c) => c.text())
+    expect(cells()).toEqual(['筛选合计共 6 项', '21', '615.00', '135.00', '315.00', '51.2%'])
+    await w.get('[aria-label="商品下一页"]').trigger('click')
+    expect(w.findAll('.sales-products tbody tr')).toHaveLength(1)
+    expect(cells()[2]).toBe('615.00')
+    await w.get('[aria-label="商品"]').setValue('P1')
+    await w.get('[aria-label="型号"]').setValue('A2')
+    expect(cells()).toEqual(['筛选合计共 1 项', '3', '102.00', '22.00', '52.00', '51.0%'])
+    w.unmount()
+  })
+  it('金额按展示精度合计，空结果为零，缺失数量不伪装成零', () => {
+    const p = salesDashboardFixture().sales!.products[0]!
+    expect(
+      salesProductTotals([
+        { ...p, sales: 0.104 },
+        { ...p, sales: 0.104 },
+      ]).sales,
+    ).toBe(0.2)
+    expect(salesProductTotals([])).toMatchObject({
+      quantity: 0,
+      sales: 0,
+      receipts: 0,
+      received: 0,
+    })
+    expect(salesProductTotals([{ ...p, quantity: null }]).quantity).toBeNull()
+  })
+  it('商品显示对应主图，无图保持占位且不影响金额', () => {
+    const detail = salesDashboardFixture()
+    detail.sales!.products[0]!.imageUrl = 'https://img.test/P1.png'
+    const w = render({ selectedCode: 'S1', detail })
+    const image = w.getComponent({ name: 'ElImage' })
+    expect(image.props('src')).toBe('https://img.test/P1.png')
+    expect(w.findAll('.sales-products tbody .sales-product-image-empty')).toHaveLength(2)
+    expect(w.get('.sales-products tfoot').text()).toContain('36,000.00')
     w.unmount()
   })
   it('日视图隐藏趋势、目标和完成率，保留订单回款率', async () => {

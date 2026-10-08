@@ -9,6 +9,19 @@ export interface SalesDashboardSnapshot {
   previousSales: SalesAnalysis | null
   notice?: string
 }
+export function salesProductTotals(products: SalesAnalysis['products']) {
+  const sum = (key: 'sales' | 'receipts' | 'received') =>
+    products.reduce((total, p) => total + Math.round(p[key] * 100), 0) / 100
+  return {
+    quantity: products.some((p) => p.quantity == null)
+      ? null
+      : products.reduce((total, p) => total + Math.round(p.quantity! * 1e6), 0) / 1e6,
+    sales: sum('sales'),
+    receipts: sum('receipts'),
+    received: sum('received'),
+    allocated: products.every((p) => p.allocated),
+  }
+}
 export function personalGoal(
   data: SalesAnalysis | null | undefined,
   code: string,

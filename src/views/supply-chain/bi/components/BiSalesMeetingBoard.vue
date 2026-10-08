@@ -473,7 +473,26 @@
                 <tbody>
                   <tr v-for="row in visibleProducts" :key="`${row.productId}:${row.sku}`">
                     <td>
-                      {{ row.product }}<small class="sales-person-city">{{ row.sku }}</small>
+                      <div class="sales-product-label">
+                        <el-image
+                          v-if="row.imageUrl"
+                          :src="row.imageUrl"
+                          :alt="row.product"
+                          fit="contain"
+                          lazy
+                          class="sales-product-image"
+                        >
+                          <template #error
+                            ><span class="sales-product-image-empty">暂无图片</span></template
+                          >
+                        </el-image>
+                        <span v-else class="sales-product-image sales-product-image-empty"
+                          >暂无图片</span
+                        >
+                        <div>
+                          {{ row.product }}<small class="sales-person-city">{{ row.sku }}</small>
+                        </div>
+                      </div>
                     </td>
                     <td>
                       {{
@@ -490,11 +509,41 @@
                     </td>
                   </tr>
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <th scope="row">
+                      筛选合计<small class="sales-person-city"
+                        >共 {{ filteredProducts.length }} 项</small
+                      >
+                    </th>
+                    <td>
+                      {{
+                        productTotals.quantity == null
+                          ? '—'
+                          : productTotals.quantity.toLocaleString('zh-CN', {
+                              maximumFractionDigits: 6,
+                            })
+                      }}
+                    </td>
+                    <td class="blue">{{ moneyYuan(productTotals.sales) }}</td>
+                    <td class="mint">{{ moneyYuan(productTotals.receipts) }}</td>
+                    <td>{{ moneyYuan(productTotals.received) }}</td>
+                    <td>
+                      {{
+                        productTotals.allocated
+                          ? percentage(rate(productTotals.received, productTotals.sales))
+                          : '—'
+                      }}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
               <p v-if="!filteredProducts.length" class="sales-state">暂无匹配商品</p>
             </div>
             <div class="sales-table-footer">
-              <p>数量按本期订单统计；到账含历史订单分摊；商品筛选不改变个人目标。</p>
+              <p>
+                合计包含筛选后的全部商品；数量按本期订单统计；到账含历史订单分摊；商品筛选不改变个人目标。
+              </p>
               <div class="sales-pagination">
                 <span>共 {{ filteredProducts.length }} 项</span
                 ><button
@@ -593,6 +642,7 @@
 </template>
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { ElImage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Close, FullScreen, Refresh, Search } from '@element-plus/icons-vue'
 import EchartsChart from './EchartsChart.vue'
 import { businessMonthRange } from '@/utils/business-date'
@@ -602,6 +652,7 @@ import {
   personalGoal,
   salesCustomerStats,
   salesDashboardRows,
+  salesProductTotals,
   type SalesDashboardSnapshot,
 } from '../sales-dashboard-model'
 import type { SalesPeriod } from '../sales-meeting-model'
@@ -807,6 +858,7 @@ const filteredProducts = computed(() =>
 const visibleProducts = computed(() =>
   filteredProducts.value.slice(productPage.value * 5, productPage.value * 5 + 5),
 )
+const productTotals = computed(() => salesProductTotals(filteredProducts.value))
 const monthlyRows = computed(() =>
   Array.from(
     {
