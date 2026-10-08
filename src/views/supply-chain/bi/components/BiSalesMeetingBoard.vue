@@ -643,6 +643,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElImage } from 'element-plus'
+import 'element-plus/es/components/image/style/css'
 import { ArrowLeft, ArrowRight, Close, FullScreen, Refresh, Search } from '@element-plus/icons-vue'
 import EchartsChart from './EchartsChart.vue'
 import { businessMonthRange } from '@/utils/business-date'
