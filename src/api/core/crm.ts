@@ -94,6 +94,7 @@ export interface InternalCrmCustomerQuery {
 export interface CrmDictionaryView {
   sortOrder?: number | null
   sourceCode?: string | null
+  sourceLinked?: boolean | null
   createdBy?: string | null
   createdTime?: string | null
   updatedBy?: string | null
@@ -112,6 +113,7 @@ export interface CrmDictionaryView {
 
 export interface CrmCustomerAreaCommand {
   sortOrder?: number | null
+  sourceCode?: string | null
   areaName: string
   parentAreaCode?: string | null
   status?: string | null

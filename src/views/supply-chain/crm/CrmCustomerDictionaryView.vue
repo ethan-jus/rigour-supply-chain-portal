@@ -149,6 +149,13 @@
         <el-form-item label="名称">
           <el-input v-model="areaForm.areaName" clearable placeholder="如 华北地区、西安" />
         </el-form-item>
+        <el-form-item label="订货宝编号">
+          <el-input v-model="areaForm.sourceCode" maxlength="128" clearable placeholder="订货宝页面中的地区编号，如 1031" />
+        </el-form-item>
+        <el-form-item v-if="editingAreaId" label="订货宝关联">
+          <el-tag :type="areaSourceLinked ? 'success' : 'info'">{{ areaSourceLinked ? '已关联' : '未关联' }}</el-tag>
+          <span class="area-source-hint">修改编号不会更换已关联的订货宝地区。</span>
+        </el-form-item>
         <el-form-item label="上级区域">
           <el-tree-select v-model="areaForm.parentAreaCode" :data="parentAreaTree"
             :props="{ label: 'name', children: 'children', disabled: 'disabled' }"
@@ -200,12 +207,14 @@ const loading = ref(false)
 const saving = ref(false)
 const editorVisible = ref(false)
 const editingAreaId = ref<string | null>(null)
+const areaSourceLinked = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(50)
 const pageData = ref<CrmPage<CrmDictionaryView>>({ total: 0, begin: 0, step: 50, items: [] })
 const filters = reactive({ q: '' })
 const areaForm = reactive({
   areaName: '',
+  sourceCode: '',
   parentAreaCode: '',
   status: 'ACTIVE',
   sortOrder: 0,
@@ -328,6 +337,8 @@ function openChildArea(row: CrmDictionaryView) {
 function openEditArea(row: CrmDictionaryView) {
   editingAreaId.value = row.id
   areaForm.areaName = row.name || ''
+  areaForm.sourceCode = row.sourceCode || ''
+  areaSourceLinked.value = row.sourceLinked === true
   areaForm.parentAreaCode = row.parentCode || ''
   areaForm.sortOrder = row.sortOrder ?? 0
   areaForm.status = row.status || 'ACTIVE'
@@ -383,6 +394,7 @@ function buildAreaCommand(): CrmCustomerAreaCommand | null {
   }
   return {
     areaName: areaForm.areaName.trim(),
+    sourceCode: areaForm.sourceCode.trim(),
     parentAreaCode: empty(areaForm.parentAreaCode),
     sortOrder: areaForm.sortOrder,
     status: areaForm.status || 'ACTIVE',
@@ -392,6 +404,8 @@ function buildAreaCommand(): CrmCustomerAreaCommand | null {
 
 function resetAreaForm() {
   areaForm.areaName = ''
+  areaForm.sourceCode = ''
+  areaSourceLinked.value = false
   areaForm.parentAreaCode = ''
   areaForm.sortOrder = 0
   areaForm.status = 'ACTIVE'
@@ -417,6 +431,7 @@ function errorMessage(reason: unknown, fallback: string) {
 .area-toolbar { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; color: var(--el-text-color-secondary); }
 .area-name { display: inline; font-weight: 500; }
 .area-child-count { margin-left: 12px; font-size: 12px; color: var(--el-text-color-secondary); }
+.area-source-hint { margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px; }
 .crm-dictionary-page {
   min-height: 0;
 }
