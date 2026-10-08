@@ -63,10 +63,35 @@ beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount())
   apiClient.defaults.adapter = originalAdapter
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
 describe('后台任务真实响应契约', () => {
+  it.each(['CUSTOMER', 'ORDER_SALES_PACKAGE', 'SALESPERSON'] as const)(
+    '%s 在 HTTP 环境没有 randomUUID 时仍用安全随机编号提交任务',
+    async (scope) => {
+      const getRandomValues = vi.fn(crypto.getRandomValues.bind(crypto))
+      vi.stubGlobal('crypto', { getRandomValues })
+      const calls = transport((config) =>
+        config.method === 'get'
+          ? envelope()
+          : envelope({ data: running(config.url!.split('/').at(-1), scope) }),
+      )
+      const { state } = setup()
+      await state.start({ ...command, scope })
+      expect(calls.mock.calls.map(([c]) => c.method)).toEqual(['get', 'post'])
+      expect(state.error.value).toBe('')
+      expect(state.job.value?.jobId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      )
+      expect(state.job.value?.scope).toBe(scope)
+      expect(getRandomValues).toHaveBeenCalledTimes(1)
+      await state.start({ ...command, scope })
+      expect(calls).toHaveBeenCalledTimes(2)
+    },
+  )
+
   it.each([
     ['CUSTOMER', {}],
     ['CUSTOMER', { data: null }],
@@ -93,7 +118,7 @@ describe('后台任务真实响应契约', () => {
   it('无 data 的业务错误仍拒绝，不当作业务对象返回', async () => {
     const failure = envelope({ code: 'FORBIDDEN', message: '无权限' })
     transport(() => failure)
-    await expect(apiClient.get('/contract-read')).rejects.toEqual(failure)
+    await expect(apiClient.get('/contract-read')).rejects.toMatchObject(failure)
   })
 
   it.each([

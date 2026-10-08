@@ -9,6 +9,7 @@ import {
   type PageSyncCommand,
 } from '@/api/core/dhb-page-sync'
 import type { DhbSyncOrchestrationResult } from '@/api/core/dhb-orchestration'
+import { randomId } from '@/utils/random-id'
 
 function requireJob(value: unknown): asserts value is DhbPageSyncJob {
   const item = value as Partial<DhbPageSyncJob> | null
@@ -93,7 +94,7 @@ export function useDhbSyncJob(completed: (result: DhbSyncOrchestrationResult) =>
         return
       }
       job.value = null
-      trackedId = crypto.randomUUID()
+      trackedId = randomId()
       try {
         const value = await startDhbPageSyncJob(trackedId, command)
         if (!disposed) accept(value)
