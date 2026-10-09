@@ -125,7 +125,6 @@ export function citySalesRows(snapshot: MeetingSnapshot | null, receipt: boolean
     ...receipts.keys(),
     ...targets.map((row) => row.dimensionCode),
   ])
-  const months = annual ? 12 : 1
   return [...codes]
     .filter((code) => !['', 'UNKNOWN', 'MULTI'].includes(code.trim().toUpperCase()))
     .map((code) => {
@@ -137,10 +136,6 @@ export function citySalesRows(snapshot: MeetingSnapshot | null, receipt: boolean
           row.metricCode === (receipt ? 'RECEIPT_AMOUNT' : 'SALES_AMOUNT'),
       )
       const configuredValue = finite(configured?.targetValue)
-      const configuredMonths =
-        configuredValue == null
-          ? 0
-          : Math.max(0, Math.min(months, configured?.configuredMonthCount ?? months))
       const effective = snapshot.personalGoals
         ? personalGoal(
             snapshot.personalGoals,
@@ -151,13 +146,14 @@ export function citySalesRows(snapshot: MeetingSnapshot | null, receipt: boolean
               : Number(businessDate(snapshot.query.from || snapshot.current.from).slice(5, 7)),
           )
         : null
-      const defaultMonths = effective?.defaults ?? months - configuredMonths
       const target =
         snapshot.personalGoals === null
           ? null
           : effective
             ? effective.value
-            : (configuredValue ?? 0) + defaultMonths * (receipt ? 20000 : 40000)
+            : configured?.periodMonthCount === (annual ? 12 : 1)
+              ? configuredValue
+              : null
       return {
         code,
         name:
@@ -187,7 +183,6 @@ export function citySalesRows(snapshot: MeetingSnapshot | null, receipt: boolean
           : null,
         paid: paidReady ? (order ? finite(order.paidAmount) : 0) : null,
         target,
-        defaultMonths,
       }
     })
     .filter((row) => !(row.employmentStatus === 'LEFT' && row.amount === 0))

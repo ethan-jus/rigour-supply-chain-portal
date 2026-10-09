@@ -8,12 +8,7 @@ import 'element-plus/dist/index.css'
 import '@/assets/styles/index.scss'
 import ConsoleShell from '@/layouts/ConsoleShell.vue'
 import Targets from '@/views/supply-chain/hr/HrTargetSettingsView.vue'
-import type {
-  TargetSettings,
-  TargetHistory,
-  TargetBatch,
-  DefaultBatch,
-} from '@/api/core/bi-target-settings'
+import type { TargetSettings, TargetHistory, TargetBatch } from '@/api/core/hr-target-settings'
 import { useAuthStore } from '@/stores/auth'
 import { useNavigationStore } from '@/stores/navigation'
 import { apiClient } from '@/api/core/client'
@@ -93,114 +88,77 @@ for (const [i, name] of ['李明', '陈晨', '王宁', '刘洋', '周敏', '赵�
     writable: !readonly,
   })
 }
-const byMonth = new Map<string, TargetSettings['overrides']>()
-const defaults: TargetSettings['defaults'] = []
+const byMonth = new Map<string, TargetSettings['targets']>()
 const history = new Map<string, TargetHistory[]>()
-function overrides(month: string) {
+function values(month: string) {
   if (!byMonth.has(month))
     byMonth.set(
       month,
-      [
-        { dimensionType: 'CITY', code: 'C0', metric: 'SALES_AMOUNT', value: 150000 },
-        { dimensionType: 'CITY', code: 'C0', metric: 'NEW_CUSTOMER', value: 250 },
-        { dimensionType: 'CITY', code: 'C1', metric: 'SALES_AMOUNT', value: 120000 },
-        { dimensionType: 'SALES_OWNER', code: 'XS001', metric: 'SALES_AMOUNT', value: 60000 },
-        { dimensionType: 'SALES_OWNER', code: 'XS001', metric: 'RECEIPT_AMOUNT', value: 30000 },
-      ].map((x) => ({
-        ...x,
-        revision: 1,
-        deleted: false,
-        updatedBy: '示例人事',
-        updatedAt: '2026-10-09T07:30:00Z',
-      })) as TargetSettings['overrides'],
+      subjects.flatMap((subject) =>
+        ['SALES_AMOUNT', 'RECEIPT_AMOUNT', 'NEW_CUSTOMER', 'REPEAT_CUSTOMER'].map((metric) => ({
+          month,
+          dimensionType: subject.dimensionType,
+          code: subject.code,
+          name: subject.name,
+          metric: metric as TargetSettings['targets'][number]['metric'],
+          value:
+            metric === 'NEW_CUSTOMER'
+              ? 200
+              : metric === 'REPEAT_CUSTOMER'
+                ? 100
+                : subject.dimensionType === 'CITY'
+                  ? 100000
+                  : metric === 'SALES_AMOUNT'
+                    ? 40000
+                    : 20000,
+          revision: 0,
+        })),
+      ),
     )
   return byMonth.get(month)!
 }
 apiClient.defaults.adapter = async (config) => {
-  const url = config.url || ''
-  const params = config.params || {}
+  const url = config.url || '',
+    params = config.params || {}
   let body: unknown = null
   if (url.endsWith('/target-settings/history'))
     body = history.get(`${params.month}:${params.dimensionType}:${params.code}`) || []
-  else if (url.endsWith('/target-settings/defaults') && config.method === 'put') {
-    if (readonly) throw new Error('当前账号仅可查看')
-    const batch = JSON.parse(String(config.data)) as DefaultBatch
+  else if (url.endsWith('/target-settings') && config.method === 'put') {
+    if (readonly) throw new Error('当前为只读预览')
+    const batch = JSON.parse(config.data as string) as TargetBatch
     for (const change of batch.changes) {
-      const old = defaults.find(
-        (d) =>
-          d.dimensionType === batch.dimensionType &&
-          d.effectiveMonth === batch.effectiveMonth &&
-          d.metric === change.metric,
-      )
-      if ((old?.revision || 0) !== change.expectedRevision)
-        throw new Error('指标已被其他人修改，请刷新后重试')
+      const target = values(batch.month).find(
+        (t) =>
+          t.dimensionType === change.dimensionType &&
+          t.code === change.code &&
+          t.metric === change.metric,
+      )!
+      if (target.revision !== change.expectedRevision) throw new Error('指标已被其他人修改，请刷新')
     }
     for (const change of batch.changes) {
-      const old = defaults.find(
-        (d) =>
-          d.dimensionType === batch.dimensionType &&
-          d.effectiveMonth === batch.effectiveMonth &&
-          d.metric === change.metric,
-      )
-      const next = {
-        dimensionType: batch.dimensionType,
-        effectiveMonth: batch.effectiveMonth,
-        metric: change.metric,
-        value: change.value,
-        revision: change.expectedRevision + 1,
-      }
-      if (old) Object.assign(old, next)
-      else defaults.push(next)
-    }
-  } else if (url.endsWith('/target-settings') && config.method === 'put') {
-    if (readonly) throw new Error('当前账号仅可查看')
-    const batch = JSON.parse(String(config.data)) as TargetBatch
-    const list = overrides(batch.month)
-    for (const c of batch.changes) {
-      const old = list.find(
-        (o) => o.dimensionType === c.dimensionType && o.code === c.code && o.metric === c.metric,
-      )
-      if ((old?.revision || 0) !== c.expectedRevision)
-        throw new Error('指标已被其他人修改，请刷新后重试')
-    }
-    for (const c of batch.changes) {
-      const old = list.find(
-        (o) => o.dimensionType === c.dimensionType && o.code === c.code && o.metric === c.metric,
-      )
-      const next = {
-        dimensionType: c.dimensionType,
-        code: c.code,
-        metric: c.metric,
-        value: c.value ?? 0,
-        deleted: c.value === null,
-        revision: c.expectedRevision + 1,
-        updatedBy: '示例人事',
-        updatedAt: new Date().toISOString(),
-      }
-      if (old) Object.assign(old, next)
-      else list.push(next)
-      const key = `${batch.month}:${c.dimensionType}:${c.code}`
+      const target = values(batch.month).find(
+        (t) =>
+          t.dimensionType === change.dimensionType &&
+          t.code === change.code &&
+          t.metric === change.metric,
+      )!
+      target.value = change.value
+      target.revision++
+      const key = `${batch.month}:${change.dimensionType}:${change.code}`
       history.set(key, [
         {
-          metric: c.metric,
-          value: c.value ?? 0,
-          deleted: c.value === null,
-          revision: next.revision,
+          metric: change.metric,
+          value: change.value,
+          revision: target.revision,
           reason: batch.reason,
           actor: '示例人事',
-          occurredAt: next.updatedAt,
+          occurredAt: new Date().toISOString(),
         },
         ...(history.get(key) || []),
       ])
     }
   } else if (url.endsWith('/target-settings'))
-    body = {
-      month: params.month,
-      subjects,
-      overrides: overrides(params.month),
-      defaults,
-      defaultsWritable: !readonly,
-    }
+    body = { month: params.month, subjects, targets: values(params.month) }
   else throw new Error(`Preview blocks live request: ${url}`)
   return { config, data: structuredClone(body), status: 200, statusText: 'OK', headers: {} }
 }
@@ -214,8 +172,8 @@ useAuthStore(pinia).user = {
   permissions: [
     'integration:dhb:read',
     'integration:dhb:write',
-    'analytics:targets:write',
-    'analytics:targets:defaults',
+    'hr:targets:read',
+    'hr:targets:write',
     'hr:employee:read',
     'hr:employee:update',
     'hr:employee:create',

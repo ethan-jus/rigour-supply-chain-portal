@@ -55,14 +55,7 @@
                   : `${row.amount > row.previous ? '+' : ''}${money(row.amount - row.previous)}`
               }}
             </td>
-            <td
-              :title="row.defaultMonths ? `${row.defaultMonths}个月使用默认目标` : '已配置个人目标'"
-            >
-              {{ row.target === 0 ? '不考核' : money(row.target)
-              }}<small v-if="row.defaultMonths"
-                >默认{{ row.defaultMonths < (annual ? 12 : 1) ? '补齐' : '' }}</small
-              >
-            </td>
+            <td>{{ row.target === 0 ? '不考核' : money(row.target) }}</td>
             <td>
               <div class="city-completion">
                 <b>{{ percentage(rate(row.amount, row.target)) }}</b>
@@ -119,9 +112,7 @@
     <p v-if="unlistedReceipts != null && unlistedReceipts > 0.01" class="sales-target-note">
       归属异常待核对：{{ money(unlistedReceipts) }} 元（回款经办人和客户当前归属业务员均缺失）。
     </p>
-    <p class="sales-target-note">
-      个人目标按当月单独设置或适用的默认标准计算；年度逐月累计，0 表示不考核。
-    </p>
+    <p class="sales-target-note">个人指标由人事统一维护；年度逐月累计，0 表示不考核。</p>
   </div>
 </template>
 <script setup lang="ts">

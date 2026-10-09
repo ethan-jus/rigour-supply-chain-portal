@@ -43,10 +43,21 @@ describe('销售经营看板', () => {
     expect(first.previous).toBe(30000)
     expect(first.delta).toBe(6000)
   })
-  it('正式月目标优先，四项年目标逐月补城市看板默认值', () => {
+  it('人事月目标直接显示，四项年目标按接口完整月份累计', () => {
     const data = salesDashboardFixture().sales!
     data.goals.push({ code: 'S1', month: 8, metric: 'SALES_AMOUNT', target: 50000 })
     expect(personalGoal(data, 'S1', 'SALES_AMOUNT', 8).value).toBe(50000)
+    expect(personalGoal(data, 'S1', 'SALES_AMOUNT', null).value).toBeNull()
+    for (let month = 1; month <= 12; month++)
+      for (const [metric, target] of Object.entries({
+        SALES_AMOUNT: 40000,
+        RECEIPT_AMOUNT: 20000,
+        NEW_CUSTOMER: 200,
+        REPEAT_CUSTOMER: 100,
+      })) {
+        if (!data.goals.some((g) => g.code === 'S1' && g.month === month && g.metric === metric))
+          data.goals.push({ code: 'S1', month, metric, target })
+      }
     expect(personalGoal(data, 'S1', 'SALES_AMOUNT', null).value).toBe(490000)
     expect(personalGoal(data, 'S1', 'RECEIPT_AMOUNT', null).value).toBe(240000)
     expect(personalGoal(data, 'S1', 'NEW_CUSTOMER', 8).value).toBe(20)
@@ -154,8 +165,9 @@ describe('销售经营看板', () => {
       receipts,
     }))
     const w = render({ selectedCode: 'S1', detail })
-    expect(w.findAll('.sales-products tbody tr').map((row) => row.findAll('td')[3]!.text()))
-      .toEqual(['0.33', '0.33', '0.33'])
+    expect(
+      w.findAll('.sales-products tbody tr').map((row) => row.findAll('td')[3]!.text()),
+    ).toEqual(['0.33', '0.33', '0.33'])
     expect(w.get('.sales-products tfoot tr').findAll('th, td')[3]!.text()).toBe('1.00')
     w.unmount()
   })
@@ -179,13 +191,13 @@ describe('销售经营看板', () => {
     expect(w.find('.sales-collections').text()).toContain('本期回款率')
     w.unmount()
   })
-  it('目标缺失时客户月目标默认200和100，并展示真实完成数', () => {
+  it('接口缺少指标时显示暂无人事指标，同时保留真实完成数', () => {
     const detail = salesDashboardFixture()
     detail.sales!.goals = []
     const w = render({ selectedCode: 'S1', detail })
-    expect(w.find('.sales-goal-grid').text()).not.toContain('目标待配置')
-    expect(w.find('.sales-goal-grid').text()).toContain('目标 200家')
-    expect(w.find('.sales-goal-grid').text()).toContain('目标 100家')
+    expect(w.find('.sales-goal-grid').text()).toContain('暂无人事指标')
+    expect(w.find('.sales-goal-grid').text()).not.toContain('目标 200家')
+    expect(w.find('.sales-goal-grid').text()).not.toContain('目标 100家')
     expect(w.find('.sales-goal-grid').text()).toContain('15')
     w.unmount()
   })

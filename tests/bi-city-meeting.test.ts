@@ -122,7 +122,7 @@ describe('城市看板口径与主流程', () => {
       .trigger('click')
     expect(wrapper.get('.city-sales-comparison thead').text()).toContain('本期到账')
     expect(wrapper.get('.city-sales-comparison thead').text()).not.toContain('本期回款率')
-    expect(wrapper.get('.city-sales-comparison').text()).toContain('20,000.00')
+    expect(wrapper.get('.city-sales-comparison').text()).not.toContain('20,000.00')
     await wrapper.setProps({ loading: true, snapshot: null })
     expect(wrapper.find('.city-sales-comparison').exists()).toBe(false)
     await wrapper.setProps({ loading: false, snapshot: city })
@@ -158,17 +158,17 @@ describe('城市看板口径与主流程', () => {
       },
     ]
     const trade = citySalesRows(source, false, false)
-    expect(trade[0]).toMatchObject({ code: 'A', amount: 100, paid: 20, target: 40000 })
+    expect(trade[0]).toMatchObject({ code: 'A', amount: 100, paid: 20, target: null })
     expect(trade.find((r) => r.code === 'B')).toMatchObject({ amount: 0, paid: 0 })
     expect(citySalesRows(source, true, false)[0]).toMatchObject({
       code: 'B',
       amount: 80,
-      target: 20000,
+      target: null,
     })
     source.analysis = null
     expect(citySalesRows(source, true, false)[0].amount).toBeNull()
   })
-  it('个人目标已配置优先，缺失月份按交易4万到账2万补齐，年度累计12个月', () => {
+  it('个人目标来自接口，年度缺失月份不再由前端补齐', () => {
     const source = cityMeetingFixture('CITY-0')
     source.current.salesRanking = [
       { ...source.current.citySalesRanking[0], dimensionCode: 'A', dimensionName: '销售A' },
@@ -189,18 +189,15 @@ describe('城市看板口径与主流程', () => {
     ]
     expect(citySalesRows(source, false, false)[0]).toMatchObject({
       target: 60000,
-      defaultMonths: 0,
     })
     expect(citySalesRows(source, false, true)[0]).toMatchObject({
-      target: 500000,
-      defaultMonths: 11,
+      target: null,
     })
     expect(citySalesRows(source, true, true)[0]).toMatchObject({
-      target: 240000,
-      defaultMonths: 12,
+      target: null,
     })
     source.current.salesTargetCompletions = []
-    expect(citySalesRows(source, false, true)[0].target).toBe(480000)
+    expect(citySalesRows(source, false, true)[0].target).toBeNull()
   })
 })
 

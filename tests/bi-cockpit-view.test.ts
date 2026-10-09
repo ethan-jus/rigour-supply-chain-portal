@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
 }))
 vi.mock('vue-router', async (importOriginal) => ({
-  ...await importOriginal<typeof import('vue-router')>(),
+  ...(await importOriginal<typeof import('vue-router')>()),
   useRoute: () => mocks.route,
   useRouter: () => ({ push: mocks.push }),
 }))
@@ -513,26 +513,22 @@ describe('BI页面接口筛选与异步状态', () => {
     expect(wrapper.findComponent({ name: 'CityProductReport' }).props('modelValue')).toBe(false)
     wrapper.unmount()
   })
-  it('经营目标与运营跟进入口打开可操作专题，并带入当前业务期间和城市', async () => {
+  it('经营目标跳转人事指标设置，运营跟进保留城市', async () => {
     mocks.route.query.regionCode = 'BJ'
     const wrapper = render()
     await flushPromises()
     await wrapper.get('button[aria-label="经营目标"]').trigger('click')
     await flushPromises()
+    expect(mocks.push).toHaveBeenLastCalledWith('/supply-chain/hr/target-settings')
+    await wrapper.get('button[aria-label="运营跟进"]').trigger('click')
+    await flushPromises()
     expect(wrapper.findComponent({ name: 'BiOperationsWorkbench' }).props()).toMatchObject({
-      initialTab: 'targets',
-      month: '2026-09',
       regionCode: 'BJ',
       actionSeed: null,
     })
-    await wrapper.get('button[aria-label="运营跟进"]').trigger('click')
-    await flushPromises()
-    expect(wrapper.findComponent({ name: 'BiOperationsWorkbench' }).props('initialTab')).toBe(
-      'actions',
-    )
     wrapper.unmount()
   })
-  it('点击目标矩阵带入该城市或销售，而不是打开全租户目标', async () => {
+  it('点击目标矩阵统一进入人事指标设置', async () => {
     const wrapper = render()
     await flushPromises()
     wrapper.findComponent({ name: 'CockpitFigure' }).vm.$emit(
@@ -554,12 +550,7 @@ describe('BI页面接口筛选与异步状态', () => {
       'S1-paid',
     )
     await flushPromises()
-    expect(wrapper.findComponent({ name: 'BiOperationsWorkbench' }).props()).toMatchObject({
-      initialTab: 'targets',
-      regionCode: 'BJ',
-      ownerStaffCode: 'S1',
-      month: '2026-09',
-    })
+    expect(mocks.push).toHaveBeenLastCalledWith('/supply-chain/hr/target-settings')
     wrapper.unmount()
   })
   it('点击城市图形直接下钻并保留日期，不先打开单行表格', async () => {

@@ -132,7 +132,7 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
     applicationCode: 'SUPPLY_CHAIN',
     routeKey: page.routeKey,
     permission: page.routeKey === 'supply.hr.target-settings'
-      ? 'analytics:dashboard:read'
+      ? 'hr:targets:read'
       : page.routeKey === 'supply.integration.schedules' ? 'integration:dhb:read' : page.routeKey === 'supply.hr.departments' ? 'hr:department:read' : page.domainKey === 'crm'
       ? 'crm:customer:read'
       : hrEmployeeRouteKeys.has(page.routeKey)

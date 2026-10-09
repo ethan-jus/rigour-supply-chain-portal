@@ -30,32 +30,15 @@ export function personalGoal(
   month: number | null,
 ) {
   const months = month == null ? Array.from({ length: 12 }, (_, i) => i + 1) : [month]
-  const fallback =
-    (
-      {
-        SALES_AMOUNT: 40000,
-        RECEIPT_AMOUNT: 20000,
-        NEW_CUSTOMER: 200,
-        REPEAT_CUSTOMER: 100,
-      } as Record<string, number>
-    )[metric] ?? null
-  let total = 0,
-    defaults = 0
+  let total = 0
   for (const m of months) {
     const value = data?.goals.find(
       (g) => g.code === code && g.month === m && g.metric === metric,
     )?.target
-    if (value == null) {
-      const inherited =
-        data?.goals.find((g) => g.code === '*' && g.month === m && g.metric === metric)?.target ??
-        fallback
-      if (inherited == null)
-        return { value: null, defaults: months.length, configured: months.length - defaults }
-      total += inherited
-      defaults++
-    } else total += value
+    if (value == null) return { value: null }
+    total += value
   }
-  return { value: total, defaults, configured: months.length - defaults }
+  return { value: total }
 }
 export function salesDashboardRows(
   snapshot: SalesDashboardSnapshot | null,
@@ -92,7 +75,6 @@ export function salesDashboardRows(
         collectionRate: rate(paid, now?.sales ?? 0),
         delta: amount != null && prior != null ? amount - prior : null,
         target: goal.value,
-        defaults: goal.defaults,
       }
     })
     .filter((p) => !(p.employmentStatus === 'LEFT' && p.amount === 0))

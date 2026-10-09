@@ -1,126 +1,153 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import ElementPlus from 'element-plus'
+import Targets from '@/views/supply-chain/hr/HrTargetSettingsView.vue'
 import {
-  defaultTarget,
   targetCell,
   targetValueError,
-  previousMonth,
-  copyPreviousTargets,
-} from '../src/views/supply-chain/hr/target-settings-model'
-import { personalGoal } from '../src/views/supply-chain/bi/sales-dashboard-model'
-import type { TargetSettings, TargetSubject } from '../src/api/core/bi-target-settings'
-import type { SalesAnalysis } from '../src/api/core/bi-sales-dashboard'
-const person: TargetSubject = {
+  targetMetrics,
+} from '@/views/supply-chain/hr/target-settings-model'
+import { personalGoal } from '@/views/supply-chain/bi/sales-dashboard-model'
+import * as api from '@/api/core/hr-target-settings'
+import type { SalesAnalysis } from '@/api/core/bi-sales-dashboard'
+vi.mock('@/api/core/hr-target-settings', () => ({
+  getTargetSettings: vi.fn(),
+  saveTargetSettings: vi.fn(),
+  getTargetHistory: vi.fn(),
+}))
+const person: api.TargetSubject = {
   dimensionType: 'SALES_OWNER',
-  code: 'E1',
-  name: '示例销售',
+  code: 'NEW',
+  name: '新销售',
   cityCode: 'BJ',
   cityName: '北京',
-  departmentName: '销售部',
+  departmentName: '北京一部',
   employmentStatus: 'ACTIVE',
   writable: true,
 }
-const settings = (): TargetSettings => ({
+const settings = (): api.TargetSettings => ({
   month: '2026-10',
   subjects: [person],
-  overrides: [],
-  defaults: [
-    {
-      dimensionType: 'SALES_OWNER',
-      effectiveMonth: '2026-11',
-      metric: 'SALES_AMOUNT',
-      value: 60000,
-      revision: 1,
-    },
-  ],
-  defaultsWritable: true,
+  targets: targetMetrics.map((m) => ({
+    month: '2026-10',
+    dimensionType: 'SALES_OWNER',
+    code: 'NEW',
+    name: '新销售',
+    metric: m.code,
+    value: '123',
+    revision: 0,
+  })),
 })
-describe('月度指标的来源与复制语义', () => {
-  it('future standards leave historical months unchanged and dimensions separate', () => {
-    const d = settings()
-    expect(defaultTarget(d, 'SALES_OWNER', 'SALES_AMOUNT')).toBe(40000)
-    expect(defaultTarget(d, 'SALES_OWNER', 'SALES_AMOUNT', '2026-11')).toBe(60000)
-    expect(defaultTarget(d, 'CITY', 'SALES_AMOUNT', '2026-11')).toBe(100000)
+let wrapper: VueWrapper | undefined
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(api.getTargetSettings).mockResolvedValue(settings())
+  vi.mocked(api.getTargetHistory).mockResolvedValue([])
+})
+afterEach(() => {
+  wrapper?.unmount()
+  wrapper = undefined
+  document.body.innerHTML = ''
+})
+async function open() {
+  wrapper = mount(Targets, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+  await flushPromises()
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text().includes('销售指标'))!
+    .trigger('click')
+  await flushPromises()
+  return wrapper
+}
+async function click(label: string) {
+  const button = [...document.querySelectorAll('button')].find(
+    (b) => b.textContent?.trim() === label,
+  )!
+  button.click()
+  await flushPromises()
+}
+describe('HR有效指标与简化编辑', () => {
+  it('shows a new salesperson and uses HR values without default/custom selectors', async () => {
+    const page = await open()
+    expect(page.text()).toContain('新销售')
+    expect(page.text()).toContain('123')
+    expect(page.text()).not.toContain('单独设置')
+    expect(page.text()).not.toContain('自定义')
+    expect(page.text()).not.toContain('默认标准')
+    await page.get('button[aria-label="修改新销售指标"]').trigger('click')
+    await flushPromises()
+    expect((document.getElementById('target-SALES_AMOUNT') as HTMLInputElement).value).toBe('123')
   })
-  it('zero is explicit non-assessment, deleted overrides inherit while retaining revisions', () => {
-    const d = settings()
-    d.overrides = [
-      {
-        dimensionType: 'SALES_OWNER',
-        code: 'E1',
-        metric: 'SALES_AMOUNT',
-        value: 0,
-        revision: 3,
-        deleted: false,
-        updatedAt: null,
-        updatedBy: null,
-      },
-    ]
-    expect(targetCell(d, person, 'SALES_AMOUNT')).toMatchObject({
-      value: 0,
-      configured: true,
-      revision: 3,
-    })
-    d.overrides[0]!.deleted = true
-    expect(targetCell(d, person, 'SALES_AMOUNT')).toMatchObject({
-      value: 40000,
-      configured: false,
-      revision: 3,
-    })
+  it('previews and saves explicit zero with the revision, retaining input on conflict', async () => {
+    vi.mocked(api.saveTargetSettings).mockRejectedValueOnce(new Error('版本冲突，请刷新'))
+    const page = await open()
+    await page.get('button[aria-label="修改新销售指标"]').trigger('click')
+    await flushPromises()
+    const input = document.getElementById('target-SALES_AMOUNT') as HTMLInputElement
+    input.value = '0'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    const reason = document.getElementById('target-reason') as HTMLTextAreaElement
+    reason.value = '入职当月不考核'
+    reason.dispatchEvent(new Event('input', { bubbles: true }))
+    await click('预览变更')
+    await click('确认保存')
+    expect(api.saveTargetSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: [
+          {
+            dimensionType: 'SALES_OWNER',
+            code: 'NEW',
+            metric: 'SALES_AMOUNT',
+            value: '0',
+            expectedRevision: 0,
+          },
+        ],
+      }),
+    )
+    expect(document.body.textContent).toContain('版本冲突')
+    expect(input.value).toBe('0')
   })
-  it('copy only fills inherited metrics and preserves explicit zero, read-only people and current versions', () => {
-    const current = settings(),
-      prior = settings()
-    prior.month = '2026-09'
-    prior.overrides = [
-      {
-        dimensionType: 'SALES_OWNER',
-        code: 'E1',
-        metric: 'SALES_AMOUNT',
-        value: 50000,
-        revision: 2,
-        deleted: false,
-        updatedAt: null,
-        updatedBy: null,
-      },
-    ]
-    expect(copyPreviousTargets(current, prior, [person])).toEqual([
-      {
-        dimensionType: 'SALES_OWNER',
-        code: 'E1',
-        metric: 'SALES_AMOUNT',
-        value: '50000',
-        expectedRevision: 0,
-      },
-    ])
-    expect(copyPreviousTargets(current, prior, [{ ...person, writable: false }])).toEqual([])
-    current.overrides = [{ ...prior.overrides[0]!, value: 0, revision: 4 }]
-    expect(copyPreviousTargets(current, prior, [person])).toEqual([])
-    current.overrides[0]!.deleted = true
-    expect(copyPreviousTargets(current, prior, [person])[0]?.expectedRevision).toBe(4)
+  it('successfully saves and reloads without rendering a stale preview against cleared data', async () => {
+    vi.mocked(api.saveTargetSettings).mockResolvedValueOnce(undefined)
+    const page = await open()
+    await page.get('button[aria-label="修改新销售指标"]').trigger('click')
+    await flushPromises()
+    const input = document.getElementById('target-SALES_AMOUNT') as HTMLInputElement
+    input.value = '888'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    const reason = document.getElementById('target-reason') as HTMLTextAreaElement
+    reason.value = '月度调整'
+    reason.dispatchEvent(new Event('input', { bubbles: true }))
+    const saved = settings()
+    saved.targets[0]!.value = 888
+    saved.targets[0]!.revision = 1
+    vi.mocked(api.getTargetSettings).mockResolvedValue(saved)
+    await click('预览变更')
+    await click('确认保存')
+    expect(page.text()).toContain('888')
+    expect(api.getTargetSettings).toHaveBeenCalledTimes(2)
   })
-  it('rejects invalid decimals, negatives and fractional people without rounding', () => {
-    for (const value of ['', '-1', '1.001', 'Infinity', '1000000000000', '1e3'])
-      expect(targetValueError('SALES_AMOUNT', value)).toBeTruthy()
-    expect(targetValueError('NEW_CUSTOMER', '1.5')).toBeTruthy()
-    expect(targetValueError('NEW_CUSTOMER', '0')).toBeNull()
-    expect(targetValueError('SALES_AMOUNT', '123.45')).toBeNull()
+  it('does not expose editing for read-only subjects', async () => {
+    const data = settings()
+    data.subjects = [{ ...person, writable: false }]
+    vi.mocked(api.getTargetSettings).mockResolvedValue(data)
+    const page = await open()
+    expect(page.find('button[aria-label="修改新销售指标"]').exists()).toBe(false)
   })
-  it('previous month crosses year boundary', () => {
-    expect(previousMonth('2026-01')).toBe('2025-12')
+  it('rejects incomplete HR data, negative amounts and fractional customer counts', () => {
+    expect(() => targetCell({ ...settings(), targets: [] }, person, 'SALES_AMOUNT')).toThrow(
+      '不完整',
+    )
+    expect(targetValueError('SALES_AMOUNT', '-1')).not.toBeNull()
+    expect(targetValueError('NEW_CUSTOMER', '1.5')).not.toBeNull()
+    expect(targetValueError('RECEIPT_AMOUNT', '0')).toBeNull()
   })
-  it('sales dashboard consumes effective per-month defaults while explicit zero wins', () => {
-    const d = {
-      goals: [
-        { code: '*', month: 10, metric: 'SALES_AMOUNT', target: 60000 },
-        { code: '*', month: 11, metric: 'SALES_AMOUNT', target: 70000 },
-        { code: 'E1', month: 10, metric: 'SALES_AMOUNT', target: 0 },
-      ],
+  it('BI never fills missing API months with hardcoded goals and preserves zero', () => {
+    const data = {
+      goals: [{ code: 'NEW', metric: 'SALES_AMOUNT', month: 10, target: 0 }],
     } as SalesAnalysis
-    expect(personalGoal(d, 'E1', 'SALES_AMOUNT', 10)).toMatchObject({ value: 0, defaults: 0 })
-    expect(personalGoal(d, 'E2', 'SALES_AMOUNT', 10)).toMatchObject({ value: 60000, defaults: 1 })
-    expect(personalGoal(d, 'E1', 'SALES_AMOUNT', null)).toMatchObject({
-      value: 470000,
-      defaults: 11,
-    })
+    expect(personalGoal(data, 'NEW', 'SALES_AMOUNT', 10).value).toBe(0)
+    expect(personalGoal(data, 'NEW', 'SALES_AMOUNT', null).value).toBeNull()
+    expect(personalGoal(null, 'NEW', 'SALES_AMOUNT', 10).value).toBeNull()
   })
 })

@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import BiSalesMeetingPresentation from '@/views/supply-chain/bi/components/BiSalesMeetingPresentation.vue'
 import { salesDashboardFixture } from './fixtures/bi-sales-dashboard-data'
+vi.mock('@/views/supply-chain/bi/components/BiSalesMeetingBoard.vue', () => ({
+  default: { name: 'BiSalesMeetingBoard', template: '<div/>' },
+}))
 const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   overview: vi.fn(),

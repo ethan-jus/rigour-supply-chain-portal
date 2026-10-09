@@ -191,10 +191,7 @@
               </button>
             </div>
           </div>
-          <p v-if="!dayMode" class="sales-note">
-            个人默认月目标：交易额 40,000.00 元、本期到账 20,000.00 元；新增合作客户 200
-            家、复购客户 100 家。正式配置优先，年度目标逐月累计。
-          </p>
+          <p v-if="!dayMode" class="sales-note">月度指标由人事统一维护；0 表示不考核。</p>
         </section>
       </template>
     </template>
@@ -300,13 +297,14 @@
                     }}{{ goal.unit }}</span
                   >
                 </p>
-                <p v-else>目标待配置 · 已完成 {{ integer(goal.actual) }} 家</p>
+                <p v-else>
+                  暂无人事指标 · 已完成
+                  {{ goal.unit === '元' ? moneyYuan(goal.actual) : integer(goal.actual) }}
+                  {{ goal.unit }}
+                </p>
               </article>
             </div>
-            <p class="sales-note">
-              默认月目标：交易 40,000 元、到账 20,000 元、新增 200 家、复购 100
-              家。正式配置优先；年度逐月累计。
-            </p>
+            <p class="sales-note">指标来自人事设置，全年目标按月累计。</p>
           </article>
         </section>
         <section v-if="showMonths && !dayMode" class="sales-month-detail">
