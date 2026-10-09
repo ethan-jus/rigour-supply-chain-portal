@@ -46,17 +46,19 @@ export interface OrderRegisterOrderQuery extends OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterLineQuery extends OrderRegisterCommonQuery {
-  productVariantId?: string | number
+  paymentTimeFrom?: string
+  paymentTimeTo?: string
+  productVariantIds?: Array<string | number>
   hasDiscount?: boolean
   paymentStatusCode?: string
   productKeyword?: string
   productCode?: string
-  /** 商品集合过滤：商品下拉选中的单个商品，或商品分类解析出的商品ID集合。 */
+  /** 商品集合过滤：商品多选，或多个商品分类及其子分类解析出的商品ID集合。 */
   productIds?: Array<string | number>
 }
 
 export interface OrderRegisterPaymentQuery extends OrderRegisterCommonQuery {
-  productVariantId?: string | number
+  productVariantIds?: Array<string | number>
   productIds?: Array<string | number>
   paymentNo?: string
   transactionNo?: string
@@ -128,6 +130,8 @@ export interface OrderRegisterOrderPage {
 }
 
 export interface OrderRegisterLineItem {
+  /** 最近一次实际收款日期；未收款或无有效收款记录时为空。 */
+  paymentTime?: string | null
   paymentStatusCode: string
   id: string
   orderId: string
@@ -362,6 +366,12 @@ export interface OrderReceivablesView {
 }
 
 const readOptions = { stayOnUnauthorized: true }
+function productFilterParams(params: Record<string, unknown>) {
+  return { ...params,
+    ...(Array.isArray(params.productIds) ? { productIds: params.productIds.join(',') } : {}),
+    ...(Array.isArray(params.productVariantIds) ? { productVariantIds: params.productVariantIds.join(',') } : {}),
+  }
+}
 
 export const getOrderRegisterOrders = (params: OrderRegisterOrderQuery) =>
   apiClient.get<OrderRegisterOrderPage>(`${ORDER_REGISTER_BASE_PATH}/orders`, {
@@ -371,13 +381,13 @@ export const getOrderRegisterOrders = (params: OrderRegisterOrderQuery) =>
 
 export const getOrderRegisterLines = (params: OrderRegisterLineQuery) =>
   apiClient.get<OrderRegisterLinePage>(`${ORDER_REGISTER_BASE_PATH}/lines`, {
-    params: { ...params, ...(params.productIds ? { productIds: params.productIds.join(',') } : {}) },
+    params: productFilterParams({ ...params }),
     ...readOptions,
   })
 
 export const getOrderRegisterPayments = (params: OrderRegisterPaymentQuery) =>
   apiClient.get<OrderRegisterPaymentPage>(`${ORDER_REGISTER_BASE_PATH}/payments`, {
-    params: { ...params, ...(params.productIds ? { productIds: params.productIds.join(',') } : {}) },
+    params: productFilterParams({ ...params }),
     ...readOptions,
   })
 
@@ -409,7 +419,7 @@ export function exportOrderRegisterCsv(
       ? `${ORDER_REGISTER_BASE_PATH}/statistics/receivables/export`
       : `${ORDER_REGISTER_BASE_PATH}/${kind}/export`
   return apiClient.get<Blob>(path, {
-    params: { ...params, ...(Array.isArray(params.productIds) ? { productIds: params.productIds.join(',') } : {}) },
+    params: productFilterParams(params),
     responseType: 'blob',
     timeout: 180000,
     stayOnUnauthorized: true,

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ElementPlus, { ElSelect, ElTreeSelect } from 'element-plus'
+import ElementPlus, { ElSelect, ElTreeSelect, ElDatePicker } from 'element-plus'
 import { reactive } from 'vue'
 
 const mocks = vi.hoisted(() => ({
@@ -140,22 +140,50 @@ describe('订单明细页', () => {
     mocks.getLines.mockResolvedValue(linePage())
   })
 
+  it('收款日期展示最近实际日期，未收款留空，查询与导出保留日期范围', async () => {
+    const page = linePage()
+    mocks.getLines.mockResolvedValue({ ...page, items: page.items.map((row, i) => ({ ...row,
+      paymentStatusCode: i === 0 ? 'PARTIAL_PAID' : 'UNPAID',
+      paymentTime: i === 0 ? '2026-09-01T16:00:00Z' : null,
+    })) })
+    const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const headers = wrapper.findAll('.el-table__header th')
+    const dateIndex = headers.findIndex(h => h.text() === '收款日期')
+    expect(dateIndex).toBeGreaterThan(-1)
+    const rows = wrapper.findAll('.el-table__body tbody tr')
+    expect(rows[0]!.findAll('td')[dateIndex]!.text()).toBe('2026-09-02')
+    expect(rows[1]!.findAll('td')[dateIndex]!.text()).toBe('')
+    const date = wrapper.findAllComponents(ElDatePicker).find(c => c.props('startPlaceholder') === '收款开始日期')!
+    date.vm.$emit('update:modelValue', ['2026-09-02', '2026-09-02'])
+    await wrapper.find('form').trigger('submit'); await flushPromises()
+    const range = { paymentTimeFrom: '2026-09-01T16:00:00.000Z', paymentTimeTo: '2026-09-02T16:00:00.000Z' }
+    expect(mocks.getLines.mock.calls.at(-1)![0]).toMatchObject(range)
+    await wrapper.findAll('button').find(b => b.text() === '导出')!.trigger('click'); await flushPromises()
+    expect(mocks.exportCsv).toHaveBeenLastCalledWith('lines', expect.objectContaining(range))
+    date.vm.$emit('update:modelValue', null)
+    await wrapper.find('form').trigger('submit'); await flushPromises()
+    expect(mocks.getLines.mock.calls.at(-1)![0].paymentTimeFrom).toBeUndefined()
+    expect(mocks.getLines.mock.calls.at(-1)![0].paymentTimeTo).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('商品规格必须先选商品，列表和导出都传递规格条件', async () => {
     const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     const variant = wrapper.findAllComponents(ElSelect).find(item => item.props('ariaLabel') === '商品规格')!
     expect(variant.props('disabled')).toBe(true)
     const product = wrapper.findAllComponents(ElSelect).find(item => item.props('ariaLabel') === '商品')!
-    product.vm.$emit('update:modelValue', '9'); await flushPromises()
+    product.vm.$emit('update:modelValue', ['9']); await flushPromises()
     expect(variant.props('disabled')).toBe(false)
-    variant.vm.$emit('update:modelValue', '99')
+    variant.vm.$emit('update:modelValue', ['99'])
     await wrapper.find('form').trigger('submit'); await flushPromises()
-    expect(mocks.getLines.mock.calls.at(-1)![0]).toMatchObject({ productIds: [9], productVariantId: '99' })
+    expect(mocks.getLines.mock.calls.at(-1)![0]).toMatchObject({ productIds: [9], productVariantIds: ['99'] })
     await wrapper.findAll('button').find(button => button.text() === '导出')!.trigger('click'); await flushPromises()
-    expect(mocks.exportCsv).toHaveBeenLastCalledWith('lines', expect.objectContaining({ productIds: [9], productVariantId: '99' }))
-    product.vm.$emit('update:modelValue', undefined); await flushPromises()
+    expect(mocks.exportCsv).toHaveBeenLastCalledWith('lines', expect.objectContaining({ productIds: [9], productVariantIds: ['99'] }))
+    product.vm.$emit('update:modelValue', []); await flushPromises()
     expect(variant.props('disabled')).toBe(true)
-    expect(variant.props('modelValue')).toBe('')
+    expect(variant.props('modelValue')).toEqual([])
     wrapper.unmount()
   })
 
@@ -192,15 +220,15 @@ describe('订单明细页', () => {
     wrapper.unmount()
   })
 
-  it.each([undefined, null, ''])('商品下拉清空为 %s 后查询不保留商品条件', async (cleared) => {
+  it('商品多选清空后查询不保留商品条件', async () => {
     const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     const product = wrapper.findAllComponents(ElSelect).find((item) => item.props('ariaLabel') === '商品')!
-    product.vm.$emit('update:modelValue', '9')
+    product.vm.$emit('update:modelValue', ['9'])
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(mocks.getLines.mock.calls.at(-1)![0].productIds).toEqual([9])
-    product.vm.$emit('update:modelValue', cleared)
+    product.vm.$emit('update:modelValue', [])
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(mocks.getLines.mock.calls.at(-1)![0].productIds).toBeUndefined()
@@ -211,7 +239,7 @@ describe('订单明细页', () => {
     const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     const category = wrapper.findAllComponents(ElTreeSelect).find((item) => item.props('ariaLabel') === '商品分类')!
-    category.vm.$emit('update:modelValue', 'empty-category')
+    category.vm.$emit('update:modelValue', ['empty-category'])
     const calls = mocks.getLines.mock.calls.length
     await wrapper.find('form').trigger('submit')
     await flushPromises()
@@ -221,11 +249,11 @@ describe('订单明细页', () => {
     wrapper.unmount()
   })
 
-  it('分类清空为 undefined 后可以重新查询', async () => {
+  it('分类多选清空后可以重新查询', async () => {
     const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     const category = wrapper.findAllComponents(ElTreeSelect).find((item) => item.props('ariaLabel') === '商品分类')!
-    category.vm.$emit('update:modelValue', undefined)
+    category.vm.$emit('update:modelValue', [])
     const count = mocks.getLines.mock.calls.length
     await wrapper.find('form').trigger('submit')
     await flushPromises()
@@ -252,7 +280,7 @@ describe('订单明细页', () => {
       total: query.categoryId === '2' ? 1 : 0,
       items: query.categoryId === '2' ? [{ id: 9 }] : [],
     }))
-    category.vm.$emit('update:modelValue', '1')
+    category.vm.$emit('update:modelValue', ['1'])
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(mocks.getLines.mock.calls.at(-1)![0].productIds).toEqual([9])

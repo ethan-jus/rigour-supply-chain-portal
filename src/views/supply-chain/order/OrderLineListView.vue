@@ -22,6 +22,16 @@
           aria-label="下单时间"
           style="width: 280px"
         />
+        <el-date-picker
+          v-model="pageFilters.paymentTimeRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          range-separator="~"
+          start-placeholder="收款开始日期"
+          end-placeholder="收款结束日期"
+          aria-label="收款日期"
+          style="width: 280px"
+        />
         <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 190px" @keyup.enter="search" />
         <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 190px" @keyup.enter="search" />
         <el-tree-select
@@ -78,8 +88,7 @@
         />
         <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
         <el-tree-select
-          v-model="pageFilters.categoryId"
-          v-clear-filter-on-empty-input="() => (pageFilters.categoryId = '')"
+          v-model="pageFilters.categoryIds"
           :data="categoryTree"
           :props="categoryTreeProps"
           node-key="id"
@@ -88,6 +97,10 @@
           :loading="categoryLoading"
           :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
           @visible-change="onCategoryVisibleChange"
+          multiple
+          show-checkbox
+          collapse-tags
+          collapse-tags-tooltip
           aria-label="商品分类"
           clearable
           filterable
@@ -97,8 +110,10 @@
           @change="onCategoryChange"
         />
         <el-select
-          v-model="pageFilters.productId"
-          v-clear-filter-on-empty-input="() => (pageFilters.productId = '')"
+          v-model="pageFilters.productIds"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
           aria-label="商品"
           clearable
           filterable
@@ -108,23 +123,25 @@
           :loading="productSearching"
           :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
           @visible-change="visible => visible && searchProductOptions('')"
-          placeholder="搜索商品名称/编码"
+          placeholder="商品名称"
           style="width: 220px"
         >
           <el-option
             v-for="item in productOptions"
             :key="item.id"
-            :label="`${item.productName} · ${item.productCode}`"
+            :label="item.productName"
             :value="String(item.id)"
           />
         </el-select>
-        <el-select v-model="pageFilters.productVariantId" aria-label="商品规格" clearable filterable
-          :disabled="!pageFilters.productId" :loading="variantLoading"
-          :placeholder="pageFilters.productId ? '商品规格' : '请先选择商品'"
+        <el-select v-model="pageFilters.productVariantIds" aria-label="商品规格" multiple collapse-tags collapse-tags-tooltip clearable filterable
+          :disabled="!pageFilters.productIds.length" :loading="variantLoading"
+          :placeholder="pageFilters.productIds.length ? '商品规格' : '请先选择商品'"
           :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'"
           style="width: 200px" @visible-change="visible => visible && variantLoadFailed && loadVariants()">
-          <el-option v-for="variant in variantOptions" :key="variant.id" :value="String(variant.id)"
-            :label="`${variant.specificationSnapshot || '默认规格'} · ${variant.variantCode}`" />
+          <el-option-group v-for="group in variantGroups" :key="group.productId" :label="group.productName">
+            <el-option v-for="variant in group.variants" :key="variant.id" :value="String(variant.id)"
+              :label="variant.specificationSnapshot || '默认规格'" />
+          </el-option-group>
         </el-select>
         <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况" style="width: 130px">
           <el-option label="全部" value="" />
@@ -143,7 +160,7 @@
       :title="`当前筛选有 ${pageData.totals.missingLineOrderCount} 笔订单缺少明细，订货金额、优惠额及优惠率暂无法完整计算。`" />
     <el-alert v-if="pageData.totals.unallocatableOrderCount" :closable="false" type="warning"
       :title="`${pageData.totals.unallocatableOrderCount} 笔订单订货金额为零但存在财务金额，无法按商品比例分摊，相关统计暂不展示。`" />
-    <p v-if="pageFilters.productId || pageFilters.categoryId" class="order-summary-note">已筛选商品：优惠、应收、已收及待收按商品订货金额占整单的比例分摊，分币尾差已计入。</p>
+    <p v-if="pageFilters.productIds.length || pageFilters.categoryIds.length" class="order-summary-note">已筛选商品：优惠、应收、已收及待收按商品订货金额占整单的比例分摊，分币尾差已计入。</p>
     <div class="order-summary order-summary--lines" aria-label="明细统计">
       <div class="order-summary__metric order-summary__metric--ordered">
         <el-tooltip content="筛选命中的有效明细单价×数量合计。" placement="top">
@@ -321,6 +338,12 @@
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('paymentTime')" label="收款日期" width="130">
+            <template #header>
+              <el-tooltip content="整单最近一次有效收款日期；查询当月结清业绩时，请同时选择收款状态“已收款”。"><span>收款日期</span></el-tooltip>
+            </template>
+            <template #default="{ row }">{{ row.paymentTime ? businessDate(row.paymentTime) : '' }}</template>
+          </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('orderDate')" label="下单时间" width="170" sortable="custom" prop="orderDate">
             <template #default="{ row }">{{ displayDateTime(row.orderDate) }}</template>
           </el-table-column>
@@ -385,11 +408,11 @@ import { ElMessage } from 'element-plus'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
-import { displayDateTime } from '@/utils/business-date'
+import { businessDate, displayDateTime } from '@/utils/business-date'
 import { moneyText, numberText, repaymentRateText, orderPaymentStatusLabel, orderPaymentStatusTag } from '@/utils/order-register-status'
 import { businessDictionaryLabel, loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { convertLine, type ConvertedLineQuantity } from '@/utils/product-unit'
-import { empty, orderRegisterDateParams } from '@/utils/order-register-query'
+import { dateRangeParams, empty, orderRegisterDateParams } from '@/utils/order-register-query'
 import { csvFilename, downloadBlob } from '@/utils/file-download'
 import { vClearFilterOnEmptyInput } from '@/utils/filter-select-clear'
 import {
@@ -421,6 +444,7 @@ const lineColumns = useColumnSettings('order-lines', [
   { key: 'discountAmount', label: '优惠额' },
   { key: 'discountRate', label: '优惠率' },
   { key: 'paymentStatus', label: '收款状态' },
+  { key: 'paymentTime', label: '收款日期' },
   { key: 'orderDate', label: '下单时间' },
   { key: 'sourceLineId', label: '来源明细号' },
   { key: 'createdBy', label: '创建人', defaultVisible: false },
@@ -445,16 +469,17 @@ const {
 } = useOrderRegisterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
+  paymentTimeRange: null as [string, string] | null,
   discountStatus: '' as string | undefined,
   paymentStatusCode: '' as string | undefined,
-  categoryId: '' as string | undefined,
-  productId: '' as string | undefined,
-  productVariantId: '' as string | undefined,
+  categoryIds: [] as string[],
+  productIds: [] as string[],
+  productVariantIds: [] as string[],
 })
 
 const {
   categoryTree, categoryTreeProps, categoryLoading, categoryLoadFailed,
-  productOptions, productSearching, productLoadFailed, variantOptions, variantLoading, variantLoadFailed,
+  productOptions, productSearching, productLoadFailed, variantGroups, variantLoading, variantLoadFailed,
   loadCategoryOptions, resolveProductIds, searchProductOptions, loadVariants,
   onCategoryChange, onCategoryVisibleChange,
 } = useOrderProductFilters(pageFilters)
@@ -548,12 +573,13 @@ async function buildQuery() {
     departmentId: filters.departmentId ?? undefined,
     includeSubDepartments: filters.includeSubDepartments,
     productIds,
-    productVariantId: pageFilters.productId ? empty(pageFilters.productVariantId) : undefined,
+    productVariantIds: pageFilters.productIds.length && pageFilters.productVariantIds.length ? pageFilters.productVariantIds : undefined,
     paymentStatusCode: empty(pageFilters.paymentStatusCode),
     hasDiscount: empty(pageFilters.discountStatus) == null ? undefined : pageFilters.discountStatus === 'true',
     sortBy: sortBy.value,
     sortDirection: sortDirection.value,
     ...dateParams,
+    ...dateRangeParams(pageFilters.paymentTimeRange, 'paymentTimeFrom', 'paymentTimeTo'),
   }
 }
 
@@ -612,11 +638,12 @@ function search() {
 
 function resetFilters() {
   resetCommonFilters()
+  pageFilters.paymentTimeRange = null
   pageFilters.discountStatus = ''
   pageFilters.paymentStatusCode = ''
-  pageFilters.categoryId = ''
-  pageFilters.productId = ''
-  pageFilters.productVariantId = ''
+  pageFilters.categoryIds = []
+  pageFilters.productIds = []
+  pageFilters.productVariantIds = []
   sortBy.value = 'orderDate'
   sortDirection.value = 'desc'
   search()

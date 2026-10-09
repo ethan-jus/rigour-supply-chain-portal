@@ -36,6 +36,18 @@ describe('订单注册读接口契约', () => {
     expect(mocks.get.mock.calls.at(-1)![1].params.productIds).toBe('15,14')
   })
 
+  it('明细和回款的多商品、多规格及导出使用一致参数', () => {
+    const filters = { productIds: [15, 14], productVariantIds: [151, 142] }
+    for (const get of [getOrderRegisterLines, getOrderRegisterPayments]) {
+      void get({ begin: 0, step: 20, ...filters })
+      expect(mocks.get.mock.calls.at(-1)![1].params).toMatchObject({ productIds: '15,14', productVariantIds: '151,142' })
+    }
+    for (const kind of ['lines', 'payments'] as const) {
+      void exportOrderRegisterCsv(kind, filters)
+      expect(mocks.get.mock.calls.at(-1)![1].params).toMatchObject({ productIds: '15,14', productVariantIds: '151,142' })
+    }
+  })
+
   it('订单/明细/收款/统计使用同一 BASE 和 stayOnUnauthorized', () => {
     void getOrderRegisterOrders({ begin: 0, step: 20 })
     expect(mocks.get).toHaveBeenLastCalledWith('/orders/register/orders', {

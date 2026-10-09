@@ -91,8 +91,7 @@
           />
         </el-select>
         <el-tree-select
-          v-model="pageFilters.categoryId"
-          v-clear-filter-on-empty-input="() => (pageFilters.categoryId = '')"
+          v-model="pageFilters.categoryIds"
           :data="categoryTree"
           :props="categoryTreeProps"
           node-key="id"
@@ -101,6 +100,10 @@
           :loading="categoryLoading"
           :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
           @visible-change="onCategoryVisibleChange"
+          multiple
+          show-checkbox
+          collapse-tags
+          collapse-tags-tooltip
           aria-label="商品分类"
           clearable
           filterable
@@ -110,8 +113,10 @@
           @change="onCategoryChange"
         />
         <el-select
-          v-model="pageFilters.productId"
-          v-clear-filter-on-empty-input="() => (pageFilters.productId = '')"
+          v-model="pageFilters.productIds"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
           aria-label="商品"
           clearable
           filterable
@@ -121,23 +126,25 @@
           :loading="productSearching"
           :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
           @visible-change="visible => visible && searchProductOptions('')"
-          placeholder="搜索商品名称/编码"
+          placeholder="商品名称"
           style="width: 220px"
         >
           <el-option
             v-for="item in productOptions"
             :key="item.id"
-            :label="`${item.productName} · ${item.productCode}`"
+            :label="item.productName"
             :value="String(item.id)"
           />
         </el-select>
-        <el-select v-model="pageFilters.productVariantId" aria-label="商品规格" clearable filterable
-          :disabled="!pageFilters.productId" :loading="variantLoading"
-          :placeholder="pageFilters.productId ? '商品规格' : '请先选择商品'"
+        <el-select v-model="pageFilters.productVariantIds" aria-label="商品规格" multiple collapse-tags collapse-tags-tooltip clearable filterable
+          :disabled="!pageFilters.productIds.length" :loading="variantLoading"
+          :placeholder="pageFilters.productIds.length ? '商品规格' : '请先选择商品'"
           :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'"
           style="width: 200px" @visible-change="visible => visible && variantLoadFailed && loadVariants()">
-          <el-option v-for="variant in variantOptions" :key="variant.id" :value="String(variant.id)"
-            :label="`${variant.specificationSnapshot || '默认规格'} · ${variant.variantCode}`" />
+          <el-option-group v-for="group in variantGroups" :key="group.productId" :label="group.productName">
+            <el-option v-for="variant in group.variants" :key="variant.id" :value="String(variant.id)"
+              :label="variant.specificationSnapshot || '默认规格'" />
+          </el-option-group>
         </el-select>
 
       </template>
@@ -471,9 +478,9 @@ const {
 } = useOrderRegisterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
-  categoryId: '' as string | undefined,
-  productId: '' as string | undefined,
-  productVariantId: '' as string | undefined,
+  categoryIds: [] as string[],
+  productIds: [] as string[],
+  productVariantIds: [] as string[],
   paymentNo: '',
   transactionNo: '',
   paymentStatusCode: '',
@@ -482,7 +489,7 @@ const pageFilters = reactive({
 
 const {
   categoryTree, categoryTreeProps, categoryLoading, categoryLoadFailed,
-  productOptions, productSearching, productLoadFailed, variantOptions, variantLoading, variantLoadFailed,
+  productOptions, productSearching, productLoadFailed, variantGroups, variantLoading, variantLoadFailed,
   loadCategoryOptions, resolveProductIds, searchProductOptions, loadVariants,
   onCategoryChange, onCategoryVisibleChange,
 } = useOrderProductFilters(pageFilters)
@@ -565,7 +572,7 @@ async function buildQuery() {
   )
   return {
     productIds: productIds?.length === 0 ? [0] : productIds,
-    productVariantId: pageFilters.productId ? empty(pageFilters.productVariantId) : undefined,
+    productVariantIds: pageFilters.productIds.length && pageFilters.productVariantIds.length ? pageFilters.productVariantIds : undefined,
     begin: (currentPage.value - 1) * pageSize.value,
     step: pageSize.value,
     orderNo: empty(filters.orderNo),
@@ -616,9 +623,9 @@ function search() {
 
 function clearFilters() {
   resetCommonFilters()
-  pageFilters.categoryId = ''
-  pageFilters.productId = ''
-  pageFilters.productVariantId = ''
+  pageFilters.categoryIds = []
+  pageFilters.productIds = []
+  pageFilters.productVariantIds = []
   pageFilters.paymentNo = ''
   pageFilters.transactionNo = ''
   pageFilters.paymentStatusCode = ''
