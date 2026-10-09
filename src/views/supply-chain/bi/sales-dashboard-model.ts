@@ -10,8 +10,9 @@ export interface SalesDashboardSnapshot {
   notice?: string
 }
 export function salesProductTotals(products: SalesAnalysis['products']) {
+  // 保留后端分摊精度，合计后再格式化；逐行取分会使合计偏离实际到账。
   const sum = (key: 'sales' | 'receipts' | 'received') =>
-    products.reduce((total, p) => total + Math.round(p[key] * 100), 0) / 100
+    products.reduce((total, p) => total + Math.round(p[key] * 1e6), 0) / 1e6
   return {
     quantity: products.some((p) => p.quantity == null)
       ? null

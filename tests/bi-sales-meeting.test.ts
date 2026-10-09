@@ -128,14 +128,14 @@ describe('销售经营看板', () => {
     expect(cells()).toEqual(['筛选合计共 1 项', '3', '102.00', '22.00', '52.00', '51.0%'])
     w.unmount()
   })
-  it('金额按展示精度合计，空结果为零，缺失数量不伪装成零', () => {
+  it('合计保留分摊精度，空结果为零，缺失数量不伪装成零', () => {
     const p = salesDashboardFixture().sales!.products[0]!
     expect(
       salesProductTotals([
         { ...p, sales: 0.104 },
         { ...p, sales: 0.104 },
       ]).sales,
-    ).toBe(0.2)
+    ).toBe(0.208)
     expect(salesProductTotals([])).toMatchObject({
       quantity: 0,
       sales: 0,
@@ -143,6 +143,20 @@ describe('销售经营看板', () => {
       received: 0,
     })
     expect(salesProductTotals([{ ...p, quantity: null }]).quantity).toBeNull()
+  })
+  it('分摊到账先合计再展示，三行尾差不会改变实际到账总额', () => {
+    const detail = salesDashboardFixture()
+    const product = detail.sales!.products[0]!
+    detail.sales!.products = [0.333333, 0.333333, 0.333334].map((receipts, i) => ({
+      ...product,
+      sku: `split-${i}`,
+      receipts,
+    }))
+    const w = render({ selectedCode: 'S1', detail })
+    expect(w.findAll('.sales-products tbody tr').map((row) => row.findAll('td')[3]!.text()))
+      .toEqual(['0.33', '0.33', '0.33'])
+    expect(w.get('.sales-products tfoot tr').findAll('th, td')[3]!.text()).toBe('1.00')
+    w.unmount()
   })
   it('商品显示对应主图，无图保持占位且不影响金额', () => {
     const detail = salesDashboardFixture()
