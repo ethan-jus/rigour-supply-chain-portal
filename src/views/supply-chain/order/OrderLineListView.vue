@@ -190,6 +190,12 @@
         <span class="order-summary__label">客户数</span>
         <strong class="order-summary__value">{{ pageData.totals.customerCount ?? '-' }}</strong>
       </div>
+      <div class="order-summary__metric order-summary__metric--count">
+        <el-tooltip content="按筛选命中的明细交易单位合计数量。" placement="top">
+          <span class="order-summary__label">商品数</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ numberText(pageData.totals.quantitySum) }}</strong>
+      </div>
       <div class="order-summary__metric order-summary__metric--ordered">
         <el-tooltip content="筛选命中的有效明细单价×数量合计。" placement="top">
           <span class="order-summary__label">订货金额</span>
@@ -209,7 +215,6 @@
         <strong class="order-summary__value">{{ discountRateText(pageData.totals.discountRate) }}</strong>
       </div>
     </div>
-    <p class="order-summary-note order-summary-note--quantity">商品数 <strong>{{ numberText(pageData.totals.quantitySum) }}</strong><span>按明细交易单位合计</span></p>
 
     <el-alert v-if="productInfoFailed" type="warning" :closable="false" show-icon>
       商品图片与单位信息加载失败
@@ -298,11 +303,11 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('paymentTime')" label="收款日期" width="130">
+          <el-table-column v-if="lineColumns.isVisible('paymentTime')" label="收款日期" width="170">
             <template #header>
               <el-tooltip content="整单最近一次有效收款日期；查询当月结清业绩时，请同时选择收款状态“已收款”。"><span>收款日期</span></el-tooltip>
             </template>
-            <template #default="{ row }">{{ row.paymentTime ? businessDate(row.paymentTime) : '' }}</template>
+            <template #default="{ row }">{{ row.paymentTime ? displayDateTime(row.paymentTime) : '' }}</template>
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('orderDate')" label="下单时间" width="170" sortable="custom" prop="orderDate">
             <template #default="{ row }">{{ displayDateTime(row.orderDate) }}</template>
@@ -407,7 +412,7 @@ import { ElMessage } from 'element-plus'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
-import { businessDate, displayDateTime } from '@/utils/business-date'
+import { displayDateTime } from '@/utils/business-date'
 import { moneyText, numberText, repaymentRateText, orderPaymentStatusLabel, orderPaymentStatusTag } from '@/utils/order-register-status'
 import { businessDictionaryLabel, loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { convertLine, type ConvertedLineQuantity } from '@/utils/product-unit'

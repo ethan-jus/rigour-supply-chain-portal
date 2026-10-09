@@ -140,11 +140,11 @@ describe('订单明细页', () => {
     mocks.getLines.mockResolvedValue(linePage())
   })
 
-  it('收款日期展示最近实际日期，未收款留空，查询与导出保留日期范围', async () => {
+  it('收款日期展示最近实际日期和时分秒，未收款留空，查询与导出保留日期范围', async () => {
     const page = linePage()
     mocks.getLines.mockResolvedValue({ ...page, items: page.items.map((row, i) => ({ ...row,
       paymentStatusCode: i === 0 ? 'PARTIAL_PAID' : 'UNPAID',
-      paymentTime: i === 0 ? '2026-09-01T16:00:00Z' : null,
+      paymentTime: i === 0 ? '2026-09-01T16:23:45Z' : null,
     })) })
     const wrapper = mount(OrderLineListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
@@ -152,7 +152,7 @@ describe('订单明细页', () => {
     const dateIndex = headers.findIndex(h => h.text() === '收款日期')
     expect(dateIndex).toBeGreaterThan(-1)
     const rows = wrapper.findAll('.el-table__body tbody tr')
-    expect(rows[0]!.findAll('td')[dateIndex]!.text()).toBe('2026-09-02')
+    expect(rows[0]!.findAll('td')[dateIndex]!.text()).toBe('2026-09-02 00:23:45')
     expect(rows[1]!.findAll('td')[dateIndex]!.text()).toBe('')
     const date = wrapper.findAllComponents(ElDatePicker).find(c => c.props('startPlaceholder') === '收款开始日期')!
     date.vm.$emit('update:modelValue', ['2026-09-02', '2026-09-02'])
@@ -373,7 +373,11 @@ describe('订单明细页', () => {
     expect(text).toContain('回款金额')
     expect(text).toContain('回款率')
     expect(text).toContain('62.50%')
-    expect(wrapper.find('.order-summary-note--quantity strong').text()).toBe('34')
+    const summary = wrapper.find('[aria-label="明细统计"]')
+    expect(summary.findAll('.order-summary__label').map(label => label.text()))
+      .toEqual(['订单金额', '回款金额', '回款率', '待收金额', '客户数', '商品数', '订货金额', '优惠额', '优惠率'])
+    expect(summary.findAll('.order-summary__metric').find(metric => metric.text().startsWith('商品数'))!.find('strong').text()).toBe('34')
+    expect(wrapper.find('.order-summary-note--quantity').exists()).toBe(false)
     expect(text).toContain('¥50.00')
     expect(text).toContain('优惠额')
     expect(text).toContain('优惠率')
