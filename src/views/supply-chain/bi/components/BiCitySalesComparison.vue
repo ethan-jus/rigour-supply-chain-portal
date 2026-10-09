@@ -58,7 +58,7 @@
             <td
               :title="row.defaultMonths ? `${row.defaultMonths}个月使用默认目标` : '已配置个人目标'"
             >
-              {{ money(row.target)
+              {{ row.target === 0 ? '不考核' : money(row.target)
               }}<small v-if="row.defaultMonths"
                 >默认{{ row.defaultMonths < (annual ? 12 : 1) ? '补齐' : '' }}</small
               >
@@ -120,7 +120,7 @@
       归属异常待核对：{{ money(unlistedReceipts) }} 元（回款经办人和客户当前归属业务员均缺失）。
     </p>
     <p class="sales-target-note">
-      个人月默认目标：交易额40,000元、到账20,000元；已配置目标优先，年度按12个月累计。
+      个人目标按当月单独设置或适用的默认标准计算；年度逐月累计，0 表示不考核。
     </p>
   </div>
 </template>

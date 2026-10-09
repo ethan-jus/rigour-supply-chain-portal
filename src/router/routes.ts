@@ -107,7 +107,9 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
                 ? () => import('@/views/supply-chain/crm/CrmShippingAddressView.vue')
                 : crmCustomerDictionaryRouteKeys.has(page.routeKey)
                   ? () => import('@/views/supply-chain/crm/CrmCustomerDictionaryView.vue')
-                  : page.routeKey === 'supply.hr.departments'
+                  : page.routeKey === 'supply.hr.target-settings'
+                    ? () => import('@/views/supply-chain/hr/HrTargetSettingsView.vue')
+                    : page.routeKey === 'supply.hr.departments'
                     ? () => import('@/views/supply-chain/hr/HrDepartmentManagementView.vue')
                     : hrEmployeeRouteKeys.has(page.routeKey)
                     ? () => import('@/views/supply-chain/hr/HrEmployeeManagementView.vue')
@@ -129,7 +131,9 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
     requiresAuth: true,
     applicationCode: 'SUPPLY_CHAIN',
     routeKey: page.routeKey,
-    permission: page.routeKey === 'supply.integration.schedules' ? 'integration:dhb:read' : page.routeKey === 'supply.hr.departments' ? 'hr:department:read' : page.domainKey === 'crm'
+    permission: page.routeKey === 'supply.hr.target-settings'
+      ? 'analytics:dashboard:read'
+      : page.routeKey === 'supply.integration.schedules' ? 'integration:dhb:read' : page.routeKey === 'supply.hr.departments' ? 'hr:department:read' : page.domainKey === 'crm'
       ? 'crm:customer:read'
       : hrEmployeeRouteKeys.has(page.routeKey)
         ? 'hr:employee:read'

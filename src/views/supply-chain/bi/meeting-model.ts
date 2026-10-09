@@ -10,6 +10,7 @@ import { businessDate, businessDateRange, businessMonthRange } from '@/utils/bus
 
 export const meetingPages = ['经营总览', '目标达成', '城市经营', '客户与商品', '回款风险']
 export interface MeetingSnapshot {
+  personalGoals?: import('@/api/core/bi-sales-dashboard').SalesAnalysis | null
   current: SupplyDashboardOverview
   previous: SupplyDashboardOverview | null
   query: SupplyDashboardQuery

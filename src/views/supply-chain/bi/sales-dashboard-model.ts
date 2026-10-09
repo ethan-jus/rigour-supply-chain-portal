@@ -46,9 +46,12 @@ export function personalGoal(
       (g) => g.code === code && g.month === m && g.metric === metric,
     )?.target
     if (value == null) {
-      if (fallback == null)
+      const inherited =
+        data?.goals.find((g) => g.code === '*' && g.month === m && g.metric === metric)?.target ??
+        fallback
+      if (inherited == null)
         return { value: null, defaults: months.length, configured: months.length - defaults }
-      total += fallback
+      total += inherited
       defaults++
     } else total += value
   }

@@ -285,7 +285,8 @@
                   >{{ goal.unit === '元' ? moneyYuan(goal.actual) : integer(goal.actual)
                   }}<small>{{ goal.unit }}</small></strong
                 >
-                <p v-if="goal.value != null">
+                <p v-if="goal.value === 0">当月该项不考核</p>
+                <p v-else-if="goal.value != null">
                   目标 {{ goal.unit === '元' ? moneyYuan(goal.value) : integer(goal.value)
                   }}{{ goal.unit }}
                   <span

@@ -1,3 +1,4 @@
+import { personalGoal } from './sales-dashboard-model'
 import { aggregateGoals } from './overview-model'
 import { businessDate } from '@/utils/business-date'
 import type { MeetingSnapshot } from './meeting-model'
@@ -140,8 +141,23 @@ export function citySalesRows(snapshot: MeetingSnapshot | null, receipt: boolean
         configuredValue == null
           ? 0
           : Math.max(0, Math.min(months, configured?.configuredMonthCount ?? months))
-      const defaultMonths = months - configuredMonths
-      const target = (configuredValue ?? 0) + defaultMonths * (receipt ? 20000 : 40000)
+      const effective = snapshot.personalGoals
+        ? personalGoal(
+            snapshot.personalGoals,
+            code,
+            receipt ? 'RECEIPT_AMOUNT' : 'SALES_AMOUNT',
+            annual
+              ? null
+              : Number(businessDate(snapshot.query.from || snapshot.current.from).slice(5, 7)),
+          )
+        : null
+      const defaultMonths = effective?.defaults ?? months - configuredMonths
+      const target =
+        snapshot.personalGoals === null
+          ? null
+          : effective
+            ? effective.value
+            : (configuredValue ?? 0) + defaultMonths * (receipt ? 20000 : 40000)
       return {
         code,
         name:

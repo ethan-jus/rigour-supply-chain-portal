@@ -151,6 +151,7 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'departments', title: '部门管理' },
     { key: 'employees', title: '员工档案' },
     { key: 'positions', title: '岗位职位' },
+    { key: 'target-settings', title: '指标设置' },
     { key: 'assignments', title: '任职与调动' }, { key: 'calendar-policies', title: '工作日历与考勤政策' },
     { key: 'attendance-appeals', title: '正式考勤与申诉' }, { key: 'payroll-commission', title: '薪酬与提成' },
     { key: 'performance', title: '绩效核算' }, { key: 'monthly-close', title: '月结与冲回' },

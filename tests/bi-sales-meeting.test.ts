@@ -8,6 +8,7 @@ import {
   salesProductTotals,
 } from '@/views/supply-chain/bi/sales-dashboard-model'
 import { salesDashboardFixture } from './fixtures/bi-sales-dashboard-data'
+vi.mock('element-plus/es/components/image/style/css', () => ({}))
 Element.prototype.scrollIntoView = vi.fn()
 const props = () => ({
   snapshot: salesDashboardFixture(),

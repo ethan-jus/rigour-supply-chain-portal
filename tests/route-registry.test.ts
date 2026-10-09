@@ -249,7 +249,7 @@ describe('数据库导航注册表', () => {
       'supply.hr.payroll-commission', 'supply.hr.performance',
     ]))
     expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(11)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(75)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(76)
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
