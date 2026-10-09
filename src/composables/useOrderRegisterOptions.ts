@@ -58,7 +58,7 @@ export function useOrderRegisterOptions() {
   }
 
   /**
-   * 业务员远程搜索；传归属地区时按该地区下属城市级联过滤。
+   * 历史订单查询包括已离职员工，不按在职状态限制；传归属地区时按下属城市级联过滤。
    * 地区下没有可匹配城市（如“全国/散客”）时退回全量，避免下拉为空。
    */
   async function searchEmployees(keyword: string, regionCode?: string | null) {
@@ -71,7 +71,6 @@ export function useOrderRegisterOptions() {
           begin: 0,
           step: 50,
           keyword: text,
-          employmentStatus: 'ACTIVE',
         })
         employeeOptions.value = result.items
         return
@@ -82,7 +81,6 @@ export function useOrderRegisterOptions() {
             begin: 0,
             step: 50,
             keyword: text,
-            employmentStatus: 'ACTIVE',
             cityName: city,
           }),
         ),

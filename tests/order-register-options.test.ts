@@ -82,6 +82,27 @@ describe('订单主数据选项级联', () => {
     expect(lastCall.cityName).toBeUndefined()
   })
 
+  it.each([undefined, 'WH'])('搜索历史业务员包括已离职员工（地区：%s）', async (regionCode) => {
+    const options = useOrderRegisterOptions()
+    await options.loadOptions()
+    const staff = [
+      employee('EMP-ACTIVE', '测试在职', '武汉'),
+      { ...employee('EMP-LEFT', '测试离职', '武汉'), employmentStatus: 'LEFT' },
+    ]
+    mocks.getEmployees.mockImplementation(async (params: { employmentStatus?: string }) => ({
+      total: staff.length, begin: 0, step: 50,
+      items: staff.filter(item => !params.employmentStatus || item.employmentStatus === params.employmentStatus),
+    }))
+
+    await options.searchEmployees('测试', regionCode)
+
+    expect(options.employeeOptions.value.map(item => item.employeeCode)).toEqual(['EMP-ACTIVE', 'EMP-LEFT'])
+    const params = mocks.getEmployees.mock.calls.at(-1)![0]
+    expect(params.keyword).toBe('测试')
+    expect(params.employmentStatus).toBeUndefined()
+    expect(params.cityName).toBe(regionCode ? '武汉' : undefined)
+  })
+
   it('选中城市时按去掉“市”后缀的城市名级联业务员', async () => {
     const options = useOrderRegisterOptions()
     await options.loadOptions()
