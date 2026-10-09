@@ -190,7 +190,7 @@ describe('订单列表页', () => {
     await wrapper.find('form').trigger('submit'); await flushPromises()
     const dates = { paymentTimeFrom: '2026-08-31T16:00:00.000Z', paymentTimeTo: '2026-09-30T16:00:00.000Z' }
     expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining(dates))
-    expect(wrapper.text()).toContain('2026-09-02')
+    expect(wrapper.text()).toContain('2026-09-02 00:00:00')
     expect(wrapper.findAll('.order-summary__label').map(v => v.text())).toEqual(['订单金额','回款金额','回款率','待收金额','客户数','订货金额','优惠额','优惠率'])
     expect(wrapper.findAll('.order-party-name').map(v => v.text())).toContain('张三')
     await wrapper.findAll('button').find(b => b.text() === '导出')!.trigger('click'); await flushPromises()
@@ -372,38 +372,46 @@ describe('订单列表页', () => {
     expect(dateEditor.exists()).toBe(true)
     expect(wrapper.find('input[placeholder="下单开始日期"]').exists()).toBe(true)
     expect(wrapper.find('input[placeholder="下单结束日期"]').exists()).toBe(true)
+    expect(wrapper.findAllComponents({ name: 'ElDatePicker' }).slice(0, 2).map(picker => picker.props('startPlaceholder')))
+      .toEqual(['下单开始日期', '收款开始日期'])
     wrapper.unmount()
   })
 
-  it('操作列用按钮样式展示明细、回款与发票', async () => {
+  it('操作列用紧凑文字按钮展示明细与发票，不再展示回款按钮', async () => {
     const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     const actionButtons = wrapper
       .findAll('.order-register-table button')
       .filter((node) => ['明细', '回款', '发票'].includes(node.text()))
-    expect(actionButtons.map((node) => node.text())).toEqual(['明细', '回款', '发票'])
+    expect(actionButtons.map((node) => node.text())).toEqual(['明细', '发票'])
     expect(actionButtons.every((node) => node.classes().includes('el-button--small'))).toBe(true)
-    expect(actionButtons.every((node) => !node.classes().includes('is-link'))).toBe(true)
+    expect(actionButtons.every((node) => node.classes().includes('is-link'))).toBe(true)
     wrapper.unmount()
   })
 
-  it('回款入口只在有回款记录时出现', async () => {
+  it('收款日期显示时分秒，点击打开对应订单回款记录，无日期时保持空白', async () => {
     const base = pageResponse()
     mocks.getOrders.mockResolvedValue({
       ...base,
       items: [
-        { ...base.items[0], id: '1', orderNo: 'A001', paidAmount: 200 },
-        { ...base.items[0], id: '2', orderNo: 'A002', paidAmount: 0 },
+        { ...base.items[0], id: '1', orderNo: 'A001', paidAmount: 200, paymentTime: '2026-09-01T10:23:45Z' },
+        { ...base.items[0], id: '2', orderNo: 'A002', paidAmount: 0, paymentTime: null },
+        { ...base.items[0], id: '3', orderNo: 'A003', paidAmount: 200, paymentTime: null },
       ],
     })
 
     const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
 
-    const payButtons = wrapper
-      .findAll('.order-register-table button')
-      .filter((node) => node.text() === '回款')
-    expect(payButtons).toHaveLength(1)
+    const paymentDates = wrapper.findAll('.payment-time-link')
+    expect(paymentDates).toHaveLength(1)
+    expect(paymentDates[0]!.text()).toBe('2026-09-01 18:23:45')
+    await paymentDates[0]!.trigger('click')
+    await flushPromises()
+    expect(mocks.push).toHaveBeenCalledWith({
+      path: '/supply-chain/order/sales-payments',
+      query: { orderNo: 'A001' },
+    })
     wrapper.unmount()
   })
 

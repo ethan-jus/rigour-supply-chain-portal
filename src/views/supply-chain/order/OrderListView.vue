@@ -15,16 +15,6 @@
       </template>
       <template #primary>
         <el-date-picker
-          v-model="pageFilters.paymentTimeRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="~"
-          start-placeholder="收款开始日期"
-          end-placeholder="收款结束日期"
-          aria-label="收款日期"
-          style="width: 280px"
-        />
-        <el-date-picker
           v-model="filters.orderDateRange"
           type="daterange"
           value-format="YYYY-MM-DD"
@@ -32,6 +22,16 @@
           start-placeholder="下单开始日期"
           end-placeholder="下单结束日期"
           aria-label="下单时间"
+          style="width: 280px"
+        />
+        <el-date-picker
+          v-model="pageFilters.paymentTimeRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          range-separator="~"
+          start-placeholder="收款开始日期"
+          end-placeholder="收款结束日期"
+          aria-label="收款日期"
           style="width: 280px"
         />
         <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 190px" @keyup.enter="search" />
@@ -231,11 +231,21 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('paymentTime')" label="收款日期" width="140" sortable="custom" prop="paymentTime">
+          <el-table-column v-if="orderColumns.isVisible('paymentTime')" label="收款日期" width="170" sortable="custom" prop="paymentTime">
             <template #header>
               <el-tooltip content="整单最近一次有效收款日期；查询当月结清业绩时，请同时选择收款状态“已收款”。"><span class="column-header-hint">收款日期</span></el-tooltip>
             </template>
-            <template #default="{ row }">{{ row.paymentTime ? businessDate(row.paymentTime) : '' }}</template>
+            <template #default="{ row }">
+              <el-link
+                v-if="row.paymentTime && canViewOrders"
+                class="payment-time-link"
+                type="primary"
+                underline="hover"
+                title="查看此订单的回款记录"
+                @click.stop="openPayments(row)"
+              >{{ displayDateTime(row.paymentTime) }}</el-link>
+              <span v-else-if="row.paymentTime">{{ displayDateTime(row.paymentTime) }}</span>
+            </template>
           </el-table-column>
           <el-table-column v-if="orderColumns.isVisible('orderDate')" label="下单时间" width="170" sortable="custom" prop="orderDate">
             <template #default="{ row }">{{ displayDateTime(row.orderDate) }}</template>
@@ -324,47 +334,49 @@
           <el-table-column v-if="orderColumns.isVisible('syncedAt')" label="同步时间" width="170" sortable="custom" prop="syncedAt">
             <template #default="{ row }">{{ displayDateTime(row.syncedAt) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="300" fixed="right" class-name="order-actions-cell">
+          <el-table-column label="操作" width="150" fixed="right" class-name="order-actions-cell">
             <template #default="{ row }">
               <el-button
                 v-if="canViewOrders"
                 class="order-action order-action--detail"
+                link
+                type="primary"
                 size="small"
                 @click="openLines(row)"
               >
-                <el-icon><Document /></el-icon>明细
-              </el-button>
-              <el-button
-                v-if="canViewOrders && hasPayments(row as OrderRegisterOrderItem)"
-                class="order-action order-action--payment"
-                size="small"
-                @click="openPayments(row)"
-              >
-                <el-icon><Money /></el-icon>回款
+                明细
               </el-button>
               <el-button
                 v-if="canInvoiceOrders && isInvoiceNotApplied(row as OrderRegisterOrderItem)"
                 class="order-action order-action--invoice-apply"
+                link
+                type="primary"
+                title="申请发票"
                 size="small"
                 @click="openInvoiceApply(row as OrderRegisterOrderItem)"
               >
-                <el-icon><DocumentAdd /></el-icon>发票
+                发票
               </el-button>
               <el-button
                 v-else-if="canInvoiceOrders"
                 class="order-action order-action--invoice-view"
+                link
+                type="primary"
+                title="查看发票"
                 size="small"
                 @click="openInvoice(row as OrderRegisterOrderItem)"
               >
-                <el-icon><View /></el-icon>发票
+                发票
               </el-button>
               <el-button
                 v-if="canDeleteOrder(row as OrderRegisterOrderItem)"
                 class="order-action order-action--delete"
+                link
+                type="danger"
                 size="small"
                 @click="deleteDraftOrder(row as OrderRegisterOrderItem)"
               >
-                <el-icon><Delete /></el-icon>删除
+                删除
               </el-button>
             </template>
           </el-table-column>
@@ -410,10 +422,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { businessDate, businessMonth } from '@/utils/business-date'
+import { businessMonth } from '@/utils/business-date'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Document, DocumentAdd, Money, View } from '@element-plus/icons-vue'
 import OrderPackageSyncButton from '@/components/supply/OrderPackageSyncButton.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
@@ -592,11 +603,6 @@ const invoiceApplyOrderNo = ref('')
 function isInvoiceNotApplied(row: { invoiceStatusCode?: string | null }) {
   const status = row.invoiceStatusCode
   return !status || status === 'NOT_APPLIED' || status === 'REVOKED'
-}
-
-/** 没有回款记录的订单不展示回款入口，避免点开是空列表。 */
-function hasPayments(row: { paidAmount?: number | null }) {
-  return Number(row.paidAmount || 0) > 0
 }
 
 function openInvoice(row: { orderNo?: string; invoiceStatusCode?: string | null }) {
@@ -906,63 +912,26 @@ watch(
   font-weight: 600;
 }
 
-/* 操作列强制单行展示，四个按钮不允许换行。 */
+/* 常用操作保持单行，用轻量文字按钮减少固定列占用。 */
 .order-register-table :deep(.order-actions-cell) {
   white-space: nowrap;
 }
 
-/* 操作列按钮：紧凑浅底 + 功能图标，颜色只对应动作语义。 */
 .order-register-table :deep(.el-table__row .order-action) {
-  height: 26px;
-  min-height: 26px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
   font-size: 12px;
 }
 
 .order-register-table :deep(.el-table__row .order-action + .order-action) {
-  margin-left: 6px;
+  margin-left: 12px;
 }
 
-.order-register-table :deep(.el-table__row .order-action .el-icon) {
-  margin-right: 4px;
-  font-size: 13px;
-}
-
-.order-register-table :deep(.el-table__row .order-action--detail) {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.order-register-table :deep(.el-table__row .order-action--payment) {
-  border-color: #a7f3d0;
-  background: #ecfdf5;
-  color: #047857;
-}
-
-/* 申请发票属于待办动作，用行动橙 + 申请图标；已申请的"发票"是只读查看，用中性灰蓝 + 查看图标，文案统一为"发票"。 */
-.order-register-table :deep(.el-table__row .order-action--invoice-apply) {
-  border-color: #fde68a;
-  background: #fffbeb;
-  color: #b45309;
-}
-
-.order-register-table :deep(.el-table__row .order-action--invoice-view) {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-  color: #334155;
-}
-
-.order-register-table :deep(.el-table__row .order-action--delete) {
-  border-color: #fecaca;
-  background: #fef2f2;
-  color: #b91c1c;
-}
-
-.order-register-table :deep(.el-table__row .order-action:hover) {
-  filter: brightness(0.96);
+.payment-time-link {
+  font-size: inherit;
+  font-weight: inherit;
+  white-space: nowrap;
 }
 
 
