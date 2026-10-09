@@ -170,13 +170,33 @@ describe('订单列表页', () => {
     await flushPromises()
     const summary = wrapper.find('[aria-label="金额统计"]').text()
     expect(summary).not.toContain('已核对金额')
-    for (const text of ['订货金额', '¥400.00', '订单金额', '¥350.00', '优惠额', '¥50.00', '优惠率', '12.50%', '本期回款', '本期回款率', '34.29%', '¥120.00', '待收金额', '¥230.00']) {
+    for (const text of ['订货金额', '¥400.00', '订单金额', '¥350.00', '优惠额', '¥50.00', '优惠率', '12.50%', '回款金额', '回款率', '34.29%', '¥120.00', '待收金额', '¥230.00']) {
       expect(summary).toContain(text)
     }
     expect(summary).not.toContain('¥900.00')
-    const last = wrapper.findAll('.order-summary__metric').at(-1)!
+    const last = wrapper.findAll('.order-summary__metric')[4]!
     expect(last.text()).toContain('客户数')
     expect(last.text()).toContain('7')
+    wrapper.unmount()
+  })
+
+  it('收款日期按中国时区包含结束日，查询导出共用且重置清空', async () => {
+    const page = pageResponse()
+    mocks.getOrders.mockResolvedValue({ ...page, items: [{ ...page.items[0], paymentTime: '2026-09-01T16:00:00Z' }] })
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const picker = wrapper.findAllComponents({ name: 'ElDatePicker' }).find(p => p.props('startPlaceholder') === '收款开始日期')!
+    picker.vm.$emit('update:modelValue', ['2026-09-01', '2026-09-30'])
+    await wrapper.find('form').trigger('submit'); await flushPromises()
+    const dates = { paymentTimeFrom: '2026-08-31T16:00:00.000Z', paymentTimeTo: '2026-09-30T16:00:00.000Z' }
+    expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining(dates))
+    expect(wrapper.text()).toContain('2026-09-02')
+    expect(wrapper.findAll('.order-summary__label').map(v => v.text())).toEqual(['订单金额','回款金额','回款率','待收金额','客户数','订货金额','优惠额','优惠率'])
+    expect(wrapper.findAll('.order-party-name').map(v => v.text())).toContain('张三')
+    await wrapper.findAll('button').find(b => b.text() === '导出')!.trigger('click'); await flushPromises()
+    expect(mocks.exportCsv).toHaveBeenLastCalledWith('orders', expect.objectContaining(dates))
+    await wrapper.findAll('button').find(b => b.text() === '重置')!.trigger('click'); await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].paymentTimeFrom).toBeUndefined()
     wrapper.unmount()
   })
 

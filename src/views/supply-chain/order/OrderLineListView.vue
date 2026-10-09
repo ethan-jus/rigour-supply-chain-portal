@@ -162,17 +162,39 @@
       :title="`${pageData.totals.unallocatableOrderCount} 笔订单订货金额为零但存在财务金额，无法按商品比例分摊，相关统计暂不展示。`" />
     <p v-if="pageFilters.productIds.length || pageFilters.categoryIds.length" class="order-summary-note">已筛选商品：优惠、应收、已收及待收按商品订货金额占整单的比例分摊，分币尾差已计入。</p>
     <div class="order-summary order-summary--lines" aria-label="明细统计">
-      <div class="order-summary__metric order-summary__metric--ordered">
-        <el-tooltip content="筛选命中的有效明细单价×数量合计。" placement="top">
-          <span class="order-summary__label">订货金额</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ moneyText(pageData.totals.lineAmount) }}</strong>
-      </div>
       <div class="order-summary__metric order-summary__metric--payable">
         <el-tooltip content="商品条件下按明细订货金额占整单比例分摊实际应收；未筛选商品时与订单列表一致。" placement="top">
           <span class="order-summary__label">订单金额</span>
         </el-tooltip>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.orderAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--paid">
+        <el-tooltip content="所选订单累计回款（含历史期初），包含订货宝待财务确认和已确认金额；商品条件下按订货金额比例分摊，已取消回款不计入。" placement="top">
+          <span class="order-summary__label">回款金额</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--paid">
+        <el-tooltip content="当前筛选订单的累计回款÷订单金额；按收款日期筛选时取整单最近一次有效收款日期，订单金额为零时不计算。" placement="top">
+          <span class="order-summary__label">回款率</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ repaymentRateText(pageData.totals.receivedAmount, pageData.totals.orderAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--unpaid">
+        <el-tooltip content="订单账本未收余额，商品条件下按订货金额比例分摊。" placement="top">
+          <span class="order-summary__label">待收金额</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.unpaidAmount) }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--count">
+        <span class="order-summary__label">客户数</span>
+        <strong class="order-summary__value">{{ pageData.totals.customerCount ?? '-' }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--ordered">
+        <el-tooltip content="筛选命中的有效明细单价×数量合计。" placement="top">
+          <span class="order-summary__label">订货金额</span>
+        </el-tooltip>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.lineAmount) }}</strong>
       </div>
       <div class="order-summary__metric order-summary__metric--discount">
         <el-tooltip content="订货金额减对应实际应收；商品条件下为分摊后的优惠额。" placement="top">
@@ -186,31 +208,8 @@
         </el-tooltip>
         <strong class="order-summary__value">{{ discountRateText(pageData.totals.discountRate) }}</strong>
       </div>
-      <div class="order-summary__metric order-summary__metric--paid">
-        <el-tooltip content="所选订单累计回款（含历史期初），包含订货宝待财务确认和已确认金额；商品条件下按订货金额比例分摊，已取消回款不计入。" placement="top">
-          <span class="order-summary__label">本期回款</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--paid">
-        <el-tooltip content="本期按筛选的订单日期确定；这些订单累计回款÷订单金额，包含后续月份收到的款；订单金额为零时不计算。" placement="top">
-          <span class="order-summary__label">本期回款率</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ repaymentRateText(pageData.totals.receivedAmount, pageData.totals.orderAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--unpaid">
-        <el-tooltip content="订单账本未收余额，商品条件下按订货金额比例分摊。" placement="top">
-          <span class="order-summary__label">待收金额</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ moneyText(pageData.totals.unpaidAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--count">
-        <el-tooltip content="当前查询条件下全部有效明细的销售数量合计，按明细交易单位累加，不按商品或SKU去重。" placement="top">
-          <span class="order-summary__label">商品数</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ numberText(pageData.totals.quantitySum) }}</strong>
-      </div>
     </div>
+    <p class="order-summary-note order-summary-note--quantity">商品数 <strong>{{ numberText(pageData.totals.quantitySum) }}</strong><span>按明细交易单位合计</span></p>
 
     <el-alert v-if="productInfoFailed" type="warning" :closable="false" show-icon>
       商品图片与单位信息加载失败
@@ -235,15 +234,6 @@
             <span v-else>暂无数据</span>
           </template>
           <el-table-column type="index" label="序号" width="70" fixed="left" :index="tableRowIndex" />
-          <el-table-column label="明细编码" width="120" fixed="left">
-            <template #default="{ row }">
-              <el-tooltip content="查看该明细（打开订单商品明细）" placement="top">
-                <el-link type="primary" underline="never" @click.stop="openLineDetail(row)">
-                  <span class="order-no-cell">{{ row.id }}</span>
-                </el-link>
-              </el-tooltip>
-            </template>
-          </el-table-column>
           <el-table-column label="订单号" width="170" fixed="left" sortable="custom" prop="orderNo">
             <template #default="{ row }">
               <el-link type="primary" underline="never" @click.stop="openDetail(row)">
@@ -252,16 +242,10 @@
             </template>
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('customerName')" prop="customerName" label="客户名称" width="190" fixed="left" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.customerName || '-' }}</template>
-          </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('regionName')" label="归属地区" width="130">
-            <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
+            <template #default="{ row }"><strong class="order-party-name">{{ row.customerName || '-' }}</strong></template>
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('ownerEmployee')" label="业务员" width="120">
-            <template #default="{ row }">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</template>
-          </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('departmentName')" label="部门" width="130" show-overflow-tooltip>
-            <template #default="{ row }">{{ departmentLabel(row.departmentId, row.departmentName) }}</template>
+            <template #default="{ row }"><strong class="order-party-name">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</strong></template>
           </el-table-column>
           <el-table-column label="商品" width="240" show-overflow-tooltip>
             <template #default="{ row }">
@@ -291,9 +275,6 @@
           <el-table-column v-if="lineColumns.isVisible('skuCode')" prop="skuCode" label="SKU/型号" width="190" show-overflow-tooltip>
             <template #default="{ row }">{{ row.skuCode || '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('unitCode')" label="单位" width="80">
-            <template #default="{ row }">{{ unitLabel(lineView(row as OrderRegisterLineItem).unitCode) }}</template>
-          </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('quantity')" label="数量" width="110" align="right">
             <template #default="{ row }">
               <el-tooltip :disabled="!lineView(row as OrderRegisterLineItem).converted" :content="sourceQuantityHint(row as OrderRegisterLineItem)" placement="top">
@@ -301,35 +282,14 @@
               </el-tooltip>
             </template>
           </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('unitPrice')" label="单价" width="120" align="right">
-            <template #default="{ row }">
-              <el-tooltip :disabled="!lineView(row as OrderRegisterLineItem).converted" :content="sourceUnitPriceHint(row as OrderRegisterLineItem)" placement="top">
-                <span class="amount">{{ moneyText(lineView(row as OrderRegisterLineItem).unitPrice) }}</span>
-              </el-tooltip>
-            </template>
-          </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('lineAmount')" label="订货金额" width="130" align="right" sortable="custom" prop="lineAmount">
-            <template #default="{ row }">
-              <span class="amount amount--muted">{{ moneyText(row.lineAmount) }}</span>
-            </template>
+          <el-table-column v-if="lineColumns.isVisible('unitCode')" label="单位" width="80">
+            <template #default="{ row }">{{ unitLabel(lineView(row as OrderRegisterLineItem).unitCode) }}</template>
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('orderAmount')" label="订单金额（分摊后）" width="175" align="right">
             <template #header>
               <el-tooltip content="整单实际应收按本明细订货金额比例分摊。" placement="top"><span>订单金额（分摊后）</span></el-tooltip>
             </template>
             <template #default="{ row }"><span class="amount amount--strong">{{ moneyText(row.orderAmount) }}</span></template>
-          </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('discountAmount')" label="优惠额" width="130" align="right" sortable="custom" prop="discountAmount">
-            <template #header>
-              <el-tooltip content="明细订货金额减分摊订单金额，包含整单优惠分摊，不代表来源单独对该商品打折。" placement="top"><span>优惠额</span></el-tooltip>
-            </template>
-            <template #default="{ row }"><span class="amount line-discount-amount">{{ moneyText(row.discountAmount) }}</span></template>
-          </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('discountRate')" label="优惠率" width="115" align="right" sortable="custom" prop="discountRate">
-            <template #header>
-              <el-tooltip content="分摊优惠额÷明细订货金额；订货金额为零时不计算。" placement="top"><span>优惠率</span></el-tooltip>
-            </template>
-            <template #default="{ row }"><span class="line-discount-amount">{{ discountRateText(row.discountRate) }}</span></template>
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('paymentStatus')" label="收款状态" width="110">
             <template #default="{ row }">
@@ -347,8 +307,44 @@
           <el-table-column v-if="lineColumns.isVisible('orderDate')" label="下单时间" width="170" sortable="custom" prop="orderDate">
             <template #default="{ row }">{{ displayDateTime(row.orderDate) }}</template>
           </el-table-column>
-          <el-table-column v-if="lineColumns.isVisible('sourceLineId')" label="来源明细号" width="170" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.sourceLineId || '-' }}</template>
+          <el-table-column v-if="lineColumns.isVisible('departmentName')" label="部门" width="130" show-overflow-tooltip>
+            <template #default="{ row }">{{ departmentLabel(row.departmentId, row.departmentName) }}</template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('regionName')" label="归属地区" width="130">
+            <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('lineAmount')" label="订货金额" width="130" align="right" sortable="custom" prop="lineAmount">
+            <template #default="{ row }">
+              <span class="amount amount--muted">{{ moneyText(row.lineAmount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('unitPrice')" label="单价" width="120" align="right">
+            <template #default="{ row }">
+              <el-tooltip :disabled="!lineView(row as OrderRegisterLineItem).converted" :content="sourceUnitPriceHint(row as OrderRegisterLineItem)" placement="top">
+                <span class="amount">{{ moneyText(lineView(row as OrderRegisterLineItem).unitPrice) }}</span>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('discountAmount')" label="优惠额" width="130" align="right" sortable="custom" prop="discountAmount">
+            <template #header>
+              <el-tooltip content="明细订货金额减分摊订单金额，包含整单优惠分摊，不代表来源单独对该商品打折。" placement="top"><span>优惠额</span></el-tooltip>
+            </template>
+            <template #default="{ row }"><span class="amount line-discount-amount">{{ moneyText(row.discountAmount) }}</span></template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('discountRate')" label="优惠率" width="115" align="right" sortable="custom" prop="discountRate">
+            <template #header>
+              <el-tooltip content="分摊优惠额÷明细订货金额；订货金额为零时不计算。" placement="top"><span>优惠率</span></el-tooltip>
+            </template>
+            <template #default="{ row }"><span class="line-discount-amount">{{ discountRateText(row.discountRate) }}</span></template>
+          </el-table-column>
+          <el-table-column label="明细编码" width="120">
+            <template #default="{ row }">
+              <el-tooltip content="查看该明细（打开订单商品明细）" placement="top">
+                <el-link type="primary" underline="never" @click.stop="openLineDetail(row)">
+                  <span class="order-no-cell">{{ row.id }}</span>
+                </el-link>
+              </el-tooltip>
+            </template>
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('createdBy')" label="创建人" width="110" show-overflow-tooltip>
             <template #header>
@@ -377,6 +373,9 @@
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('syncedAt')" label="同步时间" width="170">
             <template #default="{ row }">{{ displayDateTime(row.syncedAt) }}</template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('sourceLineId')" label="来源明细号" width="170" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.sourceLineId || '-' }}</template>
           </el-table-column>
         </el-table>
       </div>

@@ -370,10 +370,10 @@ describe('订单明细页', () => {
     expect(text).toContain('订货金额')
     expect(text).toContain('订单金额')
     // 收款金额按命中订单去重后的账本金额统计。
-    expect(text).toContain('本期回款')
+    expect(text).toContain('回款金额')
     expect(text).toContain('回款率')
     expect(text).toContain('62.50%')
-    expect(wrapper.find('.order-summary__metric--count .order-summary__value').text()).toBe('34')
+    expect(wrapper.find('.order-summary-note--quantity strong').text()).toBe('34')
     expect(text).toContain('¥50.00')
     expect(text).toContain('优惠额')
     expect(text).toContain('优惠率')

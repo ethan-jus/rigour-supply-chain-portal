@@ -184,10 +184,6 @@
         <span class="order-summary__label">{{ allocationActive ? '待收金额（分摊）' : '待收金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.unpaidAmount) }}</strong>
       </div>
-      <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已核对收款合计。">
-        <span class="order-summary__label">{{ allocationActive ? '已核对金额（分摊）' : '已核对金额' }}</span>
-        <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
-      </div>
       <div class="order-summary__metric order-summary__metric--count" title="筛选命中的订单客户去重数量。">
         <span class="order-summary__label">客户数</span>
         <strong class="order-summary__value">{{ pageData.totals.customerCount?.toLocaleString() ?? '-' }}</strong>
@@ -195,6 +191,10 @@
       <div class="order-summary__metric order-summary__metric--count" title="当前筛选命中的订单去重后，合计符合商品分类、商品及规格条件的明细数量；同一订单多笔回款不重复计算，不按回款比例分摊数量。">
         <span class="order-summary__label">商品数</span>
         <strong class="order-summary__value">{{ pageData.totals.quantitySum?.toLocaleString('zh-CN', { maximumFractionDigits: 6 }) ?? '-' }}</strong>
+      </div>
+      <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已核对收款合计。">
+        <span class="order-summary__label">{{ allocationActive ? '已核对金额（分摊）' : '已核对金额' }}</span>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
       </div>
     </div>
 
@@ -256,19 +256,10 @@
             min-width="240"
             show-overflow-tooltip
           >
-            <template #default="{ row }">{{ row.customerName || '-' }}</template>
-          </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('regionName')" label="归属地区" width="140">
-            <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
+            <template #default="{ row }"><strong class="order-party-name">{{ row.customerName || '-' }}</strong></template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('ownerEmployee')" label="业务员" width="110">
-            <template #default="{ row }">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</template>
-          </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('departmentName')" label="部门" width="130" show-overflow-tooltip>
-            <template #default="{ row }">{{ departmentLabel(row.departmentId, row.departmentName) }}</template>
-          </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('orderAmount')" label="订单金额" width="120" align="right" prop="orderAmount">
-            <template #default="{ row }">{{ moneyText(row.orderAmount) }}</template>
+            <template #default="{ row }"><strong class="order-party-name">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</strong></template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('paidAmount')" label="收款金额" width="120" align="right" prop="paidAmount">
             <template #default="{ row }">{{ moneyText(row.paidAmount) }}</template>
@@ -286,6 +277,15 @@
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('orderAmount')" label="订单金额" width="120" align="right" prop="orderAmount">
+            <template #default="{ row }">{{ moneyText(row.orderAmount) }}</template>
+          </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('departmentName')" label="部门" width="130" show-overflow-tooltip>
+            <template #default="{ row }">{{ departmentLabel(row.departmentId, row.departmentName) }}</template>
+          </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('regionName')" label="归属地区" width="140">
+            <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
+          </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('checkedStatus')" label="核对状态" width="100">
             <template #default="{ row }">
               <el-tag class="order-status-tag" :type="row.paymentStatusCode === 'CHECKED' ? 'success' : row.paymentStatusCode === 'CANCELLED' ? 'info' : 'warning'" effect="light">
@@ -296,6 +296,9 @@
           <el-table-column v-if="paymentColumns.isVisible('checkedBy')" label="核对人" width="110" show-overflow-tooltip>
             <template #default="{ row }">{{ row.paymentStatusCode === 'CHECKED' ? auditActorLabel(row.checkedBy) : '-' }}</template>
           </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('checkedAt')" label="核对时间" width="170">
+            <template #default="{ row }">{{ displayDateTime(row.checkedAt) }}</template>
+          </el-table-column>
           <el-table-column
             v-if="paymentColumns.isVisible('transactionNo')"
             prop="transactionNo"
@@ -304,13 +307,6 @@
             show-overflow-tooltip
           >
             <template #default="{ row }">{{ row.transactionNo || '-' }}</template>
-          </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('attachments')" label="付款凭证" width="130">
-            <template #default="{ row }">
-              <FundAttachmentThumbnails
-                :attachments="row.attachmentViews?.length ? row.attachmentViews : row.attachments"
-              />
-            </template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('createdBy')" label="创建人" width="110" show-overflow-tooltip>
             <template #header>
@@ -352,6 +348,14 @@
           >
             <template #default="{ row }">{{ displayDateTime(row.syncedAt) }}</template>
           </el-table-column>
+
+          <el-table-column v-if="paymentColumns.isVisible('attachments')" label="付款凭证" width="130">
+            <template #default="{ row }">
+              <FundAttachmentThumbnails
+                :attachments="row.attachmentViews?.length ? row.attachmentViews : row.attachments"
+              />
+            </template>
+          </el-table-column>
           <el-table-column
             v-if="paymentColumns.isVisible('sourcePaymentCode')"
             prop="sourceRecordId"
@@ -360,9 +364,6 @@
             show-overflow-tooltip
           >
             <template #default="{ row }">{{ row.sourceRecordId || '-' }}</template>
-          </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedAt')" label="核对时间" width="170">
-            <template #default="{ row }">{{ displayDateTime(row.checkedAt) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="120" align="center" fixed="right" class-name="order-actions-cell">
             <template #default="{ row }">

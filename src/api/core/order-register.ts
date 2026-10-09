@@ -35,6 +35,8 @@ export interface OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterOrderQuery extends OrderRegisterCommonQuery {
+  paymentTimeFrom?: string
+  paymentTimeTo?: string
   hasDiscount?: boolean
   orderStatusCode?: string
   paymentStatusCode?: string
@@ -68,6 +70,8 @@ export interface OrderRegisterPaymentQuery extends OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterOrderItem {
+  /** 整单最近一次有效收款日期；未收款为空。 */
+  paymentTime?: string | null
   id: string
   orderNo: string
   legacyOrderNo: string | null

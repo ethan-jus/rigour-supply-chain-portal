@@ -21,9 +21,9 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--metric-color) 5%, var(--supply-surface));
 }
-.order-summary__metric--ordered { --metric-color: #476582; }
+.order-summary__metric--ordered { --metric-color: #64748b; }
 .order-summary__metric--payable { --metric-color: #2563eb; }
-.order-summary__metric--discount { --metric-color: #7c3aed; }
+.order-summary__metric--discount { --metric-color: #64748b; }
 .order-summary__metric--paid { --metric-color: #047857; }
 .order-summary__metric--unpaid { --metric-color: #b45309; }
 .order-summary__metric--count { --metric-color: #64748b; }
@@ -57,3 +57,12 @@
 
 .order-summary--payments { --summary-columns: 6; }
 .order-summary__metric--checked { --metric-color: #0e7490; }
+
+/* 三个列表统一识别客户与业务员；主要金额在前，辅助指标收敛颜色。 */
+.order-party-name { color: var(--supply-text); font-weight: 700; }
+.order-summary__metric--payable,
+.order-summary__metric--paid,
+.order-summary__metric--unpaid { border-top: 3px solid var(--metric-color); padding-top: 10px; }
+.order-summary-note--quantity { display: flex; align-items: baseline; gap: 10px; background: var(--supply-surface); border-inline: 1px solid var(--supply-border); }
+.order-summary-note--quantity strong { color: var(--supply-text); font-size: 16px; font-variant-numeric: tabular-nums; }
+.order-summary-note--quantity span { margin-left: 4px; }
