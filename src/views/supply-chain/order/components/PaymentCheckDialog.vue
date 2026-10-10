@@ -40,9 +40,10 @@
             clearable
             placeholder="银行流水号 / 支付渠道流水号"
             @keyup.enter="submit"
-          />
+          ><template #append><el-button @click="duplicateVisible = true">查重</el-button></template></el-input>
         </el-form-item>
       </el-form>
+      <PaymentTransactionCheckDialog v-model="duplicateVisible" :transaction-no="transactionNo" />
       <p v-if="checkError" class="payment-check__error">{{ checkError }}</p>
     </template>
 
@@ -55,6 +56,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import PaymentTransactionCheckDialog from './PaymentTransactionCheckDialog.vue'
 import { ElMessage } from 'element-plus'
 import FundAttachmentThumbnails from '@/components/supply/FundAttachmentThumbnails.vue'
 import { displayDateTime } from '@/utils/business-date'
@@ -80,6 +82,7 @@ const visible = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
+const duplicateVisible = ref(false)
 const transactionNo = ref('')
 const checkError = ref('')
 const submitting = ref(false)
