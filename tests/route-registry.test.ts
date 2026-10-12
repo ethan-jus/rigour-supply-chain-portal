@@ -17,14 +17,28 @@ function menuNode(routeKey: string): NavigationNode {
 }
 
 describe('数据库导航注册表', () => {
+  it('共享DEV新增未编译薪酬菜单不阻断现有页面，也不授予新页面访问路径', () => {
+    const employees = node('supply.hr.employees', '/supply-chain/hr/employees')
+    const payroll = { ...menuNode('supply.hr.payroll-settings.menu'), children: [
+      node('supply.hr.commission-rules', '/supply-chain/hr/commission-rules'),
+    ] }
+    const source = [{ ...menuNode('supply.hr.menu'), children: [employees, payroll,
+      node('supply.hr.payroll', '/supply-chain/hr/payroll')] }]
+    const result = validateNavigation(source)
+    expect(result[0].children).toEqual([employees])
+    expect(source[0].children).toHaveLength(3)
+    expect(() => validateNavigation([node('supply.hr.employees', '/supply-chain/settings/users')]))
+      .toThrow('未注册或路径不一致')
+  })
+
   it('员工档案仅使用正式页面，旧占位入口不可恢复', () => {
     expect(validateNavigation([node('supply.hr.employees', '/supply-chain/hr/employees')])).toHaveLength(1)
-    expect(() => validateNavigation([node('supply.hr.index', '/supply-chain/hr')])).toThrow('未注册或路径不一致')
+    expect(validateNavigation([node('supply.hr.index', '/supply-chain/hr')])).toEqual([])
     expect(constantRoutes.find(route => route.path === '/supply-chain')?.children?.some(route => route.path === 'hr')).toBe(false)
   })
   it('拒绝已撤销的管理入口', () => {
     for (const [key, path] of [['system.user.list', '/system-admin/users'], ['platform.dashboard', '/platform-admin']])
-      expect(() => validateNavigation([node(key, path)])).toThrow('未注册或路径不一致')
+      expect(validateNavigation([node(key, path)])).toEqual([])
   })
 
   it('接受供应链系统设置的完整菜单，并对应实际页面和功能权限', () => {
@@ -60,13 +74,11 @@ describe('数据库导航注册表', () => {
   })
 
   it('对未注册routeKey失败关闭', () => {
-    expect(() => validateNavigation([node('system.script.injected', '/system-admin/users')]))
-      .toThrow('未注册或路径不一致')
+    expect(validateNavigation([node('system.script.injected', '/system-admin/users')])).toEqual([])
   })
 
-  it('对routeKey与数据库路径不一致失败关闭', () => {
-    expect(() => validateNavigation([node('system.user.list', '/platform-admin/tenants')]))
-      .toThrow('未注册或路径不一致')
+  it('不接受未注册资源携带的其他管理路径', () => {
+    expect(validateNavigation([node('system.user.list', '/platform-admin/tenants')])).toEqual([])
   })
 
   it('接受销售管理三级菜单的已编译路由', () => {
@@ -85,18 +97,18 @@ describe('数据库导航注册表', () => {
       node('supply.order.sales-refunds', '/supply-chain/order/sales-refunds'),
     ])).toHaveLength(5)
 
-    expect(() => validateNavigation([
+    expect(validateNavigation([
       node('supply.order.center.menu', null),
-    ])).toThrow('未注册或路径不一致')
-    expect(() => validateNavigation([
+    ])).toEqual([])
+    expect(validateNavigation([
       node('supply.order.all', '/supply-chain/order/all'),
-    ])).toThrow('未注册或路径不一致')
-    expect(() => validateNavigation([
+    ])).toEqual([])
+    expect(validateNavigation([
       node('supply.order.settlement.collections', '/supply-chain/order/settlement/collections'),
-    ])).toThrow('未注册或路径不一致')
-    expect(() => validateNavigation([
+    ])).toEqual([])
+    expect(validateNavigation([
       node('supply.order.stock-up', '/supply-chain/order/stock-up'),
-    ])).toThrow('未注册或路径不一致')
+    ])).toEqual([])
   })
 
   it('接受V2.1 ERP和CRM三级路由', () => {
@@ -131,8 +143,7 @@ describe('数据库导航注册表', () => {
       'supply.erp.master-data.products', 'supply.erp.master-data.attributes.categories',
     ])
     expect(navigation[0].children).toHaveLength(3)
-    expect(() => validateNavigation([menuNode('supply.erp.master-data.attributes.menu')]))
-      .toThrow('未注册或路径不一致')
+    expect(validateNavigation([menuNode('supply.erp.master-data.attributes.menu')])).toEqual([])
   })
 
   it('已注册隐藏页面保留授权直达能力，但错误路径仍失败关闭', () => {
@@ -150,13 +161,13 @@ describe('数据库导航注册表', () => {
       node('supply.order.fund-documents', '/supply-chain/order/fund-documents'),
     ])).toHaveLength(2)
 
-    expect(() => validateNavigation([
+    expect(validateNavigation([
       menuNode('supply.integration.legacy-dhb.menu'),
-    ])).toThrow('未注册或路径不一致')
+    ])).toEqual([])
 
-    expect(() => validateNavigation([
+    expect(validateNavigation([
       node('supply.integration.dhb-skus', '/supply-chain/integration/dhb-skus'),
-    ])).toThrow('未注册或路径不一致')
+    ])).toEqual([])
   })
 
   it('接受独立订货宝同步中心入口，并拒绝分散的旧集成子页面', () => {
@@ -166,18 +177,18 @@ describe('数据库导航注册表', () => {
       node('supply.integration.overview', '/supply-chain/integration'),
     ])).toHaveLength(3)
 
-    expect(() => validateNavigation([
+    expect(validateNavigation([
       node('supply.integration.connections', '/supply-chain/integration/connections'),
-    ])).toThrow('未注册或路径不一致')
-    expect(() => validateNavigation([
+    ])).toEqual([])
+    expect(validateNavigation([
       node('supply.integration.sync-tasks', '/supply-chain/integration/sync-tasks'),
-    ])).toThrow('未注册或路径不一致')
-    expect(() => validateNavigation([
+    ])).toEqual([])
+    expect(validateNavigation([
       node('supply.integration.retries', '/supply-chain/integration/retries-dead-letters'),
-    ])).toThrow('未注册或路径不一致')
-    expect(() => validateNavigation([
+    ])).toEqual([])
+    expect(validateNavigation([
       node('supply.integration.field-mappings', '/supply-chain/integration/field-mappings'),
-    ])).toThrow('未注册或路径不一致')
+    ])).toEqual([])
   })
 
   it('采购付款单使用可加载的独立业务占位页', async () => {
@@ -226,8 +237,7 @@ describe('数据库导航注册表', () => {
 
   it('拒绝已退出的城市运营和渠道代理路由', () => {
     for (const domain of ['city', 'channel']) {
-      expect(() => validateNavigation([node(`supply.${domain}.index`, `/supply-chain/${domain}`)]))
-        .toThrow('未注册或路径不一致')
+      expect(validateNavigation([node(`supply.${domain}.index`, `/supply-chain/${domain}`)])).toEqual([])
       expect(SUPPLY_DOMAIN_PAGES.some((page) => page.domainKey === domain)).toBe(false)
     }
   })
@@ -309,8 +319,8 @@ describe('数据库导航注册表', () => {
       node('supply.bi.inventory-risk', '/supply-chain/bi/inventory-risk'),
     ])).toHaveLength(14)
 
-    expect(() => validateNavigation([
+    expect(validateNavigation([
       node('supply.bi.sync-quality', '/supply-chain/bi/sync-quality'),
-    ])).toThrow('未注册或路径不一致')
+    ])).toEqual([])
   })
 })

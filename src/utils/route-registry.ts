@@ -3,7 +3,7 @@ import { devWarn } from '@/utils/dev-log'
 import { CUSTOM_PAGE_ROUTE_PREFIX, isCustomPage, resolveView } from '@/utils/dynamic-pages'
 import { SUPPLY_DOMAIN_ROUTE_MAP } from '@/views/supply-chain/domain/catalog'
 
-/** 数据库 routeKey 到已编译页面的映射；可见未知节点及路径不一致时失败关闭。 */
+/** 数据库 routeKey 到已编译页面的映射；未编译节点不进入导航，已注册页面严格校验路径。 */
 const ROUTES: Record<string, string | null> = {
   'supply.dashboard': '/supply-chain',
   'supply.crm.menu': null, 'supply.crm.index': '/supply-chain/crm', 'supply.order.menu': null,
@@ -110,6 +110,11 @@ export function validateNavigation(nodes: NavigationNode[]): NavigationNode[] {
     // IAM 保留隐藏的历史资源；未编译的隐藏分支不进入导航和可访问路径集合。
     // 已注册的隐藏页面仍需校验，保留其授权直达能力；隐藏不等于撤销权限。
     if (node.visible === false && !customGroupKey && !(node.routeKey in ROUTES)) return []
+    // 共享 DEV 或滚动发布时，IAM 可能先返回新版菜单；未编译分支不可访问，但不阻断登录。
+    if (!tenantGroup && !customGroupKey && !(node.routeKey in ROUTES)) {
+      devWarn('忽略当前前端未编译的菜单分支', { routeKey: node.routeKey, routePath: node.routePath })
+      return []
+    }
     if (!tenantGroup && (!(node.routeKey in ROUTES) || ROUTES[node.routeKey] !== node.routePath)) {
       const expectedPath = node.routeKey in ROUTES ? ROUTES[node.routeKey] : '未注册'
       throw new Error(`IAM返回未注册或路径不一致的routeKey: ${node.routeKey}; routePath=${node.routePath}; expected=${expectedPath}`)
