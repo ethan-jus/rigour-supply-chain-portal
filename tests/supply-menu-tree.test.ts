@@ -12,6 +12,13 @@ describe('供应链菜单层级', () => {
     expect(menuParentOptions(nodes, 'a', 'MENU').map(n => n.id)).toEqual(['d'])
     expect(menuParentOptions(nodes, null, 'BUTTON').map(n => n.id)).toEqual(['p'])
   })
+  it('已注册目录可承载公共权限，自定义目录仍不可选', () => {
+    const registered = { ...node('registered', null), resourceId: 'resource-group' }
+    const custom = node('custom', null)
+    const page = node('page', 'registered', 'PAGE')
+    expect(menuParentOptions([registered, custom, page], null, 'BUTTON').map(n => n.id))
+      .toEqual(['registered', 'page'])
+  })
   it('按钮保留在所属页面内，不成为导航目录', () => {
     const tree = supplyMenuTree([node('a', null), node('p', 'a', 'PAGE'), node('b', 'p', 'BUTTON')])
     expect(tree[0].children[0].children[0].type).toBe('BUTTON')

@@ -30,5 +30,7 @@ export function menuParentOptions(nodes: SupplyMenuNode[], editingId: string | n
       banned.add(node.id); changed = true
     }
   }
-  return nodes.filter(node => !banned.has(node.id) && node.type === (type === 'BUTTON' ? 'PAGE' : 'MENU'))
+  return nodes.filter(node => !banned.has(node.id) && (type === 'BUTTON'
+    ? node.type === 'PAGE' || (node.type === 'MENU' && node.resourceId !== null)
+    : node.type === 'MENU'))
 }

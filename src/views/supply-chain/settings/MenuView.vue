@@ -562,7 +562,7 @@ const customComponentMissing = computed(() => {
   return Boolean(componentPath) && resolveView(componentPath) === null
 })
 const featureEmptyText = computed(() => form.type === 'BUTTON'
-  ? '当前上级页面下已没有可绑定的操作权限。'
+  ? '当前上级页面或功能目录下已没有可绑定的操作权限。'
   : '已注册页面都已加入菜单，请把「页面来源」切换为「自定义页面」，直接填写路由地址和组件路径。')
 const boundFeature = computed(() => form.resourceId
   ? catalog.value.find(node => node.resourceId === form.resourceId)
