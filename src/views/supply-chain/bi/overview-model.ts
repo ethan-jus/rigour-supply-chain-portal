@@ -149,12 +149,20 @@ export function aggregateGoals(
   const rows = analysis?.cityMonthlyGoals?.filter((row) => month == null || row.month === month)
   if (!rows?.length) return null
   const cities = new Map<string, { code: string; name: string; sales: number; receipt: number }>()
-  const totals = { sales: 0, receipt: 0, newCustomer: 0, repeatCustomer: 0, configuredCount: 0 }
+  const totals = {
+    sales: 0,
+    receipt: 0,
+    contactedStore: 0,
+    orderedStore: 0,
+    yangzhangguiSales: 0,
+    configuredCount: 0,
+  }
   for (const row of rows) {
     totals.sales += row.salesTarget
     totals.receipt += row.receiptTarget
-    totals.newCustomer += row.newCustomerTarget
-    totals.repeatCustomer += row.repeatCustomerTarget
+    totals.contactedStore += row.contactedStoreTarget
+    totals.orderedStore += row.orderedStoreTarget
+    totals.yangzhangguiSales += row.yangzhangguiSalesTarget
     totals.configuredCount += row.configuredCount
     const city = cities.get(row.regionCode) || {
       code: row.regionCode,

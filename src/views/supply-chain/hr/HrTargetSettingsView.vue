@@ -220,7 +220,16 @@ function changeName(change: TargetChange) {
   )
 }
 function metricName(metric: string) {
-  return targetMetrics.find((m) => m.code === metric)?.label ?? metric
+  return (
+    targetMetrics.find((m) => m.code === metric)?.label ??
+    (
+      { NEW_CUSTOMER: '新增合作客户（旧指标）', REPEAT_CUSTOMER: '复购客户（旧指标）' } as Record<
+        string,
+        string
+      >
+    )[metric] ??
+    metric
+  )
 }
 </script>
 
@@ -331,7 +340,7 @@ function metricName(metric: string) {
                   />
                 </th>
                 <th>{{ dimension === 'CITY' ? '城市' : '销售人员' }}</th>
-                <th v-for="metric in targetMetrics" :key="metric.code">
+                <th v-for="metric in targetMetrics" :key="metric.code" :title="metric.description">
                   {{ metric.label }}<small>{{ metric.unit }}</small>
                 </th>
                 <th>操作</th>
@@ -373,7 +382,7 @@ function metricName(metric: string) {
                 </td>
               </tr>
               <tr v-if="!visibleRows.length">
-                <td colspan="7" class="target-empty">
+                <td :colspan="targetMetrics.length + 3" class="target-empty">
                   {{
                     search
                       ? '没有匹配的记录'

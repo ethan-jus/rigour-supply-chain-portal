@@ -52,8 +52,9 @@ describe('城市看板口径与主流程', () => {
       month: 9,
       salesTarget: 100000,
       receiptTarget: 100000,
-      newCustomerTarget: 200,
-      repeatCustomerTarget: 100,
+      contactedStoreTarget: 200,
+      yangzhangguiSalesTarget: 0,
+      orderedStoreTarget: 100,
       configuredCount: 0,
     }))
     source.analysis!.cityReceipts!.push({

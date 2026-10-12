@@ -95,22 +95,28 @@ function values(month: string) {
     byMonth.set(
       month,
       subjects.flatMap((subject) =>
-        ['SALES_AMOUNT', 'RECEIPT_AMOUNT', 'NEW_CUSTOMER', 'REPEAT_CUSTOMER'].map((metric) => ({
+        [
+          'CONTACTED_STORE_COUNT',
+          'ORDERED_STORE_COUNT',
+          'YANGZHANGGUI_SALES_AMOUNT',
+          'SALES_AMOUNT',
+          'RECEIPT_AMOUNT',
+        ].map((metric) => ({
           month,
           dimensionType: subject.dimensionType,
           code: subject.code,
           name: subject.name,
           metric: metric as TargetSettings['targets'][number]['metric'],
           value:
-            metric === 'NEW_CUSTOMER'
-              ? 200
-              : metric === 'REPEAT_CUSTOMER'
-                ? 100
-                : subject.dimensionType === 'CITY'
+            metric === 'SALES_AMOUNT'
+              ? subject.dimensionType === 'CITY'
+                ? 100000
+                : 40000
+              : metric === 'RECEIPT_AMOUNT'
+                ? subject.dimensionType === 'CITY'
                   ? 100000
-                  : metric === 'SALES_AMOUNT'
-                    ? 40000
-                    : 20000,
+                  : 20000
+                : 0,
           revision: 0,
         })),
       ),

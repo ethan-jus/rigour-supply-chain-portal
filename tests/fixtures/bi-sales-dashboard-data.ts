@@ -123,8 +123,8 @@ export function salesDashboardFixture(): SalesDashboardSnapshot {
     sales: {
       people,
       goals: [
-        { code: 'S1', month: 8, metric: 'NEW_CUSTOMER', target: 20 },
-        { code: 'S1', month: 8, metric: 'REPEAT_CUSTOMER', target: 10 },
+        { code: 'S1', month: 8, metric: 'CONTACTED_STORE_COUNT', target: 20 },
+        { code: 'S1', month: 8, metric: 'ORDERED_STORE_COUNT', target: 10 },
       ],
       history: { amount: 240000, received: 204000 },
       customers: [

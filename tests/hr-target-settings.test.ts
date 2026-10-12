@@ -119,8 +119,9 @@ describe('HR有效指标与简化编辑', () => {
     reason.value = '月度调整'
     reason.dispatchEvent(new Event('input', { bubbles: true }))
     const saved = settings()
-    saved.targets[0]!.value = 888
-    saved.targets[0]!.revision = 1
+    const savedSales = saved.targets.find((t) => t.metric === 'SALES_AMOUNT')!
+    savedSales.value = 888
+    savedSales.revision = 1
     vi.mocked(api.getTargetSettings).mockResolvedValue(saved)
     await click('预览变更')
     await click('确认保存')
@@ -139,7 +140,7 @@ describe('HR有效指标与简化编辑', () => {
       '不完整',
     )
     expect(targetValueError('SALES_AMOUNT', '-1')).not.toBeNull()
-    expect(targetValueError('NEW_CUSTOMER', '1.5')).not.toBeNull()
+    expect(targetValueError('CONTACTED_STORE_COUNT', '1.5')).not.toBeNull()
     expect(targetValueError('RECEIPT_AMOUNT', '0')).toBeNull()
   })
   it('BI never fills missing API months with hardcoded goals and preserves zero', () => {

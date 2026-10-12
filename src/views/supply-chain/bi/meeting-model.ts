@@ -104,7 +104,7 @@ export function meetingTarget(
     meetingMetric(data, code === 'RECEIPT_AMOUNT' ? 'receipt_amount' : 'sales_amount') != null
   const actual =
     ready && configured.length && configured.every((row) => finite(row.actualValue) != null)
-      ? configured.reduce((sum, row) => sum + row.actualValue, 0)
+      ? configured.reduce((sum, row) => sum + Number(row.actualValue), 0)
       : null
   const incomplete = configured.some(
     (row) =>

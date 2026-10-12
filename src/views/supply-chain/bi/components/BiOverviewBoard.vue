@@ -168,7 +168,8 @@
                   >目标 {{ goal.money ? money(goal.target) : count(goal.target)
                   }}{{ goal.money ? shortAmountUnit : '家' }}</span
                 >
-                <span v-if="goal.actual != null && goal.target != null">
+                <span v-if="goal.target === 0">不考核</span>
+                <span v-else-if="goal.actual != null && goal.target != null">
                   {{ goal.actual >= goal.target ? '超额' : '差额' }}
                   {{
                     goal.money
@@ -442,7 +443,8 @@
       append-to-body
       ><div class="overview-definitions">
         <p>
-          本期回款指所选期间订单的累计回款，包含后续月份收到的款；回款和到账均包含待财务确认及已确认金额；本期回款率 = 本期回款 ÷
+          本期回款指所选期间订单的累计回款，包含后续月份收到的款；回款和到账均包含待财务确认及已确认金额；本期回款率
+          = 本期回款 ÷
           本期交易额。交易额按有效订单日期统计折后订单金额；本期到账按实际到账日期统计，包含任意历史月份订单在所选期间到账的金额。
         </p>
         <p>
@@ -582,42 +584,54 @@ const kpis = computed(() =>
   })),
 )
 const goals = computed(() => aggregateGoals(props.snapshot?.analysis, props.selectedMonth))
+const yangzhangguiActual = computed(() => {
+  const rows = props.snapshot?.current.cityTargetCompletions?.filter(
+    (item) => item.metricCode === 'YANGZHANGGUI_SALES_AMOUNT',
+  )
+  return rows?.length && rows.every((item) => item.actualValue != null)
+    ? rows.reduce((sum, item) => sum + Number(item.actualValue), 0)
+    : null
+})
 const goalCards = computed(() => [
   {
+    key: 'contactedStore',
+    label: '建联门店数',
+    money: false,
+    actual: null,
+    target: goals.value?.contactedStore ?? null,
+    note: '当月新增企微建联门店；完成数待接入首次建联记录',
+  },
+  {
+    key: 'orderedStore',
+    label: '有效门店数',
+    money: false,
+    actual: customers.value,
+    target: goals.value?.orderedStore ?? null,
+    note: '本期有下单的去重合作门店',
+  },
+  {
+    key: 'yangzhangguiSales',
+    label: '杨掌柜品牌销售额',
+    money: true,
+    actual: yangzhangguiActual.value,
+    target: goals.value?.yangzhangguiSales ?? null,
+    note: '本期杨掌柜品牌商品销售额',
+  },
+  {
     key: 'sales',
-    label: '交易额',
+    label: '销售总额',
     money: true,
     actual: metric('sales_amount'),
     target: goals.value?.sales ?? null,
-    note: annual.value
-      ? '12个月城市目标合计'
-      : props.cityContext
-        ? '单城月默认100,000元'
-        : '单城月默认10万元',
+    note: '人事设置的销售总额目标',
   },
   {
     key: 'receipt',
-    label: '本期到账',
+    label: '回款额',
     money: true,
     actual: metric('receipt_amount'),
     target: goals.value?.receipt ?? null,
     note: '按到账日期统计',
-  },
-  {
-    key: 'newCustomer',
-    label: '新增合作客户',
-    money: false,
-    actual: newCustomers.value,
-    target: goals.value?.newCustomer ?? null,
-    note: '本期首次有效下单',
-  },
-  {
-    key: 'repeatCustomer',
-    label: '复购客户',
-    money: false,
-    actual: repeat.value,
-    target: goals.value?.repeatCustomer ?? null,
-    note: annual.value ? '全年去重复购客户' : '月初前已有有效订单',
   },
 ])
 const chart = computed(() =>

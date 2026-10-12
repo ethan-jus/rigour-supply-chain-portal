@@ -3,7 +3,10 @@ import type { Figure } from './cockpit-model'
 import { exactAmount, heatmap, percent, ratio } from './cockpit-charts'
 
 const metricNames: Record<string, string> = {
-  SALES_AMOUNT: '销售额',
+  CONTACTED_STORE_COUNT: '建联门店数',
+  ORDERED_STORE_COUNT: '有效门店数',
+  YANGZHANGGUI_SALES_AMOUNT: '杨掌柜品牌销售额',
+  SALES_AMOUNT: '销售总额',
   PAID_AMOUNT: '本期回款额（按订单日期）',
   RECEIPT_AMOUNT: '本期到账额（按收款日期）',
   CONTACTED_CUSTOMER: '留资客户',
@@ -37,7 +40,8 @@ export function targetCompletionFigure(
     const person = people.get(row.dimensionCode) || { name: row.dimensionName, metrics: new Map() }
     const code = row.metricCode.toUpperCase()
     const values = person.metrics.get(code) || { actual: null, target: 0, partial: false }
-    if (Number.isFinite(row.actualValue)) values.actual = (values.actual ?? 0) + row.actualValue
+    if (row.actualValue != null && Number.isFinite(row.actualValue))
+      values.actual = (values.actual ?? 0) + row.actualValue
     if (Number.isFinite(row.targetValue) && row.targetValue > 0) values.target += row.targetValue
     if (row.configuredMonthCount != null && row.periodMonthCount != null) {
       values.partial ||= row.configuredMonthCount < row.periodMonthCount
@@ -83,13 +87,13 @@ export function targetCompletionFigure(
       const coverage = value?.coverage
         ? `\n目标覆盖 ${value.coverage}${value.partial ? '，部分月份未配置' : ''}`
         : ''
-      return `${person?.name || ''}\n${names[point[0]]} ${value?.target ? percent(rate) : '未配置'}${coverage}`
+      return `${person?.name || ''}\n${names[point[0]]} ${value?.target === 0 ? '不考核' : value?.actual == null ? '数据待接入' : percent(rate)}${coverage}`
     },
   }
   const series = option.series as { label: { formatter: (raw: unknown) => string } }[]
   series[0].label.formatter = (raw) => {
     const { point, value } = cell(raw)
-    return `${percent(point[2])}${value?.partial ? '*' : ''}`
+    return value?.target === 0 ? '不考核' : `${percent(point[2])}${value?.partial ? '*' : ''}`
   }
   return {
     id: 'targets',
@@ -118,27 +122,33 @@ export function targetCompletionFigure(
             cells: {
               指标: names[i],
               实际: format(value.actual),
-              目标: value.target > 0 ? format(value.target) : '未配置',
+              目标: value.target > 0 ? format(value.target) : '0（不考核）',
               达成率: percent(value.actual == null ? null : ratio(value.actual, value.target)),
               目标覆盖: value.coverage
                 ? `${value.coverage}${value.partial ? ' · 部分月份未配置' : ''}`
                 : '未提供月份覆盖',
               统计口径:
-                metric === 'CONTACTED_CUSTOMER'
-                  ? '当前有效留资客户存量，仅单月比较'
-                  : metric === 'COOPERATED_CUSTOMER'
-                    ? '已配置月份内去重下单客户'
-                    : metric === 'PAID_AMOUNT'
-                      ? '已配置月份内订单的累计回款'
-                      : metric === 'RECEIPT_AMOUNT'
-                        ? '按到账日期统计，包含历史订单在已配置月份内到账'
-                        : '已配置月份内订单销售额',
+                metric === 'CONTACTED_STORE_COUNT'
+                  ? '当月新增企业微信建联去重门店，实际数据待接入'
+                  : metric === 'ORDERED_STORE_COUNT'
+                    ? '期间有有效下单的去重门店，包含新老客户'
+                    : metric === 'YANGZHANGGUI_SALES_AMOUNT'
+                      ? '期间杨掌柜品牌商品销售额，包含在销售总额内'
+                      : metric === 'CONTACTED_CUSTOMER'
+                        ? '当前有效留资客户存量，仅单月比较'
+                        : metric === 'COOPERATED_CUSTOMER'
+                          ? '已配置月份内去重下单客户'
+                          : metric === 'PAID_AMOUNT'
+                            ? '已配置月份内订单的累计回款'
+                            : metric === 'RECEIPT_AMOUNT'
+                              ? '按到账日期统计，包含历史订单在已配置月份内到账'
+                              : '已配置月份内订单销售额',
               缺口:
                 value.target > 0
                   ? value.actual == null
                     ? '—'
                     : format(Math.max(0, value.target - value.actual))
-                  : '未配置',
+                  : '不考核',
             },
           },
         ]
@@ -147,7 +157,7 @@ export function targetCompletionFigure(
     empty: '当前期间尚无目标配置',
     emptyAction: 'target',
     note: configured
-      ? `达成率按已配置月份计算${partial ? '；* 部分月份未配置' : ''}；留资为当前存量，合作为期间去重下单客户`
+      ? `达成率按已配置月份计算${partial ? '；* 部分月份未配置' : ''}；建联为当月新增企微门店，有效为期间去重下单门店`
       : undefined,
   }
 }

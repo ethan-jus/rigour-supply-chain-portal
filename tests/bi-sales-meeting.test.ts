@@ -43,7 +43,7 @@ describe('销售经营看板', () => {
     expect(first.previous).toBe(30000)
     expect(first.delta).toBe(6000)
   })
-  it('人事月目标直接显示，四项年目标按接口完整月份累计', () => {
+  it('人事月目标直接显示，五项年目标按接口完整月份累计', () => {
     const data = salesDashboardFixture().sales!
     data.goals.push({ code: 'S1', month: 8, metric: 'SALES_AMOUNT', target: 50000 })
     expect(personalGoal(data, 'S1', 'SALES_AMOUNT', 8).value).toBe(50000)
@@ -52,17 +52,19 @@ describe('销售经营看板', () => {
       for (const [metric, target] of Object.entries({
         SALES_AMOUNT: 40000,
         RECEIPT_AMOUNT: 20000,
-        NEW_CUSTOMER: 200,
-        REPEAT_CUSTOMER: 100,
+        CONTACTED_STORE_COUNT: 200,
+        ORDERED_STORE_COUNT: 100,
+        YANGZHANGGUI_SALES_AMOUNT: 0,
       })) {
         if (!data.goals.some((g) => g.code === 'S1' && g.month === month && g.metric === metric))
           data.goals.push({ code: 'S1', month, metric, target })
       }
     expect(personalGoal(data, 'S1', 'SALES_AMOUNT', null).value).toBe(490000)
     expect(personalGoal(data, 'S1', 'RECEIPT_AMOUNT', null).value).toBe(240000)
-    expect(personalGoal(data, 'S1', 'NEW_CUSTOMER', 8).value).toBe(20)
-    expect(personalGoal(data, 'S1', 'NEW_CUSTOMER', null).value).toBe(2220)
-    expect(personalGoal(data, 'S1', 'REPEAT_CUSTOMER', null).value).toBe(1110)
+    expect(personalGoal(data, 'S1', 'CONTACTED_STORE_COUNT', 8).value).toBe(20)
+    expect(personalGoal(data, 'S1', 'CONTACTED_STORE_COUNT', null).value).toBe(2220)
+    expect(personalGoal(data, 'S1', 'ORDERED_STORE_COUNT', null).value).toBe(1110)
+    expect(personalGoal(data, 'S1', 'YANGZHANGGUI_SALES_AMOUNT', null).value).toBe(0)
   })
   it('来源失败不把数据当零；年度客户独立去重', () => {
     const data = salesDashboardFixture()
@@ -82,11 +84,11 @@ describe('销售经营看板', () => {
     expect(w.emitted('select')?.[0]).toEqual(['S1'])
     w.unmount()
   })
-  it('个人页具备四项目标，商品筛选不改变目标', async () => {
+  it('个人页具备五项目标，商品筛选不改变目标', async () => {
     const w = render({ selectedCode: 'S1' })
-    expect(w.findAll('.sales-goal-grid article')).toHaveLength(4)
-    expect(w.find('.sales-goal-grid').text()).toContain('新增合作客户数')
-    expect(w.find('.sales-goal-grid').text()).toContain('复购客户数')
+    expect(w.findAll('.sales-goal-grid article')).toHaveLength(5)
+    expect(w.find('.sales-goal-grid').text()).toContain('建联门店数')
+    expect(w.find('.sales-goal-grid').text()).toContain('有效门店数')
     const before = w.find('.sales-goal-grid').text()
     await w.get('[aria-label="商品品类"]').setValue('cloth')
     expect(w.find('.sales-products').text()).not.toContain('专业球杆')
@@ -198,7 +200,7 @@ describe('销售经营看板', () => {
     expect(w.find('.sales-goal-grid').text()).toContain('暂无人事指标')
     expect(w.find('.sales-goal-grid').text()).not.toContain('目标 200家')
     expect(w.find('.sales-goal-grid').text()).not.toContain('目标 100家')
-    expect(w.find('.sales-goal-grid').text()).toContain('15')
+    expect(w.find('.sales-goal-grid').text()).toContain('36,000.00')
     w.unmount()
   })
 })

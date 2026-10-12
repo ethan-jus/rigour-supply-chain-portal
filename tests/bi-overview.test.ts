@@ -71,8 +71,9 @@ describe('连续经营总览：年/月、真实聚合和目标口径', () => {
         month: i + 1,
         salesTarget: i === 1 && regionCode === 'BJ' ? 250000 : 100000,
         receiptTarget: 100000,
-        newCustomerTarget: 200,
-        repeatCustomerTarget: 100,
+        contactedStoreTarget: 200,
+        yangzhangguiSalesTarget: 0,
+        orderedStoreTarget: 100,
         configuredCount: i === 1 && regionCode === 'BJ' ? 1 : 0,
       })),
     )
@@ -81,14 +82,14 @@ describe('连续经营总览：年/月、真实聚合和目标口径', () => {
       sales: 350000,
       receipt: 200000,
       cityCount: 2,
-      newCustomer: 400,
-      repeatCustomer: 200,
+      contactedStore: 400,
+      orderedStore: 200,
     })
     expect(aggregateGoals(analysis, null)).toMatchObject({
       sales: 2550000,
       receipt: 2400000,
-      newCustomer: 4800,
-      repeatCustomer: 2400,
+      contactedStore: 4800,
+      orderedStore: 2400,
     })
     expect(aggregateGoals(null, 9)).toBeNull()
   })
@@ -153,8 +154,9 @@ describe('连续经营总览：年/月、真实聚合和目标口径', () => {
           month: 8,
           salesTarget: 100000,
           receiptTarget: 100000,
-          newCustomerTarget: 200,
-          repeatCustomerTarget: 100,
+          contactedStoreTarget: 200,
+          yangzhangguiSalesTarget: 0,
+          orderedStoreTarget: 100,
           configuredCount: 0,
         },
       ],
