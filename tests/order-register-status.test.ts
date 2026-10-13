@@ -26,13 +26,13 @@ describe('订单注册状态文案', () => {
     expect(orderPaymentStatusLabel('UNPAID')).toBe('待收款')
     expect(orderPaymentStatusLabel('PARTIAL_PAID')).toBe('部分收款')
     expect(orderPaymentStatusTag('PAID')).toBe('success')
-    expect(orderPaymentStatusTag('UNPAID')).toBe('danger')
+    expect(orderPaymentStatusTag('UNPAID')).toBe('warning')
   })
 
-  it('单笔收款状态区分已收款与已核对，且都计入回款', () => {
+  it('单笔收款状态区分已收款与已审核', () => {
     expect(paymentRecordStatusLabel('PENDING')).toBe('待收款')
     expect(paymentRecordStatusLabel('CONFIRMED')).toBe('已收款')
-    expect(paymentRecordStatusLabel('CHECKED')).toBe('已核对')
+    expect(paymentRecordStatusLabel('CHECKED')).toBe('已审核')
     expect(paymentRecordStatusTag('CHECKED')).toBe('success')
     expect(paymentRecordStatusTag('PENDING')).toBe('warning')
   })
