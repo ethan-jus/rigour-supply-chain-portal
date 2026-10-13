@@ -1,6 +1,9 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { SUPPLY_DOMAIN_PAGES } from '@/views/supply-chain/domain/catalog'
 
+const payrollRuleRouteKeys = new Set(['supply.hr.commission-rules', 'supply.hr.performance-rules', 'supply.hr.allowance-rules'])
+const costPermissions: Record<string, string> = { 'supply.cost.logistics': 'order:logistics-cost:read', 'supply.cost.marketing': 'erp:cost:marketing:read', 'supply.cost.warehouse-rentals': 'erp:cost:rental:read', 'supply.hr.expenses': 'hr:expense:read' }
+
 const erpProductManagementRouteKeys = new Set([
   'supply.erp.master-data.products',
 ])
@@ -89,7 +92,13 @@ const routableSupplyDomainPages = SUPPLY_DOMAIN_PAGES
 const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page) => ({
   path: page.path.replace('/supply-chain/', ''),
   name: `SupplyDomain${page.routeKey.split('.').map((part) => part.replace(/(^|-)([a-z])/g, (_, __, letter) => letter.toUpperCase())).join('')}`,
-  component: erpProductManagementRouteKeys.has(page.routeKey)
+  component: page.routeKey in costPermissions
+    ? () => import('@/views/supply-chain/cost/CostManagementView.vue')
+    : payrollRuleRouteKeys.has(page.routeKey)
+      ? () => import('@/views/supply-chain/hr/PayrollRuleView.vue')
+      : page.routeKey === 'supply.hr.payroll'
+        ? () => import('@/views/supply-chain/hr/PayrollView.vue')
+        : erpProductManagementRouteKeys.has(page.routeKey)
     ? () => import('@/views/supply-chain/erp/ErpProductManagementView.vue')
     : erpProductSpecificationRouteKeys.has(page.routeKey)
       ? () => import('@/views/supply-chain/erp/ErpProductSpecificationView.vue')
@@ -129,7 +138,7 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
     requiresAuth: true,
     applicationCode: 'SUPPLY_CHAIN',
     routeKey: page.routeKey,
-    permission: page.routeKey === 'supply.integration.schedules' ? 'integration:dhb:read' : page.routeKey === 'supply.hr.departments' ? 'hr:department:read' : page.domainKey === 'crm'
+    permission: costPermissions[page.routeKey] ?? (payrollRuleRouteKeys.has(page.routeKey) ? 'hr:payroll-rule:read' : page.routeKey === 'supply.hr.payroll' ? 'hr:payroll:read' : undefined) ?? (page.routeKey === 'supply.integration.schedules' ? 'integration:dhb:read' : page.routeKey === 'supply.hr.departments' ? 'hr:department:read' : page.domainKey === 'crm'
       ? 'crm:customer:read'
       : hrEmployeeRouteKeys.has(page.routeKey)
         ? 'hr:employee:read'
@@ -137,7 +146,7 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
           ? 'hr:position:read'
           : businessDictionaryRouteKeys.has(page.routeKey)
             ? 'business-settings:dict:read'
-            : undefined,
+            : undefined),
   },
 }))
 
@@ -266,6 +275,11 @@ export const constantRoutes: RouteRecordRaw[] = [
       { path: 'settings/menus', name: 'SupplySettingsMenus', component: () => import('@/views/supply-chain/settings/MenuView.vue'), meta: { title: '菜单管理', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'supply:menu:read' } },
       { path: 'settings/parameters', name: 'SupplySettingsParameters', component: () => import('@/views/supply-chain/settings/ParameterView.vue'), meta: { title: '业务参数', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'supply:parameter:read' } },
       { path: 'settings/audits', name: 'SupplySettingsAudits', component: () => import('@/views/supply-chain/settings/AuditView.vue'), meta: { title: '操作日志', requiresAuth: true, applicationCode: 'SUPPLY_CHAIN', permission: 'supply:audit:read' } },
+      // 旧薪酬占位地址统一进入月度工作台，由目标路由执行权限校验。
+      ...['payroll-commission', 'performance', 'monthly-close'].map((path) => ({
+        path: `hr/${path}`,
+        redirect: '/supply-chain/hr/payroll',
+      })),
       ...supplyDomainRoutes,
     ],
   },

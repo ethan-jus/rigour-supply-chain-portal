@@ -51,6 +51,38 @@
                 value="PENDING"
               />
             </el-select>
+            <el-select
+              v-model="regularized"
+              clearable
+              aria-label="是否转正"
+              placeholder="是否转正"
+              style="width: 125px"
+            >
+              <el-option :value="true" label="已转正" /><el-option :value="false" label="未转正" />
+            </el-select>
+            <el-select
+              v-model="payrollCategory"
+              clearable
+              aria-label="薪酬类别"
+              placeholder="薪酬类别"
+              style="width: 125px"
+            >
+              <el-option
+                v-for="option in payrollCategories"
+                :key="option.value"
+                :value="option.value"
+                :label="option.label"
+              />
+            </el-select>
+            <el-select
+              v-model="payrollMissing"
+              aria-label="薪酬档案完整度"
+              style="width: 135px"
+              @change="search"
+              ><el-option :value="false" label="全部薪酬档案" /><el-option
+                :value="true"
+                label="薪酬待完善"
+            /></el-select>
             <el-input
               v-model="jobGrade"
               clearable
@@ -127,6 +159,19 @@
               min-width="90"
               show-overflow-tooltip
             />
+            <el-table-column label="是否转正" width="100">
+              <template #default="{ row }"
+                ><el-tag
+                  :type="row.regularized == null ? 'info' : row.regularized ? 'success' : 'warning'"
+                  >{{ regularizationLabel(row.regularized) }}</el-tag
+                ></template
+              >
+            </el-table-column>
+            <el-table-column label="薪酬类别" width="100">
+              <template #default="{ row }">{{
+                payrollCategoryLabel(row.payrollCategory)
+              }}</template>
+            </el-table-column>
             <el-table-column prop="entryDate" label="入职时间" sortable="custom" width="110"
               ><template #default="{ row }">{{
                 dateOnly(row.entryDate) || '—'
@@ -211,6 +256,18 @@
           }}</el-descriptions-item
           ><el-descriptions-item label="岗位">{{
             detail.positionName || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="是否转正">{{
+            regularizationLabel(detail.regularized)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="转正日期">{{
+            detail.regularizationDate || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="薪酬类别">{{
+            payrollCategoryLabel(detail.payrollCategory)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="薪资生效日期">{{
+            detail.salaryEffectiveFrom || '—'
           }}</el-descriptions-item>
           <el-descriptions-item label="职级">{{ detail.jobGrade || '—' }}</el-descriptions-item>
           <el-descriptions-item label="手机号">{{ detail.mobile || '—' }}</el-descriptions-item
@@ -323,7 +380,8 @@
 </template>
 <script setup lang="ts">
 import DhbSalespersonSyncButton from '@/components/supply/DhbSalespersonSyncButton.vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import DhbBindingReviewDrawer from './DhbBindingReviewDrawer.vue'
 import { CopyDocument, WarningFilled } from '@element-plus/icons-vue'
@@ -345,6 +403,11 @@ import {
 } from '@/api/core/hr'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import {
+  payrollCategories,
+  payrollCategoryLabel,
+  regularizationLabel,
+} from '@/utils/hr-payroll-profile'
+import {
   auditActor,
   auditTime,
   dateOnly,
@@ -352,6 +415,8 @@ import {
   serviceLength,
 } from '@/utils/hr-employee-profile'
 const { can } = useSupplyPermissions()
+const route = useRoute(),
+  payrollMissing = ref(route.query.payrollMissing === '1')
 const departmentId = ref<number | null>(null),
   includeSubDepartments = ref(true),
   departments = ref<HrDepartmentOption[]>([]),
@@ -368,6 +433,8 @@ const sortBy = ref('createdTime'),
 const positions = ref<HrPositionRecord[]>([])
 const positionCode = ref(''),
   jobGrade = ref('')
+const regularized = ref<boolean | undefined>(),
+  payrollCategory = ref('')
 const keyword = ref(''),
   status = ref(''),
   page = ref(1),
@@ -394,6 +461,9 @@ async function load() {
       step: size.value,
       keyword: keyword.value || undefined,
       employmentStatus: status.value || undefined,
+      regularized: typeof regularized.value === 'boolean' ? regularized.value : undefined,
+      payrollCategory: payrollCategory.value || undefined,
+      payrollMissing: payrollMissing.value || undefined,
       departmentId: departmentId.value ?? undefined,
       includeSubDepartments: includeSubDepartments.value,
       positionCode: positionCode.value || undefined,
@@ -422,6 +492,9 @@ function selectDepartment(id: number | null) {
 function reset() {
   keyword.value = ''
   status.value = ''
+  regularized.value = undefined
+  payrollCategory.value = ''
+  payrollMissing.value = false
   positionCode.value = ''
   jobGrade.value = ''
   includeSubDepartments.value = true
@@ -516,7 +589,32 @@ function statusLabel(value: string) {
     )[value] || value
   )
 }
-onMounted(refresh)
+async function applyPayrollLink() {
+  if (route.query.payrollMissing === '1') {
+    payrollMissing.value = true
+    search()
+  }
+  const id = route.query.payrollEmployeeId
+  if (typeof id === 'string') {
+    try {
+      const row = await getHrEmployee(id)
+      if (can('hr:employee:update')) openEditor(row)
+      else await openDetail(row)
+    } catch (e) {
+      ElMessage.error(e instanceof Error ? e.message : '读取员工失败')
+    }
+  }
+}
+watch(
+  () => [route.query.payrollMissing, route.query.payrollEmployeeId],
+  () => {
+    void applyPayrollLink()
+  },
+)
+onMounted(async () => {
+  await refresh()
+  await applyPayrollLink()
+})
 </script>
 <style scoped>
 .employee-page :deep(.department-sidebar) {

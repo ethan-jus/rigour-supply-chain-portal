@@ -85,10 +85,17 @@ export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
   'supply.crm.credit-policy.menu',
   'supply.order.menu',
   'supply.hr.menu',
+  'supply.cost.menu',
+  'supply.hr.payroll-settings.menu',
   'supply.integration.sync-control.menu',
 ]
 
 export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
+  ...directPages('cost', '成本管理', 'order-center-service', [{ key: 'logistics', title: '物流成本信息' }]),
+  ...directPages('cost', '成本管理', 'erp-core-service', [
+    { key: 'marketing', title: '营销费用成本' },
+    { key: 'warehouse-rentals', title: '仓库租赁成本' },
+  ]),
   ...erpProductCenterPages,
   ...groupPages('erp', 'ERP', 'erp-core-service', [
     { key: 'suppliers', title: '供应商', pages: [
@@ -148,12 +155,15 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'inventory-risk', title: '库存风险看板' },
   ]),
   ...directPages('hr', '人事与绩效', 'hr-payroll-service', [
+    { key: 'commission-rules', title: '提成设置' },
+    { key: 'performance-rules', title: '绩效规则设置' },
+    { key: 'allowance-rules', title: '其他薪资设置' },
+    { key: 'payroll', title: '月度薪酬' }, { key: 'expenses', title: '报销费用' },
     { key: 'departments', title: '部门管理' },
     { key: 'employees', title: '员工档案' },
     { key: 'positions', title: '岗位职位' },
     { key: 'assignments', title: '任职与调动' }, { key: 'calendar-policies', title: '工作日历与考勤政策' },
-    { key: 'attendance-appeals', title: '正式考勤与申诉' }, { key: 'payroll-commission', title: '薪酬与提成' },
-    { key: 'performance', title: '绩效核算' }, { key: 'monthly-close', title: '月结与冲回' },
+    { key: 'attendance-appeals', title: '正式考勤与申诉' },
   ]),
   ...directPages('settings', '系统设置', '各领域服务', [
     { key: 'product-inventory', title: '商品与库存参数' }, { key: 'procurement', title: '采购规则' },

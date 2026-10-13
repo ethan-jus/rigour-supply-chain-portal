@@ -95,14 +95,61 @@
         ></el-form-item>
       </div>
       <h3>薪资档案</h3>
-      <p class="section-note">记录约定薪资，支持填写薪资构成；此处不会自动调整薪酬核算规则。</p>
+      <p class="section-note">
+        销售在此填写底薪，绩效、提成和补贴由薪酬配置计算；总部保留原有薪资记录方式，暂不参与销售核算。
+      </p>
       <div class="form-grid">
-        <el-form-item label="转正薪资"
-          ><el-input v-model="profile.regularSalary" maxlength="64" placeholder="例如 8000+8000"
+        <el-form-item label="薪酬类别" required>
+          <el-select
+            v-model="form.payrollCategory"
+            clearable
+            placeholder="请选择薪酬类别"
+            aria-label="薪酬类别"
+          >
+            <el-option
+              v-for="option in payrollCategories"
+              :key="option.value"
+              :value="option.value"
+              :label="option.label"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="是否转正" required>
+          <el-select v-model="form.regularized" placeholder="请选择是否转正" aria-label="是否转正">
+            <el-option :value="false" label="否 · 未转正" /><el-option
+              :value="true"
+              label="是 · 已转正"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="form.regularized" label="转正日期" required>
+          <el-date-picker
+            v-model="form.regularizationDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="实际转正日期"
+          />
+        </el-form-item>
+        <el-form-item :label="form.payrollCategory === 'SALES' ? '转正底薪（元 / 月）' : '转正薪资'"
+          ><el-input
+            v-model="profile.regularSalary"
+            maxlength="64"
+            :placeholder="
+              form.payrollCategory === 'SALES' ? '仅填底薪金额，如 5000' : '按现有约定填写'
+            "
         /></el-form-item>
-        <el-form-item label="试用期薪资"
+        <el-form-item
+          :label="form.payrollCategory === 'SALES' ? '试用期底薪（元 / 月）' : '试用期薪资'"
           ><el-input v-model="profile.probationSalary" maxlength="64"
         /></el-form-item>
+        <el-form-item v-if="form.payrollCategory === 'SALES'" label="薪资生效日期">
+          <el-date-picker
+            v-model="form.salaryEffectiveFrom"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="当前档案金额的生效日期"
+          />
+        </el-form-item>
         <el-form-item label="试用期"
           ><el-input v-model="profile.probationPeriod" maxlength="32" placeholder="例如 3个月"
         /></el-form-item>
@@ -147,6 +194,7 @@
 </template>
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { payrollCategories, isSalesSalary } from '@/utils/hr-payroll-profile'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getHrEmployee,
@@ -200,6 +248,10 @@ const empty = (): HrEmployeeCommand => ({
   departmentId: null,
   positionCode: '',
   jobGrade: null,
+  regularized: false,
+  regularizationDate: null,
+  payrollCategory: null,
+  salaryEffectiveFrom: null,
   employmentStatus: 'ACTIVE',
   mobile: null,
   email: null,
@@ -275,6 +327,10 @@ watch(visible, async (open) => {
         departmentId: detail.departmentId,
         positionCode: detail.positionCode ?? '',
         jobGrade: detail.jobGrade ?? null,
+        regularized: detail.regularized ?? null,
+        regularizationDate: detail.regularizationDate ?? null,
+        payrollCategory: detail.payrollCategory ?? null,
+        salaryEffectiveFrom: detail.salaryEffectiveFrom ?? null,
         employmentStatus: detail.employmentStatus,
         mobile: detail.mobile,
         email: detail.email,
@@ -296,6 +352,28 @@ async function save() {
   saveError.value = ''
   if (!form.employeeName.trim() || !form.departmentId || !form.positionCode) {
     saveError.value = '请填写姓名并选择部门和岗位'
+    return
+  }
+  if (!form.payrollCategory) {
+    saveError.value = '请选择薪酬类别，由 HR 明确区分总部和销售'
+    return
+  }
+  if (form.regularized == null) {
+    saveError.value = '请选择是否转正，历史档案不会自动推断'
+    return
+  }
+  if (
+    form.regularized &&
+    (!form.regularizationDate || (entryDate.value && form.regularizationDate < entryDate.value))
+  ) {
+    saveError.value = '请填写不早于入职日期的实际转正日期'
+    return
+  }
+  if (
+    form.payrollCategory === 'SALES' &&
+    (!isSalesSalary(profile.regularSalary) || !isSalesSalary(profile.probationSalary))
+  ) {
+    saveError.value = '销售薪资仅填写底薪金额，最多两位小数；绩效、提成和补贴在薪酬配置维护'
     return
   }
   if (identity.value.error) {
@@ -331,6 +409,7 @@ async function save() {
           ? `${leaveDate.value}T00:00:00+08:00`
           : null,
       profile: normalized,
+      regularizationDate: form.regularized ? form.regularizationDate : null,
     })
     visible.value = false
     emit('saved')

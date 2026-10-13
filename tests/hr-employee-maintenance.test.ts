@@ -16,6 +16,7 @@ import {
   getHrPositions,
   type HrEmployeeRecord,
 } from '@/api/core/hr'
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
 vi.mock('@/api/core/hr', () => ({
   getHrEmployee: vi.fn(),
   getDhbBindingRisks: vi.fn(),
@@ -72,6 +73,7 @@ it('居中弹窗选择部门岗位，离职日期必填，提交全部个人资�
   field('部门').getComponent({ name: 'ElTreeSelect' }).vm.$emit('update:modelValue', 2)
   field('岗位').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'SALES')
   await field('姓名').get('input').setValue('测试员工')
+  field('薪酬类别').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'HEADQUARTERS')
   await field('身份证号').get('input').setValue('11010519491231002X')
   expect(field('出生日期').get('input').element.value).toBe('1949-12-31')
   field('在职状态').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'LEFT')
@@ -125,6 +127,8 @@ it('编辑先取详情，避免把列表未返回的个人信息清空', async (
   } as HrEmployeeRecord
   vi.mocked(getHrEmployee).mockResolvedValue({
     ...row,
+    regularized: false,
+    payrollCategory: 'HEADQUARTERS',
     profile: {
       idNumber: null,
       bankName: '原银行',
@@ -148,6 +152,44 @@ it('编辑先取详情，避免把列表未返回的个人信息清空', async (
     }),
   )
 })
+it('销售底薪仅接受金额，并提交转正日期和薪资生效日期', async () => {
+  await renderEditor()
+  field('部门').getComponent({ name: 'ElTreeSelect' }).vm.$emit('update:modelValue', 2)
+  field('岗位').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'SALES')
+  await field('姓名').get('input').setValue('薪资测试员工')
+  field('薪酬类别').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'SALES')
+  field('是否转正').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', true)
+  await flushPromises()
+  field('转正日期')
+    .getComponent({ name: 'ElDatePicker' })
+    .vm.$emit('update:modelValue', '2026-09-01')
+  field('薪资生效日期')
+    .getComponent({ name: 'ElDatePicker' })
+    .vm.$emit('update:modelValue', '2026-06-01')
+  await field('转正底薪（元 / 月）').get('input').setValue('3000+1000')
+  const submit = () =>
+    wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '确定')!
+      .trigger('click')
+  await submit()
+  expect(hrOrganizationApi.saveEmployee).not.toHaveBeenCalled()
+  expect(wrapper!.text()).toContain('销售薪资仅填写底薪金额')
+  await field('转正底薪（元 / 月）').get('input').setValue('5000')
+  await submit()
+  await flushPromises()
+  expect(hrOrganizationApi.saveEmployee).toHaveBeenCalledWith(
+    null,
+    expect.objectContaining({
+      payrollCategory: 'SALES',
+      regularized: true,
+      regularizationDate: '2026-09-01',
+      salaryEffectiveFrom: '2026-06-01',
+      profile: expect.objectContaining({ regularSalary: '5000' }),
+    }),
+  )
+})
+
 describe('员工部门筛选', () => {
   it('默认真实根部门、部门切换和重置、账号搜索与服务端排序', async () => {
     vi.mocked(getHrEmployees).mockResolvedValue({
@@ -204,6 +246,8 @@ describe('员工部门筛选', () => {
       '手机号',
       '订货宝账号',
       '岗位',
+      '是否转正',
+      '薪酬类别',
       '入职时间',
       '创建时间',
       '关联状态',

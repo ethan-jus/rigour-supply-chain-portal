@@ -33,6 +33,10 @@ export interface HrDepartmentOption {
   statusCode: string
 }
 export interface HrEmployeeRecord {
+  regularized?: boolean | null
+  regularizationDate?: string | null
+  payrollCategory?: string | null
+  salaryEffectiveFrom?: string | null
   dhbReviewCount?: number
   dhbStaffIds?: string[]
   dhbAccountNames?: string[]
@@ -94,6 +98,9 @@ export interface HrPositionCommand {
 }
 
 export interface HrEmployeeQuery {
+  regularized?: boolean
+  payrollCategory?: string
+  payrollMissing?: boolean
   sortBy?: string
   sortDirection?: 'asc' | 'desc'
   positionCode?: string
@@ -204,6 +211,10 @@ export interface HrDepartmentCommand {
   establishedDate: string | null
 }
 export interface HrEmployeeCommand {
+  regularized?: boolean | null
+  regularizationDate?: string | null
+  payrollCategory?: string | null
+  salaryEffectiveFrom?: string | null
   jobGrade?: string | null
   profile?: HrEmployeeProfile | null
   employeeName: string
@@ -302,8 +313,14 @@ export interface DhbBindingRisk {
   reason: string
 }
 export function getDhbBindingRisks() {
-  return apiClient.get<DhbBindingRisk[]>('/hr/employees/dhb-link-risks', { stayOnUnauthorized: true })
+  return apiClient.get<DhbBindingRisk[]>('/hr/employees/dhb-link-risks', {
+    stayOnUnauthorized: true,
+  })
 }
 export function confirmDhbBinding(id: number, expectedVersion: number, targetEmployeeId: string) {
-  return apiClient.post<boolean>(`/hr/employees/dhb-link-risks/${id}/confirm`, { expectedVersion, targetEmployeeId }, { stayOnUnauthorized: true })
+  return apiClient.post<boolean>(
+    `/hr/employees/dhb-link-risks/${id}/confirm`,
+    { expectedVersion, targetEmployeeId },
+    { stayOnUnauthorized: true },
+  )
 }

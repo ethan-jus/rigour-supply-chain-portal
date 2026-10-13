@@ -1,13 +1,16 @@
 import type { HrDepartment } from '@/api/core/hr'
 
-export interface DepartmentNode extends HrDepartment {
-  children: DepartmentNode[]
-}
+export type DepartmentTreeNode<T> = T & { children: DepartmentTreeNode<T>[] }
+export type DepartmentNode = DepartmentTreeNode<HrDepartment>
 
 /** 部门树只使用 HR 保存的父子关系；搜索保留祖先链和命中部门的下级。 */
-export function departmentTree(rows: HrDepartment[]): DepartmentNode[] {
-  const index = new Map(rows.map((row) => [row.id, { ...row, children: [] as DepartmentNode[] }]))
-  const roots: DepartmentNode[] = []
+export function departmentTree<T extends Pick<HrDepartment, 'id' | 'parentId' | 'sortOrder'>>(
+  rows: T[],
+): DepartmentTreeNode<T>[] {
+  const index = new Map(
+    rows.map((row) => [row.id, { ...row, children: [] as DepartmentTreeNode<T>[] }]),
+  )
+  const roots: DepartmentTreeNode<T>[] = []
   for (const node of index.values()) {
     const seen = new Set<number>([node.id])
     let parentId = node.parentId
@@ -20,7 +23,7 @@ export function departmentTree(rows: HrDepartment[]): DepartmentNode[] {
     if (parent) parent.children.push(node)
     else roots.push(node)
   }
-  const sort = (nodes: DepartmentNode[]) => {
+  const sort = (nodes: DepartmentTreeNode<T>[]) => {
     nodes.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
     nodes.forEach((node) => sort(node.children))
   }

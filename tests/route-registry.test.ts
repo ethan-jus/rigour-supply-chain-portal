@@ -22,8 +22,18 @@ describe('数据库导航注册表', () => {
     expect(() => validateNavigation([node('supply.hr.index', '/supply-chain/hr')])).toThrow('未注册或路径不一致')
     expect(constantRoutes.find(route => route.path === '/supply-chain')?.children?.some(route => route.path === 'hr')).toBe(false)
   })
-  it('拒绝已撤销的管理入口', () => {
-    for (const [key, path] of [['system.user.list', '/system-admin/users'], ['platform.dashboard', '/platform-admin']])
+  it('月度薪酬保留目标权限，旧地址跳转且不再出现在导航目录', () => {
+    const children = constantRoutes.find(route => route.path === '/supply-chain')?.children
+    const payroll = children?.find(route => route.path === 'hr/payroll')
+    expect(payroll?.meta?.title).toBe('月度薪酬')
+    expect(payroll?.meta?.permission).toBe('hr:payroll:read')
+    for (const key of ['payroll-commission', 'performance', 'monthly-close']) {
+      expect(children?.find(route => route.path === `hr/${key}`)?.redirect).toBe('/supply-chain/hr/payroll')
+      expect(SUPPLY_DOMAIN_PAGES.some(page => page.routeKey === `supply.hr.${key}`)).toBe(false)
+    }
+  })
+  it('拒绝已撤销的页面入口', () => {
+    for (const [key, path] of [['system.user.list', '/system-admin/users'], ['platform.dashboard', '/platform-admin'], ['supply.hr.salary-standards', '/supply-chain/hr/salary-standards']])
       expect(() => validateNavigation([node(key, path)])).toThrow('未注册或路径不一致')
   })
 
@@ -246,10 +256,10 @@ describe('数据库导航注册表', () => {
     ]))
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).toEqual(expect.arrayContaining([
       'supply.bi.product-sales', 'supply.bi.city-cost', 'supply.hr.employees',
-      'supply.hr.payroll-commission', 'supply.hr.performance',
+      'supply.hr.payroll', 'supply.hr.performance-rules',
     ]))
-    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(11)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(75)
+    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(13)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(80)
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
