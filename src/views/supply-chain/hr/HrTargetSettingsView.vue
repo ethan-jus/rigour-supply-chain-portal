@@ -220,17 +220,25 @@ function changeName(change: TargetChange) {
   )
 }
 function metricName(metric: string) {
-  return targetMetrics.find((m) => m.code === metric)?.label ?? metric
+  return (
+    targetMetrics.find((m) => m.code === metric)?.label ??
+    (
+      { NEW_CUSTOMER: '新增合作客户（旧指标）', REPEAT_CUSTOMER: '复购客户（旧指标）' } as Record<
+        string,
+        string
+      >
+    )[metric] ??
+    metric
+  )
 }
 </script>
 
 <template>
   <section class="hr-target-settings">
-    <div class="target-breadcrumb">人事 / 指标设置</div>
     <header class="target-header">
-      <div>
+      <div class="target-heading">
         <h1>指标设置</h1>
-        <p>按月维护城市与销售目标，保存后同步至看板</p>
+        <p>按月维护 · 保存后同步至看板</p>
       </div>
       <el-date-picker
         v-model="month"
@@ -242,22 +250,45 @@ function metricName(metric: string) {
         aria-label="指标月份"
       />
     </header>
-    <nav class="target-tabs" aria-label="指标类型">
-      <button
-        :class="{ active: dimension === 'CITY' }"
-        :disabled="locked"
-        @click="dimension = 'CITY'"
-      >
-        城市指标 <span v-if="data">{{ cities.length }}</span>
-      </button>
-      <button
-        :class="{ active: dimension === 'SALES_OWNER' }"
-        :disabled="locked"
-        @click="dimension = 'SALES_OWNER'"
-      >
-        销售指标 <span v-if="data">{{ sales.length }}</span>
-      </button>
-    </nav>
+    <div class="target-controls">
+      <nav class="target-tabs" aria-label="指标类型">
+        <button
+          :class="{ active: dimension === 'CITY' }"
+          :aria-pressed="dimension === 'CITY'"
+          :disabled="locked"
+          @click="dimension = 'CITY'"
+        >
+          城市指标 <span v-if="data">{{ cities.length }}</span>
+        </button>
+        <button
+          :class="{ active: dimension === 'SALES_OWNER' }"
+          :aria-pressed="dimension === 'SALES_OWNER'"
+          :disabled="locked"
+          @click="dimension = 'SALES_OWNER'"
+        >
+          销售指标 <span v-if="data">{{ sales.length }}</span>
+        </button>
+      </nav>
+      <div class="target-filters">
+        <el-input
+          v-model="search"
+          :prefix-icon="Search"
+          clearable
+          :disabled="locked || busy || !data"
+          :placeholder="dimension === 'CITY' ? '搜索城市' : '搜索姓名 / 工号'"
+          aria-label="搜索指标对象"
+        />
+        <el-select
+          v-if="dimension === 'SALES_OWNER'"
+          v-model="employment"
+          :disabled="locked || busy || !data"
+          aria-label="在职状态"
+          ><el-option label="全部状态" value="ALL" /><el-option
+            label="在职"
+            value="ACTIVE" /><el-option label="离职" value="LEFT"
+        /></el-select>
+      </div>
+    </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <el-button v-if="error" :icon="Refresh" @click="load">重新加载</el-button>
     <el-skeleton v-else-if="busy" :rows="6" animated class="target-loading" />
@@ -281,36 +312,10 @@ function metricName(metric: string) {
           {{ name }}<span>{{ sales.filter((s) => s.cityCode === code).length }}</span>
         </button>
       </aside>
-      <main class="target-panel">
-        <div class="target-toolbar">
-          <h2>
-            {{
-              dimension === 'CITY'
-                ? '城市月度指标'
-                : cityOptions.find((c) => c[0] === selectedCity)?.[1] || '全部销售'
-            }}
-            <small>{{ rows.length }}{{ dimension === 'CITY' ? '个城市' : '人' }}</small>
-          </h2>
-          <div class="target-filters">
-            <el-input
-              v-model="search"
-              :prefix-icon="Search"
-              clearable
-              :disabled="locked"
-              :placeholder="dimension === 'CITY' ? '搜索城市' : '搜索姓名 / 工号'"
-              aria-label="搜索指标对象"
-            />
-            <el-select
-              v-if="dimension === 'SALES_OWNER'"
-              v-model="employment"
-              :disabled="locked"
-              aria-label="在职状态"
-              ><el-option label="全部状态" value="ALL" /><el-option
-                label="在职"
-                value="ACTIVE" /><el-option label="离职" value="LEFT"
-            /></el-select>
-          </div>
-        </div>
+      <main
+        class="target-panel"
+        :aria-label="dimension === 'CITY' ? '城市月度指标' : '销售月度指标'"
+      >
         <div v-if="selected.length" class="target-selection">
           <span>已选 {{ selected.length }} 项</span
           ><el-button type="primary" plain size="small" :disabled="locked" @click="edit(selected)"
@@ -331,7 +336,12 @@ function metricName(metric: string) {
                   />
                 </th>
                 <th>{{ dimension === 'CITY' ? '城市' : '销售人员' }}</th>
-                <th v-for="metric in targetMetrics" :key="metric.code">
+                <th
+                  v-for="metric in targetMetrics"
+                  :key="metric.code"
+                  class="target-number"
+                  :title="metric.description"
+                >
                   {{ metric.label }}<small>{{ metric.unit }}</small>
                 </th>
                 <th>操作</th>
@@ -349,12 +359,12 @@ function metricName(metric: string) {
                   />
                 </td>
                 <td class="target-name">
-                  <strong>{{ subject.name }}</strong
-                  ><small>{{
-                    dimension === 'CITY'
-                      ? subject.code
-                      : `${subject.code} · ${subject.departmentName || ''}`
-                  }}</small>
+                  <strong :title="subject.code">{{ subject.name }}</strong>
+                  <small
+                    v-if="dimension === 'SALES_OWNER'"
+                    :title="`${subject.code} · ${subject.departmentName || ''}`"
+                    >{{ subject.code }} · {{ subject.departmentName }}</small
+                  >
                 </td>
                 <td v-for="metric in targetMetrics" :key="metric.code" class="target-number">
                   {{ format(cell(subject, metric.code).value) }}
@@ -373,7 +383,7 @@ function metricName(metric: string) {
                 </td>
               </tr>
               <tr v-if="!visibleRows.length">
-                <td colspan="7" class="target-empty">
+                <td :colspan="targetMetrics.length + 3" class="target-empty">
                   {{
                     search
                       ? '没有匹配的记录'
@@ -385,7 +395,9 @@ function metricName(metric: string) {
           </table>
         </div>
         <footer class="target-footer">
-          <span>名单随销售部组织和员工档案更新 · 0 表示不考核</span
+          <span
+            >共 {{ rows.length }}{{ dimension === 'CITY' ? ' 个城市' : ' 名销售' }} ·
+            名单随组织和员工档案更新 · 0 表示不考核</span
           ><el-pagination
             v-model:current-page="page"
             :page-size="20"

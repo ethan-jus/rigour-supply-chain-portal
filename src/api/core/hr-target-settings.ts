@@ -1,6 +1,11 @@
 import { apiClient } from './client'
 export type TargetDimension = 'CITY' | 'SALES_OWNER'
-export type TargetMetric = 'SALES_AMOUNT' | 'RECEIPT_AMOUNT' | 'NEW_CUSTOMER' | 'REPEAT_CUSTOMER'
+export type TargetMetric =
+  | 'CONTACTED_STORE_COUNT'
+  | 'ORDERED_STORE_COUNT'
+  | 'YANGZHANGGUI_SALES_AMOUNT'
+  | 'SALES_AMOUNT'
+  | 'RECEIPT_AMOUNT'
 export interface TargetSubject {
   dimensionType: TargetDimension
   code: string
@@ -38,7 +43,7 @@ export interface TargetBatch {
   reason: string
 }
 export interface TargetHistory {
-  metric: TargetMetric
+  metric: TargetMetric | 'NEW_CUSTOMER' | 'REPEAT_CUSTOMER'
   value: number | string
   revision: number
   reason: string

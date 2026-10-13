@@ -66,6 +66,18 @@ describe('经营判断图表与维度', () => {
     expect(figure.rows[0].cells.达成率).toBe('66.7%')
     expect(figure.rows[0].regionCode).toBe('S1')
   })
+  it('建联实际缺失保留空值，零目标显示不考核', () => {
+    const figure = targetCompletionFigure(
+      [
+        { ...target('CONTACTED_STORE_COUNT', 0, 100), actualValue: null, achievementRate: null },
+        target('ORDERED_STORE_COUNT', 20, 0),
+      ],
+      true,
+      6,
+    )
+    expect(figure.rows[0].cells).toMatchObject({ 实际: '—', 达成率: '—', 缺口: '—' })
+    expect(figure.rows[1].cells).toMatchObject({ 目标: '0（不考核）', 达成率: '—', 缺口: '不考核' })
+  })
   it('无目标仅显示紧凑配置入口，不用0%填充', () => {
     const figure = targetCompletionFigure([], false, 4)
     expect(figure).toMatchObject({ compact: true, rows: [], emptyAction: 'target' })

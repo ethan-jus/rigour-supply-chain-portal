@@ -139,8 +139,8 @@ export interface SupplyDashboardTargetCompletionItem {
   metricCode: string
   metricName: string
   targetValue: number
-  actualValue: number
-  achievementRate: number
+  actualValue: number | null
+  achievementRate: number | null
   configuredMonthCount?: number | null
   periodMonthCount?: number | null
 }
@@ -452,8 +452,9 @@ export interface SupplyDashboardOperatingAnalysis {
     month: number
     salesTarget: number
     receiptTarget: number
-    newCustomerTarget: number
-    repeatCustomerTarget: number
+    contactedStoreTarget: number
+    orderedStoreTarget: number
+    yangzhangguiSalesTarget: number
     configuredCount: number
   }[]
   /** Scoped HR roster, including current city staff with zero performance. */

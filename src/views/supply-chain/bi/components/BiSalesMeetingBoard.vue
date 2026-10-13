@@ -304,7 +304,9 @@
                 </p>
               </article>
             </div>
-            <p class="sales-note">指标来自人事设置，全年目标按月累计。</p>
+            <p class="sales-note">
+              指标来自人事设置，全年目标按月累计。建联完成数待接入首次添加企业微信的记录。
+            </p>
           </article>
         </section>
         <section v-if="showMonths && !dayMode" class="sales-month-detail">
@@ -794,22 +796,23 @@ const trendChart = computed(() =>
 )
 const goals = computed(() =>
   [
-    { metric: 'SALES_AMOUNT', label: '交易额', actual: metric('sales_amount'), unit: '元' },
-    { metric: 'RECEIPT_AMOUNT', label: '本期到账', actual: personalReceipts.value, unit: '元' },
-    {
-      metric: 'NEW_CUSTOMER',
-      label: '新增合作客户数',
-      actual: customers.value.newCustomers,
-      unit: '家',
-    },
-    {
-      metric: 'REPEAT_CUSTOMER',
-      label: '复购客户数',
-      actual: customers.value.returning,
-      unit: '家',
-    },
+    { metric: 'CONTACTED_STORE_COUNT', label: '建联门店数', unit: '家' },
+    { metric: 'ORDERED_STORE_COUNT', label: '有效门店数', unit: '家' },
+    { metric: 'YANGZHANGGUI_SALES_AMOUNT', label: '杨掌柜品牌销售额', unit: '元' },
+    { metric: 'SALES_AMOUNT', label: '销售总额', unit: '元' },
+    { metric: 'RECEIPT_AMOUNT', label: '回款额', unit: '元' },
   ].map((g) => ({
     ...g,
+    actual:
+      g.metric === 'SALES_AMOUNT'
+        ? metric('sales_amount')
+        : g.metric === 'RECEIPT_AMOUNT'
+          ? personalReceipts.value
+          : g.metric === 'ORDERED_STORE_COUNT'
+            ? customers.value.customers
+            : (props.detail?.current.salesTargetCompletions?.find(
+                (item) => item.dimensionCode === props.selectedCode && item.metricCode === g.metric,
+              )?.actualValue ?? null),
     ...personalGoal(props.detail?.sales, props.selectedCode, g.metric, month.value),
   })),
 )

@@ -83,10 +83,10 @@ describe('validateNavigation 自定义页面宽松、静态路由失败关闭', 
     expect(result[0].children.map((item) => item.id)).toEqual(['child'])
   })
 
-  it('未注册的静态 routeKey 仍然失败关闭', () => {
-    expect(() => validateNavigation([
+  it('未注册的静态 routeKey 被剔除，不获得访问路径', () => {
+    expect(validateNavigation([
       node({ componentPath: null, routeKey: 'system.script.injected', routePath: '/system-admin/users' }),
-    ])).toThrow('未注册或路径不一致')
+    ])).toEqual([])
   })
 })
 
