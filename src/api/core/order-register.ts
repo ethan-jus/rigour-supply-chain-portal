@@ -223,6 +223,7 @@ export interface PaymentProductAllocation {
 }
 
 export interface OrderRegisterPaymentItem {
+  voucherTransactionNos?: string[]
   allocatedPaymentAmount?: number | null
   productAllocations?: PaymentProductAllocation[]
   id: string
@@ -607,3 +608,34 @@ export interface MonthlyPerformanceReport {
 }
 export const getMonthlyPerformance = (params: { monthFrom: string; monthTo: string }) =>
   apiClient.get<MonthlyPerformanceReport>(`${ORDER_REGISTER_BASE_PATH}/statistics/monthly-performance`, { params, ...readOptions })
+
+/** 按图片记录的凭证信息；voucherAmount 不参与回款汇总。 */
+export interface PaymentVoucherTransaction {
+  voucherKey: string
+  voucherAmount: number | null
+  transactionNo: string | null
+  evidenceNote: string | null
+  url: string | null
+}
+export interface PaymentTransactionMatch {
+  paymentId: string
+  paymentNo: string
+  orderNo: string | null
+  customerName: string | null
+  salesperson: string | null
+  paidAmount: number | null
+  paymentTime: string | null
+  paymentStatusCode: string | null
+  deleted: boolean
+  voucherKey: string | null
+  voucherAmount: number | null
+  evidenceNote: string | null
+}
+export const getPaymentVoucherTransactions = (id: string) =>
+  apiClient.get<PaymentVoucherTransaction[]>(
+    `${ORDER_REGISTER_BASE_PATH}/payments/${encodeURIComponent(id)}/voucher-transactions`, readOptions)
+
+export const checkPaymentTransaction = (transactionNo: string) =>
+  apiClient.get<PaymentTransactionMatch[]>(`${ORDER_REGISTER_BASE_PATH}/payments/transaction-check`, {
+    params: { transactionNo }, ...readOptions,
+  })

@@ -1,23 +1,5 @@
 import { apiClient } from './client'
 
-export type BiTargetDimension = 'CITY' | 'SALES_OWNER'
-export type BiTargetMetric = 'SALES_AMOUNT' | 'PAID_AMOUNT' | 'RECEIPT_AMOUNT' | 'CONTACTED_CUSTOMER' | 'COOPERATED_CUSTOMER' | 'NEW_CUSTOMER' | 'REPEAT_CUSTOMER'
-export interface BiTargetCommand {
-  month: string
-  dimensionType: BiTargetDimension
-  dimensionCode: string
-  dimensionName: string
-  metricCode: BiTargetMetric
-  targetValue: string
-  remark: string | null
-  expectedRevision: number
-}
-export interface BiTarget extends Omit<BiTargetCommand, 'expectedRevision' | 'targetValue'> {
-  id: string
-  revision: number
-  targetValue: number | string
-  updatedAt: string
-}
 export type BiActionKind = 'COLLECTION' | 'CUSTOMER' | 'STOCK'
 export type BiActionStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'DISMISSED'
 export interface BiActionSeed {
@@ -59,7 +41,12 @@ export interface BiActionQuery {
   page?: number
   pageSize?: number
 }
-export interface BiActionPage { items: BiAction[]; total: number; page: number; pageSize: number }
+export interface BiActionPage {
+  items: BiAction[]
+  total: number
+  page: number
+  pageSize: number
+}
 export interface BiActionEvent {
   id: string
   actionId: string
@@ -76,12 +63,6 @@ export interface BiActionEvent {
 }
 const root = '/analytics/supply/dashboard'
 const options = { stayOnUnauthorized: true }
-export const getBiTargets = (params: { month: string; dimensionType?: BiTargetDimension; dimensionCode?: string }) =>
-  apiClient.get<BiTarget[], BiTarget[]>(`${root}/targets`, { ...options, params })
-export const saveBiTarget = (command: BiTargetCommand) =>
-  apiClient.put<BiTarget, BiTarget>(`${root}/targets`, command, options)
-export const deleteBiTarget = (id: string, revision: number) =>
-  apiClient.delete<void, void>(`${root}/targets/${encodeURIComponent(id)}`, { ...options, params: { revision } })
 export const getBiActions = (params: BiActionQuery) =>
   apiClient.get<BiActionPage, BiActionPage>(`${root}/actions`, { ...options, params })
 export const createBiAction = (command: BiActionCommand) =>
@@ -89,4 +70,7 @@ export const createBiAction = (command: BiActionCommand) =>
 export const updateBiAction = (id: string, command: BiActionUpdate) =>
   apiClient.put<BiAction, BiAction>(`${root}/actions/${encodeURIComponent(id)}`, command, options)
 export const getBiActionEvents = (id: string) =>
-  apiClient.get<BiActionEvent[], BiActionEvent[]>(`${root}/actions/${encodeURIComponent(id)}/events`, options)
+  apiClient.get<BiActionEvent[], BiActionEvent[]>(
+    `${root}/actions/${encodeURIComponent(id)}/events`,
+    options,
+  )

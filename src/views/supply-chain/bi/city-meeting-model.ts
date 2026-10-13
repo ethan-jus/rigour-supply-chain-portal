@@ -1,3 +1,4 @@
+import { personalGoal } from './sales-dashboard-model'
 import { aggregateGoals } from './overview-model'
 import { businessDate } from '@/utils/business-date'
 import type { MeetingSnapshot } from './meeting-model'
@@ -124,7 +125,6 @@ export function citySalesRows(snapshot: MeetingSnapshot | null, receipt: boolean
     ...receipts.keys(),
     ...targets.map((row) => row.dimensionCode),
   ])
-  const months = annual ? 12 : 1
   return [...codes]
     .filter((code) => !['', 'UNKNOWN', 'MULTI'].includes(code.trim().toUpperCase()))
     .map((code) => {
@@ -136,12 +136,24 @@ export function citySalesRows(snapshot: MeetingSnapshot | null, receipt: boolean
           row.metricCode === (receipt ? 'RECEIPT_AMOUNT' : 'SALES_AMOUNT'),
       )
       const configuredValue = finite(configured?.targetValue)
-      const configuredMonths =
-        configuredValue == null
-          ? 0
-          : Math.max(0, Math.min(months, configured?.configuredMonthCount ?? months))
-      const defaultMonths = months - configuredMonths
-      const target = (configuredValue ?? 0) + defaultMonths * (receipt ? 20000 : 40000)
+      const effective = snapshot.personalGoals
+        ? personalGoal(
+            snapshot.personalGoals,
+            code,
+            receipt ? 'RECEIPT_AMOUNT' : 'SALES_AMOUNT',
+            annual
+              ? null
+              : Number(businessDate(snapshot.query.from || snapshot.current.from).slice(5, 7)),
+          )
+        : null
+      const target =
+        snapshot.personalGoals === null
+          ? null
+          : effective
+            ? effective.value
+            : configured?.periodMonthCount === (annual ? 12 : 1)
+              ? configuredValue
+              : null
       return {
         code,
         name:
@@ -171,7 +183,6 @@ export function citySalesRows(snapshot: MeetingSnapshot | null, receipt: boolean
           : null,
         paid: paidReady ? (order ? finite(order.paidAmount) : 0) : null,
         target,
-        defaultMonths,
       }
     })
     .filter((row) => !(row.employmentStatus === 'LEFT' && row.amount === 0))

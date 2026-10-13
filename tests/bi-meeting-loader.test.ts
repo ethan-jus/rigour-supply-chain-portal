@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   overview: vi.fn(),
   trust: vi.fn(),
   analysis: vi.fn(),
+  personalGoals: vi.fn(),
 }))
+vi.mock('@/api/core/bi-sales-dashboard', () => ({ getSalesDashboardAnalysis: mocks.personalGoals }))
 vi.mock('@/api/core/bi-access', () => ({ getBiEffectiveScope: mocks.access }))
 vi.mock('@/api/core/bi', () => ({
   getSupplyDashboardOverview: mocks.overview,
@@ -55,6 +57,7 @@ beforeEach(() => {
     query.from.includes('2026-09') ? meetingFixture().current : meetingFixture().previous,
   )
   mocks.trust.mockResolvedValue(null)
+  mocks.personalGoals.mockResolvedValue({ goals: [] })
 })
 afterEach(() => vi.useRealTimers())
 describe('会议数据加载与隔离', () => {

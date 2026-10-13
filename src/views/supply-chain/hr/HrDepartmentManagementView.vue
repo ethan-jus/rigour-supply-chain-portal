@@ -85,9 +85,7 @@
         >
         <el-table-column label="创建人" min-width="140" show-overflow-tooltip
           ><template #default="{ row }"
-            ><span>{{
-              actorLabel(row.createdByName, row.createdBy)
-            }}</span></template
+            ><span>{{ actorLabel(row.createdByName, row.createdBy) }}</span></template
           ></el-table-column
         >
         <el-table-column label="修改时间" min-width="180"
@@ -97,9 +95,7 @@
         >
         <el-table-column label="修改人" min-width="140" show-overflow-tooltip
           ><template #default="{ row }"
-            ><span>{{
-              actorLabel(row.updatedByName, row.updatedBy)
-            }}</span></template
+            ><span>{{ actorLabel(row.updatedByName, row.updatedBy) }}</span></template
           ></el-table-column
         >
         <!-- @vue-generic {DepartmentNode} -->

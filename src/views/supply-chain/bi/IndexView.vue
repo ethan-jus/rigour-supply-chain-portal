@@ -483,14 +483,11 @@
     >
       <BiOperationsWorkbench
         v-if="operationsVisible"
-        :initial-tab="operationsTab"
-        :month="(appliedFilters.dateRange?.[1] || dateText(new Date())).slice(0, 7)"
         :region-code="operationsScope.regionCode"
         :owner-staff-code="operationsScope.ownerStaffCode"
         :regions="cityProductReportOptions.region"
         :sales-owners="cityProductReportOptions.owner"
         :action-seed="actionSeed"
-        @changed="operationsChanged"
         @open-business="openActionBusiness"
       />
     </el-drawer>
@@ -973,20 +970,19 @@ function openCityProductReport(row?: DetailRow) {
   cityProductReportVisible.value = true
 }
 const operationsVisible = ref(false)
-const operationsTab = ref<'actions' | 'targets'>('actions')
 const actionSeed = ref<BiActionSeed | null>(null)
 const operationsScope = ref({ regionCode: '', ownerStaffCode: '' })
 function openOperations(tab: 'actions' | 'targets', row?: DetailRow) {
+  if (tab === 'targets') {
+    void router.push('/supply-chain/hr/target-settings')
+    return
+  }
   actionSeed.value = null
   operationsScope.value = {
     regionCode: row?.regionCode || appliedFilters.value.regionCode,
     ownerStaffCode: row?.ownerStaffCode || appliedFilters.value.ownerStaffCode,
   }
-  operationsTab.value = tab
   operationsVisible.value = true
-}
-function operationsChanged(event: { type: 'actions' | 'targets' }) {
-  if (event.type === 'targets') void refreshDashboard()
 }
 function canRegisterFollowup(row: DetailRow) {
   return (
@@ -1016,7 +1012,6 @@ function registerFollowup(row: DetailRow) {
     employeeCode: row.ownerStaffCode,
     assignee: row.ownerStaffCode,
   }
-  operationsTab.value = 'actions'
   detailVisible.value = false
   operationsVisible.value = true
 }
@@ -1658,9 +1653,6 @@ function queryFor(value: Filters): SupplyDashboardQuery {
         : undefined,
     sourceSystemCode: value.sourceSystemCode || undefined,
   }
-}
-function dateText(value: Date) {
-  return businessDate(value)
 }
 function currentRange(period: string) {
   return businessPeriodRange(period)

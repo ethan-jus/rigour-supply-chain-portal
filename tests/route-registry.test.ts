@@ -259,7 +259,7 @@ describe('数据库导航注册表', () => {
       'supply.hr.payroll', 'supply.hr.performance-rules',
     ]))
     expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(13)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(80)
+    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(81)
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))

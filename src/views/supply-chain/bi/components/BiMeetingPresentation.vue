@@ -52,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+import { getSalesDashboardAnalysis } from '@/api/core/bi-sales-dashboard'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   getSupplyDashboardOverview,
@@ -222,11 +223,6 @@ async function selectCity(code: string) {
   const request = ++sequence
   regionCode.value = code
   error.value = ''
-  if (code === snapshot.value?.query.regionCode) {
-    citySnapshot.value = snapshot.value
-    loading.value = false
-    return
-  }
   citySnapshot.value = null
   loading.value = true
   try {
@@ -239,15 +235,19 @@ async function selectCity(code: string) {
     if (!snapshot.value) return
     const query = { ...snapshot.value.query, regionCode: code }
     const previousQuery = { ...snapshot.value.previousQuery, regionCode: code }
-    const [current, previous, analysis, previousAnalysis] = await Promise.allSettled([
-      getSupplyDashboardOverview(query),
-      getSupplyDashboardOverview(previousQuery),
-      getSupplyDashboardOperatingAnalysis(query),
-      getSupplyDashboardOperatingAnalysis(previousQuery),
-    ])
+    const [current, previous, analysis, previousAnalysis, personalGoals] = await Promise.allSettled(
+      [
+        getSupplyDashboardOverview(query),
+        getSupplyDashboardOverview(previousQuery),
+        getSupplyDashboardOperatingAnalysis(query),
+        getSupplyDashboardOperatingAnalysis(previousQuery),
+        getSalesDashboardAnalysis(query),
+      ],
+    )
     if (request !== sequence) return
     if (current.status === 'rejected') throw current.reason
     citySnapshot.value = {
+      personalGoals: personalGoals.status === 'fulfilled' ? personalGoals.value : null,
       current: current.value,
       previous: previous.status === 'fulfilled' ? previous.value : null,
       query,

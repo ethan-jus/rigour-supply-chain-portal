@@ -2,6 +2,8 @@
   <div class="order-register-page supply-page supply-page--business-main">
     <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="resetFilters">
       <template #actions>
+        <el-button plain @click="auditVisible = true">回款凭证核查</el-button>
+        <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
         <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
         <TableColumnSettings
           plain
@@ -306,7 +308,11 @@
             width="280"
             show-overflow-tooltip
           >
-            <template #default="{ row }">{{ row.transactionNo || '-' }}</template>
+            <template #default="{ row }">
+              <div v-for="number in [...new Set([row.transactionNo, ...(row.voucherTransactionNos || [])].filter(Boolean))]" :key="number">
+                <el-button link type="primary" @click="voucherTarget = row as OrderRegisterPaymentItem; voucherVisible = true">{{ number }}</el-button>
+              </div>
+            </template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('createdBy')" label="创建人" width="110" show-overflow-tooltip>
             <template #header>
@@ -401,6 +407,9 @@
       </div>
     </el-card>
 
+    <PaymentVoucherAuditDialog v-model="auditVisible" />
+    <PaymentTransactionCheckDialog v-model="transactionCheckVisible" />
+    <PaymentVoucherTransactionsDialog v-model="voucherVisible" :payment="voucherTarget" />
     <PaymentCheckDialog v-model="checkVisible" :payment="checkTarget" @checked="onChecked" />
     <PaymentDetailDrawer v-model="paymentDetailVisible" :payment="selectedPayment" />
     <OrderRegisterDetailDrawer v-model="detailVisible" :order-id="detailOrderId" />
@@ -415,6 +424,9 @@ import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import PaymentDetailDrawer from './components/PaymentDetailDrawer.vue'
 import PaymentCheckDialog from './components/PaymentCheckDialog.vue'
+import PaymentTransactionCheckDialog from './components/PaymentTransactionCheckDialog.vue'
+import PaymentVoucherAuditDialog from './components/PaymentVoucherAuditDialog.vue'
+import PaymentVoucherTransactionsDialog from './components/PaymentVoucherTransactionsDialog.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
 import FundAttachmentThumbnails from '@/components/supply/FundAttachmentThumbnails.vue'
 import { displayDateTime } from '@/utils/business-date'
@@ -440,6 +452,10 @@ import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
 import { useOrderProductFilters } from '@/composables/useOrderProductFilters'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
+const auditVisible = ref(false)
+const transactionCheckVisible = ref(false)
+const voucherVisible = ref(false)
+const voucherTarget = ref<OrderRegisterPaymentItem | null>(null)
 const route = useRoute()
 const paymentColumns = useColumnSettings('order-payments', [
   { key: 'customerName', label: '客户名称', locked: true },
