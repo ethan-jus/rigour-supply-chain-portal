@@ -184,7 +184,7 @@ describe('供应链工作台', () => {
     expect(wrapper.text()).not.toContain('不应显示的客户')
     expect(wrapper.text()).not.toContain('999')
   })
-  it('waits for Shell navigation, retries failures and retains route validation', async () => {
+  it('waits for Shell navigation, retries failures and ignores unregistered routes', async () => {
     const { wrapper, navigation } = await render(null)
     expect(wrapper.text()).toContain('业务入口尚未加载')
     expect(mocks.get).not.toHaveBeenCalled()
@@ -200,8 +200,9 @@ describe('供应链工作台', () => {
     mocks.get.mockResolvedValueOnce([node('unknown', '非法页面', '/unregistered')])
     await wrapper.get('.home-state button').trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('业务入口加载失败')
+    expect(wrapper.text()).toContain('暂无已授权的业务入口')
     expect(wrapper.text()).not.toContain('非法页面')
+    expect(wrapper.find('a').exists()).toBe(false)
   })
   it('collapses the secondary column, reopens modules and searches the same authorized tree with keyboard navigation', async () => {
     const nodes = [home, node('supply.order.menu', '订单管理', null, [order, payments])]
