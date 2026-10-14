@@ -2,6 +2,7 @@ import { apiClient } from './client'
 import type { CostEmployee, CostAudit } from './cost'
 export type PayrollRuleKind = 'BASE' | 'COMMISSION' | 'PERFORMANCE' | 'ALLOWANCE' | 'CITY_MANAGER'
 export interface PayrollRuleCommand {
+  cityCommission?: CityCommissionPolicy | null
   requestId: string
   revision: number | null
   name: string
@@ -9,12 +10,14 @@ export interface PayrollRuleCommand {
   employeeCode: string | null
   cityCode: string | null
   cityName: string | null
-  includeOwnSalesCommission: boolean
+  includeOwnSalesCommission: boolean | null
   departmentIds: number[]
   productId: string | null
   productVariantId: string | null
   productName: string | null
   unitCode: string | null
+  categoryId?: number | null
+  categoryName?: string | null
   groupCode: string | null
   recipientRoleCode: string | null
   methodCode: string | null
@@ -31,6 +34,21 @@ export interface PayrollRuleCommand {
     phoneAllowance: number
     computerAllowance: number
   } | null
+}
+export interface CityProductRule {
+  productId: string
+  productVariantId: string
+  productName: string
+  unitCode: string
+  categoryId: number
+  categoryName: string
+  methodCode: string
+  rate: number
+}
+export interface CityCommissionPolicy {
+  teamPercent: number
+  /** null 沿用部门标准；空数组不计独立商品提成。 */
+  products: CityProductRule[] | null
 }
 export interface PerformancePolicy {
   mode: string
@@ -83,6 +101,7 @@ export interface PayrollInput {
 }
 export interface PayrollDetail {
   sourceLineId: string
+  sourceEmployeeCode?: string | null
   recipientRoleCode: string
   orderNo: string
   productName: string
@@ -136,7 +155,15 @@ export interface PayrollRecord {
   correctionsIssued?: PayrollCorrection[]
   updatedTime: string
 }
+export interface PayrollCategory {
+  id: number
+  parentId: number | null
+  name: string
+  sortOrder: number
+}
 export interface PayrollProduct {
+  categoryId: number | null
+  categoryName: string | null
   productId: string
   productVariantId: string
   productCode: string
@@ -171,13 +198,28 @@ export const savePayrollRule = (id: string | null, command: PayrollRuleCommand) 
   id
     ? apiClient.put<PayrollRule>(`${base}/rules/${encodeURIComponent(id)}`, command, options)
     : apiClient.post<PayrollRule>(`${base}/rules`, command, options)
+export const createCityManagerRules = (commands: PayrollRuleCommand[]) =>
+  apiClient.post<PayrollRule[]>(`${base}/rules/city-managers`, commands, options)
 export interface PayrollEmployee extends CostEmployee {
   payrollCategory: string | null
 }
 export const getPayrollEmployees = (forRules = false) =>
   apiClient.get<PayrollEmployee[]>(`${base}/${forRules ? 'rule-employees' : 'employees'}`, options)
-export const getPayrollProducts = (keyword: string) =>
-  apiClient.get<PayrollProduct[]>(`${base}/products`, { params: { keyword }, ...options })
+export const getPayrollProducts = (
+  keyword: string,
+  categoryId?: number | null,
+  productVariantId?: string | null,
+) =>
+  apiClient.get<PayrollProduct[]>(`${base}/products`, {
+    params: {
+      keyword,
+      categoryId: categoryId ?? undefined,
+      productVariantId: productVariantId ?? undefined,
+    },
+    ...options,
+  })
+export const getPayrollProductCategories = () =>
+  apiClient.get<PayrollCategory[]>(`${base}/product-categories`, options)
 export const getPayroll = (params: PayrollQuery) =>
   apiClient.get<PayrollPage<PayrollRecord>>(base, { params, ...options })
 export const calculatePayroll = (month: string, employeeCodes: string[]) =>
@@ -210,15 +252,6 @@ export const changePayrollStatus = (
 export const getPayrollHistory = (id: string) =>
   apiClient.get<CostAudit[]>(`${base}/${encodeURIComponent(id)}/history`, options)
 
-export interface CommissionPolicy {
-  code: string
-  name: string
-  methodCode: string
-  salesRate: number
-  managerRate: number
-}
-export const getCommissionPolicies = () =>
-  apiClient.get<CommissionPolicy[]>(`${base}/commission-policies`, options)
 export interface PayrollDepartment {
   id: number
   parentId: number | null

@@ -3,7 +3,12 @@ export type CostCategory = 'logistics' | 'marketing' | 'warehouse-rentals' | 'ex
 export interface CostQuery {
   begin: number
   step: number
-  keyword?: string
+  documentNo?: string
+  title?: string
+  remark?: string
+  trackingNo?: string
+  sourceDocumentNo?: string
+  contractNo?: string
   typeCode?: string
   cityCode?: string
   statusCode?: string

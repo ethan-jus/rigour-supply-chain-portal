@@ -75,6 +75,78 @@ describe('cost management workflow', () => {
     )
     expect(wrapper!.findAll('button').some((button) => /新增/.test(button.text()))).toBe(false)
   })
+  it.each(['expenses', 'marketing', 'warehouse-rentals', 'logistics'] as const)(
+    'submits independent document, title, remark and date filters for %s',
+    async (category) => {
+      state.route.path =
+        category === 'expenses' ? '/supply-chain/hr/expenses' : `/supply-chain/cost/${category}`
+      await render()
+      await wrapper!.get('input[aria-label="费用单号"]').setValue(' DOC-1 ')
+      await wrapper!.get('input[aria-label="费用事项"]').setValue(' 差旅 ')
+      await wrapper!.get('input[aria-label="备注"]').setValue(' 发票 ')
+      const dates = wrapper!.findAllComponents({ name: 'ElDatePicker' })
+      dates
+        .find((picker) => picker.props('ariaLabel') === '费用开始日期')!
+        .vm.$emit('update:modelValue', '2026-10-01')
+      dates
+        .find((picker) => picker.props('ariaLabel') === '费用截止日期')!
+        .vm.$emit('update:modelValue', '2026-10-13')
+      await wrapper!.get('.supply-list-filters form').trigger('submit')
+      await flushPromises()
+      expect(getCosts).toHaveBeenLastCalledWith(category, {
+        documentNo: 'DOC-1',
+        title: '差旅',
+        remark: '发票',
+        dateFrom: '2026-10-01',
+        dateTo: '2026-10-13',
+        begin: 0,
+        step: 20,
+      })
+      expect(wrapper!.find('input[aria-label="关键词"]').exists()).toBe(false)
+      await wrapper!
+        .findAll('button')
+        .find((button) => button.text() === '重置')!
+        .trigger('click')
+      await flushPromises()
+      expect(getCosts).toHaveBeenLastCalledWith(category, { begin: 0, step: 20 })
+    },
+  )
+  it('keeps applied filters during pagination and does not double query after resetting the page', async () => {
+    vi.mocked(getCosts).mockResolvedValue({ ...empty, total: 45 })
+    await render()
+    await wrapper!.get('input[aria-label="费用事项"]').setValue('未提交')
+    await wrapper!.get('.el-pagination .btn-next').trigger('click')
+    await flushPromises()
+    expect(getCosts).toHaveBeenLastCalledWith('logistics', { begin: 20, step: 20 })
+    vi.mocked(getCosts).mockClear()
+    await wrapper!.get('.supply-list-filters form').trigger('submit')
+    await flushPromises()
+    expect(getCosts).toHaveBeenCalledTimes(1)
+    expect(getCosts).toHaveBeenLastCalledWith('logistics', { begin: 0, step: 20, title: '未提交' })
+  })
+  it('does not carry logistics-only filters to a different cost category', async () => {
+    await render()
+    await wrapper!.get('input[aria-label="运单号"]').setValue('WAY-1')
+    await wrapper!.get('input[aria-label="来源单号"]').setValue('SRC-1')
+    await wrapper!.get('.supply-list-filters form').trigger('submit')
+    await flushPromises()
+    expect(getCosts).toHaveBeenLastCalledWith(
+      'logistics',
+      expect.objectContaining({ trackingNo: 'WAY-1', sourceDocumentNo: 'SRC-1' }),
+    )
+    state.route.path = '/supply-chain/cost/warehouse-rentals'
+    await flushPromises()
+    expect(getCosts).toHaveBeenLastCalledWith('warehouse-rentals', { begin: 0, step: 20 })
+    expect(wrapper!.find('input[aria-label="运单号"]').exists()).toBe(false)
+    await wrapper!.get('input[aria-label="租赁合同号"]').setValue('LEASE-1')
+    await wrapper!.get('.supply-list-filters form').trigger('submit')
+    await flushPromises()
+    expect(getCosts).toHaveBeenLastCalledWith('warehouse-rentals', {
+      begin: 0,
+      step: 20,
+      contractNo: 'LEASE-1',
+    })
+  })
   it('shows query failures as errors and clears stale records', async () => {
     vi.mocked(getCosts).mockRejectedValue(new Error('费用查询服务不可用'))
     await render()

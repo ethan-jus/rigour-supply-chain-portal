@@ -61,6 +61,26 @@ describe('cost service contracts', () => {
       expect.objectContaining({ params: expect.objectContaining({ employeeCode: 'E1' }) }),
     )
   })
+  it.each(['expenses', 'marketing', 'warehouse-rentals', 'logistics'] as const)(
+    'preserves individual query fields for %s',
+    async (category) => {
+      vi.mocked(apiClient.get).mockResolvedValue({ begin: 0, step: 20, total: 0, items: [] })
+      const filters = {
+        begin: 0,
+        step: 20,
+        documentNo: 'DOC-1',
+        title: '差旅',
+        remark: '发票',
+        dateFrom: '2026-10-01',
+      }
+      await getCosts(category, filters)
+      expect(apiClient.get).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ params: expect.objectContaining(filters) }),
+      )
+      expect(vi.mocked(apiClient.get).mock.calls[0][1]?.params).not.toHaveProperty('keyword')
+    },
+  )
   it('sends the visible revision when confirming, so stale pages cannot silently overwrite', async () => {
     await changeCostStatus(
       'logistics',

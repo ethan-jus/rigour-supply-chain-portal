@@ -1,5 +1,5 @@
 <template>
-  <div class="supply-page supply-page--business-main cost-page">
+  <div class="supply-page supply-page--list supply-page--filtered-list cost-page">
     <div class="page-heading">
       <div>
         <SupplyPageTitle>{{ title }}</SupplyPageTitle>
@@ -10,193 +10,264 @@
       >
     </div>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
-    <el-card shadow="never" class="filter-card">
-      <el-form inline @submit.prevent="search">
-        <el-form-item
-          ><el-input
-            v-model="filters.keyword"
-            clearable
-            placeholder="单号 / 费用事项 / 备注"
-            aria-label="关键词"
-            @keyup.enter="search"
-        /></el-form-item>
-        <el-form-item v-if="typeDictionary"
-          ><CostDictSelect
-            v-model="filters.typeCode"
-            :code="typeDictionary"
-            clearable
-            placeholder="全部类型"
-        /></el-form-item>
-        <el-form-item
-          ><el-select v-model="filters.cityCode" clearable filterable placeholder="归属城市"
-            ><el-option
-              v-for="city in cities"
-              :key="city.code"
-              :label="city.name"
-              :value="city.code" /></el-select
-        ></el-form-item>
-        <el-form-item
-          ><CostDictSelect
-            v-model="filters.statusCode"
-            code="COST_STATUS"
-            clearable
-            placeholder="确认状态"
-        /></el-form-item>
-        <el-form-item
-          ><CostDictSelect
-            v-model="filters.paymentStatusCode"
-            code="COST_PAYMENT_STATUS"
-            clearable
-            placeholder="付款状态"
-        /></el-form-item>
-        <el-form-item v-if="hasEmployee"
-          ><el-select
-            v-model="filters.ownerEmployeeCode"
-            filterable
-            clearable
-            placeholder="费用归属人"
-            ><el-option
-              v-for="e in employees"
-              :key="e.employeeCode"
-              :label="employeeLabel(e)"
-              :value="e.employeeCode" /></el-select
-        ></el-form-item>
-        <el-form-item v-if="category === 'warehouse-rentals'"
-          ><el-select v-model="filters.warehouseId" filterable clearable placeholder="所属仓库"
-            ><el-option
-              v-for="w in warehouses"
-              :key="w.value"
-              :label="w.label"
-              :value="w.value" /></el-select
-        ></el-form-item>
-        <el-form-item
-          ><el-date-picker
-            v-model="dates"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            start-placeholder="费用开始日期"
-            end-placeholder="截止日期"
-        /></el-form-item>
-        <el-form-item
-          ><el-button type="primary" :loading="loading" @click="search">查询</el-button
-          ><el-button @click="reset">重置</el-button></el-form-item
-        >
-      </el-form>
-    </el-card>
-    <div class="result-heading">
-      <span
-        >共 {{ page.total }} 条<span v-if="page.confirmedAmount != null">
-          · 已确认成本 ¥{{ costMoney(page.confirmedAmount) }} · 已付款 ¥{{
-            costMoney(page.paidAmount)
-          }}
-          · 待确认 {{ page.pendingCount }} 条</span
-        ></span
+    <SupplyListFilters :loading="loading" @search="search" @reset="reset">
+      <el-form-item label="费用单号">
+        <el-input
+          v-model="filters.documentNo"
+          clearable
+          maxlength="100"
+          placeholder="请输入费用单号"
+          aria-label="费用单号"
+        />
+      </el-form-item>
+      <el-form-item label="费用事项">
+        <el-input
+          v-model="filters.title"
+          clearable
+          maxlength="200"
+          placeholder="请输入费用事项"
+          aria-label="费用事项"
+        />
+      </el-form-item>
+      <el-form-item label="备注">
+        <el-input
+          v-model="filters.remark"
+          clearable
+          maxlength="1000"
+          placeholder="请输入备注内容"
+          aria-label="备注"
+        />
+      </el-form-item>
+      <el-form-item
+        v-if="typeDictionary"
+        :label="category === 'logistics' ? '物流类型' : '费用类型'"
       >
-      <div>
-        <el-button :disabled="!page.items.length" @click="exportPage">导出当前页</el-button
-        ><el-button :loading="loading" @click="load">刷新</el-button>
-      </div>
-    </div>
-    <el-card shadow="never" class="list-card"
-      ><div class="table-viewport">
-        <el-table
-          v-loading="loading"
-          :data="page.items"
-          row-key="id"
-          border
-          class="business-table supply-scroll-table"
+        <CostDictSelect
+          v-model="filters.typeCode"
+          :code="typeDictionary"
+          clearable
+          placeholder="全部类型"
+          :aria-label="category === 'logistics' ? '物流类型' : '费用类型'"
+        />
+      </el-form-item>
+      <el-form-item label="归属城市">
+        <el-select
+          v-model="filters.cityCode"
+          clearable
+          filterable
+          placeholder="全部城市"
+          aria-label="归属城市"
         >
-          <el-table-column label="费用单号" width="200" fixed="left"
-            ><template #default="{ row }"
-              ><el-button link type="primary" @click="showDetail(row as CostRecord)">{{
-                row.documentNo
-              }}</el-button></template
-            ></el-table-column
-          >
-          <el-table-column
-            prop="data.title"
-            label="费用事项"
-            min-width="190"
-            show-overflow-tooltip
+          <el-option
+            v-for="city in cities"
+            :key="city.code"
+            :label="city.name"
+            :value="city.code"
           />
-          <el-table-column v-if="typeDictionary" label="类型" width="180"
-            ><template #default="{ row }">{{
-              costLabel(typeDictionary, row.data.logistics?.legCode || row.data.typeCode)
-            }}</template></el-table-column
-          >
-          <el-table-column prop="data.cityName" label="归属城市" width="120" />
-          <el-table-column v-if="hasEmployee" prop="ownerEmployeeName" label="归属人" width="120" />
-          <el-table-column
-            v-if="category === 'warehouse-rentals'"
-            prop="warehouseName"
-            label="仓库"
-            width="160"
+        </el-select>
+      </el-form-item>
+      <el-form-item v-if="hasEmployee" label="费用归属人">
+        <el-select
+          v-model="filters.ownerEmployeeCode"
+          filterable
+          clearable
+          placeholder="全部归属人"
+          aria-label="费用归属人"
+        >
+          <el-option
+            v-for="e in employees"
+            :key="e.employeeCode"
+            :label="employeeLabel(e)"
+            :value="e.employeeCode"
           />
-          <el-table-column prop="data.costDate" label="费用日期" width="115" />
-          <el-table-column label="金额（元）" width="135" align="right"
-            ><template #default="{ row }">{{
-              costMoney(row.data.amount)
-            }}</template></el-table-column
-          >
-          <el-table-column v-if="category === 'logistics'" label="承担方" width="100"
-            ><template #default="{ row }">{{
-              costLabel('COST_PAYER', row.data.logistics?.payerCode)
-            }}</template></el-table-column
-          >
-          <el-table-column label="付款状态" width="100"
-            ><template #default="{ row }">{{
-              costLabel('COST_PAYMENT_STATUS', row.data.paymentStatusCode)
-            }}</template></el-table-column
-          >
-          <el-table-column label="确认状态" width="100"
-            ><template #default="{ row }"
-              ><el-tag
-                :type="
-                  row.statusCode === 'CONFIRMED'
-                    ? 'success'
-                    : row.statusCode === 'VOID'
-                      ? 'info'
-                      : 'warning'
-                "
-                >{{ costLabel('COST_STATUS', row.statusCode) }}</el-tag
-              ></template
-            ></el-table-column
-          >
-          <el-table-column label="操作" fixed="right" width="205"
-            ><template #default="{ row }"
-              ><el-button
-                v-if="row.statusCode !== 'VOID' && can(permission + ':write')"
-                link
-                type="primary"
-                @click="edit(row as CostRecord)"
-                >编辑</el-button
-              ><el-button
-                v-if="row.statusCode === 'DRAFT' && can(permission + ':confirm')"
-                link
-                type="primary"
-                :disabled="saving"
-                @click="transition(row as CostRecord, 'confirm')"
-                >确认</el-button
-              ><el-button
-                v-if="row.statusCode !== 'VOID' && can(permission + ':void')"
-                link
-                type="danger"
-                :disabled="saving"
-                @click="transition(row as CostRecord, 'void')"
-                >作废</el-button
-              ><el-button link @click="showHistory(row as CostRecord)">记录</el-button></template
-            ></el-table-column
-          >
-        </el-table>
+        </el-select>
+      </el-form-item>
+      <el-form-item v-if="category === 'warehouse-rentals'" label="所属仓库">
+        <el-select
+          v-model="filters.warehouseId"
+          filterable
+          clearable
+          placeholder="全部仓库"
+          aria-label="所属仓库"
+        >
+          <el-option v-for="w in warehouses" :key="w.value" :label="w.label" :value="w.value" />
+        </el-select>
+      </el-form-item>
+      <el-form-item v-if="category === 'warehouse-rentals'" label="租赁合同号">
+        <el-input
+          v-model="filters.contractNo"
+          clearable
+          maxlength="100"
+          placeholder="请输入租赁合同号"
+          aria-label="租赁合同号"
+        />
+      </el-form-item>
+      <el-form-item v-if="category === 'logistics'" label="运单号">
+        <el-input
+          v-model="filters.trackingNo"
+          clearable
+          maxlength="100"
+          placeholder="请输入运单号"
+          aria-label="运单号"
+        />
+      </el-form-item>
+      <el-form-item v-if="category === 'logistics'" label="来源单号">
+        <el-input
+          v-model="filters.sourceDocumentNo"
+          clearable
+          maxlength="100"
+          placeholder="请输入来源单号"
+          aria-label="来源单号"
+        />
+      </el-form-item>
+      <el-form-item label="确认状态">
+        <CostDictSelect
+          v-model="filters.statusCode"
+          code="COST_STATUS"
+          clearable
+          placeholder="全部确认状态"
+          aria-label="确认状态"
+        />
+      </el-form-item>
+      <el-form-item label="付款状态">
+        <CostDictSelect
+          v-model="filters.paymentStatusCode"
+          code="COST_PAYMENT_STATUS"
+          clearable
+          placeholder="全部付款状态"
+          aria-label="付款状态"
+        />
+      </el-form-item>
+      <el-form-item label="费用开始日期">
+        <el-date-picker
+          v-model="filters.dateFrom"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="选择开始日期"
+          aria-label="费用开始日期"
+        />
+      </el-form-item>
+      <el-form-item label="费用截止日期">
+        <el-date-picker
+          v-model="filters.dateTo"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="选择截止日期"
+          aria-label="费用截止日期"
+        />
+      </el-form-item>
+    </SupplyListFilters>
+    <el-card shadow="never" class="list-card">
+      <div class="supply-list-toolbar">
+        <span v-if="!loadError"
+          >共 {{ page.total }} 条<span v-if="page.confirmedAmount != null">
+            · 已确认成本 ¥{{ costMoney(page.confirmedAmount) }} · 已付款 ¥{{
+              costMoney(page.paidAmount)
+            }}
+            · 待确认 {{ page.pendingCount }} 条</span
+          ></span
+        >
+        <span v-else>查询失败，请重试</span>
+        <div class="supply-list-actions">
+          <el-button :disabled="loading || !page.items.length" @click="exportPage"
+            >导出当前页</el-button
+          ><el-button :loading="loading" @click="load">刷新</el-button>
+        </div>
       </div>
+      <el-table
+        v-loading="loading"
+        :data="page.items"
+        row-key="id"
+        height="100%"
+        border
+        class="business-table supply-scroll-table"
+      >
+        <el-table-column label="费用单号" width="200" fixed="left"
+          ><template #default="{ row }"
+            ><el-button link type="primary" @click="showDetail(row as CostRecord)">{{
+              row.documentNo
+            }}</el-button></template
+          ></el-table-column
+        >
+        <el-table-column prop="data.title" label="费用事项" min-width="190" show-overflow-tooltip />
+        <el-table-column v-if="typeDictionary" label="类型" width="180"
+          ><template #default="{ row }">{{
+            costLabel(typeDictionary, row.data.logistics?.legCode || row.data.typeCode)
+          }}</template></el-table-column
+        >
+        <el-table-column prop="data.cityName" label="归属城市" width="120" />
+        <el-table-column v-if="hasEmployee" prop="ownerEmployeeName" label="归属人" width="120" />
+        <el-table-column
+          v-if="category === 'warehouse-rentals'"
+          prop="warehouseName"
+          label="仓库"
+          width="160"
+        />
+        <el-table-column prop="data.costDate" label="费用日期" width="115" />
+        <el-table-column label="金额（元）" width="135" align="right"
+          ><template #default="{ row }">{{ costMoney(row.data.amount) }}</template></el-table-column
+        >
+        <el-table-column v-if="category === 'logistics'" label="承担方" width="100"
+          ><template #default="{ row }">{{
+            costLabel('COST_PAYER', row.data.logistics?.payerCode)
+          }}</template></el-table-column
+        >
+        <el-table-column label="付款状态" width="100"
+          ><template #default="{ row }">{{
+            costLabel('COST_PAYMENT_STATUS', row.data.paymentStatusCode)
+          }}</template></el-table-column
+        >
+        <el-table-column label="确认状态" width="100"
+          ><template #default="{ row }"
+            ><el-tag
+              :type="
+                row.statusCode === 'CONFIRMED'
+                  ? 'success'
+                  : row.statusCode === 'VOID'
+                    ? 'info'
+                    : 'warning'
+              "
+              >{{ costLabel('COST_STATUS', row.statusCode) }}</el-tag
+            ></template
+          ></el-table-column
+        >
+        <el-table-column label="操作" fixed="right" width="205"
+          ><template #default="{ row }"
+            ><el-button
+              v-if="row.statusCode !== 'VOID' && can(permission + ':write')"
+              link
+              type="primary"
+              @click="edit(row as CostRecord)"
+              >编辑</el-button
+            ><el-button
+              v-if="row.statusCode === 'DRAFT' && can(permission + ':confirm')"
+              link
+              type="primary"
+              :disabled="saving"
+              @click="transition(row as CostRecord, 'confirm')"
+              >确认</el-button
+            ><el-button
+              v-if="row.statusCode !== 'VOID' && can(permission + ':void')"
+              link
+              type="danger"
+              :disabled="saving"
+              @click="transition(row as CostRecord, 'void')"
+              >作废</el-button
+            ><el-button link @click="showHistory(row as CostRecord)">记录</el-button></template
+          ></el-table-column
+        >
+      </el-table>
       <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
+        v-show="!loadError"
+        class="supply-list-pagination"
+        :current-page="currentPage"
+        :page-size="pageSize"
         :total="page.total"
         :page-sizes="[20, 50, 100]"
         layout="total, sizes, prev, pager, next"
-        @current-change="load"
-        @size-change="search"
+        :disabled="loading"
+        @current-change="changePage"
+        @size-change="changePageSize"
     /></el-card>
     <el-dialog
       v-model="editorVisible"
@@ -451,6 +522,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { errorMessage } from '@/api/core/error'
 import { getCostCities } from '@/api/core/cost'
@@ -467,6 +539,7 @@ import {
   type CostCommand,
   type CostEmployee,
   type CostPage,
+  type CostQuery,
   type CostRecord,
   type CostSource,
   type CostWarehouse,
@@ -518,7 +591,14 @@ const description = computed(() =>
       : '按归属城市、人员及费用类型登记，确认后计入成本。',
 )
 const emptyFilters = () => ({
-  keyword: '',
+  documentNo: '',
+  title: '',
+  remark: '',
+  trackingNo: '',
+  sourceDocumentNo: '',
+  contractNo: '',
+  dateFrom: '',
+  dateTo: '',
   typeCode: '',
   cityCode: '',
   statusCode: '',
@@ -527,9 +607,9 @@ const emptyFilters = () => ({
   warehouseId: '',
 })
 const filters = ref(emptyFilters()),
-  dates = ref<string[]>([]),
   currentPage = ref(1),
   pageSize = ref(20)
+const appliedFilters = ref<Omit<CostQuery, 'begin' | 'step'>>({})
 const page = ref<CostPage>({ total: 0, begin: 0, step: 20, items: [] }),
   loading = ref(false),
   loadError = ref(''),
@@ -600,16 +680,20 @@ async function load() {
   loadError.value = ''
   try {
     const result = await getCosts(selected, {
-      ...Object.fromEntries(Object.entries(filters.value).filter(([, value]) => value !== '')),
+      ...appliedFilters.value,
       begin: (currentPage.value - 1) * pageSize.value,
       step: pageSize.value,
-      dateFrom: dates.value?.[0],
-      dateTo: dates.value?.[1],
     })
     if (version === requestVersion) page.value = result
   } catch (e) {
     if (version === requestVersion) {
-      page.value = { total: 0, begin: 0, step: pageSize.value, items: [] }
+      page.value = {
+        ...page.value,
+        items: [],
+        confirmedAmount: undefined,
+        paidAmount: undefined,
+        pendingCount: undefined,
+      }
       loadError.value = errorMessage(e, '费用查询失败')
     }
   } finally {
@@ -617,13 +701,36 @@ async function load() {
   }
 }
 function search() {
+  if (
+    filters.value.dateFrom &&
+    filters.value.dateTo &&
+    filters.value.dateFrom > filters.value.dateTo
+  ) {
+    ElMessage.warning('截止日期不能早于开始日期')
+    return
+  }
+  appliedFilters.value = Object.fromEntries(
+    Object.entries(filters.value)
+      .map(([key, value]) => [key, value?.trim()])
+      .filter(([, value]) => !!value),
+  )
   currentPage.value = 1
   void load()
 }
 function reset() {
   filters.value = emptyFilters()
-  dates.value = []
   search()
+}
+function changePage(value: number) {
+  if (currentPage.value === value) return
+  currentPage.value = value
+  void load()
+}
+function changePageSize(value: number) {
+  if (pageSize.value === value) return
+  pageSize.value = value
+  currentPage.value = 1
+  void load()
 }
 async function references() {
   const selected = category.value
@@ -795,6 +902,7 @@ watch(
     employees.value = []
     warehouses.value = []
     cities.value = []
+    page.value = { total: 0, begin: 0, step: pageSize.value, items: [] }
     reset()
     void references()
   },
@@ -802,11 +910,7 @@ watch(
 )
 </script>
 <style scoped lang="scss">
-.cost-page {
-  gap: 16px;
-}
-.page-heading,
-.result-heading {
+.page-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -817,12 +921,6 @@ watch(
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
-.filter-card .el-form-item {
-  margin-bottom: 12px;
-}
-.filter-card :deep(.el-select) {
-  width: 160px;
-}
 .cost-editor :deep(.el-select),
 .full-width {
   width: 100%;
@@ -830,18 +928,13 @@ watch(
 .full-width .el-select {
   margin-top: 8px;
 }
-.el-pagination {
-  justify-content: flex-end;
-  margin-top: 16px;
-}
 pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 12px;
 }
 @media (max-width: 768px) {
-  .page-heading,
-  .result-heading {
+  .page-heading {
     align-items: flex-start;
     flex-direction: column;
   }

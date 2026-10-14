@@ -18,7 +18,6 @@ export const COST_DICTIONARIES = [
   'PAYROLL_PERFORMANCE_MODE',
   'PAYROLL_FIRST_MONTH_MODE',
   'COMMISSION_RECIPIENT_ROLE',
-  'COMMISSION_PRODUCT_GROUP',
   'PRODUCT_UNIT',
 ] as const
 export const loadCostDictionaries = () =>

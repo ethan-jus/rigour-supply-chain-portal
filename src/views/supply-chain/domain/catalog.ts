@@ -163,8 +163,8 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'employees', title: '员工档案' },
     { key: 'positions', title: '岗位职位' },
     { key: 'target-settings', title: '指标设置' },
-    { key: 'assignments', title: '任职与调动' }, { key: 'calendar-policies', title: '工作日历与考勤政策' },
-    { key: 'attendance-appeals', title: '正式考勤与申诉' },
+    { key: 'assignments', title: '任职与调动' }, { key: 'attendance-rules', title: '考勤规则设置' },
+    { key: 'attendance', title: '员工考勤' },
   ]),
   ...directPages('settings', '系统设置', '各领域服务', [
     { key: 'product-inventory', title: '商品与库存参数' }, { key: 'procurement', title: '采购规则' },

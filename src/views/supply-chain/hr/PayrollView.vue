@@ -422,17 +422,26 @@
             </div>
             <el-empty v-else description="当前快照没有具体原因，请重新核算获取最新结果" />
           </el-tab-pane>
-          <el-tab-pane label="商品提成明细" name="commission"
-            ><el-table :data="detail.calculation.details" border max-height="560"
+          <el-tab-pane label="商品提成明细" name="commission">
+            <PayrollCommissionSummary
+              :calculation="detail.calculation"
+              :review-hint="['READY', 'REVIEW'].includes(detail.statusCode)" />
+            <el-table :data="detail.calculation.details" border max-height="560"
               ><el-table-column prop="orderNo" label="订单" width="180" /><el-table-column
                 prop="productName"
                 label="商品"
                 min-width="160"
-                show-overflow-tooltip /><el-table-column label="受益角色" width="100"
+                show-overflow-tooltip /><el-table-column label="提成来源" width="140"
                 ><template #default="{ row }">{{
-                  costLabel('COMMISSION_RECIPIENT_ROLE', row.recipientRoleCode)
+                  row.recipientRoleCode === 'CITY_TEAM'
+                    ? '团队销售提成'
+                    : costLabel('COMMISSION_RECIPIENT_ROLE', row.recipientRoleCode)
                 }}</template></el-table-column
-              ><el-table-column label="数量" width="100"
+              ><el-table-column
+                prop="sourceEmployeeCode"
+                label="销售员工编号"
+                min-width="160"
+                show-overflow-tooltip /><el-table-column label="数量" width="100"
                 ><template #default="{ row }"
                   >{{ row.quantity }} {{ costLabel('PRODUCT_UNIT', row.unitCode) }}</template
                 ></el-table-column
@@ -662,6 +671,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import PayrollPreparationPanel from './components/PayrollPreparationPanel.vue'
 import PayrollSettlementDialog from './components/PayrollSettlementDialog.vue'
 import PayrollWorkflowActions from './components/PayrollWorkflowActions.vue'
+import PayrollCommissionSummary from './components/PayrollCommissionSummary.vue'
 import {
   previousPayrollMonth,
   payrollPaid,

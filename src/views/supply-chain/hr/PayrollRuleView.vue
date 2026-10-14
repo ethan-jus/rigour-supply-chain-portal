@@ -9,143 +9,142 @@
         >新增{{ title }}</el-button
       >
     </div>
-    <el-tabs v-if="commissionPage" v-model="commissionTab" @tab-change="search"
-      ><el-tab-pane name="COMMISSION" label="商品提成规则" /><el-tab-pane
+    <el-tabs v-if="commissionPage" v-model="commissionTab"
+      ><el-tab-pane name="COMMISSION" label="商品提成" /><el-tab-pane
         name="CITY_MANAGER"
-        label="城市总提成归属"
+        label="城市总提成"
     /></el-tabs>
-    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
-    <el-card shadow="never" class="filter-card"
-      ><el-form inline @submit.prevent="search"
-        ><el-form-item label="规则名称"
+    <CityManagerPanel
+      v-if="kind === 'CITY_MANAGER'"
+      ref="managerPanel"
+      :employees="employees"
+      :cities="cities"
+      :can-write="can('hr:payroll-rule:write')"
+      @edit="edit"
+      @add-city="addManagedCity"
+    />
+    <template v-else>
+      <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
+      <SupplyListFilters :loading="loading" @search="search" @reset="reset">
+        <el-form-item label="规则名称"
           ><el-input
             v-model="keyword"
-            placeholder="规则名称"
+            aria-label="规则名称筛选"
+            placeholder="请输入规则名称"
             clearable
-            @keyup.enter="search" /></el-form-item
-        ><el-form-item class="filter-actions"
-          ><el-button type="primary" :loading="loading" @click="search">查询</el-button
-          ><el-button @click="reset">重置</el-button></el-form-item
-        ></el-form
-      ></el-card
-    >
-    <div class="result-heading">
-      <span>共 {{ page.total }} 条规则</span
-      ><el-button :loading="loading" @click="load">刷新</el-button>
-    </div>
-    <el-card shadow="never" class="list-card"
-      ><el-table
-        v-loading="loading"
-        :data="page.items"
-        border
-        row-key="id"
-        class="business-table supply-scroll-table"
-      >
-        <el-table-column
-          prop="data.name"
-          label="规则名称"
-          min-width="180"
-          fixed="left"
-          show-overflow-tooltip
-        />
-        <el-table-column v-if="kind === 'CITY_MANAGER'" label="员工" min-width="160"
-          ><template #default="{ row }">{{
-            employeeName(row.data.employeeCode)
-          }}</template></el-table-column
+        /></el-form-item>
+      </SupplyListFilters>
+      <div class="result-heading">
+        <span>共 {{ page.total }} 条规则</span
+        ><el-button :loading="loading" @click="load">刷新</el-button>
+      </div>
+      <el-card shadow="never" class="list-card"
+        ><el-table
+          v-loading="loading"
+          :data="page.items"
+          border
+          row-key="id"
+          class="business-table supply-scroll-table"
         >
-        <el-table-column
-          v-if="kind !== 'CITY_MANAGER'"
-          label="适用部门"
-          min-width="190"
-          show-overflow-tooltip
-          ><template #default="{ row }">{{
-            departmentNames(row.data.departmentIds)
-          }}</template></el-table-column
-        >
-        <el-table-column
-          v-if="kind === 'CITY_MANAGER'"
-          prop="data.cityName"
-          label="所辖城市"
-          width="180"
-        />
-        <template v-if="kind === 'COMMISSION'"
-          ><el-table-column label="商品组" min-width="170"
-            ><template #default="{ row }">{{
-              costLabel('COMMISSION_PRODUCT_GROUP', row.data.groupCode)
-            }}</template></el-table-column
-          ><el-table-column
-            prop="data.productName"
-            label="商品规格"
-            min-width="190"
+          <el-table-column
+            prop="data.name"
+            label="规则名称"
+            min-width="180"
+            fixed="left"
             show-overflow-tooltip
-          /><el-table-column label="受益角色" width="120"
+          />
+          <el-table-column label="适用部门" min-width="190" show-overflow-tooltip
             ><template #default="{ row }">{{
-              costLabel('COMMISSION_RECIPIENT_ROLE', row.data.recipientRoleCode)
+              departmentNames(row.data.departmentIds)
             }}</template></el-table-column
-          ><el-table-column label="提成标准" width="160" align="right"
-            ><template #default="{ row }"
-              >{{ row.data.rate
-              }}{{
-                row.data.methodCode === 'PERCENT'
-                  ? '%'
-                  : ' 元/' + costLabel('PRODUCT_UNIT', row.data.unitCode)
-              }}</template
-            ></el-table-column
-          ></template
-        >
-        <el-table-column v-if="kind === 'ALLOWANCE'" label="类型" width="130">
-          <template #default="{ row }">{{
-            costLabel('PAYROLL_ALLOWANCE_TYPE', row.data.allowanceTypeCode)
-          }}</template>
-        </el-table-column>
-        <el-table-column
-          v-if="kind !== 'CITY_MANAGER' && kind !== 'COMMISSION'"
-          :label="kind === 'PERFORMANCE' ? '满额月绩效（元）' : '每月金额（元）'"
-          align="right"
-          width="160"
-          ><template #default="{ row }">{{ costMoney(row.data.amount) }}</template></el-table-column
-        >
-        <el-table-column prop="data.effectiveFrom" label="生效日期" width="115" /><el-table-column
-          label="截止日期"
-          width="115"
-          ><template #default="{ row }">{{
-            row.data.effectiveTo === '9999-12-31' ? '长期有效' : row.data.effectiveTo
-          }}</template></el-table-column
-        >
-        <el-table-column label="状态" width="85"
-          ><template #default="{ row }"
-            ><el-tag :type="row.data.enabled ? 'success' : 'info'">{{
-              row.data.enabled ? '启用' : '停用'
-            }}</el-tag></template
-          ></el-table-column
-        >
-        <el-table-column
-          prop="data.remark"
-          label="备注"
-          min-width="140"
-          show-overflow-tooltip
-        /><el-table-column label="操作" fixed="right" width="150"
-          ><template #default="{ row }"
-            ><el-button link type="primary" @click="edit(row as PayrollRule)">{{
-              can('hr:payroll-rule:write') ? '编辑' : '查看'
-            }}</el-button
-            ><el-button
-              v-if="can('hr:payroll-rule:write')"
-              link
-              type="primary"
-              @click="copyRule(row as PayrollRule)"
-              >复制</el-button
+          >
+          <template v-if="kind === 'COMMISSION'"
+            ><el-table-column label="商品分类" min-width="140"
+              ><template #default="{ row }">{{
+                row.data.categoryName || '待补充分类'
+              }}</template></el-table-column
+            ><el-table-column
+              prop="data.productName"
+              label="商品规格型号"
+              min-width="190"
+              show-overflow-tooltip
+            /><el-table-column label="受益角色" width="120"
+              ><template #default="{ row }">{{
+                costLabel('COMMISSION_RECIPIENT_ROLE', row.data.recipientRoleCode)
+              }}</template></el-table-column
+            ><el-table-column label="提成标准" width="160" align="right"
+              ><template #default="{ row }"
+                >{{ row.data.rate
+                }}{{
+                  row.data.methodCode === 'PERCENT'
+                    ? '%'
+                    : ' 元/' + costLabel('PRODUCT_UNIT', row.data.unitCode)
+                }}</template
+              ></el-table-column
             ></template
-          ></el-table-column
-        > </el-table
-      ><el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :total="page.total"
-        layout="total, sizes, prev, pager, next"
-        @current-change="load"
-        @size-change="search"
-    /></el-card>
+          >
+          <el-table-column v-if="kind === 'ALLOWANCE'" label="类型" width="130">
+            <template #default="{ row }">{{
+              costLabel('PAYROLL_ALLOWANCE_TYPE', row.data.allowanceTypeCode)
+            }}</template>
+          </el-table-column>
+          <el-table-column
+            v-if="kind !== 'COMMISSION'"
+            :label="kind === 'PERFORMANCE' ? '满额月绩效（元）' : '每月金额（元）'"
+            align="right"
+            width="160"
+            ><template #default="{ row }">{{
+              costMoney(row.data.amount)
+            }}</template></el-table-column
+          >
+          <el-table-column prop="data.effectiveFrom" label="生效日期" width="115" />
+          <el-table-column label="截止日期" width="115">
+            <template #default="{ row }">{{
+              row.data.effectiveTo === '9999-12-31' ? '长期有效' : row.data.effectiveTo
+            }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }"
+              ><el-tag :type="row.data.enabled ? 'success' : 'info'">{{
+                row.data.enabled ? '启用' : '停用'
+              }}</el-tag></template
+            >
+          </el-table-column>
+          <el-table-column
+            prop="data.remark"
+            label="备注"
+            min-width="140"
+            show-overflow-tooltip
+          /><el-table-column label="操作" fixed="right" :width="kind === 'COMMISSION' ? 90 : 150"
+            ><template #default="{ row }"
+              ><el-button link type="primary" @click="edit(row as PayrollRule)">{{
+                can('hr:payroll-rule:write') ? '编辑' : '查看'
+              }}</el-button
+              ><el-button
+                v-if="!commissionPage && can('hr:payroll-rule:write')"
+                link
+                type="primary"
+                @click="copyRule(row as PayrollRule)"
+                >复制</el-button
+              >
+            </template></el-table-column
+          > </el-table
+        ><el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :total="page.total"
+          layout="total, sizes, prev, pager, next"
+          @current-change="load"
+          @size-change="search"
+      /></el-card>
+    </template>
+    <CityCommissionEditor
+      ref="cityEditor"
+      :employees="employees"
+      :cities="cities"
+      :can-write="can('hr:payroll-rule:write')"
+      @saved="load"
+    />
     <el-dialog
       v-model="visible"
       :title="(editingId ? '编辑' : '新增') + title"
@@ -155,21 +154,16 @@
       destroy-on-close
     >
       <el-alert v-if="editorError" :title="editorError" type="error" :closable="false" />
-      <el-form label-width="120px" :disabled="!can('hr:payroll-rule:write')">
+      <el-form
+        :label-position="commissionPage ? 'top' : 'right'"
+        :label-width="commissionPage ? undefined : '120px'"
+        :class="{ 'compact-commission-form': commissionPage }"
+        :disabled="!can('hr:payroll-rule:write') || saving"
+      >
         <el-form-item label="规则名称" required
           ><el-input v-model="form.name" maxlength="120"
         /></el-form-item>
-        <el-form-item v-if="kind === 'CITY_MANAGER'" label="城市总员工" required
-          ><el-select v-model="form.employeeCode" filterable
-            ><el-option
-              v-for="e in employees.filter((item) => item.payrollCategory === 'SALES')"
-              :key="e.employeeCode"
-              :label="
-                e.employeeName + ' · ' + e.employeeCode + ' · ' + (e.departmentName || '未分配部门')
-              "
-              :value="e.employeeCode" /></el-select
-        ></el-form-item>
-        <el-form-item v-if="kind !== 'CITY_MANAGER'" label="适用部门" required
+        <el-form-item class="full-row" label="适用部门" required
           ><div class="full-width">
             <el-tree-select
               v-model="form.departmentIds"
@@ -198,85 +192,92 @@
             </p>
           </div></el-form-item
         >
-        <template v-if="kind === 'CITY_MANAGER'">
-          <el-form-item label="所辖城市" required
-            ><el-select
-              v-model="form.cityCode"
-              filterable
-              @change="form.cityName = cities.find((c) => c.code === form.cityCode)?.name || ''"
-              ><el-option
-                v-for="city in cities"
-                :key="city.code"
-                :value="city.code"
-                :label="city.name" /></el-select
-          ></el-form-item>
-          <el-form-item label="本人销售"
-            ><el-checkbox v-model="form.includeOwnSalesCommission"
-              >同时计销售人员提成</el-checkbox
-            ></el-form-item
-          >
-          <el-alert
-            title="城市总提成包含所辖城市全部销售；不勾选时，本人销售仅计城市总提成。"
-            type="info"
-            :closable="false"
-          />
-        </template>
         <template v-if="kind === 'COMMISSION'">
-          <el-form-item label="商品组" required
-            ><CostDictSelect
-              v-model="form.groupCode"
-              code="COMMISSION_PRODUCT_GROUP"
-              @update:model-value="applyPolicy"
-          /></el-form-item>
-          <el-form-item label="受益角色" required
-            ><CostDictSelect
-              v-model="form.recipientRoleCode"
-              code="COMMISSION_RECIPIENT_ROLE"
-              @update:model-value="applyPolicy"
-          /></el-form-item>
-          <el-form-item label="商品规格" required
-            ><div class="full-width">
+          <el-form-item label="商品分类" required>
+            <el-tree-select
+              v-model="form.categoryId"
+              :data="categoryTree"
+              node-key="id"
+              :props="{ label: 'name', children: 'children' }"
+              check-strictly
+              filterable
+              clearable
+              :render-after-expand="false"
+              aria-label="商品分类"
+              placeholder="选择商品分类"
+              @change="categoryChanged"
+            />
+          </el-form-item>
+          <el-form-item label="规格型号" required>
+            <div class="full-width">
               <el-select
                 v-model="form.productVariantId"
                 filterable
                 remote
                 :remote-method="searchProducts"
                 :loading="productsLoading"
-                placeholder="搜索商品名称、编码或规格，选择真实 SKU"
+                :disabled="!form.categoryId"
+                aria-label="规格型号"
+                placeholder="先选分类，再搜索商品、型号或编码"
+                @visible-change="productOpened"
                 @change="selectProduct"
-                ><el-option
+              >
+                <template #label="{ label }">{{ selectedProductLabel || label }}</template>
+                <el-option
                   v-for="p in products"
                   :key="p.productVariantId"
                   :value="p.productVariantId"
                   :label="productLabel(p)"
-              /></el-select>
-              <p class="field-hint">
-                商品组只提供可编辑的默认标准，绑定真实 SKU
-                后参与核算。台呢按套计提，请核实所选规格单位。
+                />
+              </el-select>
+            </div>
+          </el-form-item>
+          <el-form-item label="受益角色" required
+            ><CostDictSelect v-model="form.recipientRoleCode" code="COMMISSION_RECIPIENT_ROLE"
+          /></el-form-item>
+          <el-form-item label="计算方式" required>
+            <CostDictSelect v-model="form.methodCode" code="PAYROLL_COMMISSION_METHOD" />
+          </el-form-item>
+          <el-form-item label="提成标准" required>
+            <div class="full-width">
+              <div class="commission-rate">
+                <el-input-number
+                  v-model="form.rate"
+                  aria-label="提成标准"
+                  :min="0"
+                  :max="form.methodCode === 'PERCENT' ? 100 : 99999999999999.99"
+                  :precision="2"
+                  :disabled="
+                    !form.methodCode ||
+                    productsLoading ||
+                    (form.methodCode === 'QUANTITY' && !hasCommissionUnit)
+                  "
+                  :controls="false"
+                  placeholder="请输入提成标准"
+                />
+                <span v-if="form.methodCode === 'PERCENT'" class="commission-rate__unit">%</span>
+                <span
+                  v-else-if="form.methodCode === 'QUANTITY' && hasCommissionUnit"
+                  class="commission-rate__unit"
+                >
+                  元 / {{ costLabel('PRODUCT_UNIT', form.unitCode) }}
+                </span>
+              </div>
+              <p v-if="!form.methodCode" class="field-hint commission-rate__hint">
+                请先选择计算方式
               </p>
-            </div></el-form-item
-          >
-          <el-form-item label="计算方式" required
-            ><CostDictSelect
-              v-model="form.methodCode"
-              code="PAYROLL_COMMISSION_METHOD" /></el-form-item
-          ><el-form-item
-            :label="form.methodCode === 'PERCENT' ? '回款提成（%）' : '单位提成（元）'"
-            required
-            ><el-input-number
-              v-model="form.rate"
-              :min="0"
-              :max="form.methodCode === 'PERCENT' ? 100 : 99999999999999.99"
-              :precision="2"
-            /><span class="field-hint">{{
-              form.methodCode === 'QUANTITY' ? ' / ' + costLabel('PRODUCT_UNIT', form.unitCode) : ''
-            }}</span></el-form-item
-          >
-          <el-alert
-            title="整笔订单全部回款后发放；混合商品订单按明细金额分摊订单净回款，退款等异常进入待核对。"
-            type="info"
-            :closable="false"
-          />
+              <p
+                v-else-if="form.methodCode === 'QUANTITY' && !hasCommissionUnit"
+                class="field-hint commission-rate__hint"
+              >
+                {{
+                  form.productVariantId
+                    ? '该规格缺少计量单位，请完善商品资料'
+                    : '请先选择规格型号，自动带出计量单位'
+                }}
+              </p>
+            </div>
+          </el-form-item>
         </template>
         <template v-if="kind === 'ALLOWANCE'">
           <el-form-item label="类型" required>
@@ -400,21 +401,21 @@
           ><el-date-picker
             v-model="form.effectiveFrom"
             value-format="YYYY-MM-DD"
-            placeholder="选择生效日期" /></el-form-item
-        ><el-form-item label="有效期"
+            placeholder="选择生效日期"
+        /></el-form-item>
+        <el-form-item label="有效期"
           ><el-checkbox v-model="longTerm">长期有效</el-checkbox></el-form-item
-        ><el-form-item v-if="!longTerm" label="截止日期" required
+        >
+        <el-form-item v-if="!longTerm" label="截止日期" required
           ><el-date-picker
             v-model="form.effectiveTo"
             value-format="YYYY-MM-DD"
             placeholder="选择截止日期"
         /></el-form-item>
         <el-form-item label="状态"
-          ><el-switch
-            v-model="form.enabled"
-            active-text="启用"
-            inactive-text="停用" /></el-form-item
-        ><el-form-item label="备注 / 变更说明"
+          ><el-switch v-model="form.enabled" active-text="启用" inactive-text="停用"
+        /></el-form-item>
+        <el-form-item class="full-row" label="备注 / 变更说明"
           ><el-input v-model="form.remark" type="textarea" maxlength="500" show-word-limit
         /></el-form-item> </el-form
       ><template #footer
@@ -435,18 +436,21 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
+import CityManagerPanel from './components/CityManagerPanel.vue'
+import CityCommissionEditor from './components/CityCommissionEditor.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { errorMessage } from '@/api/core/error'
 import { departmentTree } from '@/utils/hr-department-tree'
 import { getCostCities } from '@/api/core/cost'
 import {
-  getCommissionPolicies,
   getPayrollDepartments,
   getPayrollEmployees,
   getPayrollProducts,
+  getPayrollProductCategories,
+  type PayrollCategory,
   getPayrollRules,
   savePayrollRule,
-  type CommissionPolicy,
   type PayrollDepartment,
   type PayrollEmployee,
   type PayrollPage,
@@ -462,6 +466,8 @@ const route = useRoute(),
 const commissionPage = computed(() => route.path.endsWith('/commission-rules'))
 type PayrollRulePageKind = Exclude<PayrollRuleKind, 'BASE'>
 const commissionTab = ref<'COMMISSION' | 'CITY_MANAGER'>('COMMISSION')
+const cityEditor = ref<InstanceType<typeof CityCommissionEditor>>()
+const managerPanel = ref<InstanceType<typeof CityManagerPanel>>()
 const kind = computed<PayrollRulePageKind>(() =>
   commissionPage.value
     ? commissionTab.value
@@ -473,14 +479,14 @@ const titles: Record<PayrollRulePageKind, string> = {
   COMMISSION: '商品提成规则',
   PERFORMANCE: '绩效规则',
   ALLOWANCE: '其他薪资',
-  CITY_MANAGER: '城市总提成归属',
+  CITY_MANAGER: '城市总提成',
 }
 const title = computed(() => titles[kind.value])
 const description = computed(() =>
   kind.value === 'CITY_MANAGER'
-    ? '设置城市总提成的归属人员、城市和生效期间；提成标准在商品提成规则中维护。'
+    ? '按城市配置团队比例、本人提成和独立商品标准。'
     : kind.value === 'COMMISSION'
-      ? '按商品规格、受益角色、销售部门和有效期间配置；整单回款后发放。'
+      ? '先选商品分类，再按具体型号、受益角色和生效期间设置；整单回款后计提。'
       : kind.value === 'PERFORMANCE'
         ? '仅适用于销售人员，按过程与回款核算绩效；首月按铜牌金额，固定补贴在其他薪资设置维护。'
         : '仅适用于销售人员。类型选择固定补贴后分别配置交通、话费、电脑补贴，自动合计。',
@@ -492,9 +498,10 @@ const keyword = ref(''),
   loadError = ref('')
 const page = ref<PayrollPage<PayrollRule>>({ total: 0, begin: 0, step: 20, items: [] })
 const employees = ref<PayrollEmployee[]>([]),
-  departments = ref<PayrollDepartment[]>([]),
-  policies = ref<CommissionPolicy[]>([])
+  departments = ref<PayrollDepartment[]>([])
 const departmentOptionsTree = computed(() => departmentTree(departments.value))
+const categories = ref<PayrollCategory[]>([])
+const categoryTree = computed(() => departmentTree(categories.value))
 const cities = ref<{ code: string; name: string }[]>([])
 const visible = ref(false),
   saving = ref(false),
@@ -512,11 +519,13 @@ function blank(): PayrollRuleCommand {
     departmentIds: [],
     cityCode: null,
     cityName: null,
-    includeOwnSalesCommission: true,
+    includeOwnSalesCommission: null,
     productId: null,
     productVariantId: null,
     productName: null,
     unitCode: null,
+    categoryId: null,
+    categoryName: null,
     groupCode: null,
     recipientRoleCode: 'SALES',
     methodCode: null,
@@ -550,6 +559,14 @@ function blank(): PayrollRuleCommand {
   }
 }
 const form = ref<PayrollRuleCommand>(blank())
+// Remote select caches its selected label; render the refreshed ERP label directly.
+const selectedProductLabel = computed(() => {
+  const product = products.value.find((p) => p.productVariantId === form.value.productVariantId)
+  return product ? productLabel(product) : ''
+})
+const hasCommissionUnit = computed(() =>
+  Boolean(form.value.productVariantId && form.value.unitCode?.trim()),
+)
 const includeChildren = ref(false),
   longTerm = ref(true)
 const coveredDepartments = computed(() => {
@@ -619,9 +636,14 @@ let version = 0,
   productVersion = 0
 async function load() {
   const id = ++version
+  if (kind.value === 'CITY_MANAGER') {
+    loading.value = false
+    return managerPanel.value?.reload()
+  }
   loading.value = true
   loadError.value = ''
   try {
+    await loadCostDictionaries()
     const result = await getPayrollRules({
       begin: (currentPage.value - 1) * pageSize.value,
       step: pageSize.value,
@@ -652,36 +674,42 @@ async function references() {
     loadCostDictionaries(),
     getPayrollEmployees(true),
     getPayrollDepartments(),
-    getCommissionPolicies(),
     getCostCities(),
+    kind.value === 'COMMISSION'
+      ? getPayrollProductCategories()
+      : Promise.resolve([] as PayrollCategory[]),
   ])
-  const [, people, deps, templates, regions] = result
+  const [, people, deps, regions, categoryResult] = result
+  if (categoryResult?.status === 'fulfilled')
+    categories.value = categoryResult.value as PayrollCategory[]
   if (regions.status === 'fulfilled') cities.value = regions.value
   if (people.status === 'fulfilled') employees.value = people.value
   if (deps.status === 'fulfilled') departments.value = deps.value
-  if (templates.status === 'fulfilled') policies.value = templates.value
   result.forEach((r) => {
     if (r.status === 'rejected') ElMessage.error(errorMessage(r.reason, '规则选项加载失败'))
   })
-}
-function employeeName(code: string | null) {
-  return employees.value.find((e) => e.employeeCode === code)?.employeeName ?? code ?? '—'
 }
 function departmentNames(ids: number[]) {
   return ids.map((id) => departments.value.find((d) => d.id === id)?.name ?? String(id)).join('、')
 }
 function productLabel(p: PayrollProduct) {
-  return (
-    p.productName +
-    ' · ' +
-    (p.specification || p.variantCode) +
-    ' · ' +
-    p.variantCode +
-    ' · ' +
-    costLabel('PRODUCT_UNIT', p.unitCode)
-  )
+  return [
+    p.productName,
+    p.specification,
+    p.variantCode,
+    p.unitCode ? costLabel('PRODUCT_UNIT', p.unitCode) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 function edit(row?: PayrollRule) {
+  if (kind.value === 'CITY_MANAGER') {
+    cityEditor.value?.open(blank(), row)
+    void references()
+    return
+  }
+  ++productVersion
+  productsLoading.value = false
   includeChildren.value = false
   longTerm.value = !row || row.data.effectiveTo === '9999-12-31'
   editingId.value = row?.id ?? null
@@ -694,28 +722,63 @@ function edit(row?: PayrollRule) {
           productVariantId: row.data.productVariantId,
           productName: row.data.productName ?? '',
           productCode: '',
-          variantCode: String(row.data.productVariantId),
+          variantCode: '',
           specification: '',
           unitCode: row.data.unitCode ?? '',
+          categoryId: row.data.categoryId ?? null,
+          categoryName: row.data.categoryName ?? null,
         },
       ]
     : []
   visible.value = true
+  if (kind.value === 'COMMISSION' && row?.data.productVariantId)
+    void hydrateProduct(row.data.productVariantId)
   void references()
 }
-function applyPolicy() {
-  const policy = policies.value.find((p) => p.code === form.value.groupCode)
-  if (!policy) return
-  form.value.methodCode = policy.methodCode
-  form.value.rate =
-    form.value.recipientRoleCode === 'CITY_MANAGER' ? policy.managerRate : policy.salesRate
-  if (!form.value.name) form.value.name = policy.name + '提成'
+function addManagedCity(row: PayrollRule) {
+  cityEditor.value?.open(blank(), undefined, row.data.employeeCode ?? undefined)
+  void references()
 }
-async function searchProducts(query: string) {
+async function hydrateProduct(variant: string) {
   const id = ++productVersion
   productsLoading.value = true
   try {
-    const result = await getPayrollProducts(query)
+    const rows = await getPayrollProducts('', null, variant)
+    if (id !== productVersion || !visible.value) return
+    const p = rows.find((p) => p.productVariantId === variant)
+    if (!p) {
+      editorError.value = '原商品规格已不可用，请重新选择'
+      return
+    }
+    products.value = [p]
+    form.value.categoryId = p.categoryId
+    form.value.categoryName = p.categoryName
+    selectProduct()
+  } catch (e) {
+    if (id === productVersion) editorError.value = errorMessage(e, '商品资料加载失败')
+  } finally {
+    if (id === productVersion) productsLoading.value = false
+  }
+}
+function categoryChanged() {
+  ++productVersion
+  products.value = []
+  form.value.productId = null
+  form.value.productVariantId = null
+  form.value.productName = null
+  form.value.unitCode = null
+  form.value.categoryName = null
+  if (form.value.categoryId) void searchProducts('')
+}
+function productOpened(open: boolean) {
+  if (open && !products.value.length) void searchProducts('')
+}
+async function searchProducts(query: string) {
+  if (!form.value.categoryId) return
+  const id = ++productVersion
+  productsLoading.value = true
+  try {
+    const result = await getPayrollProducts(query, form.value.categoryId)
     if (id === productVersion) {
       const selected = products.value.filter(
         (p) => p.productVariantId === form.value.productVariantId,
@@ -725,13 +788,15 @@ async function searchProducts(query: string) {
       )
     }
   } catch (e) {
-    editorError.value = errorMessage(e, '商品查询失败')
+    if (id === productVersion) editorError.value = errorMessage(e, '商品查询失败')
   } finally {
     if (id === productVersion) productsLoading.value = false
   }
 }
 function selectProduct() {
   const p = products.value.find((p) => p.productVariantId === form.value.productVariantId)
+  form.value.categoryId = p?.categoryId ?? form.value.categoryId
+  form.value.categoryName = p?.categoryName ?? null
   form.value.productId = p?.productId ?? null
   form.value.productName = p
     ? p.productName + (p.specification ? ' · ' + p.specification : '')
@@ -743,10 +808,35 @@ async function save() {
     !form.value.name.trim() ||
     !form.value.effectiveFrom ||
     (!longTerm.value && !form.value.effectiveTo) ||
-    (kind.value !== 'CITY_MANAGER' && !form.value.departmentIds.length) ||
-    (kind.value === 'CITY_MANAGER' && (!form.value.employeeCode || !form.value.cityCode))
+    !form.value.departmentIds.length
   ) {
     editorError.value = '请填写规则名称、适用对象和生效期间'
+    return
+  }
+  if (!longTerm.value && form.value.effectiveTo < form.value.effectiveFrom) {
+    editorError.value = '结束日期不能早于开始日期'
+    return
+  }
+  if (
+    kind.value === 'COMMISSION' &&
+    (!form.value.categoryId ||
+      !form.value.productVariantId ||
+      !form.value.methodCode ||
+      form.value.rate == null)
+  ) {
+    editorError.value = '请选择商品分类、规格型号并填写提成标准'
+    return
+  }
+  if (kind.value === 'COMMISSION' && productsLoading.value) {
+    editorError.value = '商品资料加载中，请稍后再保存'
+    return
+  }
+  if (
+    kind.value === 'COMMISSION' &&
+    form.value.methodCode === 'QUANTITY' &&
+    !hasCommissionUnit.value
+  ) {
+    editorError.value = '该规格缺少计量单位，请完善商品资料'
     return
   }
   saving.value = true
@@ -799,6 +889,40 @@ void references()
 .full-width,
 .el-form :deep(.el-select) {
   width: 100%;
+}
+.compact-commission-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
+}
+.compact-commission-form .full-row {
+  grid-column: 1 / -1;
+}
+.compact-commission-form :deep(.el-date-editor) {
+  width: 100%;
+}
+@media (max-width: 600px) {
+  .compact-commission-form {
+    grid-template-columns: 1fr;
+  }
+}
+.commission-rate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.commission-rate :deep(.el-input-number) {
+  width: 220px;
+  max-width: 100%;
+}
+.commission-rate__unit {
+  white-space: nowrap;
+  color: var(--el-text-color-regular);
+}
+.commission-rate__hint {
+  margin: 6px 0 0;
+  line-height: 1.5;
 }
 .el-alert {
   margin-bottom: 14px;

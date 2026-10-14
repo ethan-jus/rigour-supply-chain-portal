@@ -21,6 +21,11 @@
           >¥{{ costMoney(payrollRemaining(row)) }}</el-descriptions-item
         ></el-descriptions
       >
+      <PayrollCommissionSummary
+        v-if="action === 'confirm'"
+        :calculation="row.calculation"
+        review-hint
+      />
       <el-alert :title="hints[action]" type="info" :closable="false" />
       <el-alert v-if="error" :title="error" type="error" :closable="false" />
       <el-form label-width="125px" :disabled="saving">
@@ -76,6 +81,7 @@
 </template>
 <script setup lang="ts">
 import { ref } from 'vue'
+import PayrollCommissionSummary from './PayrollCommissionSummary.vue'
 import { ElMessage } from 'element-plus'
 import {
   changePayrollStatus,
