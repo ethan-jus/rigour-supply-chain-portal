@@ -1,5 +1,11 @@
 <template>
   <section class="city-manager-panel">
+    <el-alert
+      v-if="assignmentOnly"
+      title="此处维护管辖城市和任期。工资与商品提成在对应规则入口维护；同一人管理多个城市，只生成一份月度工资。"
+      type="info"
+      :closable="false"
+    />
     <SupplyListFilters :loading="loading" @search="search" @reset="reset">
       <el-form-item label="城市总">
         <el-select
@@ -36,13 +42,13 @@
     </SupplyListFilters>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
     <div class="manager-results">
-      <span>匹配 {{ groups.length }} 位城市总 · {{ matchedRecords }} 条提成配置</span>
+      <span>匹配 {{ groups.length }} 位城市总 · {{ matchedRecords }} 条任职配置</span>
       <el-button :loading="loading" @click="reload">刷新</el-button>
     </div>
     <div v-loading="loading" class="manager-groups">
       <el-empty
         v-if="!loading && !loadError && !groups.length"
-        description="暂无匹配的城市总提成配置"
+        description="暂无匹配的城市总任职配置"
       />
       <section v-for="group in visibleGroups" :key="group.employeeCode" class="manager-group">
         <header class="manager-group__heading">
@@ -80,7 +86,7 @@
               ></template
             ></el-table-column
           >
-          <el-table-column label="本人销售提成" min-width="145"
+          <el-table-column v-if="!assignmentOnly" label="本人销售提成" min-width="145"
             ><template #default="{ row }">{{
               row.data.includeOwnSalesCommission == null
                 ? '待明确'
@@ -89,12 +95,12 @@
                   : '不另计销售提成'
             }}</template></el-table-column
           >
-          <el-table-column label="团队计入比例" width="130"
+          <el-table-column v-if="!assignmentOnly" label="团队计入比例" width="130"
             ><template #default="{ row }"
               >{{ row.data.cityCommission?.teamPercent ?? 100 }}%</template
             ></el-table-column
           >
-          <el-table-column label="独立商品提成" min-width="150"
+          <el-table-column v-if="!assignmentOnly" label="独立商品提成" min-width="150"
             ><template #default="{ row }">{{
               row.data.cityCommission?.products == null
                 ? '沿用部门商品标准'
@@ -132,6 +138,7 @@ const props = defineProps<{
   employees: PayrollEmployee[]
   cities: { code: string; name: string }[]
   canWrite: boolean
+  assignmentOnly?: boolean
 }>()
 defineEmits<{
   edit: [PayrollRule]

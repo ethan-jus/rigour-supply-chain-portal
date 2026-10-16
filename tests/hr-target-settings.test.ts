@@ -12,6 +12,7 @@ import * as api from '@/api/core/hr-target-settings'
 import type { SalesAnalysis } from '@/api/core/bi-sales-dashboard'
 vi.mock('@/api/core/hr-target-settings', () => ({
   getTargetSettings: vi.fn(),
+  getPayrollTargetMetrics: vi.fn().mockResolvedValue([]),
   saveTargetSettings: vi.fn(),
   getTargetHistory: vi.fn(),
 }))

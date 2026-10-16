@@ -5,12 +5,14 @@ import ElementPlus, { ElMessage } from 'element-plus'
 import PayrollView from '@/views/supply-chain/hr/PayrollView.vue'
 import * as api from '@/api/core/payroll'
 import type { PayrollInput, PayrollRecord } from '@/api/core/payroll'
+import { loadBusinessDictionaries } from '@/utils/business-dictionary'
 
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => true }),
 }))
 vi.mock('@/api/core/payroll', () => ({
   getPayroll: vi.fn(),
+  getPayrollSummary: vi.fn(),
   getPayrollDepartments: vi.fn(),
   getPayrollHistory: vi.fn(),
   getPayrollDetail: vi.fn(),
@@ -32,7 +34,8 @@ const button = (name: string) => wrapper.findAll('button').find((b) => b.text() 
 // 布局控件在无浏览器尺寸的测试环境中简化；表单、页面操作和状态反馈使用真实组件。
 const Table = defineComponent({
   props: ['data'],
-  setup(props, { slots }) {
+  setup(props, { slots, expose }) {
+    expose({ clearSelection: () => {} })
     provide(
       'payroll-test-rows',
       computed(() => props.data || []),
@@ -102,6 +105,14 @@ beforeEach(() => {
     step: 20,
     items: [row],
   }))
+  vi.mocked(api.getPayrollSummary).mockResolvedValue({
+    total: 1,
+    completeCount: 0,
+    pendingCount: 1,
+    grossPay: 0,
+    netPay: 0,
+    statusCounts: { REVIEW: 1 },
+  })
   vi.mocked(api.getPayrollDepartments).mockResolvedValue([
     { id: 1, parentId: null, name: '测试总部', sortOrder: 1 },
     { id: 20, parentId: 1, name: '测试城市', sortOrder: 1 },
@@ -137,7 +148,7 @@ afterEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()
 })
-async function openDetermination() {
+async function openList() {
   wrapper = mount(PayrollView, {
     global: {
       plugins: [ElementPlus],
@@ -145,6 +156,25 @@ async function openDetermination() {
         SupplyPageTitle: true,
         PayrollPreparationPanel: true,
         PayrollSettlementDialog: true,
+        PayrollBatchDialog: true,
+        ElDropdown: defineComponent({
+          setup:
+            (_, { slots }) =>
+            () =>
+              h('div', [slots.default?.(), slots.dropdown?.()]),
+        }),
+        ElDropdownMenu: defineComponent({
+          setup:
+            (_, { slots }) =>
+            () =>
+              h('div', slots.default?.()),
+        }),
+        ElDropdownItem: defineComponent({
+          setup:
+            (_, { slots, attrs }) =>
+            () =>
+              h('button', attrs, slots.default?.()),
+        }),
         ElTable: Table,
         ElTableColumn: Column,
         ElPagination: true,
@@ -154,9 +184,50 @@ async function openDetermination() {
     },
   })
   await flushPromises()
-  await button('当月核定').trigger('click')
+}
+async function openDetermination() {
+  await openList()
+  await button('人工调整').trigger('click')
   await flushPromises()
 }
+describe('工资列表汇总', () => {
+  it('使用全部筛选结果汇总，不把当前页金额或待核定工资算进合计', async () => {
+    vi.mocked(api.getPayrollSummary).mockResolvedValue({
+      total: 44,
+      completeCount: 41,
+      pendingCount: 3,
+      grossPay: 123456.78,
+      netPay: 120000.12,
+      statusCounts: { REVIEW: 3, READY: 40, CONFIRMED: 1 },
+    })
+    await openList()
+    const summary = wrapper.get('.payroll-summary').text().replace(/\s+/g, ' ')
+    expect(summary).toContain('44')
+    expect(summary).toContain('完整核算 41 人 / 待核定 3 人')
+    expect(summary).toContain('123,456.78')
+    expect(summary).toContain('120,000.12')
+    expect(wrapper.text()).toContain('待处理（3）')
+    expect(wrapper.text()).toContain('待确认（40）')
+    expect(wrapper.text()).toContain('待发放（1）')
+    expect(
+      wrapper.find('button[aria-label="查看汇总口径：合计仅含当前筛选下的完整结果"]').exists(),
+    ).toBe(true)
+    expect(api.getPayrollSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ month: expect.any(String) }),
+    )
+  })
+  it('没有完整工资时合计显示空缺，并仅加载薪酬相关字典', async () => {
+    await openList()
+    const summary = wrapper.get('.payroll-summary').text().replace(/\s+/g, ' ')
+    expect(summary).toContain('完整核算 0 人 / 待核定 1 人')
+    expect(summary.match(/—/g)).toHaveLength(2)
+    expect(summary).not.toContain('0.00')
+    expect(JSON.stringify(vi.mocked(loadBusinessDictionaries).mock.calls)).not.toContain(
+      'COST_PREMISES_TYPE',
+    )
+    expect(loadBusinessDictionaries).toHaveBeenCalled()
+  })
+})
 describe('当月核定完整交互', () => {
   it('要求一次说明，提交部门和零绩效后自动重算，并展示确认入口与核定依据', async () => {
     await openDetermination()
@@ -207,4 +278,36 @@ describe('当月核定完整交互', () => {
     ).toBe('暂存的核定说明')
     expect(api.calculatePayroll).not.toHaveBeenCalled()
   })
+})
+
+it('恢复规则计算清除金额和部门覆盖，保留独立扣款及版本', async () => {
+  currentInput = {
+    ...currentInput,
+    revision: 3,
+    baseOverride: 4000,
+    performanceOverride: 100,
+    allowanceOverride: 0,
+    departmentOverrideId: 20,
+    deduction: 50,
+    reason: '旧核定',
+  }
+  await openList()
+  await button('人工调整').trigger('click')
+  await flushPromises()
+  await button('清除核定覆盖，恢复规则计算').trigger('click')
+  await button('保存并重新核算').trigger('click')
+  await flushPromises()
+  expect(api.savePayrollInput).toHaveBeenCalledWith(
+    '2026-09',
+    'TEST-SALES',
+    expect.objectContaining({
+      revision: 3,
+      baseOverride: null,
+      performanceOverride: null,
+      allowanceOverride: null,
+      departmentOverrideId: null,
+      deduction: 50,
+      reason: '恢复员工薪资档案与规则计算',
+    }),
+  )
 })

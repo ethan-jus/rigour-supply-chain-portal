@@ -1,7 +1,15 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="editingId ? '编辑城市总提成' : '新增城市总提成'"
+    :title="
+      assignmentOnly
+        ? editingId
+          ? '编辑城市总任职'
+          : '新增城市总任职'
+        : editingId
+          ? '编辑城市总提成'
+          : '新增城市总提成'
+    "
     width="min(860px, 96vw)"
     class="city-commission-editor"
     :close-on-click-modal="false"
@@ -51,7 +59,7 @@
           value-format="YYYY-MM-DD"
           placeholder="选择生效日期"
       /></el-form-item>
-      <el-form-item label="团队销售提成计入比例" required>
+      <el-form-item v-if="!assignmentOnly" label="团队销售提成计入比例" required>
         <div>
           <el-input-number
             v-model="teamPercent"
@@ -65,7 +73,7 @@
         </div>
         <span class="field-hint">100% 全额计入；0% 不计入。团队不含本人。</span>
       </el-form-item>
-      <el-form-item label="本人销售提成" required class="full-row">
+      <el-form-item v-if="!assignmentOnly" label="本人销售提成" required class="full-row">
         <el-radio-group
           :model-value="form.includeOwnSalesCommission ?? undefined"
           @update:model-value="form.includeOwnSalesCommission = $event === true"
@@ -74,7 +82,7 @@
           ><el-radio :value="false">不另计</el-radio>
         </el-radio-group>
       </el-form-item>
-      <section class="full-row product-section">
+      <section v-if="!assignmentOnly" class="full-row product-section">
         <div class="product-heading">
           <strong>城市总独立商品提成</strong
           ><el-button v-if="productMode === 'CUSTOM' && canWrite" @click="openProduct()"
@@ -238,6 +246,7 @@ const props = defineProps<{
   employees: PayrollEmployee[]
   cities: { code: string; name: string }[]
   canWrite: boolean
+  assignmentOnly?: boolean
 }>()
 const emit = defineEmits<{ saved: [] }>()
 const visible = ref(false),
@@ -273,6 +282,8 @@ function open(blank: PayrollRuleCommand, row?: PayrollRule, employeeCode?: strin
   selectedCities.value = row?.data.cityCode ? [row.data.cityCode] : []
   endDate.value = row && row.data.effectiveTo !== '9999-12-31' ? row.data.effectiveTo : ''
   const policy = row?.data.cityCommission
+  if (props.assignmentOnly && !form.value.includeOwnSalesCommission)
+    form.value.includeOwnSalesCommission = true
   teamPercent.value = policy?.teamPercent ?? 100
   productRules.value = policy?.products ? JSON.parse(JSON.stringify(policy.products)) : []
   productMode.value = row

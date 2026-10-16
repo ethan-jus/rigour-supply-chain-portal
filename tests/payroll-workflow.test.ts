@@ -32,13 +32,14 @@ describe('月度薪酬流程', () => {
     ]
     const groups = payrollReviewGroups(issues)
     expect(groups.map((g) => [g.key, g.items.length])).toEqual([
-      ['performance', 3],
+      ['performance', 2],
       ['department', 3],
+      ['configuration', 1],
       [issues[7], 1],
     ])
     expect(groups.flatMap((g) => g.items).sort()).toEqual([...new Set(issues)].sort())
-    expect(groups[2]?.label).toBe(issues[7])
-    expect(groups[2]?.determination).toBeNull()
+    expect(groups[3]?.label).toBe(issues[7])
+    expect(groups[3]?.determination).toBeNull()
     expect(payrollReviewGroups()).toEqual([])
   })
   it('账号关联与任职缺项各自提示处理位置', () => {
@@ -46,15 +47,15 @@ describe('月度薪酬流程', () => {
       '销售打卡账号未关联员工，无法核对过程考核',
       '当月任职部门资料缺失或发生调动',
     ])
-    expect(groups.map((g) => g.determination)).toEqual(['performance', 'department'])
-    expect(groups[0]?.hint).toContain('当月绩效总额')
+    expect(groups.map((g) => g.determination)).toEqual([null, 'department'])
+    expect(groups[0]?.hint).toContain('员工与销售账号关联')
     expect(groups[1]?.hint).toContain('无需逐笔处理')
   })
   it('字典加载前状态也显示中文，加载后使用字典且保留部分发放口径', () => {
     const review = { statusCode: 'REVIEW' } as PayrollRecord
-    expect(payrollStatusLabel(review, 'REVIEW')).toBe('待核对')
-    expect(payrollStatusLabel(review, '-')).toBe('待核对')
-    expect(payrollStatusLabel(review, '')).toBe('待核对')
+    expect(payrollStatusLabel(review, 'REVIEW')).toBe('待处理')
+    expect(payrollStatusLabel(review, '-')).toBe('待处理')
+    expect(payrollStatusLabel(review, '')).toBe('待处理')
     expect(payrollStatusLabel(review, '需要复核')).toBe('需要复核')
     expect(payrollStatusLabel({ ...review, statusCode: 'READY' }, 'READY')).toBe('待确认')
     expect(payrollStatusLabel({ ...review, statusCode: 'UNKNOWN' }, '')).toBe('UNKNOWN')
@@ -77,6 +78,15 @@ describe('月度薪酬流程', () => {
       { employeeCode: '4', payrollCategory: 'SALES', locked: false },
     ] as PayrollPreparationEmployee[]
     expect(eligiblePayrollEmployees(people).map((e) => e.employeeCode)).toEqual(['4'])
+  })
+  it('新规则按后端匹配资格生成人员，包含城市总和总部且跳过锁定工资', () => {
+    const people = [
+      { employeeCode: 'M', payrollCategory: null, canCalculate: true, locked: false },
+      { employeeCode: 'H', payrollCategory: 'HEADQUARTERS', canCalculate: true, locked: false },
+      { employeeCode: 'P', payrollCategory: 'SALES', canCalculate: true, locked: true },
+      { employeeCode: 'N', payrollCategory: 'SALES', canCalculate: false, locked: false },
+    ] as PayrollPreparationEmployee[]
+    expect(eligiblePayrollEmployees(people).map((e) => e.employeeCode)).toEqual(['M', 'H'])
   })
   it('逐人核算超过100人时不截断，一人失败不阻断后续，重复人员只处理一次', async () => {
     const progress = vi.fn(),
@@ -175,5 +185,18 @@ describe('月度薪酬流程', () => {
         }),
       }),
     )
+  })
+  it('新规则异常按类型汇总，缺配置或来源不可用不能引导直接核定绩效金额', () => {
+    const groups = payrollReviewGroups([
+      '订单A：提成规则未配置',
+      '订单B：历史提成规则待配置',
+      '绩效规则未配置',
+      '员工薪资标准未配置',
+      '打卡拜访依据暂不可用',
+    ])
+    expect(groups).toHaveLength(3)
+    expect(groups.find((g) => g.key === 'commission-rule')?.items).toHaveLength(2)
+    expect(groups.find((g) => g.key === 'configuration')?.items).toHaveLength(2)
+    expect(groups.every((g) => g.determination === null)).toBe(true)
   })
 })

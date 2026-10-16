@@ -1,3 +1,5 @@
+import type { PayrollSchemeSnapshotView } from './payroll-scheme/models/PayrollSchemeSnapshotView'
+import type { PayrollCommissionTraceView } from './payroll-scheme/models/PayrollCommissionTraceView'
 import { apiClient } from './client'
 import type { CostEmployee, CostAudit } from './cost'
 export type PayrollRuleKind = 'BASE' | 'COMMISSION' | 'PERFORMANCE' | 'ALLOWANCE' | 'CITY_MANAGER'
@@ -100,6 +102,7 @@ export interface PayrollInput {
   reason: string
 }
 export interface PayrollDetail {
+  trace?: PayrollCommissionTraceView | null
   sourceLineId: string
   sourceEmployeeCode?: string | null
   recipientRoleCode: string
@@ -111,15 +114,16 @@ export interface PayrollDetail {
   ruleName: string | null
   ruleRevision: number
   accrued: number | null
-  released: number
+  released: number | null
   message: string
 }
 export interface PayrollCalculation {
+  scheme?: PayrollSchemeSnapshotView | null
   baseSalary: number | null
   performance: number | null
-  commission: number
+  commission: number | null
   heldCommission: number
-  allowance: number
+  allowance: number | null
   deduction: number
   grossPay: number | null
   netPay: number | null
@@ -179,6 +183,7 @@ export interface PayrollQuery {
   keyword?: string
   departmentId?: number
   statusCode?: string
+  payrollCategory?: string
 }
 export interface PayrollPage<T> {
   total: number
@@ -222,6 +227,11 @@ export const getPayrollProductCategories = () =>
   apiClient.get<PayrollCategory[]>(`${base}/product-categories`, options)
 export const getPayroll = (params: PayrollQuery) =>
   apiClient.get<PayrollPage<PayrollRecord>>(base, { params, ...options })
+export const getPayrollSummary = (params: PayrollQuery) =>
+  apiClient.get<import('./payroll/models/PayrollSummary').PayrollSummary>(`${base}/summary`, {
+    params,
+    ...options,
+  })
 export const calculatePayroll = (month: string, employeeCodes: string[]) =>
   apiClient.post<PayrollRecord[]>(
     `${base}/calculate`,
@@ -265,6 +275,12 @@ export const getPayrollDepartments = (ruleScope = true) =>
   )
 
 export interface PayrollPreparationEmployee {
+  entryDate?: string | null
+  leaveDate?: string | null
+  canCalculate?: boolean
+  unifiedMode?: boolean
+  schemeName?: string | null
+  schemeRole?: string | null
   employeeCode: string
   employeeName: string
   departmentId: number | null
@@ -286,6 +302,9 @@ export interface PayrollPreparation {
   employees: PayrollPreparationEmployee[]
 }
 export interface PayrollPreview {
+  sourceChanged?: boolean
+  previousFingerprint?: string | null
+  currentFingerprint?: string | null
   employeeCode: string
   employeeName: string
   issues: string[]

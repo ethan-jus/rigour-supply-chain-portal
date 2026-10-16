@@ -7,186 +7,203 @@
     :close-on-click-modal="false"
     class="employee-editor"
   >
-    <el-form v-loading="loading" label-position="top" :model="form" @submit.prevent="save">
-      <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
-      <h3>基本信息</h3>
-      <div class="form-grid">
-        <el-form-item label="部门" required
-          ><el-tree-select
-            v-model="form.departmentId"
-            :data="departmentTree"
-            node-key="id"
-            :props="{ label: 'departmentName', children: 'children', disabled: 'disabled' }"
-            check-strictly
-            filterable
-            placeholder="请选择部门"
-        /></el-form-item>
-        <el-form-item label="岗位" required
-          ><el-select v-model="form.positionCode" filterable placeholder="请选择岗位">
-            <el-option
-              v-for="p in positions"
-              :key="p.positionCode"
-              :value="p.positionCode"
-              :label="p.positionName" /></el-select
-        ></el-form-item>
-        <el-form-item label="姓名" required
-          ><el-input v-model="form.employeeName" maxlength="128" placeholder="请输入姓名"
-        /></el-form-item>
-        <el-form-item label="手机号"
-          ><el-input v-model="form.mobile" maxlength="32"
-        /></el-form-item>
-        <el-form-item label="身份证号" :error="identity.error"
-          ><el-input v-model="profile.idNumber" maxlength="18" placeholder="18位居民身份证号"
-        /></el-form-item>
-        <el-form-item label="出生日期"
-          ><el-input :model-value="identity.birthDate" readonly placeholder="根据身份证自动显示"
-        /></el-form-item>
-        <el-form-item label="年龄"
-          ><el-input :model-value="identity.age" readonly placeholder="自动计算"
-        /></el-form-item>
-        <el-form-item label="性别"
-          ><el-input :model-value="identity.gender" readonly placeholder="根据身份证自动显示"
-        /></el-form-item>
-        <el-form-item label="学历"
-          ><el-select v-model="profile.education" clearable
-            ><el-option v-for="v in educationOptions" :key="v" :label="v" :value="v" /></el-select
-        ></el-form-item>
-      </div>
-      <h3>教育信息</h3>
-      <div class="form-grid">
-        <el-form-item label="毕业院校" class="span-two"
-          ><el-input v-model="profile.graduationSchool" maxlength="128"
-        /></el-form-item>
-        <el-form-item label="专业"
-          ><el-input v-model="profile.major" maxlength="128"
-        /></el-form-item>
-      </div>
-      <h3>任职信息</h3>
-      <div class="form-grid">
-        <el-form-item label="职级"
-          ><el-input v-model="form.jobGrade" maxlength="32" placeholder="业务员默认 S1"
-        /></el-form-item>
-        <el-form-item label="入职日期"
-          ><el-date-picker v-model="entryDate" type="date" value-format="YYYY-MM-DD"
-        /></el-form-item>
-        <el-form-item label="在职状态"
-          ><el-select
-            v-model="form.employmentStatus"
-            :disabled="!!record && !can('hr:employee:status')"
-          >
-            <el-option label="在职" value="ACTIVE" /><el-option
-              label="离职"
-              value="LEFT"
-            /><el-option label="停用" value="INACTIVE" /><el-option
-              label="待确认"
-              value="PENDING"
-            /> </el-select
-        ></el-form-item>
-        <el-form-item v-if="form.employmentStatus === 'LEFT'" label="离职日期" required
-          ><el-date-picker v-model="leaveDate" type="date" value-format="YYYY-MM-DD"
-        /></el-form-item>
-        <el-form-item label="工龄"><el-input :model-value="tenure" readonly /></el-form-item>
-        <el-form-item label="合同截止日期"
-          ><el-date-picker v-model="profile.contractEndDate" type="date" value-format="YYYY-MM-DD"
-        /></el-form-item>
-        <el-form-item label="参保状态"
-          ><el-select v-model="profile.socialInsurance" clearable
-            ><el-option v-for="v in insuranceOptions" :key="v" :label="v" :value="v" /></el-select
-        ></el-form-item>
-      </div>
-      <h3>薪资档案</h3>
-      <p class="section-note">
-        销售在此填写底薪，绩效、提成和补贴由薪酬配置计算；总部保留原有薪资记录方式，暂不参与销售核算。
-      </p>
-      <div class="form-grid">
-        <el-form-item label="薪酬类别" required>
-          <el-select
-            v-model="form.payrollCategory"
-            clearable
-            placeholder="请选择薪酬类别"
-            aria-label="薪酬类别"
-          >
-            <el-option
-              v-for="option in payrollCategories"
-              :key="option.value"
-              :value="option.value"
-              :label="option.label"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="是否转正" required>
-          <el-select v-model="form.regularized" placeholder="请选择是否转正" aria-label="是否转正">
-            <el-option :value="false" label="否 · 未转正" /><el-option
-              :value="true"
-              label="是 · 已转正"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="form.regularized" label="转正日期" required>
-          <el-date-picker
-            v-model="form.regularizationDate"
-            type="date"
-            value-format="YYYY-MM-DD"
-            placeholder="实际转正日期"
-          />
-        </el-form-item>
-        <el-form-item :label="form.payrollCategory === 'SALES' ? '转正底薪（元 / 月）' : '转正薪资'"
-          ><el-input
-            v-model="profile.regularSalary"
-            maxlength="64"
-            :placeholder="
-              form.payrollCategory === 'SALES' ? '仅填底薪金额，如 5000' : '按现有约定填写'
-            "
-        /></el-form-item>
-        <el-form-item
-          :label="form.payrollCategory === 'SALES' ? '试用期底薪（元 / 月）' : '试用期薪资'"
-          ><el-input v-model="profile.probationSalary" maxlength="64"
-        /></el-form-item>
-        <el-form-item v-if="form.payrollCategory === 'SALES'" label="薪资生效日期">
-          <el-date-picker
-            v-model="form.salaryEffectiveFrom"
-            type="date"
-            value-format="YYYY-MM-DD"
-            placeholder="当前档案金额的生效日期"
-          />
-        </el-form-item>
-        <el-form-item label="试用期"
-          ><el-input v-model="profile.probationPeriod" maxlength="32" placeholder="例如 3个月"
-        /></el-form-item>
-      </div>
-      <h3>联系与账户信息</h3>
-      <div class="form-grid">
-        <el-form-item label="户口性质"
-          ><el-select v-model="profile.householdType" clearable
-            ><el-option v-for="v in householdOptions" :key="v" :label="v" :value="v" /></el-select
-        ></el-form-item>
-        <el-form-item label="户籍地址" class="span-two"
-          ><el-input v-model="profile.registeredAddress" maxlength="300"
-        /></el-form-item>
-        <el-form-item label="现居住地" class="full-row"
-          ><el-input v-model="profile.residentialAddress" maxlength="300"
-        /></el-form-item>
-        <el-form-item label="银行卡号"
-          ><el-input v-model="profile.bankAccount" maxlength="32"
-        /></el-form-item>
-        <el-form-item label="开户行" class="span-two"
-          ><el-input v-model="profile.bankName" maxlength="128"
-        /></el-form-item>
-        <el-form-item label="紧急联系人"
-          ><el-input v-model="profile.emergencyContact" maxlength="128"
-        /></el-form-item>
-        <el-form-item label="紧急联系方式"
-          ><el-input v-model="profile.emergencyPhone" maxlength="32"
-        /></el-form-item>
-        <el-form-item label="备注" class="full-row"
-          ><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500"
-        /></el-form-item>
-      </div>
-      <el-alert v-if="saveError" :title="saveError" type="error" :closable="false" />
-    </el-form>
+    <el-tabs v-model="editorTab">
+      <el-tab-pane label="员工资料" name="basic">
+        <el-form v-loading="loading" label-position="top" :model="form" @submit.prevent="save">
+          <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
+          <h3>基本信息</h3>
+          <div class="form-grid">
+            <el-form-item label="部门" required
+              ><el-tree-select
+                v-model="form.departmentId"
+                :data="departmentTree"
+                node-key="id"
+                :props="{ label: 'departmentName', children: 'children', disabled: 'disabled' }"
+                check-strictly
+                filterable
+                placeholder="请选择部门"
+            /></el-form-item>
+            <el-form-item label="岗位" required
+              ><el-select v-model="form.positionCode" filterable placeholder="请选择岗位">
+                <el-option
+                  v-for="p in positions"
+                  :key="p.positionCode"
+                  :value="p.positionCode"
+                  :label="p.positionName" /></el-select
+            ></el-form-item>
+            <el-form-item label="姓名" required
+              ><el-input v-model="form.employeeName" maxlength="128" placeholder="请输入姓名"
+            /></el-form-item>
+            <el-form-item label="手机号"
+              ><el-input v-model="form.mobile" maxlength="32"
+            /></el-form-item>
+            <el-form-item label="身份证号" :error="identity.error"
+              ><el-input v-model="profile.idNumber" maxlength="18" placeholder="18位居民身份证号"
+            /></el-form-item>
+            <el-form-item label="出生日期"
+              ><el-input
+                :model-value="identity.birthDate"
+                readonly
+                placeholder="根据身份证自动显示"
+            /></el-form-item>
+            <el-form-item label="年龄"
+              ><el-input :model-value="identity.age" readonly placeholder="自动计算"
+            /></el-form-item>
+            <el-form-item label="性别"
+              ><el-input :model-value="identity.gender" readonly placeholder="根据身份证自动显示"
+            /></el-form-item>
+            <el-form-item label="学历"
+              ><el-select v-model="profile.education" clearable
+                ><el-option
+                  v-for="v in educationOptions"
+                  :key="v"
+                  :label="v"
+                  :value="v" /></el-select
+            ></el-form-item>
+          </div>
+          <h3>教育信息</h3>
+          <div class="form-grid">
+            <el-form-item label="毕业院校" class="span-two"
+              ><el-input v-model="profile.graduationSchool" maxlength="128"
+            /></el-form-item>
+            <el-form-item label="专业"
+              ><el-input v-model="profile.major" maxlength="128"
+            /></el-form-item>
+          </div>
+          <h3>任职信息</h3>
+          <div class="form-grid">
+            <el-form-item label="职级"
+              ><el-input v-model="form.jobGrade" maxlength="32" placeholder="业务员默认 S1"
+            /></el-form-item>
+            <el-form-item label="入职日期"
+              ><el-date-picker v-model="entryDate" type="date" value-format="YYYY-MM-DD"
+            /></el-form-item>
+            <el-form-item label="在职状态"
+              ><el-select
+                v-model="form.employmentStatus"
+                :disabled="!!record && !can('hr:employee:status')"
+              >
+                <el-option label="在职" value="ACTIVE" /><el-option
+                  label="离职"
+                  value="LEFT"
+                /><el-option label="停用" value="INACTIVE" /><el-option
+                  label="待确认"
+                  value="PENDING"
+                /> </el-select
+            ></el-form-item>
+            <el-form-item v-if="form.employmentStatus === 'LEFT'" label="离职日期" required
+              ><el-date-picker v-model="leaveDate" type="date" value-format="YYYY-MM-DD"
+            /></el-form-item>
+            <el-form-item label="工龄"><el-input :model-value="tenure" readonly /></el-form-item>
+            <el-form-item label="合同截止日期"
+              ><el-date-picker
+                v-model="profile.contractEndDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+            /></el-form-item>
+            <el-form-item label="参保状态"
+              ><el-select v-model="profile.socialInsurance" clearable
+                ><el-option
+                  v-for="v in insuranceOptions"
+                  :key="v"
+                  :label="v"
+                  :value="v" /></el-select
+            ></el-form-item>
+          </div>
+          <h3>薪酬身份与转正信息</h3>
+          <div class="form-grid">
+            <el-form-item label="薪酬类别" required>
+              <el-select
+                v-model="form.payrollCategory"
+                clearable
+                placeholder="请选择薪酬类别"
+                aria-label="薪酬类别"
+              >
+                <el-option
+                  v-for="option in payrollCategories"
+                  :key="option.value"
+                  :value="option.value"
+                  :label="option.label"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="是否转正" required>
+              <el-select
+                v-model="form.regularized"
+                placeholder="请选择是否转正"
+                aria-label="是否转正"
+              >
+                <el-option :value="false" label="否 · 未转正" /><el-option
+                  :value="true"
+                  label="是 · 已转正"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item v-if="form.regularized" label="转正日期" required>
+              <el-date-picker
+                v-model="form.regularizationDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="实际转正日期"
+              />
+            </el-form-item>
+            <el-form-item label="试用期"
+              ><el-input v-model="profile.probationPeriod" maxlength="32" placeholder="例如 3个月"
+            /></el-form-item>
+          </div>
+          <h3>联系与账户信息</h3>
+          <div class="form-grid">
+            <el-form-item label="户口性质"
+              ><el-select v-model="profile.householdType" clearable
+                ><el-option
+                  v-for="v in householdOptions"
+                  :key="v"
+                  :label="v"
+                  :value="v" /></el-select
+            ></el-form-item>
+            <el-form-item label="户籍地址" class="span-two"
+              ><el-input v-model="profile.registeredAddress" maxlength="300"
+            /></el-form-item>
+            <el-form-item label="现居住地" class="full-row"
+              ><el-input v-model="profile.residentialAddress" maxlength="300"
+            /></el-form-item>
+            <el-form-item label="银行卡号"
+              ><el-input v-model="profile.bankAccount" maxlength="32"
+            /></el-form-item>
+            <el-form-item label="开户行" class="span-two"
+              ><el-input v-model="profile.bankName" maxlength="128"
+            /></el-form-item>
+            <el-form-item label="紧急联系人"
+              ><el-input v-model="profile.emergencyContact" maxlength="128"
+            /></el-form-item>
+            <el-form-item label="紧急联系方式"
+              ><el-input v-model="profile.emergencyPhone" maxlength="32"
+            /></el-form-item>
+            <el-form-item label="备注" class="full-row"
+              ><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500"
+            /></el-form-item>
+          </div>
+          <el-alert v-if="saveError" :title="saveError" type="error" :closable="false" />
+        </el-form>
+      </el-tab-pane>
+      <el-tab-pane v-if="can('hr:payroll-rule:read')" label="薪资标准" name="salary" lazy>
+        <PayrollComponentView
+          v-if="record?.employeeCode"
+          :key="record.employeeCode"
+          component-kind="SALARY"
+          :employee-code="record.employeeCode"
+        />
+        <el-empty v-else description="先保存员工资料，再维护薪资标准" />
+      </el-tab-pane>
+    </el-tabs>
     <template #footer
       ><el-button @click="visible = false">取消</el-button
-      ><el-button type="primary" :disabled="loading || !!loadError" :loading="saving" @click="save"
+      ><el-button
+        v-if="editorTab === 'basic'"
+        type="primary"
+        :disabled="loading || !!loadError"
+        :loading="saving"
+        @click="save"
         >确定</el-button
       ></template
     >
@@ -194,7 +211,8 @@
 </template>
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { payrollCategories, isSalesSalary } from '@/utils/hr-payroll-profile'
+import PayrollComponentView from './PayrollComponentView.vue'
+import { payrollCategories } from '@/utils/hr-payroll-profile'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getHrEmployee,
@@ -215,6 +233,7 @@ import {
   householdOptions,
   insuranceOptions,
 } from '@/utils/hr-employee-profile'
+const editorTab = ref('basic')
 const visible = defineModel<boolean>({ default: false })
 const props = defineProps<{ record: HrEmployeeRecord | null; departmentId?: number | null }>()
 const emit = defineEmits<{ saved: [] }>()
@@ -295,6 +314,7 @@ watch(
   },
 )
 watch(visible, async (open) => {
+  editorTab.value = 'basic'
   if (!open) return
   loading.value = true
   loadError.value = ''
@@ -367,13 +387,6 @@ async function save() {
     (!form.regularizationDate || (entryDate.value && form.regularizationDate < entryDate.value))
   ) {
     saveError.value = '请填写不早于入职日期的实际转正日期'
-    return
-  }
-  if (
-    form.payrollCategory === 'SALES' &&
-    (!isSalesSalary(profile.regularSalary) || !isSalesSalary(profile.probationSalary))
-  ) {
-    saveError.value = '销售薪资仅填写底薪金额，最多两位小数；绩效、提成和补贴在薪酬配置维护'
     return
   }
   if (identity.value.error) {

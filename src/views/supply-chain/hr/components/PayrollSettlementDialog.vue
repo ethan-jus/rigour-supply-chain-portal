@@ -13,7 +13,7 @@
         ><el-descriptions-item label="员工"
           >{{ row.employeeName }} · {{ row.employeeCode }}</el-descriptions-item
         ><el-descriptions-item label="薪酬月份">{{ row.month }}</el-descriptions-item
-        ><el-descriptions-item label="核定实发"
+        ><el-descriptions-item label="本月核算金额"
           >¥{{ costMoney(row.calculation.netPay) }}</el-descriptions-item
         ><el-descriptions-item label="已登记发放"
           >¥{{ costMoney(payrollPaid(row)) }}</el-descriptions-item
@@ -188,7 +188,7 @@ async function save() {
       })
     else await changePayrollStatus(row.value, action.value, reason.value.trim())
     if (action.value === 'confirm') completedMessage = '薪酬已确认，进入待发放'
-    if (action.value === 'reopen') completedMessage = '已撤回确认，回到待核对，请重新核算'
+    if (action.value === 'reopen') completedMessage = '已撤回确认，回到待处理，请重新核算'
     if (action.value === 'correct') completedMessage = '差额已登记，请到目标月份核算'
     ElMessage.success(completedMessage)
     visible.value = false

@@ -56,7 +56,11 @@
         <Expand />
       </button>
     </nav>
-    <section v-show="!workspace.collapsed" id="console-secondary-nav" class="secondary-nav">
+    <section
+      v-show="!workspace.collapsed"
+      id="console-secondary-nav"
+      class="secondary-nav"
+    >
       <div class="secondary-nav__brand">供应链数字化平台</div>
       <header class="secondary-nav__heading">
         <strong>{{ isHome ? '工作空间' : selected?.displayName || '应用菜单' }}</strong
@@ -113,6 +117,12 @@
             >
           </section>
         </template>
+        <template v-else-if="isHr">
+          <section v-for="group in hrGroups" :key="group.title" class="hr-nav-group">
+            <h2>{{ group.title }}</h2>
+            <ConsoleNavTree :nodes="group.nodes" />
+          </section>
+        </template>
         <ConsoleNavTree v-else :nodes="secondaryNodes" />
         <p v-if="!roots.length" class="secondary-nav__empty">暂无可用菜单</p>
       </div>
@@ -130,6 +140,7 @@ import {
   homeShortcutPaths,
   selectEntries,
 } from '@/utils/console-navigation'
+import { hrNavigationSections } from '@/utils/hr-navigation'
 import { useConsoleWorkspace } from '@/stores/console-workspace'
 import ConsoleNavTree from './ConsoleNavTree.vue'
 import ConsoleNavIcon from './ConsoleNavIcon.vue'
@@ -153,6 +164,8 @@ const secondaryNodes = computed(() =>
     ? selected.value.children
     : roots.value.filter((node) => node.routePath !== '/supply-chain'),
 )
+const isHr = computed(() => selected.value?.routeKey.split('.')[1] === 'hr')
+const hrGroups = computed(() => hrNavigationSections(secondaryNodes.value))
 const shortcuts = computed(() => selectEntries(entries.value, homeShortcutPaths))
 const analysis = computed(() => selectEntries(entries.value, homeAnalysisPaths))
 const recent = computed(() =>
@@ -198,9 +211,12 @@ watch(
   },
   { immediate: true },
 )
-watch(() => route.path, () => {
-  if (window.matchMedia?.('(max-width: 760px)').matches) workspace.collapsed = true
-})
+watch(
+  () => route.path,
+  () => {
+    if (window.matchMedia?.('(max-width: 760px)').matches) workspace.collapsed = true
+  },
+)
 </script>
 <style scoped lang="scss">
 .console-navigation {
@@ -301,6 +317,15 @@ watch(() => route.path, () => {
   background: #d5e1f1;
   border-right: 1px solid #becde1;
   color: #273d5b;
+}
+.hr-nav-group {
+  margin-bottom: 14px;
+}
+.hr-nav-group h2 {
+  margin: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #526b8b;
 }
 .secondary-nav__brand {
   height: 70px;

@@ -16,6 +16,9 @@ import {
   getHrPositions,
   type HrEmployeeRecord,
 } from '@/api/core/hr'
+vi.mock('@/views/supply-chain/hr/PayrollComponentView.vue', () => ({
+  default: { template: '<div>员工薪资标准</div>' },
+}))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
 vi.mock('@/api/core/hr', () => ({
   getHrEmployee: vi.fn(),
@@ -92,7 +95,6 @@ it('居中弹窗选择部门岗位，离职日期必填，提交全部个人资�
     .vm.$emit('update:modelValue', '2020-01-01')
   field('参保状态').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', '公积金')
   await field('银行卡号').get('input').setValue('000000000000')
-  await field('转正薪资').get('input').setValue('8000+8000')
   await field('毕业院校').get('input').setValue('测试大学')
   await wrapper!
     .findAll('button')
@@ -108,7 +110,6 @@ it('居中弹窗选择部门岗位，离职日期必填，提交全部个人资�
     profile: {
       socialInsurance: '公积金',
       bankAccount: '000000000000',
-      regularSalary: '8000+8000',
       graduationSchool: '测试大学',
     },
   })
@@ -152,7 +153,7 @@ it('编辑先取详情，避免把列表未返回的个人信息清空', async (
     }),
   )
 })
-it('销售底薪仅接受金额，并提交转正日期和薪资生效日期', async () => {
+it('员工资料不再重复维护金额，新建后在薪资标准页签录入', async () => {
   await renderEditor()
   field('部门').getComponent({ name: 'ElTreeSelect' }).vm.$emit('update:modelValue', 2)
   field('岗位').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'SALES')
@@ -163,20 +164,11 @@ it('销售底薪仅接受金额，并提交转正日期和薪资生效日期', a
   field('转正日期')
     .getComponent({ name: 'ElDatePicker' })
     .vm.$emit('update:modelValue', '2026-09-01')
-  field('薪资生效日期')
-    .getComponent({ name: 'ElDatePicker' })
-    .vm.$emit('update:modelValue', '2026-06-01')
-  await field('转正底薪（元 / 月）').get('input').setValue('3000+1000')
-  const submit = () =>
-    wrapper!
-      .findAll('button')
-      .find((b) => b.text() === '确定')!
-      .trigger('click')
-  await submit()
-  expect(hrOrganizationApi.saveEmployee).not.toHaveBeenCalled()
-  expect(wrapper!.text()).toContain('销售薪资仅填写底薪金额')
-  await field('转正底薪（元 / 月）').get('input').setValue('5000')
-  await submit()
+  expect(wrapper!.text()).not.toContain('转正底薪（元 / 月）')
+  await wrapper!
+    .findAll('button')
+    .find((b) => b.text() === '确定')!
+    .trigger('click')
   await flushPromises()
   expect(hrOrganizationApi.saveEmployee).toHaveBeenCalledWith(
     null,
@@ -184,8 +176,6 @@ it('销售底薪仅接受金额，并提交转正日期和薪资生效日期', a
       payrollCategory: 'SALES',
       regularized: true,
       regularizationDate: '2026-09-01',
-      salaryEffectiveFrom: '2026-06-01',
-      profile: expect.objectContaining({ regularSalary: '5000' }),
     }),
   )
 })

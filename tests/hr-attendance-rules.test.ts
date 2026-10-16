@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+vi.mock('@/views/supply-chain/hr/PayrollComponentView.vue', () => ({
+  default: { template: '<div>薪资考勤规则</div>' },
+}))
 import Rules from '@/views/supply-chain/hr/HrAttendanceRuleView.vue'
 import * as api from '@/api/core/hr-attendance'
 const permissions = vi.hoisted(() => ({ write: true }))
@@ -70,6 +73,8 @@ afterEach(() => {
 })
 async function open() {
   wrapper = mount(Rules, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+  await flushPromises()
+  wrapper.getComponent({ name: 'ElTabs' }).vm.$emit('update:modelValue', 'expected')
   await flushPromises()
   return wrapper
 }

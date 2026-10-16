@@ -10,14 +10,15 @@
         <el-button :disabled="busy" @click="$emit('close')">关闭</el-button>
         <el-button
           v-if="unlocked && canCalculate"
-          :type="row.statusCode === 'REVIEW' ? 'primary' : 'default'"
+          type="default"
           :disabled="busy"
           @click="$emit('adjust')"
         >
-          当月核定
+          人工调整
         </el-button>
         <el-button
           v-if="row.statusCode === 'REVIEW' && canCalculate"
+          type="primary"
           :loading="busy"
           @click="$emit('recalculate')"
           >重新核算</el-button
@@ -70,7 +71,7 @@ const guidance = computed(() => {
     case 'REVIEW':
       return {
         title: `当前有 ${payrollReviewGroups(props.row.calculation.issues).length} 类问题待处理`,
-        hint: '点击“当月核定”填写部门、绩效和一次说明，保存后自动重算。检查通过即可确认薪酬。已在来源页面处理的，可直接重新核算。',
+        hint: '先按待处理事项补齐员工档案、规则或来源依据，再重新核算。确需人工调整时填写原因，保存后自动重算。',
       }
     case 'READY':
       return {

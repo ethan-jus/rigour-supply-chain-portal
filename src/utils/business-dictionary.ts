@@ -54,13 +54,17 @@ function normalizedKey(_moduleCode: string, code: string) {
 
 function snapshot(moduleCode: string, code: string): DictionarySnapshot {
   const key = normalizedKey(moduleCode, code)
-  return (snapshots[key] ??= {
-    loadedAt: 0,
-    loading: false,
-    loaded: false,
-    failed: false,
-    items: [],
-  })
+  if (!snapshots[key]) {
+    snapshots[key] = {
+      loadedAt: 0,
+      loading: false,
+      loaded: false,
+      failed: false,
+      items: [],
+    }
+  }
+  // 从响应式容器取回代理，首次读取也必须跟踪后续异步更新。
+  return snapshots[key]
 }
 
 function applySnapshot(target: DictionarySnapshot, result: EffectiveDictView) {

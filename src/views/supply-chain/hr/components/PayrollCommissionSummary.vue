@@ -11,12 +11,18 @@
         <strong>{{ costMoney(calculation.commission) }} <small>元</small></strong>
       </div>
     </div>
-    <p>团队提成按所辖城市配置的比例计入；销售人员自身的提成照常发放。</p>
+    <p v-if="calculation.scheme">
+      城市总提成覆盖任期内所辖城市的适用订单，包含本人订单；本人销售提成按销售标准另计。
+    </p>
+    <p v-else>团队提成按所辖城市配置的比例计入；销售人员自身的提成照常发放。</p>
     <p class="commission-summary__hint">
-      待回款提成 {{ costMoney(calculation.heldCommission) }} 元，不计入本期。
+      <template v-if="calculation.scheme">未整单付清的订单尚未计提。</template>
+      <template v-else
+        >待回款提成 {{ costMoney(calculation.heldCommission) }} 元，不计入本期。</template
+      >
       此处为核算金额，实际付款以发放登记为准。
     </p>
-    <p v-if="reviewHint" class="commission-summary__hint">
+    <p v-if="reviewHint && !calculation.scheme" class="commission-summary__hint">
       建议先完成所辖销售的薪酬确认，再重新核算并确认城市总薪酬。
     </p>
   </section>
@@ -37,13 +43,15 @@ const parts = computed(() =>
     { role: 'CITY_TEAM', label: '团队销售提成（不含本人）' },
     { role: 'CITY_MANAGER', label: '城市总独立提成' },
     { role: 'SALES', label: '本人销售提成' },
-  ].map((part) => ({
-    ...part,
-    amount:
-      props.calculation.details
-        .filter((d) => d.recipientRoleCode === part.role)
-        .reduce((cents, d) => cents + Math.round(Number(d.released || 0) * 100), 0) / 100,
-  })),
+  ]
+    .filter((part) => !props.calculation.scheme || part.role !== 'CITY_TEAM')
+    .map((part) => ({
+      ...part,
+      amount:
+        props.calculation.details
+          .filter((d) => d.recipientRoleCode === part.role)
+          .reduce((cents, d) => cents + Math.round(Number(d.released || 0) * 100), 0) / 100,
+    })),
 )
 </script>
 <style scoped>

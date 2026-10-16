@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import axios, { AxiosHeaders } from 'axios'
 import { apiClient } from '@/api/core/client'
 import {
   changeCostStatus,
   getCosts,
   saveCost,
+  uploadCostAttachment,
   type CostCommand,
   type CostRecord,
 } from '@/api/core/cost'
@@ -35,6 +37,26 @@ const command: CostCommand = {
   reason: '',
 }
 describe('cost service contracts', () => {
+  it.each(['marketing', 'logistics'] as const)(
+    'keeps %s attachment binary data as multipart instead of the client default JSON',
+    async (category) => {
+      const file = new File(['cost acceptance'], 'cost.png', { type: 'image/png' })
+      await uploadCostAttachment(category, { id: 'cost/1', revision: 3 } as CostRecord, file)
+      const [, body, config] = vi.mocked(apiClient.post).mock.calls[0]
+      const headers = new AxiosHeaders({
+        'Content-Type': config?.headers?.['Content-Type'] ?? 'application/json',
+      })
+      const transport = axios.create({
+        adapter: async (request) => {
+          expect(request.data).toBe(body)
+          expect(request.data.get('file')).toBe(file)
+          expect(request.data.get('revision')).toBe('3')
+          return { data: null, status: 200, statusText: 'OK', headers: {}, config: request }
+        },
+      })
+      await transport.post('/attachment', body, { headers })
+    },
+  )
   it('sends logistics to Order and preserves unknown cost instead of converting it to zero', async () => {
     await saveCost('logistics', null, command)
     expect(apiClient.post).toHaveBeenCalledWith(

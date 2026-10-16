@@ -242,138 +242,159 @@
       v-model="detailVisible"
       title="员工详情"
       class="employee-detail"
-      width="min(1000px,calc(100vw - 32px))"
+      width="min(1200px,calc(100vw - 32px))"
       align-center
     >
       <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
       <el-skeleton v-else-if="!detail" :rows="8" animated />
       <template v-else>
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="员工编号">{{ detail.employeeCode }}</el-descriptions-item
-          ><el-descriptions-item label="姓名">{{ detail.employeeName }}</el-descriptions-item>
-          <el-descriptions-item label="部门">{{
-            detail.departmentName || '—'
-          }}</el-descriptions-item
-          ><el-descriptions-item label="岗位">{{
-            detail.positionName || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="是否转正">{{
-            regularizationLabel(detail.regularized)
-          }}</el-descriptions-item>
-          <el-descriptions-item label="转正日期">{{
-            detail.regularizationDate || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="薪酬类别">{{
-            payrollCategoryLabel(detail.payrollCategory)
-          }}</el-descriptions-item>
-          <el-descriptions-item label="薪资生效日期">{{
-            detail.salaryEffectiveFrom || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="职级">{{ detail.jobGrade || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="手机号">{{ detail.mobile || '—' }}</el-descriptions-item
-          ><el-descriptions-item label="部门负责人">{{
-            detail.departmentLeaderName || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="身份证号">{{
-            detail.profile?.idNumber || '—'
-          }}</el-descriptions-item
-          ><el-descriptions-item label="出生日期">{{
-            identity.birthDate || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="年龄">{{ identity.age || '—' }}</el-descriptions-item
-          ><el-descriptions-item label="性别">{{ identity.gender || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="入职日期">{{
-            dateOnly(detail.entryDate) || '—'
-          }}</el-descriptions-item
-          ><el-descriptions-item label="在职状态">{{
-            statusLabel(detail.employmentStatus)
-          }}</el-descriptions-item>
-          <el-descriptions-item label="离职日期">{{
-            dateOnly(detail.leaveDate) || '—'
-          }}</el-descriptions-item
-          ><el-descriptions-item label="工龄">{{
-            serviceLength(
-              detail.entryDate,
-              detail.employmentStatus === 'LEFT' ? detail.leaveDate : null,
-            )
-          }}</el-descriptions-item>
-          <el-descriptions-item label="合同截止日期">{{
-            detail.profile?.contractEndDate || '—'
-          }}</el-descriptions-item
-          ><el-descriptions-item label="学历">{{
-            detail.profile?.education || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="毕业院校">{{
-            detail.profile?.graduationSchool || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="专业">{{
-            detail.profile?.major || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="转正薪资">{{
-            detail.profile?.regularSalary || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="试用期薪资">{{
-            detail.profile?.probationSalary || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="试用期" :span="2">{{
-            detail.profile?.probationPeriod || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="户籍地址">{{
-            detail.profile?.registeredAddress || '—'
-          }}</el-descriptions-item
-          ><el-descriptions-item label="户口性质">{{
-            detail.profile?.householdType || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="现居住地" :span="2">{{
-            detail.profile?.residentialAddress || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="银行卡号">{{
-            detail.profile?.bankAccount || '—'
-          }}</el-descriptions-item
-          ><el-descriptions-item label="开户行">{{
-            detail.profile?.bankName || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="参保状态">{{
-            detail.profile?.socialInsurance || '—'
-          }}</el-descriptions-item
-          ><el-descriptions-item label="邮箱">{{ detail.email || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="紧急联系人">{{
-            detail.profile?.emergencyContact || '—'
-          }}</el-descriptions-item
-          ><el-descriptions-item label="紧急联系方式">{{
-            detail.profile?.emergencyPhone || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="备注" :span="2">{{
-            detail.remark || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="创建人">{{
-            auditActor(detail.createdByName, detail.createdBy)
-          }}</el-descriptions-item
-          ><el-descriptions-item label="创建时间">{{
-            auditTime(detail.createdTime)
-          }}</el-descriptions-item>
-          <el-descriptions-item label="修改人">{{
-            auditActor(detail.updatedByName, detail.updatedBy)
-          }}</el-descriptions-item
-          ><el-descriptions-item label="修改时间">{{
-            auditTime(detail.updatedTime)
-          }}</el-descriptions-item>
-        </el-descriptions>
-        <h3>任职历史</h3>
-        <el-table :data="assignments"
-          ><el-table-column prop="departmentName" label="部门" /><el-table-column
-            prop="positionName"
-            label="岗位"
-          /><el-table-column label="开始时间"
-            ><template #default="{ row }">{{
-              auditTime(row.effectiveFrom)
-            }}</template></el-table-column
-          ><el-table-column label="结束时间"
-            ><template #default="{ row }">{{
-              row.effectiveTo ? auditTime(row.effectiveTo) : '当前任职'
-            }}</template></el-table-column
-          ></el-table
-        >
+        <el-tabs v-model="detailTab">
+          <el-tab-pane label="基本信息" name="basic">
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="员工编号">{{ detail.employeeCode }}</el-descriptions-item
+              ><el-descriptions-item label="姓名">{{ detail.employeeName }}</el-descriptions-item>
+              <el-descriptions-item label="部门">{{
+                detail.departmentName || '—'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="岗位">{{
+                detail.positionName || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="是否转正">{{
+                regularizationLabel(detail.regularized)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="转正日期">{{
+                detail.regularizationDate || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="薪酬类别">{{
+                payrollCategoryLabel(detail.payrollCategory)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="薪资生效日期">{{
+                detail.salaryEffectiveFrom || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="职级">{{ detail.jobGrade || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="手机号">{{ detail.mobile || '—' }}</el-descriptions-item
+              ><el-descriptions-item label="部门负责人">{{
+                detail.departmentLeaderName || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="身份证号">{{
+                detail.profile?.idNumber || '—'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="出生日期">{{
+                identity.birthDate || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="年龄">{{ identity.age || '—' }}</el-descriptions-item
+              ><el-descriptions-item label="性别">{{
+                identity.gender || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="入职日期">{{
+                dateOnly(detail.entryDate) || '—'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="在职状态">{{
+                statusLabel(detail.employmentStatus)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="离职日期">{{
+                dateOnly(detail.leaveDate) || '—'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="工龄">{{
+                serviceLength(
+                  detail.entryDate,
+                  detail.employmentStatus === 'LEFT' ? detail.leaveDate : null,
+                )
+              }}</el-descriptions-item>
+              <el-descriptions-item label="合同截止日期">{{
+                detail.profile?.contractEndDate || '—'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="学历">{{
+                detail.profile?.education || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="毕业院校">{{
+                detail.profile?.graduationSchool || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="专业">{{
+                detail.profile?.major || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="试用期" :span="2">{{
+                detail.profile?.probationPeriod || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="户籍地址">{{
+                detail.profile?.registeredAddress || '—'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="户口性质">{{
+                detail.profile?.householdType || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="现居住地" :span="2">{{
+                detail.profile?.residentialAddress || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="银行卡号">{{
+                detail.profile?.bankAccount || '—'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="开户行">{{
+                detail.profile?.bankName || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="参保状态">{{
+                detail.profile?.socialInsurance || '—'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="邮箱">{{ detail.email || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="紧急联系人">{{
+                detail.profile?.emergencyContact || '—'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="紧急联系方式">{{
+                detail.profile?.emergencyPhone || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="备注" :span="2">{{
+                detail.remark || '—'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="创建人">{{
+                auditActor(detail.createdByName, detail.createdBy)
+              }}</el-descriptions-item
+              ><el-descriptions-item label="创建时间">{{
+                auditTime(detail.createdTime)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="修改人">{{
+                auditActor(detail.updatedByName, detail.updatedBy)
+              }}</el-descriptions-item
+              ><el-descriptions-item label="修改时间">{{
+                auditTime(detail.updatedTime)
+              }}</el-descriptions-item>
+            </el-descriptions>
+          </el-tab-pane>
+          <el-tab-pane label="任职记录" name="assignments" lazy>
+            <el-table :data="assignments"
+              ><el-table-column prop="departmentName" label="部门" /><el-table-column
+                prop="positionName"
+                label="岗位"
+              /><el-table-column label="开始时间"
+                ><template #default="{ row }">{{
+                  auditTime(row.effectiveFrom)
+                }}</template></el-table-column
+              ><el-table-column label="结束时间"
+                ><template #default="{ row }">{{
+                  row.effectiveTo ? auditTime(row.effectiveTo) : '当前任职'
+                }}</template></el-table-column
+              ></el-table
+            >
+          </el-tab-pane>
+          <el-tab-pane v-if="can('hr:payroll-rule:read')" label="薪资标准" name="salary" lazy>
+            <PayrollComponentView
+              :key="detail.employeeCode"
+              component-kind="SALARY"
+              :employee-code="detail.employeeCode"
+            />
+          </el-tab-pane>
+          <el-tab-pane
+            v-if="can('hr:payroll-rule:read')"
+            label="薪资变更历史"
+            name="salaryHistory"
+            lazy
+          >
+            <PayrollComponentView
+              :key="detail.employeeCode"
+              component-kind="SALARY"
+              :employee-code="detail.employeeCode"
+              history-only
+            />
+          </el-tab-pane>
+        </el-tabs>
       </template>
     </el-dialog>
   </div>
@@ -388,6 +409,7 @@ import { CopyDocument, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
 import HrEmployeeEditor from './HrEmployeeEditor.vue'
+import PayrollComponentView from './PayrollComponentView.vue'
 import {
   getHrEmployee,
   getDhbBindingRisks,
@@ -448,6 +470,7 @@ const editorVisible = ref(false),
   detail = ref<HrEmployeeRecord | null>(null),
   detailError = ref(''),
   assignments = ref<HrAssignment[]>([])
+const detailTab = ref('basic')
 const identity = computed(() => identityDetails(detail.value?.profile?.idNumber))
 let requestId = 0,
   detailRequest = 0
@@ -562,6 +585,7 @@ async function loadDepartments() {
 async function openDetail(row: HrEmployeeRecord) {
   const request = ++detailRequest
   detailVisible.value = true
+  detailTab.value = 'basic'
   detail.value = null
   detailError.value = ''
   assignments.value = []

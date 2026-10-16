@@ -6,6 +6,7 @@ export type TargetMetric =
   | 'YANGZHANGGUI_SALES_AMOUNT'
   | 'SALES_AMOUNT'
   | 'RECEIPT_AMOUNT'
+  | (string & {})
 export interface TargetSubject {
   dimensionType: TargetDimension
   code: string
@@ -61,3 +62,8 @@ export const getTargetHistory = (month: string, dimensionType: TargetDimension, 
     ...options,
     params: { month, dimensionType, code },
   })
+
+export const getPayrollTargetMetrics = () =>
+  apiClient.get<
+    import('./payroll-scheme/models/PayrollTargetMetricView').PayrollTargetMetricView[]
+  >(`${root}/payroll-metrics`, options)

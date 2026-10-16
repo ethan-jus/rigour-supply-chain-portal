@@ -19,6 +19,8 @@ import {
   type AttendanceRuleListRow,
 } from '@/api/core/hr-attendance'
 
+import PayrollComponentView from './PayrollComponentView.vue'
+const attendanceTab = ref('calendar')
 const { can } = useSupplyPermissions()
 const initialFilters = (): AttendanceRuleFilters => ({
   month: attendanceMonth(),
@@ -279,224 +281,246 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="supply-page supply-page--list supply-page--filtered-list attendance-rule-page">
-    <div class="page-heading">
-      <SupplyPageTitle>考勤规则设置</SupplyPageTitle>
-      <el-button v-if="can('hr:attendance-rule:write')" type="primary" @click="create"
-        >新增规则</el-button
+  <div>
+    <el-tabs v-model="attendanceTab"
+      ><el-tab-pane name="calendar" label="薪资考勤规则" /><el-tab-pane
+        name="expected"
+        label="月度应出勤天数"
+    /></el-tabs>
+    <PayrollComponentView v-if="attendanceTab === 'calendar'" component-kind="ATTENDANCE" />
+    <template v-else>
+      <section
+        class="supply-page supply-page--list supply-page--filtered-list attendance-rule-page"
       >
-    </div>
-    <SupplyListFilters :loading="loading" @search="search" @reset="reset">
-      <el-form-item label="考勤月份">
-        <el-date-picker
-          v-model="filters.month"
-          type="month"
-          value-format="YYYY-MM"
-          :clearable="false"
-          aria-label="考勤月份"
-        />
-      </el-form-item>
-      <el-form-item label="适用部门">
-        <el-tree-select
-          v-model="filters.departmentId"
-          :data="departmentOptions"
-          node-key="id"
-          :props="{ label: 'departmentName', children: 'children' }"
-          :loading="departmentsLoading"
-          :disabled="!!departmentError"
-          check-strictly
-          filterable
-          clearable
-          :render-after-expand="false"
-          :default-expanded-keys="departmentOptions.map((d) => d.id)"
-          placeholder="全部部门 / 公司默认"
-          aria-label="适用部门"
-        />
-      </el-form-item>
-      <el-form-item label="规则状态">
-        <el-select v-model="filters.status" clearable placeholder="全部状态" aria-label="规则状态">
-          <el-option label="可修改" value="UNLOCKED" /><el-option label="已锁定" value="LOCKED" />
-        </el-select>
-      </el-form-item>
-      <template #feedback
-        ><div v-if="departmentError" class="department-error" role="alert">
-          {{ departmentError
-          }}<el-button link type="primary" @click="loadDepartments">重试</el-button>
-        </div></template
-      >
-    </SupplyListFilters>
-    <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-alert
-      v-if="data && data.configuredDepartmentIds.length && data.companyExpectedDays == null"
-      title="本月尚未设置公司默认规则，未单独设置规则的部门暂无应出勤标准。"
-      type="warning"
-      :closable="false"
-    />
-    <el-card v-loading="loading" class="list-card" shadow="never">
-      <div class="supply-list-toolbar">
-        <strong>{{ applied.month }} 考勤规则</strong
-        ><el-button :disabled="loading" @click="load">刷新</el-button>
-      </div>
-      <el-table
-        :data="data?.page.items ?? []"
-        :row-key="(row: AttendanceRuleListRow) => `${row.month}:${row.departmentId ?? 0}`"
-        height="100%"
-        border
-        class="business-table supply-scroll-table"
-      >
-        <el-table-column prop="month" label="考勤月份" width="130" />
-        <el-table-column
-          prop="departmentName"
-          label="适用部门"
-          min-width="200"
-          show-overflow-tooltip
-        />
-        <el-table-column label="应出勤天数" min-width="140" align="right"
-          ><template #default="{ row }">{{ row.expectedDays }} 天</template></el-table-column
-        >
-        <el-table-column label="规则状态" width="140"
-          ><template #default="{ row }"
-            ><el-tag :type="row.locked ? 'warning' : 'success'" effect="plain">{{
-              row.locked ? '已锁定' : '可修改'
-            }}</el-tag></template
-          ></el-table-column
-        >
-        <el-table-column label="最近修改时间" min-width="180"
-          ><template #default="{ row }">{{
-            formatTime(row.updatedTime)
-          }}</template></el-table-column
-        >
-        <el-table-column label="操作" width="110" fixed="right"
-          ><template #default="{ row }"
-            ><el-button
-              link
-              type="primary"
-              :aria-label="`${row.locked || !can('hr:attendance-rule:write') ? '查看' : '修改'}${row.departmentName}考勤规则`"
-              @click="openRow(row as AttendanceRuleListRow)"
-              >{{ row.locked || !can('hr:attendance-rule:write') ? '查看' : '修改' }}</el-button
-            ></template
-          ></el-table-column
-        >
-        <template #empty
-          ><div class="empty-rules">
-            <span>{{ emptyText }}</span
-            ><el-button
-              v-if="data && !data.configuredDepartmentIds.length && can('hr:attendance-rule:write')"
-              link
-              type="primary"
-              @click="create"
-              >新增本月规则</el-button
+        <div class="page-heading">
+          <SupplyPageTitle>考勤规则设置</SupplyPageTitle>
+          <el-button v-if="can('hr:attendance-rule:write')" type="primary" @click="create"
+            >新增规则</el-button
+          >
+        </div>
+        <SupplyListFilters :loading="loading" @search="search" @reset="reset">
+          <el-form-item label="考勤月份">
+            <el-date-picker
+              v-model="filters.month"
+              type="month"
+              value-format="YYYY-MM"
+              :clearable="false"
+              aria-label="考勤月份"
+            />
+          </el-form-item>
+          <el-form-item label="适用部门">
+            <el-tree-select
+              v-model="filters.departmentId"
+              :data="departmentOptions"
+              node-key="id"
+              :props="{ label: 'departmentName', children: 'children' }"
+              :loading="departmentsLoading"
+              :disabled="!!departmentError"
+              check-strictly
+              filterable
+              clearable
+              :render-after-expand="false"
+              :default-expanded-keys="departmentOptions.map((d) => d.id)"
+              placeholder="全部部门 / 公司默认"
+              aria-label="适用部门"
+            />
+          </el-form-item>
+          <el-form-item label="规则状态">
+            <el-select
+              v-model="filters.status"
+              clearable
+              placeholder="全部状态"
+              aria-label="规则状态"
             >
-          </div></template
+              <el-option label="可修改" value="UNLOCKED" /><el-option
+                label="已锁定"
+                value="LOCKED"
+              />
+            </el-select>
+          </el-form-item>
+          <template #feedback
+            ><div v-if="departmentError" class="department-error" role="alert">
+              {{ departmentError
+              }}<el-button link type="primary" @click="loadDepartments">重试</el-button>
+            </div></template
+          >
+        </SupplyListFilters>
+        <el-alert v-if="error" :title="error" type="error" :closable="false" />
+        <el-alert
+          v-if="data && data.configuredDepartmentIds.length && data.companyExpectedDays == null"
+          title="本月尚未设置公司默认规则，未单独设置规则的部门暂无应出勤标准。"
+          type="warning"
+          :closable="false"
+        />
+        <el-card v-loading="loading" class="list-card" shadow="never">
+          <div class="supply-list-toolbar">
+            <strong>{{ applied.month }} 考勤规则</strong
+            ><el-button :disabled="loading" @click="load">刷新</el-button>
+          </div>
+          <el-table
+            :data="data?.page.items ?? []"
+            :row-key="(row: AttendanceRuleListRow) => `${row.month}:${row.departmentId ?? 0}`"
+            height="100%"
+            border
+            class="business-table supply-scroll-table"
+          >
+            <el-table-column prop="month" label="考勤月份" width="130" />
+            <el-table-column
+              prop="departmentName"
+              label="适用部门"
+              min-width="200"
+              show-overflow-tooltip
+            />
+            <el-table-column label="应出勤天数" min-width="140" align="right"
+              ><template #default="{ row }">{{ row.expectedDays }} 天</template></el-table-column
+            >
+            <el-table-column label="规则状态" width="140"
+              ><template #default="{ row }"
+                ><el-tag :type="row.locked ? 'warning' : 'success'" effect="plain">{{
+                  row.locked ? '已锁定' : '可修改'
+                }}</el-tag></template
+              ></el-table-column
+            >
+            <el-table-column label="最近修改时间" min-width="180"
+              ><template #default="{ row }">{{
+                formatTime(row.updatedTime)
+              }}</template></el-table-column
+            >
+            <el-table-column label="操作" width="110" fixed="right"
+              ><template #default="{ row }"
+                ><el-button
+                  link
+                  type="primary"
+                  :aria-label="`${row.locked || !can('hr:attendance-rule:write') ? '查看' : '修改'}${row.departmentName}考勤规则`"
+                  @click="openRow(row as AttendanceRuleListRow)"
+                  >{{ row.locked || !can('hr:attendance-rule:write') ? '查看' : '修改' }}</el-button
+                ></template
+              ></el-table-column
+            >
+            <template #empty
+              ><div class="empty-rules">
+                <span>{{ emptyText }}</span
+                ><el-button
+                  v-if="
+                    data && !data.configuredDepartmentIds.length && can('hr:attendance-rule:write')
+                  "
+                  link
+                  type="primary"
+                  @click="create"
+                  >新增本月规则</el-button
+                >
+              </div></template
+            >
+          </el-table>
+          <el-pagination
+            v-show="!error"
+            class="supply-list-pagination"
+            background
+            layout="total, prev, pager, next"
+            :total="total"
+            :page-size="20"
+            :current-page="page"
+            @current-change="changePage"
+          />
+        </el-card>
+        <p class="rule-hint">
+          未单独设置的部门使用公司默认规则，不继承上级部门规则。选择部门仅查询该部门。
+        </p>
+        <el-dialog
+          v-model="dialogOpen"
+          :title="title"
+          width="min(560px, 94vw)"
+          :close-on-click-modal="false"
+          :close-on-press-escape="!saving"
+          :show-close="!saving"
         >
-      </el-table>
-      <el-pagination
-        v-show="!error"
-        class="supply-list-pagination"
-        background
-        layout="total, prev, pager, next"
-        :total="total"
-        :page-size="20"
-        :current-page="page"
-        @current-change="changePage"
-      />
-    </el-card>
-    <p class="rule-hint">
-      未单独设置的部门使用公司默认规则，不继承上级部门规则。选择部门仅查询该部门。
-    </p>
-    <el-dialog
-      v-model="dialogOpen"
-      :title="title"
-      width="min(560px, 94vw)"
-      :close-on-click-modal="false"
-      :close-on-press-escape="!saving"
-      :show-close="!saving"
-    >
-      <el-alert
-        v-if="editorError"
-        :title="editorError"
-        type="error"
-        :closable="false"
-        class="editor-alert"
-      />
-      <el-form label-position="top" @submit.prevent="save">
-        <el-form-item label="考勤月份" required
-          ><el-date-picker
-            v-model="editMonth"
-            type="month"
-            value-format="YYYY-MM"
-            :clearable="false"
-            :disabled="mode !== 'create' || saving"
-            aria-label="规则月份"
-        /></el-form-item>
-        <el-form-item label="适用部门" required
-          ><el-tree-select
-            v-model="editDepartment"
-            :data="editorOptions"
-            node-key="id"
-            :props="{ label: 'departmentName', children: 'children', disabled: 'disabled' }"
-            :disabled="mode !== 'create' || saving || editorLoading || !!departmentError"
-            :loading="editorLoading || departmentsLoading"
-            check-strictly
-            filterable
-            :render-after-expand="false"
-            :default-expanded-keys="editorOptions.map((d) => d.id)"
-            placeholder="选择公司默认或部门"
-            aria-label="规则部门"
-        /></el-form-item>
-        <el-form-item label="应出勤天数" required
-          ><div class="days-control">
-            <el-input-number
-              :key="`${maxDays}-${daysDisabled}`"
-              v-model="days"
-              :min="0"
-              :max="maxDays"
-              :precision="0"
-              :disabled="daysDisabled"
-              aria-label="应出勤天数"
-            /><span>天</span>
-          </div></el-form-item
-        >
-      </el-form>
-      <el-alert v-if="rule?.locked" :title="lockReason" type="warning" :closable="false" />
-      <el-alert
-        v-else-if="duplicate"
-        title="该月份、部门已设置考勤规则，请在列表中修改，不能重复新增。"
-        type="info"
-        :closable="false"
-      />
-      <p v-if="rule && editDepartment && rule.expectedDays == null" class="hint">
-        {{ selectedName }}当前使用公司默认：{{
-          rule.companyExpectedDays == null ? '尚未设置' : `${rule.companyExpectedDays} 天`
-        }}
-      </p>
-      <p class="hint">
-        同月份、同部门仅一条规则；关联员工确认后锁定。每月单独设置，月中入离职暂不自动折算。
-      </p>
-      <template #footer>
-        <el-button
-          v-if="mode === 'edit' && editDepartment && rule?.expectedDays != null && !readOnly"
-          :disabled="saving || editorLoading"
-          @click="persist(null)"
-          >恢复公司默认</el-button
-        >
-        <el-button :disabled="saving" @click="dialogOpen = false">{{
-          readOnly ? '关闭' : '取消'
-        }}</el-button>
-        <el-button v-if="editorError" :disabled="saving || editorLoading" @click="loadEditor()"
-          >重新加载</el-button
-        >
-        <el-button
-          v-if="!readOnly"
-          type="primary"
-          :loading="saving"
-          :disabled="daysDisabled || days == null || days === rule?.expectedDays"
-          @click="save"
-          >{{ mode === 'create' ? '保存规则' : '保存修改' }}</el-button
-        >
-      </template>
-    </el-dialog>
-  </section>
+          <el-alert
+            v-if="editorError"
+            :title="editorError"
+            type="error"
+            :closable="false"
+            class="editor-alert"
+          />
+          <el-form label-position="top" @submit.prevent="save">
+            <el-form-item label="考勤月份" required
+              ><el-date-picker
+                v-model="editMonth"
+                type="month"
+                value-format="YYYY-MM"
+                :clearable="false"
+                :disabled="mode !== 'create' || saving"
+                aria-label="规则月份"
+            /></el-form-item>
+            <el-form-item label="适用部门" required
+              ><el-tree-select
+                v-model="editDepartment"
+                :data="editorOptions"
+                node-key="id"
+                :props="{ label: 'departmentName', children: 'children', disabled: 'disabled' }"
+                :disabled="mode !== 'create' || saving || editorLoading || !!departmentError"
+                :loading="editorLoading || departmentsLoading"
+                check-strictly
+                filterable
+                :render-after-expand="false"
+                :default-expanded-keys="editorOptions.map((d) => d.id)"
+                placeholder="选择公司默认或部门"
+                aria-label="规则部门"
+            /></el-form-item>
+            <el-form-item label="应出勤天数" required
+              ><div class="days-control">
+                <el-input-number
+                  :key="`${maxDays}-${daysDisabled}`"
+                  v-model="days"
+                  :min="0"
+                  :max="maxDays"
+                  :precision="0"
+                  :disabled="daysDisabled"
+                  aria-label="应出勤天数"
+                /><span>天</span>
+              </div></el-form-item
+            >
+          </el-form>
+          <el-alert v-if="rule?.locked" :title="lockReason" type="warning" :closable="false" />
+          <el-alert
+            v-else-if="duplicate"
+            title="该月份、部门已设置考勤规则，请在列表中修改，不能重复新增。"
+            type="info"
+            :closable="false"
+          />
+          <p v-if="rule && editDepartment && rule.expectedDays == null" class="hint">
+            {{ selectedName }}当前使用公司默认：{{
+              rule.companyExpectedDays == null ? '尚未设置' : `${rule.companyExpectedDays} 天`
+            }}
+          </p>
+          <p class="hint">
+            同月份、同部门仅一条规则；关联员工确认后锁定。每月单独设置，月中入离职暂不自动折算。
+          </p>
+          <template #footer>
+            <el-button
+              v-if="mode === 'edit' && editDepartment && rule?.expectedDays != null && !readOnly"
+              :disabled="saving || editorLoading"
+              @click="persist(null)"
+              >恢复公司默认</el-button
+            >
+            <el-button :disabled="saving" @click="dialogOpen = false">{{
+              readOnly ? '关闭' : '取消'
+            }}</el-button>
+            <el-button v-if="editorError" :disabled="saving || editorLoading" @click="loadEditor()"
+              >重新加载</el-button
+            >
+            <el-button
+              v-if="!readOnly"
+              type="primary"
+              :loading="saving"
+              :disabled="daysDisabled || days == null || days === rule?.expectedDays"
+              @click="save"
+              >{{ mode === 'create' ? '保存规则' : '保存修改' }}</el-button
+            >
+          </template>
+        </el-dialog>
+      </section>
+    </template>
+  </div>
 </template>
 
 <style scoped>

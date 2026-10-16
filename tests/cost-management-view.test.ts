@@ -15,7 +15,11 @@ const state = vi.hoisted(() => ({
   permissions: new Set<string>(),
   route: { path: '/supply-chain/cost/logistics' },
 }))
-vi.mock('vue-router', () => ({ useRoute: () => state.route }))
+vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
+  onBeforeRouteUpdate: vi.fn(),
+  useRoute: () => state.route,
+}))
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: (permission: string) => state.permissions.has(permission) }),
 }))
@@ -32,7 +36,14 @@ vi.mock('@/api/core/cost', () => ({
 vi.mock('@/utils/business-dictionary', () => ({
   loadBusinessDictionaries: vi.fn().mockResolvedValue(undefined),
   businessDictionaryLabel: (_module: string, _code: string, value: string) => value,
-  businessDictionaryOptions: () => [],
+  businessDictionaryOptions: (_module: string, code: string) =>
+    code === 'MARKETING_EXPENSE_TYPE'
+      ? [
+          { value: 'PROMOTION', label: '推广活动' },
+          { value: 'ADVERTISING', label: '广告费' },
+          { value: 'ENDORSEMENT', label: '代言费' },
+        ]
+      : [],
 }))
 let wrapper: VueWrapper | undefined
 const empty: CostPage = {
@@ -57,7 +68,7 @@ afterEach(() => {
   wrapper?.unmount()
   document.body.innerHTML = ''
 })
-async function render() {
+async function render(advanced = true) {
   wrapper = mount(CostManagementView, {
     global: {
       plugins: [ElementPlus, createPinia()],
@@ -65,8 +76,66 @@ async function render() {
     },
   })
   await flushPromises()
+  const more = wrapper.findAll('button').find((button) => button.text() === '更多筛选')
+  if (more && advanced) await more.trigger('click')
 }
 describe('cost management workflow', () => {
+  it('keeps marketing keywords visible and submits the chosen dictionary type', async () => {
+    state.route.path = '/supply-chain/cost/marketing'
+    state.permissions = new Set(['erp:cost:marketing:read'])
+    await render(false)
+    expect(wrapper!.find('input[aria-label="费用事项"]').exists()).toBe(true)
+    expect(wrapper!.find('input[aria-label="收款方"]').exists()).toBe(false)
+    expect(wrapper!.find('input[aria-label="手填经办人"]').exists()).toBe(false)
+    await wrapper!
+      .findAll('button')
+      .find((button) => button.text() === '推广活动')!
+      .trigger('click')
+    await flushPromises()
+    expect(getCosts).toHaveBeenLastCalledWith(
+      'marketing',
+      expect.objectContaining({ typeCode: 'PROMOTION', begin: 0 }),
+    )
+    await wrapper!
+      .findAll('button')
+      .find((button) => button.text() === '更多筛选')!
+      .trigger('click')
+    await wrapper!.get('input[aria-label="收款方"]').setValue('合作公司')
+    await wrapper!.get('input[aria-label="手填经办人"]').setValue('经办甲')
+    await wrapper!.get('.supply-list-filters form').trigger('submit')
+    expect(getCosts).toHaveBeenLastCalledWith(
+      'marketing',
+      expect.objectContaining({
+        payeeName: '合作公司',
+        ownerName: '经办甲',
+        typeCode: 'PROMOTION',
+      }),
+    )
+  })
+  it.each(['warehouse-rentals', 'office-rentals'])(
+    'uses month as the primary rental filter for %s',
+    async (category) => {
+      state.route.path = '/supply-chain/cost/' + category
+      await render(false)
+      expect(
+        wrapper!
+          .findAllComponents({ name: 'ElDatePicker' })
+          .some((picker) => picker.props('type') === 'month'),
+      ).toBe(true)
+      expect(wrapper!.find('input[aria-label="费用开始日期"]').exists()).toBe(false)
+      await wrapper!
+        .findAll('button')
+        .find((button) => button.text() === '更多筛选')!
+        .trigger('click')
+      expect(wrapper!.find('input[aria-label="费用开始日期"]').exists()).toBe(true)
+      expect(wrapper!.find('input[aria-label="出租方"]').exists()).toBe(true)
+    },
+  )
+  it('does not show unknown aggregate values as zero or a currency-prefixed missing amount', async () => {
+    await render(false)
+    expect(wrapper!.get('.cost-summary').text()).not.toContain('¥待补金额')
+    expect(wrapper!.get('.cost-summary').text()).toContain('已登记金额—')
+  })
   it('loads the Order list and keeps mutation controls hidden for read-only access', async () => {
     await render()
     expect(getCosts).toHaveBeenCalledWith(
@@ -138,6 +207,10 @@ describe('cost management workflow', () => {
     await flushPromises()
     expect(getCosts).toHaveBeenLastCalledWith('warehouse-rentals', { begin: 0, step: 20 })
     expect(wrapper!.find('input[aria-label="运单号"]').exists()).toBe(false)
+    await wrapper!
+      .findAll('button')
+      .find((button) => button.text() === '更多筛选')!
+      .trigger('click')
     await wrapper!.get('input[aria-label="租赁合同号"]').setValue('LEASE-1')
     await wrapper!.get('.supply-list-filters form').trigger('submit')
     await flushPromises()

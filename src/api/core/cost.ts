@@ -1,13 +1,31 @@
 import { apiClient } from './client'
-export type CostCategory = 'logistics' | 'marketing' | 'warehouse-rentals' | 'expenses'
+export type CostCategory =
+  | 'logistics'
+  | 'marketing'
+  | 'warehouse-rentals'
+  | 'office-rentals'
+  | 'expenses'
+  | 'purchases'
+  | 'losses'
 export interface CostQuery {
   begin: number
   step: number
+  sourceSystem?: string
+  missingAmount?: boolean
+  payerCode?: string
   documentNo?: string
   title?: string
   remark?: string
   trackingNo?: string
   sourceDocumentNo?: string
+  costMonth?: string
+  supplierName?: string
+  lossReason?: string
+  ownerName?: string
+  payeeName?: string
+  landlordName?: string
+  objectName?: string
+  departmentId?: number
   contractNo?: string
   typeCode?: string
   cityCode?: string
@@ -27,6 +45,13 @@ export interface CostEmployee {
   cityName?: string | null
 }
 export interface CostSource {
+  sourceSystem?: string | null
+  originalNo?: string | null
+  documentDate?: string | null
+  originAddress?: string | null
+  destinationAddress?: string | null
+  warehouseTypeCode?: string | null
+  targetWarehouseTypeCode?: string | null
   id: string
   documentNo: string
   sourceType: string
@@ -42,6 +67,10 @@ export interface CostSource {
 export interface CostWarehouse {
   value: string
   label: string
+  warehouseTypeCode?: string
+  regionCode?: string
+  address?: string
+  name?: string
 }
 export interface CostCommand {
   requestId: string
@@ -55,7 +84,27 @@ export interface CostCommand {
   costDate: string
   amount: number | null
   paymentStatusCode: string
+  costMonth?: string | null
+  ownerName?: string | null
+  payeeName?: string | null
+  goods?: CostGoods | null
+  marketing?: { channelName: string; serviceFrom: string | null; serviceTo: string | null } | null
+  externalDocuments?: CostExternalDocument[]
   logistics: {
+    externalDocuments?: CostExternalDocument[]
+    supplierId?: string | null
+    customerId?: string | null
+    entryMode?: 'LINKED' | 'MANUAL' | 'MIXED' | 'NONE'
+    noSourceReason?: string
+    manualPartyReason?: string
+    deliveryStops?: { sourceId: string; customerName: string; address: string }[]
+    senderName?: string
+    receiverName?: string
+    originAddress?: string
+    destinationAddress?: string
+    sourceWarehouseId?: string | null
+    targetWarehouseId?: string | null
+    externalDocumentNo?: string
     legCode: string
     sourceIds: string[]
     voucherIds: string[]
@@ -65,6 +114,10 @@ export interface CostCommand {
     payerCode: string
   } | null
   rental: {
+    premisesType?: string
+    premisesName?: string
+    address?: string
+    landlordName?: string
     warehouseId: string | null
     area: number | null
     contractNo: string
@@ -86,6 +139,8 @@ export interface CostRecord {
   warehouseName: string | null
   ownerEmployeeName: string | null
   createdTime: string
+  createdBy?: string
+  updatedBy?: string
   updatedTime: string
 }
 export interface CostPage {
@@ -93,6 +148,8 @@ export interface CostPage {
   begin: number
   step: number
   confirmedAmount?: number
+  registeredAmount?: number
+  missingAmountCount?: number
   paidAmount?: number
   pendingCount?: number
   items: CostRecord[]
@@ -136,7 +193,7 @@ const base = (category: CostCategory) =>
     ? '/hr/expenses'
     : category === 'logistics'
       ? '/orders/logistics-costs'
-      : `/erp/costs/${category}`
+      : `/erp/costs/${category === 'office-rentals' ? 'warehouse-rentals' : category}`
 function fromExpense(row: ExpenseRecord): CostRecord {
   return {
     ...row,
@@ -154,9 +211,19 @@ function fromExpense(row: ExpenseRecord): CostRecord {
     createdTime: row.updatedTime,
   }
 }
+const scopedQuery = (category: CostCategory, params: CostQuery): CostQuery =>
+  category === 'office-rentals'
+    ? { ...params, typeCode: 'OFFICE' }
+    : category === 'warehouse-rentals'
+      ? { ...params, typeCode: params.typeCode || 'WAREHOUSE' }
+      : params
+
 export async function getCosts(category: CostCategory, params: CostQuery): Promise<CostPage> {
   if (category !== 'expenses')
-    return apiClient.get<CostPage>(base(category), { params, ...options })
+    return apiClient.get<CostPage>(base(category), {
+      params: scopedQuery(category, params),
+      ...options,
+    })
   const page = await apiClient.get<{
     total: number
     begin: number
@@ -172,8 +239,30 @@ export async function saveCost(
 ): Promise<CostRecord> {
   const path = `${base(category)}${id ? '/' + encodeURIComponent(id) : ''}`
   if (category !== 'expenses') {
-    const { rental, logistics, ...common } = data
-    const command = category === 'logistics' ? { ...common, logistics } : { ...common, rental }
+    const {
+      rental,
+      logistics,
+      goods,
+      costMonth,
+      ownerName,
+      payeeName,
+      marketing,
+      externalDocuments,
+      ...common
+    } = data
+    const command =
+      category === 'logistics'
+        ? { ...common, logistics }
+        : {
+            ...common,
+            rental,
+            goods,
+            costMonth,
+            ownerName,
+            payeeName,
+            marketing,
+            externalDocuments,
+          }
     return id
       ? apiClient.put<CostRecord>(path, command, options)
       : apiClient.post<CostRecord>(path, command, options)
@@ -212,18 +301,136 @@ export async function changeCostStatus(
 }
 export const getCostHistory = (category: CostCategory, id: string) =>
   apiClient.get<CostAudit[]>(`${base(category)}/${encodeURIComponent(id)}/history`, options)
-export const getCostSources = (legCode: string, keyword: string) =>
+export const getCostSources = (legCode: string, keyword: string, cityCode?: string, begin = 0) =>
   apiClient.get<CostSource[]>('/orders/logistics-costs/sources', {
-    params: { legCode, keyword },
+    params: { legCode, keyword, cityCode, begin },
     ...options,
   })
 export const getCostEmployees = (category: 'marketing' | 'expenses') =>
   apiClient.get<CostEmployee[]>(`${base(category)}/employees`, options)
 export const getCostWarehouses = (category: CostCategory, keyword = '') =>
-  apiClient.get<CostWarehouse[]>(`${base(category)}/warehouses`, {
-    params: { keyword },
+  apiClient.get<CostWarehouse[]>(
+    `/erp/costs/${category === 'office-rentals' ? 'warehouse-rentals' : category}/warehouses`,
+    {
+      params: { keyword },
+      ...options,
+    },
+  )
+
+export const getCostCities = (action?: string) =>
+  apiClient.get<{ code: string; name: string }[]>('/crm/cost-city-references', {
+    params: { action },
     ...options,
   })
 
-export const getCostCities = () =>
-  apiClient.get<{ code: string; name: string }[]>('/crm/cost-city-references', options)
+export interface CostExternalDocument {
+  linkedId?: string | null
+  sourceSystemName?: string
+  originAddress?: string
+  destinationAddress?: string
+  differenceReason?: string
+  sourceSystem: 'DHB' | 'MANUAL' | 'OTHER'
+  documentType: string
+  documentNo: string
+  documentDate: string
+  senderName: string
+  receiverName: string
+  remark: string
+}
+export interface CostGoods {
+  externalDocument?: CostExternalDocument | null
+  productId: string | null
+  variantId: string | null
+  productName: string
+  specification: string
+  unit: string
+  unitPrice: number | null
+  quantity: number | null
+  supplierId: string | null
+  supplierName: string
+  warehouseId: string | null
+  location: string
+  purchaseOrderId: string | null
+  lossReason: string
+  amountReason: string
+}
+export interface CostReference {
+  id: string
+  code: string
+  name: string
+  productId?: string
+  specification?: string
+  unit?: string
+}
+export const getCostReferences = (
+  category: CostCategory,
+  kind: string,
+  keyword = '',
+  parentId?: string | null,
+  begin = 0,
+) =>
+  apiClient.get<CostReference[]>(
+    `/erp/costs/${category === 'office-rentals' ? 'warehouse-rentals' : category}/references/${kind}`,
+    {
+      params: { keyword, parentId, begin },
+      ...options,
+    },
+  )
+export const getCostPurchaseOrders = (
+  category: CostCategory,
+  keyword = '',
+  cityCode?: string,
+  begin = 0,
+) =>
+  apiClient.get<CostSource[]>(
+    `/erp/costs/${category === 'office-rentals' ? 'warehouse-rentals' : category}/purchase-orders`,
+    {
+      params: { keyword, cityCode, begin },
+      ...options,
+    },
+  )
+export const getCost = (category: CostCategory, id: string) =>
+  apiClient.get<CostRecord>(`${base(category)}/${encodeURIComponent(id)}`, options)
+
+export const exportCosts = (category: CostCategory, params: CostQuery) =>
+  category === 'expenses'
+    ? getCosts(category, params)
+    : apiClient.get<CostPage>(`${base(category)}/export`, {
+        params: scopedQuery(category, params),
+        ...options,
+      })
+
+export interface CostAttachment {
+  id: string
+  fileName: string
+  contentType: string
+  size: number
+  createdBy: string
+  createdTime: string
+}
+export const getCostAttachments = (category: CostCategory, id: string) =>
+  apiClient.get<CostAttachment[]>(
+    `${base(category)}/${encodeURIComponent(id)}/attachments`,
+    options,
+  )
+export const uploadCostAttachment = (category: CostCategory, row: CostRecord, file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('revision', String(row.revision))
+  return apiClient.post<CostAttachment>(
+    `${base(category)}/${encodeURIComponent(row.id)}/attachments`,
+    form,
+    { ...options, headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+}
+export const getCostAttachmentUrl = (category: CostCategory, id: string, file: string) =>
+  apiClient.get<string>(
+    `${base(category)}/${encodeURIComponent(id)}/attachments/${encodeURIComponent(file)}/url`,
+    options,
+  )
+
+export const getCostCustomers = (cityCode: string, keyword: string, begin = 0) =>
+  apiClient.get<CostReference[]>('/crm/cost-customer-references', {
+    params: { cityCode, keyword, begin },
+    ...options,
+  })
