@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { computed } from 'vue'
 import { resolveBizDict, type EffectiveDictView, type DictItemView } from '@/api/core/business-settings'
 import { setBusinessDictionaryTenant, clearBusinessDictionaries, loadBusinessDictionaries, businessDictionaryLabel, businessDictionaryOptions, refreshBusinessDictionary } from '@/utils/business-dictionary'
 vi.mock('@/api/core/business-settings', () => ({ resolveBizDict: vi.fn() }))
@@ -7,6 +8,16 @@ const item = (code: string, name: string, enabled = true, parent: string | null 
 const result = (...items: DictItemView[]): EffectiveDictView => ({ dictionary: { id: 'unit', dictionaryCode: 'UNIT', dictionaryName: '单位', dictionaryType: null, remark: null, revision: 0 }, items })
 beforeEach(() => { vi.resetAllMocks(); clearBusinessDictionaries(); setBusinessDictionaryTenant('A') })
 describe('业务字典租户与停用规则', () => {
+  it('首次渲染先读取空选项，异步字典到达后计算属性会更新', async () => {
+    let finish!: (value: EffectiveDictView) => void
+    vi.mocked(resolveBizDict).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const loading = loadBusinessDictionaries([ref])
+    const options = computed(() => businessDictionaryOptions('CRM', 'UNIT'))
+    expect(options.value).toEqual([])
+    finish(result(item('BOX', '箱')))
+    await loading
+    expect(options.value).toEqual([{ label: '箱', value: 'BOX' }])
+  })
   it('租户切换后，迟到的旧租户请求不能污染新租户显示', async () => {
     let finish!: (value: EffectiveDictView) => void
     vi.mocked(resolveBizDict).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))

@@ -592,6 +592,50 @@
     }
   }
 
+  // 统一带筛选的业务列表：考勤、报销、物流、营销与仓库租赁共用。
+  .supply-page--filtered-list {
+    gap: 12px;
+
+    > :not(.list-card) {
+      flex: 0 0 auto;
+    }
+    > .page-heading {
+      margin-bottom: 0;
+    }
+    > .list-card {
+      border-radius: var(--supply-radius);
+    }
+    > .list-card > .el-card__body {
+      padding: 0;
+    }
+
+    .supply-list-toolbar {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--supply-border);
+    }
+    .supply-list-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .supply-list-actions .el-button + .el-button {
+      margin-left: 0;
+    }
+    .supply-list-pagination {
+      flex: 0 0 auto;
+      justify-content: flex-end;
+      margin: 0;
+      padding: 12px 16px;
+      border-top: 1px solid var(--supply-border);
+    }
+  }
+
   // ERP / CRM / Order / 数据字典的新业务主流程页面。
   // 该类只统一页面骨架，不改变各业务页面自己的字段和操作。
   .supply-page--business-main {

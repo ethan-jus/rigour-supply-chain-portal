@@ -1,15 +1,36 @@
 import { downloadBlob, csvFilename } from '@/utils/file-download'
-/** CSV 文本不允许以公式开头；金额列由调用方明确传入数值。 */
-export function exportCostRows(
+
+/** 以 XLSX 字符串单元格保存单号和来源文本，保留前导零且不会执行公式。 */
+export async function buildCostWorkbook(
   title: string,
   headers: string[],
   rows: (string | number | null | undefined)[][],
 ) {
-  const cell = (value: string | number | null | undefined) => {
-    let text = value == null ? '' : String(value)
-    if (typeof value === 'string' && /^[\s]*[=+@-]/.test(text)) text = "'" + text
-    return `"${text.replaceAll('"', '""')}"`
-  }
-  const text = [headers, ...rows].map((row) => row.map(cell).join(',')).join('\r\n')
-  downloadBlob(new Blob(['\uFEFF', text], { type: 'text/csv;charset=utf-8' }), csvFilename(title))
+  const { Workbook } = await import('exceljs')
+  const workbook = new Workbook()
+  const sheet = workbook.addWorksheet(title.slice(0, 31))
+  sheet.addRow(headers)
+  for (const row of rows) sheet.addRow(row.map((value) => value ?? null))
+  sheet.getRow(1).font = { bold: true }
+  sheet.views = [{ state: 'frozen', ySplit: 1 }]
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } }
+  sheet.columns.forEach((column) => {
+    column.width = 23
+  })
+  return workbook
+}
+
+export async function exportCostRows(
+  title: string,
+  headers: string[],
+  rows: (string | number | null | undefined)[][],
+) {
+  const workbook = await buildCostWorkbook(title, headers, rows)
+  const bytes = new Uint8Array(await workbook.xlsx.writeBuffer())
+  downloadBlob(
+    new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    csvFilename(title).replace(/\.csv$/, '.xlsx'),
+  )
 }

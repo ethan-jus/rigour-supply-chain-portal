@@ -6,9 +6,19 @@ import type { NavigationNode } from '@/types/management'
 
 function node(routeKey: string, routePath: string | null): NavigationNode {
   return {
-    id: 'navigation-id', parentId: null, code: 'NAVIGATION.CODE', type: 'PAGE',
-    displayName: '导航', permissionCode: null, routeKey, routePath, iconKey: null,
-    sortOrder: 10, visible: true, keepAlive: false, children: [],
+    id: 'navigation-id',
+    parentId: null,
+    code: 'NAVIGATION.CODE',
+    type: 'PAGE',
+    displayName: '导航',
+    permissionCode: null,
+    routeKey,
+    routePath,
+    iconKey: null,
+    sortOrder: 10,
+    visible: true,
+    keepAlive: false,
+    children: [],
   }
 }
 
@@ -19,35 +29,59 @@ function menuNode(routeKey: string): NavigationNode {
 describe('数据库导航注册表', () => {
   it('共享DEV新增未编译菜单不阻断现有页面，也不授予新页面访问路径', () => {
     const employees = node('supply.hr.employees', '/supply-chain/hr/employees')
-    const payroll = { ...menuNode('supply.hr.future-payroll-settings.menu'), children: [
-      node('supply.hr.future-commission-rules', '/supply-chain/hr/future-commission-rules'),
-    ] }
-    const source = [{ ...menuNode('supply.hr.menu'), children: [employees, payroll,
-      node('supply.hr.future-payroll', '/supply-chain/hr/future-payroll')] }]
+    const payroll = {
+      ...menuNode('supply.hr.future-payroll-settings.menu'),
+      children: [
+        node('supply.hr.future-commission-rules', '/supply-chain/hr/future-commission-rules'),
+      ],
+    }
+    const source = [
+      {
+        ...menuNode('supply.hr.menu'),
+        children: [
+          employees,
+          payroll,
+          node('supply.hr.future-payroll', '/supply-chain/hr/future-payroll'),
+        ],
+      },
+    ]
     const result = validateNavigation(source)
     expect(result[0].children).toEqual([employees])
     expect(source[0].children).toHaveLength(3)
-    expect(() => validateNavigation([node('supply.hr.employees', '/supply-chain/settings/users')]))
-      .toThrow('未注册或路径不一致')
+    expect(() =>
+      validateNavigation([node('supply.hr.employees', '/supply-chain/settings/users')]),
+    ).toThrow('未注册或路径不一致')
   })
 
   it('员工档案仅使用正式页面，旧占位入口不可恢复', () => {
-    expect(validateNavigation([node('supply.hr.employees', '/supply-chain/hr/employees')])).toHaveLength(1)
+    expect(
+      validateNavigation([node('supply.hr.employees', '/supply-chain/hr/employees')]),
+    ).toHaveLength(1)
     expect(validateNavigation([node('supply.hr.index', '/supply-chain/hr')])).toEqual([])
-    expect(constantRoutes.find(route => route.path === '/supply-chain')?.children?.some(route => route.path === 'hr')).toBe(false)
+    expect(
+      constantRoutes
+        .find((route) => route.path === '/supply-chain')
+        ?.children?.some((route) => route.path === 'hr'),
+    ).toBe(false)
   })
   it('月度薪酬保留目标权限，旧地址跳转且不再出现在导航目录', () => {
-    const children = constantRoutes.find(route => route.path === '/supply-chain')?.children
-    const payroll = children?.find(route => route.path === 'hr/payroll')
+    const children = constantRoutes.find((route) => route.path === '/supply-chain')?.children
+    const payroll = children?.find((route) => route.path === 'hr/payroll')
     expect(payroll?.meta?.title).toBe('月度薪酬')
     expect(payroll?.meta?.permission).toBe('hr:payroll:read')
     for (const key of ['payroll-commission', 'performance', 'monthly-close']) {
-      expect(children?.find(route => route.path === `hr/${key}`)?.redirect).toBe('/supply-chain/hr/payroll')
-      expect(SUPPLY_DOMAIN_PAGES.some(page => page.routeKey === `supply.hr.${key}`)).toBe(false)
+      expect(children?.find((route) => route.path === `hr/${key}`)?.redirect).toBe(
+        '/supply-chain/hr/payroll',
+      )
+      expect(SUPPLY_DOMAIN_PAGES.some((page) => page.routeKey === `supply.hr.${key}`)).toBe(false)
     }
   })
   it('拒绝已撤销的页面入口', () => {
-    for (const [key, path] of [['system.user.list', '/system-admin/users'], ['platform.dashboard', '/platform-admin'], ['supply.hr.salary-standards', '/supply-chain/hr/salary-standards']])
+    for (const [key, path] of [
+      ['system.user.list', '/system-admin/users'],
+      ['platform.dashboard', '/platform-admin'],
+      ['supply.hr.salary-standards', '/supply-chain/hr/salary-standards'],
+    ])
       expect(validateNavigation([node(key, path)])).toEqual([])
   })
 
@@ -62,7 +96,8 @@ describe('数据库导航注册表', () => {
     const settingsMenu = {
       ...menuNode('supply.setting.menu'),
       children: settingsPages.map(([key]) =>
-        node(`supply.settings.${key}`, `/supply-chain/settings/${key}`)),
+        node(`supply.settings.${key}`, `/supply-chain/settings/${key}`),
+      ),
     }
     expect(validateNavigation([settingsMenu])[0].children).toHaveLength(5)
 
@@ -72,15 +107,17 @@ describe('数据库导航注册表', () => {
       expect(route?.meta?.permission).toBe(permission)
       expect(typeof route?.component).toBe('function')
     }
-    expect(() => validateNavigation([
-      node('supply.settings.parameters', '/supply-chain/settings/users'),
-    ])).toThrow('未注册或路径不一致')
+    expect(() =>
+      validateNavigation([node('supply.settings.parameters', '/supply-chain/settings/users')]),
+    ).toThrow('未注册或路径不一致')
   })
 
   it('租户自定义分组不能携带可执行路径', () => {
-    expect(() => validateNavigation([
-      { ...menuNode('tenant.menu.group.019fdynamicgroup'), routePath: '/system-admin/users' },
-    ])).toThrow('未注册或路径不一致')
+    expect(() =>
+      validateNavigation([
+        { ...menuNode('tenant.menu.group.019fdynamicgroup'), routePath: '/system-admin/users' },
+      ]),
+    ).toThrow('未注册或路径不一致')
   })
 
   it('对未注册routeKey失败关闭', () => {
@@ -92,119 +129,167 @@ describe('数据库导航注册表', () => {
   })
 
   it('接受销售管理三级菜单的已编译路由', () => {
-    expect(validateNavigation([
-      node('supply.sales.attendance.today', '/supply-chain/sales/attendance/today'),
-      node('supply.sales.policies.releases', '/supply-chain/sales/policies/releases'),
-    ])).toHaveLength(2)
+    expect(
+      validateNavigation([
+        node('supply.sales.attendance.today', '/supply-chain/sales/attendance/today'),
+        node('supply.sales.policies.releases', '/supply-chain/sales/policies/releases'),
+      ]),
+    ).toHaveLength(2)
   })
 
   it('拒绝旧订货宝订单镜像菜单，只接受新销售订单入口', () => {
-    expect(validateNavigation([
-      menuNode('supply.order.menu'),
-      node('supply.order.sales-orders', '/supply-chain/order/sales-orders'),
-      node('supply.order.sales-payments', '/supply-chain/order/sales-payments'),
-      node('supply.order.fund-documents', '/supply-chain/order/fund-documents'),
-      node('supply.order.sales-refunds', '/supply-chain/order/sales-refunds'),
-    ])).toHaveLength(5)
+    expect(
+      validateNavigation([
+        menuNode('supply.order.menu'),
+        node('supply.order.sales-orders', '/supply-chain/order/sales-orders'),
+        node('supply.order.sales-payments', '/supply-chain/order/sales-payments'),
+        node('supply.order.fund-documents', '/supply-chain/order/fund-documents'),
+        node('supply.order.sales-refunds', '/supply-chain/order/sales-refunds'),
+      ]),
+    ).toHaveLength(5)
 
-    expect(validateNavigation([
-      node('supply.order.center.menu', null),
-    ])).toEqual([])
-    expect(validateNavigation([
-      node('supply.order.all', '/supply-chain/order/all'),
-    ])).toEqual([])
-    expect(validateNavigation([
-      node('supply.order.settlement.collections', '/supply-chain/order/settlement/collections'),
-    ])).toEqual([])
-    expect(validateNavigation([
-      node('supply.order.stock-up', '/supply-chain/order/stock-up'),
-    ])).toEqual([])
+    expect(validateNavigation([node('supply.order.center.menu', null)])).toEqual([])
+    expect(validateNavigation([node('supply.order.all', '/supply-chain/order/all')])).toEqual([])
+    expect(
+      validateNavigation([
+        node('supply.order.settlement.collections', '/supply-chain/order/settlement/collections'),
+      ]),
+    ).toEqual([])
+    expect(
+      validateNavigation([node('supply.order.stock-up', '/supply-chain/order/stock-up')]),
+    ).toEqual([])
   })
 
   it('接受V2.1 ERP和CRM三级路由', () => {
-    expect(validateNavigation([
-      node('supply.erp.master-data.menu', null),
-      node('supply.erp.master-data.products', '/supply-chain/erp/master-data/products'),
-      node('supply.erp.master-data.attributes.tags', '/supply-chain/erp/master-data/attributes/tags'),
-      node('supply.erp.master-data.attributes.specifications', '/supply-chain/erp/master-data/attributes/specifications'),
-      node('supply.erp.cost-settlement.menu', null),
-      node('supply.erp.cost-settlement.inventory-costs', '/supply-chain/erp/cost-settlement/inventory-costs'),
-      node('supply.crm.customers.areas', '/supply-chain/crm/customers/areas'),
-      node('supply.crm.customers.shipping-addresses', '/supply-chain/crm/customers/shipping-addresses'),
-      node('supply.crm.assignments.sales', '/supply-chain/crm/assignments/sales'),
-    ])).toHaveLength(9)
+    expect(
+      validateNavigation([
+        node('supply.erp.master-data.menu', null),
+        node('supply.erp.master-data.products', '/supply-chain/erp/master-data/products'),
+        node(
+          'supply.erp.master-data.attributes.tags',
+          '/supply-chain/erp/master-data/attributes/tags',
+        ),
+        node(
+          'supply.erp.master-data.attributes.specifications',
+          '/supply-chain/erp/master-data/attributes/specifications',
+        ),
+        node('supply.erp.cost-settlement.menu', null),
+        node(
+          'supply.erp.cost-settlement.inventory-costs',
+          '/supply-chain/erp/cost-settlement/inventory-costs',
+        ),
+        node('supply.crm.customers.areas', '/supply-chain/crm/customers/areas'),
+        node(
+          'supply.crm.customers.shipping-addresses',
+          '/supply-chain/crm/customers/shipping-addresses',
+        ),
+        node('supply.crm.assignments.sales', '/supply-chain/crm/assignments/sales'),
+      ]),
+    ).toHaveLength(9)
   })
 
   it('丢弃 IAM 返回的已隐藏旧分支，保留当前商品中心和系统设置', () => {
     const navigation = [
-      { ...menuNode('supply.erp.master-data.menu'), children: [
-        node('supply.erp.master-data.products', '/supply-chain/erp/master-data/products'),
-        node('supply.erp.master-data.attributes.categories', '/supply-chain/erp/master-data/attributes/categories'),
-        { ...menuNode('supply.erp.master-data.attributes.menu'), visible: false, children: [
-          node('supply.erp.master-data.sync', '/supply-chain/erp/master-data/sync'),
-        ] },
-      ] },
+      {
+        ...menuNode('supply.erp.master-data.menu'),
+        children: [
+          node('supply.erp.master-data.products', '/supply-chain/erp/master-data/products'),
+          node(
+            'supply.erp.master-data.attributes.categories',
+            '/supply-chain/erp/master-data/attributes/categories',
+          ),
+          {
+            ...menuNode('supply.erp.master-data.attributes.menu'),
+            visible: false,
+            children: [node('supply.erp.master-data.sync', '/supply-chain/erp/master-data/sync')],
+          },
+        ],
+      },
       node('supply.settings.menus', '/supply-chain/settings/menus'),
       { ...node('supply.bi.dashboards', '/supply-chain/bi/dashboards'), visible: false },
     ]
     const result = validateNavigation(navigation)
-    expect(result.map(item => item.routeKey)).toEqual(['supply.erp.master-data.menu', 'supply.settings.menus'])
-    expect(result[0].children.map(item => item.routeKey)).toEqual([
-      'supply.erp.master-data.products', 'supply.erp.master-data.attributes.categories',
+    expect(result.map((item) => item.routeKey)).toEqual([
+      'supply.erp.master-data.menu',
+      'supply.settings.menus',
+    ])
+    expect(result[0].children.map((item) => item.routeKey)).toEqual([
+      'supply.erp.master-data.products',
+      'supply.erp.master-data.attributes.categories',
     ])
     expect(navigation[0].children).toHaveLength(3)
     expect(validateNavigation([menuNode('supply.erp.master-data.attributes.menu')])).toEqual([])
   })
 
   it('已注册隐藏页面保留授权直达能力，但错误路径仍失败关闭', () => {
-    const hiddenPage = { ...node('supply.settings.users', '/supply-chain/settings/users'), visible: false }
+    const hiddenPage = {
+      ...node('supply.settings.users', '/supply-chain/settings/users'),
+      visible: false,
+    }
     expect(validateNavigation([hiddenPage])).toEqual([hiddenPage])
-    expect(() => validateNavigation([{ ...hiddenPage, routePath: '/supply-chain/settings/roles' }]))
-      .toThrow('未注册或路径不一致')
-    expect(() => validateNavigation([{ ...menuNode('tenant.menu.group.test'), visible: false, routePath: '/arbitrary' }]))
-      .toThrow('未注册或路径不一致')
+    expect(() =>
+      validateNavigation([{ ...hiddenPage, routePath: '/supply-chain/settings/roles' }]),
+    ).toThrow('未注册或路径不一致')
+    expect(() =>
+      validateNavigation([
+        { ...menuNode('tenant.menu.group.test'), visible: false, routePath: '/arbitrary' },
+      ]),
+    ).toThrow('未注册或路径不一致')
   })
 
   it('接受新销售订单入口，并拒绝旧订货宝档案菜单', () => {
-    expect(validateNavigation([
-      node('supply.order.sales-orders', '/supply-chain/order/sales-orders'),
-      node('supply.order.fund-documents', '/supply-chain/order/fund-documents'),
-    ])).toHaveLength(2)
+    expect(
+      validateNavigation([
+        node('supply.order.sales-orders', '/supply-chain/order/sales-orders'),
+        node('supply.order.fund-documents', '/supply-chain/order/fund-documents'),
+      ]),
+    ).toHaveLength(2)
 
-    expect(validateNavigation([
-      menuNode('supply.integration.legacy-dhb.menu'),
-    ])).toEqual([])
+    expect(validateNavigation([menuNode('supply.integration.legacy-dhb.menu')])).toEqual([])
 
-    expect(validateNavigation([
-      node('supply.integration.dhb-skus', '/supply-chain/integration/dhb-skus'),
-    ])).toEqual([])
+    expect(
+      validateNavigation([
+        node('supply.integration.dhb-skus', '/supply-chain/integration/dhb-skus'),
+      ]),
+    ).toEqual([])
   })
 
   it('接受独立订货宝同步中心入口，并拒绝分散的旧集成子页面', () => {
-    expect(validateNavigation([
-      menuNode('supply.integration.menu'),
-      menuNode('supply.integration.sync-control.menu'),
-      node('supply.integration.overview', '/supply-chain/integration'),
-    ])).toHaveLength(3)
+    expect(
+      validateNavigation([
+        menuNode('supply.integration.menu'),
+        menuNode('supply.integration.sync-control.menu'),
+        node('supply.integration.overview', '/supply-chain/integration'),
+      ]),
+    ).toHaveLength(3)
 
-    expect(validateNavigation([
-      node('supply.integration.connections', '/supply-chain/integration/connections'),
-    ])).toEqual([])
-    expect(validateNavigation([
-      node('supply.integration.sync-tasks', '/supply-chain/integration/sync-tasks'),
-    ])).toEqual([])
-    expect(validateNavigation([
-      node('supply.integration.retries', '/supply-chain/integration/retries-dead-letters'),
-    ])).toEqual([])
-    expect(validateNavigation([
-      node('supply.integration.field-mappings', '/supply-chain/integration/field-mappings'),
-    ])).toEqual([])
+    expect(
+      validateNavigation([
+        node('supply.integration.connections', '/supply-chain/integration/connections'),
+      ]),
+    ).toEqual([])
+    expect(
+      validateNavigation([
+        node('supply.integration.sync-tasks', '/supply-chain/integration/sync-tasks'),
+      ]),
+    ).toEqual([])
+    expect(
+      validateNavigation([
+        node('supply.integration.retries', '/supply-chain/integration/retries-dead-letters'),
+      ]),
+    ).toEqual([])
+    expect(
+      validateNavigation([
+        node('supply.integration.field-mappings', '/supply-chain/integration/field-mappings'),
+      ]),
+    ).toEqual([])
   })
 
   it('采购付款单使用可加载的独立业务占位页', async () => {
     const supplyRoot = constantRoutes.find((route) => route.path === '/supply-chain')
-    const paymentRoute = supplyRoot?.children?.find((route) =>
-      route.meta?.routeKey === 'supply.erp.procurement.payments')
+    const paymentRoute = supplyRoot?.children?.find(
+      (route) => route.meta?.routeKey === 'supply.erp.procurement.payments',
+    )
 
     expect(paymentRoute?.path).toBe('erp/procurement/payments')
     expect(paymentRoute?.meta?.title).toBe('采购付款单')
@@ -216,38 +301,48 @@ describe('数据库导航注册表', () => {
 
   it('ERP商品入口使用自研商品管理页，商品规格使用独立业务页', async () => {
     const supplyRoot = constantRoutes.find((route) => route.path === '/supply-chain')
-    const erpProductRoute = supplyRoot?.children?.find((route) =>
-      route.meta?.routeKey === 'supply.erp.master-data.products')
-    const productSpecificationRoute = supplyRoot?.children?.find((route) =>
-      route.meta?.routeKey === 'supply.erp.master-data.attributes.specifications')
+    const erpProductRoute = supplyRoot?.children?.find(
+      (route) => route.meta?.routeKey === 'supply.erp.master-data.products',
+    )
+    const productSpecificationRoute = supplyRoot?.children?.find(
+      (route) => route.meta?.routeKey === 'supply.erp.master-data.attributes.specifications',
+    )
 
     expect(erpProductRoute?.path).toBe('erp/master-data/products')
     expect(erpProductRoute?.meta?.title).toBe('商品管理')
     expect(productSpecificationRoute?.path).toBe('erp/master-data/attributes/specifications')
     expect(productSpecificationRoute?.meta?.title).toBe('商品规格')
 
-    const erpProductModule = await (erpProductRoute?.component as () => Promise<{ default: unknown }>)()
-    const specificationModule = await (productSpecificationRoute?.component as () => Promise<{ default: unknown }>)()
+    const erpProductModule = await (
+      erpProductRoute?.component as () => Promise<{ default: unknown }>
+    )()
+    const specificationModule = await (
+      productSpecificationRoute?.component as () => Promise<{ default: unknown }>
+    )()
     expect(erpProductModule.default).toBeTruthy()
     expect(specificationModule.default).toBeTruthy()
   })
 
   it('商品价格使用独立业务页', async () => {
     const supplyRoot = constantRoutes.find((route) => route.path === '/supply-chain')
-    const productPriceRoute = supplyRoot?.children?.find((route) =>
-      route.meta?.routeKey === 'supply.erp.master-data.prices')
+    const productPriceRoute = supplyRoot?.children?.find(
+      (route) => route.meta?.routeKey === 'supply.erp.master-data.prices',
+    )
 
     expect(productPriceRoute?.path).toBe('erp/master-data/prices')
     expect(productPriceRoute?.meta?.title).toBe('商品价格')
 
-    const productPriceModule =
-      await (productPriceRoute?.component as () => Promise<{ default: unknown }>)()
+    const productPriceModule = await (
+      productPriceRoute?.component as () => Promise<{ default: unknown }>
+    )()
     expect(productPriceModule.default).toBeTruthy()
   })
 
   it('拒绝已退出的城市运营和渠道代理路由', () => {
     for (const domain of ['city', 'channel']) {
-      expect(validateNavigation([node(`supply.${domain}.index`, `/supply-chain/${domain}`)])).toEqual([])
+      expect(
+        validateNavigation([node(`supply.${domain}.index`, `/supply-chain/${domain}`)]),
+      ).toEqual([])
       expect(SUPPLY_DOMAIN_PAGES.some((page) => page.domainKey === domain)).toBe(false)
     }
   })
@@ -259,78 +354,148 @@ describe('数据库导航注册表', () => {
     ]
 
     expect(new Set(SUPPLY_DOMAIN_MENU_KEYS).size).toBe(SUPPLY_DOMAIN_MENU_KEYS.length)
-    expect(new Set(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).size)
-      .toBe(SUPPLY_DOMAIN_PAGES.length)
-    expect(SUPPLY_DOMAIN_MENU_KEYS).toEqual(expect.arrayContaining([
-      'supply.order.menu', 'supply.hr.menu', 'supply.erp.cost-settlement.menu',
-    ]))
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).toEqual(expect.arrayContaining([
-      'supply.bi.product-sales', 'supply.bi.city-cost', 'supply.hr.employees',
-      'supply.hr.payroll', 'supply.hr.performance-rules',
-    ]))
+    expect(new Set(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).size).toBe(
+      SUPPLY_DOMAIN_PAGES.length,
+    )
+    expect(SUPPLY_DOMAIN_MENU_KEYS).toEqual(
+      expect.arrayContaining([
+        'supply.order.menu',
+        'supply.hr.menu',
+        'supply.erp.cost-settlement.menu',
+      ]),
+    )
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).toEqual(
+      expect.arrayContaining([
+        'supply.bi.product-sales',
+        'supply.bi.city-cost',
+        'supply.hr.employees',
+        'supply.hr.payroll',
+        'supply.hr.performance-rules',
+      ]),
+    )
     expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(13)
-    expect(SUPPLY_DOMAIN_PAGES).toHaveLength(81)
+    expect(new Set(SUPPLY_DOMAIN_PAGES.map((page) => page.routeKey)).size).toBe(
+      SUPPLY_DOMAIN_PAGES.length,
+    )
+    expect(
+      SUPPLY_DOMAIN_PAGES.filter((page) => page.routeKey.startsWith('supply.cost.')).map(
+        (page) => page.routeKey,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        'supply.cost.purchases',
+        'supply.cost.losses',
+        'supply.cost.logistics',
+        'supply.cost.warehouse-rentals',
+        'supply.cost.office-rentals',
+        'supply.cost.marketing',
+      ]),
+    )
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.erp.warehouse.menu')
     expect(SUPPLY_DOMAIN_MENU_KEYS).not.toContain('supply.integration.legacy-dhb.menu')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.erp.warehouse.locations')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.integration.dhb-products')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.integration.dhb-skus')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.integration.dhb-specifications')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.integration.sync-batches')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.integration.external-id-mappings')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.bi.sync-quality')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.bi.metrics')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.bi.dashboards')
-    expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.domainKey === 'bi').map((item) => item.title))
-      .toEqual(['销售看板', '城市经营看板', '客户看板', '活动看板', '商品/库存看板', '商品销售统计', '销售毛利分析', '回款风险看板', '城市成本看板', '库存风险看板'])
-    expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '同步控制').map((item) => item.title))
-      .toEqual(['订货宝同步中心', '定时任务', '飞书导入中心'])
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.erp.master-data.skus')
-    expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '商品中心').map((item) => item.title))
-      .toEqual(['商品管理', '商品分类', '商品品牌', '商品标签', '商品规格', '商品价格'])
-    expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '库存管理').map((item) => item.title))
-      .toEqual(['库存看板', '库存', '入库单', '出库单', '出入库流水', '库存调拨', '库存盘点', '仓库信息'])
-    expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '采购管理').map((item) => item.title))
-      .toEqual(['采购申请', '采购订单', '到货与入库', '采购退货', '采购付款单'])
-    expect(SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '客户管理').map((item) => item.title))
-      .toEqual(['客户档案', '客户地址', '门店档案', '客户类型', '归属地区'])
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.crm.customers.customer-360')
-    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey))
-      .not.toContain('supply.crm.assignments.external-staff')
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
+      'supply.erp.warehouse.locations',
+    )
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
+      'supply.integration.dhb-products',
+    )
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
+      'supply.integration.dhb-skus',
+    )
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
+      'supply.integration.dhb-specifications',
+    )
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
+      'supply.integration.sync-batches',
+    )
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
+      'supply.integration.external-id-mappings',
+    )
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain('supply.bi.sync-quality')
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain('supply.bi.metrics')
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain('supply.bi.dashboards')
+    expect(
+      SUPPLY_DOMAIN_PAGES.filter((item) => item.domainKey === 'bi').map((item) => item.title),
+    ).toEqual([
+      '销售看板',
+      '城市经营看板',
+      '客户看板',
+      '活动看板',
+      '商品/库存看板',
+      '商品销售统计',
+      '销售毛利分析',
+      '回款风险看板',
+      '城市成本看板',
+      '库存风险看板',
+    ])
+    expect(
+      SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '同步控制').map(
+        (item) => item.title,
+      ),
+    ).toEqual(['订货宝同步中心', '定时任务', '飞书导入中心'])
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
+      'supply.erp.master-data.skus',
+    )
+    expect(
+      SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '商品中心').map(
+        (item) => item.title,
+      ),
+    ).toEqual(['商品管理', '商品分类', '商品品牌', '商品标签', '商品规格', '商品价格'])
+    expect(
+      SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '库存管理').map(
+        (item) => item.title,
+      ),
+    ).toEqual([
+      '库存看板',
+      '库存',
+      '入库单',
+      '出库单',
+      '出入库流水',
+      '库存调拨',
+      '库存盘点',
+      '仓库信息',
+    ])
+    expect(
+      SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '采购管理').map(
+        (item) => item.title,
+      ),
+    ).toEqual(['采购申请', '采购订单', '到货与入库', '采购退货', '采购付款单'])
+    expect(
+      SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '客户管理').map(
+        (item) => item.title,
+      ),
+    ).toEqual(['客户档案', '客户地址', '门店档案', '客户类型', '归属地区'])
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
+      'supply.crm.customers.customer-360',
+    )
+    expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
+      'supply.crm.assignments.external-staff',
+    )
     expect(validateNavigation(navigation)).toHaveLength(navigation.length)
   })
 
   it('接受已实现的供应链 BI 子看板路由', () => {
-    expect(validateNavigation([
-      menuNode('supply.bi.menu'),
-      node('supply.bi.index', '/supply-chain/bi'),
-      node('supply.bi.sales', '/supply-chain/bi/sales'),
-      node('supply.bi.hr', '/supply-chain/bi/hr'),
-      node('supply.bi.sales-visits', '/supply-chain/bi/sales-visits'),
-      node('supply.bi.city-operating', '/supply-chain/bi/city-operating'),
-      node('supply.bi.activity', '/supply-chain/bi/activity'),
-      node('supply.bi.product-inventory', '/supply-chain/bi/product-inventory'),
-      node('supply.bi.sales-collection', '/supply-chain/bi/sales-collection'),
-      node('supply.bi.product-sales', '/supply-chain/bi/product-sales'),
-      node('supply.bi.gross-profit', '/supply-chain/bi/gross-profit'),
-      node('supply.bi.payment-risk', '/supply-chain/bi/payment-risk'),
-      node('supply.bi.city-cost', '/supply-chain/bi/city-cost'),
-      node('supply.bi.inventory-risk', '/supply-chain/bi/inventory-risk'),
-    ])).toHaveLength(14)
+    expect(
+      validateNavigation([
+        menuNode('supply.bi.menu'),
+        node('supply.bi.index', '/supply-chain/bi'),
+        node('supply.bi.sales', '/supply-chain/bi/sales'),
+        node('supply.bi.hr', '/supply-chain/bi/hr'),
+        node('supply.bi.sales-visits', '/supply-chain/bi/sales-visits'),
+        node('supply.bi.city-operating', '/supply-chain/bi/city-operating'),
+        node('supply.bi.activity', '/supply-chain/bi/activity'),
+        node('supply.bi.product-inventory', '/supply-chain/bi/product-inventory'),
+        node('supply.bi.sales-collection', '/supply-chain/bi/sales-collection'),
+        node('supply.bi.product-sales', '/supply-chain/bi/product-sales'),
+        node('supply.bi.gross-profit', '/supply-chain/bi/gross-profit'),
+        node('supply.bi.payment-risk', '/supply-chain/bi/payment-risk'),
+        node('supply.bi.city-cost', '/supply-chain/bi/city-cost'),
+        node('supply.bi.inventory-risk', '/supply-chain/bi/inventory-risk'),
+      ]),
+    ).toHaveLength(14)
 
-    expect(validateNavigation([
-      node('supply.bi.sync-quality', '/supply-chain/bi/sync-quality'),
-    ])).toEqual([])
+    expect(
+      validateNavigation([node('supply.bi.sync-quality', '/supply-chain/bi/sync-quality')]),
+    ).toEqual([])
   })
 })

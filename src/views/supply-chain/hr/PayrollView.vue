@@ -1,19 +1,21 @@
 <template>
-  <div class="supply-page supply-page--business-main payroll-page">
+  <div class="supply-page payroll-page payroll-v03-page">
     <div class="page-heading">
       <div>
         <SupplyPageTitle>月度薪酬</SupplyPageTitle>
-        <p>
-          选择月份核算 → 处理待核对事项 → 确认薪酬 → 登记发放。提成和绩效明细统一在员工薪酬中查看。
-        </p>
+        <p>选择月份和人员，按当月生效的档案与规则计算工资。</p>
       </div>
-      <el-button v-if="can('hr:payroll:calculate')" type="primary" @click="calculateVisible = true"
-        >月度核算</el-button
+      <el-button
+        v-if="can('hr:payroll:calculate')"
+        type="primary"
+        :disabled="batchBusy"
+        @click="calculateVisible = true"
+        >生成月度薪酬</el-button
       >
     </div>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
     <el-card class="filter-card" shadow="never"
-      ><el-form inline @submit.prevent="search"
+      ><el-form label-position="top" :disabled="batchBusy" @submit.prevent="search"
         ><el-form-item label="薪酬月份"
           ><el-date-picker
             v-model="month"
@@ -40,6 +42,13 @@
             :render-after-expand="false"
             placeholder="全部部门"
             aria-label="部门筛选" /></el-form-item
+        ><el-form-item label="薪资类别"
+          ><el-select v-model="payrollCategory" clearable placeholder="全部类别">
+            <el-option
+              v-for="role in payrollRoles"
+              :key="role.value"
+              v-bind="role"
+            /> </el-select></el-form-item
         ><el-form-item class="filter-actions"
           ><el-button type="primary" :loading="loading" @click="search">查询</el-button
           ><el-button @click="reset">重置</el-button></el-form-item
@@ -55,190 +64,279 @@
     <PayrollPreparationPanel
       ref="preparationPanel"
       v-model="calculateVisible"
-      :month="month"
+      v-model:month="month"
       :department-id="departmentId"
-      @loaded="preparation = $event"
       @changed="load"
     />
     <PayrollSettlementDialog ref="settlementDialog" @changed="workflowChanged" />
-    <div class="workflow-filter">
-      <el-radio-group v-model="statusCode" aria-label="月度薪酬处理阶段" @change="search">
-        <el-radio-button v-for="stage in workflowStages" :key="stage.code" :value="stage.code">
-          {{ stage.label }}（{{ stageCount(stage.code) }}）
-        </el-radio-button>
-      </el-radio-group>
-      <p class="field-hint" aria-live="polite">{{ workflowHint }}</p>
-    </div>
-    <div class="result-heading">
-      <span
-        >共 {{ page.total }} 人 · 当前页应发 ¥{{ costMoney(pageGross) }} · 核定实发 ¥{{
-          costMoney(pageNet)
-        }}</span
-      >
-      <div>
-        <el-button :loading="exporting" @click="exportAll">导出本月筛选结果</el-button
-        ><el-button :loading="loading" @click="workflowChanged">刷新</el-button>
-      </div>
-    </div>
-    <el-card class="list-card" shadow="never"
-      ><el-table
-        v-loading="loading"
-        :data="page.items"
-        row-key="id"
-        border
-        class="business-table supply-scroll-table"
-      >
-        <el-table-column label="员工" width="160" fixed="left"
-          ><template #default="{ row }"
-            ><el-button link type="primary" @click="showDetail(row as PayrollRecord)">{{
-              row.employeeName
-            }}</el-button>
-            <div class="field-hint">{{ row.employeeCode }}</div></template
-          ></el-table-column
+    <PayrollBatchDialog ref="batchDialog" @changed="workflowChanged" @busy="batchBusy = $event" />
+    <section class="payroll-results-overview" aria-label="月度薪酬状态与汇总">
+      <div class="workflow-filter">
+        <el-radio-group
+          v-model="statusCode"
+          :disabled="batchBusy"
+          aria-label="月度薪酬处理阶段"
+          @change="search"
         >
-        <el-table-column label="状态" width="105" fixed="left"
-          ><template #default="{ row }"
-            ><el-tag
-              :type="
-                row.statusCode === 'REVIEW'
-                  ? 'warning'
-                  : row.statusCode === 'PAID'
-                    ? 'success'
-                    : 'primary'
-              "
-              >{{
+          <el-radio-button v-for="stage in workflowStages" :key="stage.code" :value="stage.code">
+            {{ stage.label }}（{{ stageCount(stage.code) }}）
+          </el-radio-button>
+        </el-radio-group>
+        <el-tooltip :content="workflowHint" placement="top" :trigger="['hover', 'focus']">
+          <button type="button" class="summary-help workflow-help" aria-label="查看薪酬状态说明">
+            <el-icon><InfoFilled /></el-icon>
+            <span>状态说明</span>
+          </button>
+        </el-tooltip>
+      </div>
+      <div class="payroll-summary" aria-live="polite" :aria-busy="loading">
+        <div class="summary-card">
+          <div class="summary-label">核算人数</div>
+          <div class="summary-value">
+            <strong>{{ summary?.total ?? '—' }}</strong
+            ><span>人</span>
+          </div>
+          <div class="summary-completion">
+            完整核算 {{ summary?.completeCount ?? '—' }} 人 /
+            <span :class="{ 'summary-pending': (summary?.pendingCount ?? 0) > 0 }">
+              待核定 {{ summary?.pendingCount ?? '—' }} 人
+            </span>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-heading">
+            <span class="summary-label">应发合计（元）</span>
+            <el-tooltip
+              content="合计仅含当前筛选下的完整结果，不受列表分页影响。待核定工资暂不计入金额合计。"
+              placement="top"
+              :trigger="['hover', 'focus']"
+            >
+              <button
+                type="button"
+                class="summary-help"
+                aria-label="查看汇总口径：合计仅含当前筛选下的完整结果"
+              >
+                <el-icon><InfoFilled /></el-icon>
+              </button>
+            </el-tooltip>
+          </div>
+          <div class="summary-value">
+            <strong>{{ summary?.completeCount ? payrollMoney(summary.grossPay) : '—' }}</strong>
+          </div>
+          <div class="summary-completion">
+            当前筛选 · {{ summary?.completeCount ?? '—' }} 人计入合计
+          </div>
+        </div>
+        <div class="summary-card summary-payable">
+          <div class="summary-label">应付合计（元）</div>
+          <div class="summary-value">
+            <strong>{{ summary?.completeCount ? payrollMoney(summary.netPay) : '—' }}</strong>
+          </div>
+          <div class="summary-completion">应发减其他扣款 · 实际发放见工资表</div>
+        </div>
+      </div>
+    </section>
+    <el-card class="list-card" shadow="never">
+      <div class="payroll-list-heading">
+        <h3>员工月度工资表</h3>
+        <span>单位：元</span>
+      </div>
+      <div class="result-heading">
+        <div class="list-tools">
+          <span>已选本页 {{ selection.length }} 人</span>
+          <el-button
+            v-if="can('hr:payroll:confirm')"
+            :disabled="!selection.length || loading || saving || batchBusy"
+            @click="batchDialog?.open(selection, 'confirm')"
+            >批量确认</el-button
+          >
+          <el-button
+            v-if="can('hr:payroll:calculate')"
+            :disabled="!selection.length || loading || saving || batchBusy"
+            @click="batchDialog?.open(selection, 'recalculate')"
+            >批量重算</el-button
+          >
+        </div>
+        <div class="list-tools">
+          <el-button :loading="exporting" @click="exportAll">导出筛选结果</el-button>
+          <el-button :loading="loading" :disabled="batchBusy" @click="workflowChanged"
+            >刷新</el-button
+          >
+        </div>
+      </div>
+      <div class="table-viewport">
+        <el-table
+          ref="payrollTable"
+          v-loading="loading"
+          :data="page.items"
+          row-key="id"
+          border
+          class="business-table supply-scroll-table"
+          @selection-change="selection = $event"
+        >
+          <el-table-column
+            v-if="can('hr:payroll:confirm') || can('hr:payroll:calculate')"
+            type="selection"
+            width="44"
+            fixed="left"
+            :selectable="() => !batchBusy && !saving"
+          />
+          <el-table-column label="员工 / 部门" width="165" fixed="left">
+            <template #default="{ row }">
+              <el-button
+                link
+                type="primary"
+                :title="row.employeeCode"
+                @click="showDetail(row as PayrollRecord)"
+                >{{ row.employeeName }}</el-button
+              >
+              <div class="employee-meta">{{ row.employeeCode }}</div>
+              <div class="employee-meta">
+                {{ row.departmentName }} · {{ payrollRole(row as PayrollRecord) }}
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            v-for="field in moneyFields"
+            :key="field.key"
+            :label="field.label + '（元）'"
+            min-width="100"
+            align="right"
+          >
+            <template #default="{ row }"
+              ><span :class="{ 'payroll-total': field.key === 'netPay' }">{{
+                payrollMoney(row.calculation[field.key])
+              }}</span></template
+            >
+          </el-table-column>
+          <el-table-column label="实际发放（元）" min-width="105" align="right"
+            ><template #default="{ row }">{{
+              payrollMoney(payrollPaid(row as PayrollRecord))
+            }}</template></el-table-column
+          >
+          <el-table-column label="状态" width="95">
+            <template #default="{ row }">
+              <el-button
+                v-if="row.statusCode === 'REVIEW'"
+                link
+                type="warning"
+                @click="showDetail(row as PayrollRecord, 'review')"
+              >
+                待处理<span v-if="row.calculation.issues.length">
+                  · {{ payrollReviewGroups(row.calculation.issues).length }}类</span
+                >
+              </el-button>
+              <el-tag v-else :type="row.statusCode === 'PAID' ? 'success' : 'primary'">{{
                 payrollStatusLabel(
                   row as PayrollRecord,
                   costLabel('PAYROLL_STATUS', row.statusCode),
                 )
-              }}</el-tag
-            ></template
-          ></el-table-column
-        >
-        <el-table-column label="核对事项" min-width="250">
-          <template #default="{ row }">
-            <div v-if="row.statusCode === 'REVIEW'" class="review-cell">
-              <template v-if="row.calculation.issues.length">
-                <div
-                  v-for="group in payrollReviewGroups(row.calculation.issues).slice(0, 2)"
-                  :key="group.key"
-                  class="review-summary"
+              }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="170" fixed="right">
+            <template #default="{ row }">
+              <div class="row-actions">
+                <el-button link type="primary" @click="showDetail(row as PayrollRecord)"
+                  >明细</el-button
                 >
-                  {{ group.label }}
-                </div>
-                <el-button link type="primary" @click="showDetail(row as PayrollRecord, 'review')"
-                  >处理 {{ payrollReviewGroups(row.calculation.issues).length }} 类问题</el-button
+                <el-button
+                  v-if="row.statusCode === 'REVIEW'"
+                  link
+                  type="primary"
+                  @click="showDetail(row as PayrollRecord, 'review')"
+                  >处理</el-button
                 >
-              </template>
-              <el-button
-                v-else
-                link
-                type="primary"
-                @click="showDetail(row as PayrollRecord, 'review')"
-                >查看核算依据并重算</el-button
-              >
-            </div>
-            <span v-else class="field-hint">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="month" label="月份" width="100" /><el-table-column
-          prop="departmentName"
-          label="部门"
-          width="150"
-          show-overflow-tooltip
-        /><el-table-column prop="cityName" label="城市" width="110" />
-        <el-table-column
-          v-for="field in moneyFields"
-          :key="field.key"
-          :label="field.label"
-          width="120"
-          align="right"
-          ><template #default="{ row }">{{
-            costMoney(row.calculation[field.key])
-          }}</template></el-table-column
-        >
-        <el-table-column label="已登记发放" width="120" align="right"
-          ><template #default="{ row }">{{
-            costMoney(payrollPaid(row as PayrollRecord))
-          }}</template></el-table-column
-        >
-        <el-table-column label="待发金额" width="120" align="right"
-          ><template #default="{ row }">{{
-            row.calculation.netPay == null
-              ? '待核定'
-              : costMoney(payrollRemaining(row as PayrollRecord))
-          }}</template></el-table-column
-        >
-        <el-table-column label="操作" width="225" fixed="right"
-          ><template #default="{ row }"
-            ><el-button link type="primary" @click="showDetail(row as PayrollRecord)">{{
-              row.statusCode === 'REVIEW' ? '核对处理' : '明细'
-            }}</el-button
-            ><el-button
-              v-if="unlocked(row as PayrollRecord) && can('hr:payroll:calculate')"
-              link
-              type="primary"
-              @click="editInput(row as PayrollRecord)"
-              >当月核定</el-button
-            ><el-button
-              v-if="row.statusCode === 'READY' && can('hr:payroll:confirm')"
-              link
-              type="primary"
-              :disabled="saving"
-              @click="settlementDialog?.open(row as PayrollRecord, 'confirm')"
-              >确认</el-button
-            ><el-button
-              v-if="row.statusCode === 'CONFIRMED' && can('hr:payroll:paid')"
-              link
-              type="primary"
-              :disabled="saving"
-              @click="settlementDialog?.open(row as PayrollRecord, 'paid')"
-              >登记发放</el-button
-            ><el-button
-              v-if="unlocked(row as PayrollRecord) && can('hr:payroll:calculate')"
-              link
-              :disabled="saving"
-              @click="recalculate(row as PayrollRecord)"
-              >重算</el-button
-            >
-            <el-button
-              v-if="
-                row.statusCode === 'CONFIRMED' && !row.payments?.length && can('hr:payroll:confirm')
-              "
-              link
-              type="primary"
-              @click="settlementDialog?.open(row as PayrollRecord, 'reopen')"
-              >撤回确认</el-button
-            >
-            <el-button
-              v-if="
-                (row.statusCode === 'PAID' || row.payments?.length) && can('hr:payroll:confirm')
-              "
-              link
-              type="primary"
-              @click="settlementDialog?.open(row as PayrollRecord, 'correct')"
-              >补差 / 冲回</el-button
-            >
-          </template></el-table-column
-        > </el-table
-      ><el-pagination
+                <el-button
+                  v-if="row.statusCode === 'READY' && can('hr:payroll:confirm')"
+                  link
+                  type="primary"
+                  :disabled="saving || batchBusy || row.month >= thisMonth()"
+                  @click="settlementDialog?.open(row as PayrollRecord, 'confirm')"
+                  >确认</el-button
+                >
+                <el-button
+                  v-if="row.statusCode === 'CONFIRMED' && can('hr:payroll:paid')"
+                  link
+                  type="primary"
+                  :disabled="saving || batchBusy"
+                  @click="settlementDialog?.open(row as PayrollRecord, 'paid')"
+                  >登记发放</el-button
+                >
+                <el-dropdown
+                  v-if="can('hr:payroll:calculate') || can('hr:payroll:confirm')"
+                  trigger="click"
+                  :disabled="saving || batchBusy"
+                >
+                  <el-button link :disabled="saving || batchBusy" aria-label="更多工资操作"
+                    >更多</el-button
+                  >
+                  <template #dropdown
+                    ><el-dropdown-menu>
+                      <el-dropdown-item
+                        v-if="unlocked(row as PayrollRecord) && can('hr:payroll:calculate')"
+                        @click="recalculate(row as PayrollRecord)"
+                        >重新核算</el-dropdown-item
+                      >
+                      <el-dropdown-item
+                        v-if="unlocked(row as PayrollRecord) && can('hr:payroll:calculate')"
+                        @click="editInput(row as PayrollRecord)"
+                        >人工调整</el-dropdown-item
+                      >
+                      <el-dropdown-item
+                        v-if="
+                          row.statusCode === 'CONFIRMED' &&
+                          !row.payments?.length &&
+                          can('hr:payroll:confirm')
+                        "
+                        @click="settlementDialog?.open(row as PayrollRecord, 'reopen')"
+                        >撤回确认</el-dropdown-item
+                      >
+                      <el-dropdown-item
+                        v-if="
+                          (row.statusCode === 'PAID' || row.payments?.length) &&
+                          can('hr:payroll:confirm')
+                        "
+                        @click="settlementDialog?.open(row as PayrollRecord, 'correct')"
+                        >补差 / 冲回</el-dropdown-item
+                      >
+                    </el-dropdown-menu></template
+                  >
+                </el-dropdown>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <el-pagination
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
+        :disabled="batchBusy"
         :total="page.total"
+        :page-sizes="[20, 50, 100]"
         layout="total, sizes, prev, pager, next"
         @current-change="load"
         @size-change="search"
-    /></el-card>
+      />
+    </el-card>
     <el-dialog
       v-model="inputVisible"
-      :title="'当月核定 · ' + (inputRow?.employeeName || '') + ' · ' + (inputRow?.month || '')"
+      :title="'人工调整 · ' + (inputRow?.employeeName || '') + ' · ' + (inputRow?.month || '')"
       width="min(680px, 95vw)"
       :close-on-click-modal="false"
       ><el-alert v-if="inputError" :title="inputError" type="error" :closable="false" /><el-alert
         title="只填写需要核定的内容，留空沿用原来源。填写一次说明，保存后自动重算。核定仅影响本人工资及对应订单的提成计算，原始资料保留。"
         type="info"
         :closable="false"
-      /><el-form v-loading="inputLoading" label-width="120px"
+      />
+      <el-button
+        link
+        type="primary"
+        :disabled="inputLoading || saving"
+        @click="restoreRuleCalculation"
+        >清除核定覆盖，恢复规则计算</el-button
+      >
+      <el-form v-loading="inputLoading" label-width="120px"
         ><el-form-item label="核定部门">
           <el-tree-select
             v-model="input.departmentOverrideId"
@@ -267,9 +365,15 @@
             aria-label="核定绩效"
             style="width: 220px; max-width: 100%"
           />
-          <p class="field-hint">填写过程绩效＋回款绩效的合计；填 0 表示本月不发绩效。</p>
+          <p class="field-hint">
+            {{
+              inputRow?.calculation.performanceDetail
+                ? '填写打卡与有效拜访绩效＋回款达标绩效的合计'
+                : '填写本月最终绩效金额（含综合系数及折算）'
+            }}；填 0 表示本月不发绩效。
+          </p>
           <p v-if="inputRow?.calculation.performanceDetail" class="field-hint">
-            当前依据：过程
+            当前依据：打卡与有效拜访
             {{ costMoney(inputRow.calculation.performanceDetail.processPay) }} 元；回款
             {{ costMoney(inputRow.calculation.performanceDetail.collectionPay) }} 元。
           </p>
@@ -307,88 +411,46 @@
     >
     <el-drawer
       v-model="detailVisible"
-      title="薪酬核算明细"
-      size="min(1120px, 95vw)"
+      title="员工月度薪酬明细"
+      size="min(1440px, 96vw)"
+      class="payroll-payslip"
       destroy-on-close
       ><template v-if="detail"
-        ><el-descriptions :column="3" border
-          ><el-descriptions-item label="员工"
-            >{{ detail.employeeName }} · {{ detail.employeeCode }}</el-descriptions-item
-          ><el-descriptions-item label="月份">{{ detail.month }}</el-descriptions-item
-          ><el-descriptions-item label="状态">{{
+        ><div class="payslip-heading">
+          <strong>{{ detail.employeeName }}</strong
+          ><span>{{ detail.employeeCode }}</span>
+          <span>{{ detail.departmentName }} · {{ payrollRole(detail) }}</span
+          ><span>{{ detail.month }}</span>
+          <el-tag>{{
             payrollStatusLabel(detail, costLabel('PAYROLL_STATUS', detail.statusCode))
-          }}</el-descriptions-item
-          ><el-descriptions-item v-for="field in moneyFields" :key="field.key" :label="field.label"
-            >¥{{ costMoney(detail.calculation[field.key]) }}</el-descriptions-item
-          ></el-descriptions
-        >
-        <el-alert
-          v-if="
-            detail.calculation.input.departmentOverrideId != null ||
-            detail.calculation.input.performanceOverride != null
-          "
-          type="info"
-          :closable="false"
-          title="本月已采用人工核定"
-        >
-          <span v-if="detail.calculation.input.departmentOverrideId != null">
-            部门：{{ departmentName(detail.calculation.input.departmentOverrideId) }}；
-          </span>
-          <span v-if="detail.calculation.input.performanceOverride != null">
-            绩效：{{ costMoney(detail.calculation.input.performanceOverride) }} 元；
-          </span>
-          核定说明：{{ detail.calculation.input.reason }}
-        </el-alert>
-        <el-alert
-          v-if="detail.statusCode === 'REVIEW'"
-          type="warning"
-          :closable="false"
-          show-icon
-          :title="`有 ${payrollReviewGroups(detail.calculation.issues).length} 类问题待处理，核定后自动重算`"
-        >
-          <el-button link type="primary" @click="detailTab = 'review'"
-            >查看原因与处理指引</el-button
+          }}</el-tag>
+          <div class="payslip-payable">
+            <span>应付工资（元）</span
+            ><strong>{{ payrollMoney(detail.calculation.netPay) }}</strong>
+          </div>
+          <el-tag
+            v-if="
+              detail.calculation.input.baseOverride != null ||
+              detail.calculation.input.performanceOverride != null ||
+              detail.calculation.input.allowanceOverride != null ||
+              detail.calculation.input.departmentOverrideId != null
+            "
+            type="info"
+            >本月已采用人工核定</el-tag
           >
-        </el-alert>
-        <el-descriptions
-          v-if="detail.calculation.salarySource"
-          title="档案底薪来源"
-          :column="3"
-          border
-        >
-          <el-descriptions-item label="是否转正">{{
-            detail.calculation.salarySource.regularized == null
-              ? '待完善'
-              : detail.calculation.salarySource.regularized
-                ? '已转正'
-                : '未转正'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="转正日期">{{
-            detail.calculation.salarySource.regularizationDate || '—'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="薪资生效日期">{{
-            detail.calculation.salarySource.effectiveFrom || '待完善'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="试用期底薪">{{
-            detail.calculation.salarySource.probationSalary || '待完善'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="转正底薪">{{
-            detail.calculation.salarySource.regularSalary || '待完善'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="本月来源">{{
-            detail.calculation.input.baseOverride == null
-              ? '员工档案（按核算月份判断转正）'
-              : '月度人工调整'
-          }}</el-descriptions-item>
-        </el-descriptions>
-        <el-tabs v-model="detailTab"
-          ><el-tab-pane
+          <el-button :loading="exporting" @click="exportDetail">导出明细 Excel</el-button>
+        </div>
+        <el-tabs v-model="detailTab">
+          <el-tab-pane label="工资组成" name="overview"
+            ><PayrollSalaryOverview :row="detail"
+          /></el-tab-pane>
+          <el-tab-pane
             v-if="detail.statusCode === 'REVIEW' || detail.calculation.issues.length"
-            label="待核对事项"
+            label="待处理事项"
             name="review"
           >
             <p class="field-hint">
-              相同问题合并处理，无需逐笔核对订单。点击“当月核定”，一次填写部门、绩效和说明。
+              先在员工档案、规则设置或来源系统处理缺项，再重新计算。确需人工调整时，填写调整金额及原因。
             </p>
             <div v-if="detail.calculation.issues.length" class="review-groups">
               <section
@@ -404,7 +466,7 @@
                     link
                     :disabled="saving"
                     @click="editInput(detail, group.determination)"
-                    >当月核定</el-button
+                    >人工调整</el-button
                   >
                 </div>
                 <p>{{ group.hint }}</p>
@@ -422,98 +484,58 @@
             </div>
             <el-empty v-else description="当前快照没有具体原因，请重新核算获取最新结果" />
           </el-tab-pane>
-          <el-tab-pane label="商品提成明细" name="commission"
-            ><el-table :data="detail.calculation.details" border max-height="560"
-              ><el-table-column prop="orderNo" label="订单" width="180" /><el-table-column
-                prop="productName"
-                label="商品"
-                min-width="160"
-                show-overflow-tooltip /><el-table-column label="受益角色" width="100"
-                ><template #default="{ row }">{{
-                  costLabel('COMMISSION_RECIPIENT_ROLE', row.recipientRoleCode)
-                }}</template></el-table-column
-              ><el-table-column label="数量" width="100"
-                ><template #default="{ row }"
-                  >{{ row.quantity }} {{ costLabel('PRODUCT_UNIT', row.unitCode) }}</template
-                ></el-table-column
-              ><el-table-column
-                prop="ruleName"
-                label="适用规则"
-                width="170"
-                show-overflow-tooltip /><el-table-column
-                label="应计（元）"
-                width="110"
-                align="right"
-                ><template #default="{ row }">{{
-                  costMoney(row.accrued)
-                }}</template></el-table-column
-              ><el-table-column label="本期发放（元）" width="125" align="right"
-                ><template #default="{ row }">{{
-                  costMoney(row.released)
-                }}</template></el-table-column
-              ><el-table-column prop="message" label="核算说明" min-width="210" /></el-table
-          ></el-tab-pane>
           <el-tab-pane
-            v-if="detail.calculation.performanceDetail"
-            label="过程与回款绩效"
+            v-if="detail.calculation.performanceDetail || detail.calculation.scheme"
+            label="绩效明细"
             name="performance"
           >
-            <el-descriptions border :column="2"
-              ><el-descriptions-item label="过程预算">{{
-                costMoney(detail.calculation.performanceDetail.processBudget)
-              }}</el-descriptions-item
-              ><el-descriptions-item label="过程扣减">{{
-                costMoney(detail.calculation.performanceDetail.processDeduction)
-              }}</el-descriptions-item
-              ><el-descriptions-item label="过程绩效">{{
-                costMoney(detail.calculation.performanceDetail.processPay)
-              }}</el-descriptions-item
-              ><el-descriptions-item label="回款绩效预算">{{
-                costMoney(detail.calculation.performanceDetail.collectionBudget)
-              }}</el-descriptions-item
-              ><el-descriptions-item label="回款目标">{{
-                costMoney(detail.calculation.performanceDetail.collectionTarget)
-              }}</el-descriptions-item
-              ><el-descriptions-item label="实际回款">{{
-                costMoney(detail.calculation.performanceDetail.collections)
-              }}</el-descriptions-item
-              ><el-descriptions-item label="回款绩效">{{
-                costMoney(detail.calculation.performanceDetail.collectionPay)
-              }}</el-descriptions-item></el-descriptions
-            >
-            <h3>每日过程指标</h3>
-            <el-table :data="detail.calculation.performanceDetail.days" border max-height="420"
-              ><el-table-column prop="date" label="日期" width="115" /><el-table-column
-                prop="checkins"
-                label="打卡客户数"
-              /><el-table-column prop="effectiveVisits" label="有效拜访客户数" /><el-table-column
-                prop="missingCheckins"
-                label="缺少打卡"
-              /><el-table-column prop="missingVisits" label="缺少拜访" /><el-table-column
-                label="扣款（元）"
-                ><template #default="{ row }">{{
-                  costMoney(row.deduction)
-                }}</template></el-table-column
-              ><el-table-column label="证据"
-                ><template #default="{ row }">{{
-                  row.evidenceComplete ? '完整' : '待核对'
-                }}</template></el-table-column
-              ></el-table
-            >
-            <h3>当月回款依据</h3>
-            <el-table :data="detail.calculation.performanceDetail.sources" border max-height="360"
-              ><el-table-column prop="orderNo" label="订单号" min-width="180" /><el-table-column
-                prop="date"
-                label="回款日期"
-              /><el-table-column label="金额（元）" align="right"
-                ><template #default="{ row }">{{
-                  costMoney(row.amount)
-                }}</template></el-table-column
-              ></el-table
-            >
+            <PayrollSchemeResult
+              v-if="detail.calculation.scheme"
+              :row="detail"
+              @changed="workflowChanged"
+            />
+            <template v-if="detail.calculation.performanceDetail">
+              <h3>每日打卡与有效拜访明细</h3>
+              <el-table :data="detail.calculation.performanceDetail.days" border max-height="420"
+                ><el-table-column prop="date" label="日期" width="115" /><el-table-column
+                  prop="checkins"
+                  label="有效打卡数"
+                /><el-table-column prop="effectiveVisits" label="有效拜访客户数" /><el-table-column
+                  prop="missingCheckins"
+                  label="缺少打卡"
+                /><el-table-column prop="missingVisits" label="缺少拜访" /><el-table-column
+                  label="原始扣减（元）"
+                  ><template #default="{ row }">{{
+                    costMoney(row.deduction)
+                  }}</template></el-table-column
+                ><el-table-column label="核算状态"
+                  ><template #default="{ row }">{{
+                    row.evidenceComplete ? '已按规则计算' : '来源未关联'
+                  }}</template></el-table-column
+                ></el-table
+              >
+              <h3>当月回款依据</h3>
+              <el-table :data="detail.calculation.performanceDetail.sources" border max-height="360"
+                ><el-table-column prop="orderNo" label="订单号" min-width="180" /><el-table-column
+                  prop="date"
+                  label="回款日期"
+                /><el-table-column label="金额（元）" align="right"
+                  ><template #default="{ row }">{{
+                    costMoney(row.amount)
+                  }}</template></el-table-column
+                ></el-table
+              >
+            </template>
           </el-tab-pane>
-          <el-tab-pane label="规则快照与调整" name="rules"
-            ><el-table :data="detail.calculation.rules" border
+          <el-tab-pane label="提成明细" name="commission">
+            <PayrollCommissionDetail
+              :lines="detail.calculation.details"
+              :total="detail.calculation.commission"
+            />
+          </el-tab-pane>
+          <el-tab-pane label="规则依据" name="rules">
+            <PayrollRuleEvidenceTable :row="detail" />
+            <el-table v-if="detail.calculation.rules.length" :data="detail.calculation.rules" border
               ><el-table-column prop="data.name" label="规则" min-width="180" /><el-table-column
                 label="类别"
                 width="130"
@@ -541,7 +563,9 @@
                 }}</template></el-table-column
               ></el-table
             >
-            <h3>当月核定</h3>
+          </el-tab-pane>
+          <el-tab-pane label="调整与历史" name="payments">
+            <h3>人工调整</h3>
             <el-descriptions border :column="2"
               ><el-descriptions-item label="核定部门">{{
                 detail.calculation.input.departmentOverrideId == null
@@ -566,9 +590,7 @@
               ><el-descriptions-item label="核定说明">{{
                 detail.calculation.input.reason || '无调整'
               }}</el-descriptions-item></el-descriptions
-            ></el-tab-pane
-          >
-          <el-tab-pane label="发放与补差" name="payments">
+            >
             <p v-if="detail.statusCode === 'PAID' && !detail.payments?.length" class="field-hint">
               历史已发放单尚无结构化凭证，原说明见操作记录。
             </p>
@@ -617,9 +639,8 @@
                 ></el-table-column
               ></el-table
             >
-          </el-tab-pane>
-          <el-tab-pane label="操作记录" name="history"
-            ><el-alert
+            <h3>操作记录</h3>
+            <el-alert
               v-if="historyError"
               :title="historyError"
               type="error"
@@ -645,7 +666,7 @@
           :can-calculate="can('hr:payroll:calculate')"
           :can-confirm="can('hr:payroll:confirm')"
           :can-pay="can('hr:payroll:paid')"
-          :busy="saving || historyLoading"
+          :busy="saving || historyLoading || batchBusy"
           @close="detailVisible = false"
           @adjust="editInput(detail)"
           @recalculate="recalculate(detail)"
@@ -658,16 +679,24 @@
 </template>
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { InfoFilled } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
+import PayrollBatchDialog from './components/PayrollBatchDialog.vue'
+import type { PayrollSummary } from '@/api/core/payroll/models/PayrollSummary'
+import PayrollSchemeResult from './components/PayrollSchemeResult.vue'
 import PayrollPreparationPanel from './components/PayrollPreparationPanel.vue'
 import PayrollSettlementDialog from './components/PayrollSettlementDialog.vue'
 import PayrollWorkflowActions from './components/PayrollWorkflowActions.vue'
+import PayrollCommissionDetail from './components/PayrollCommissionDetail.vue'
+import PayrollSalaryOverview from './components/PayrollSalaryOverview.vue'
+import PayrollRuleEvidenceTable from './components/PayrollRuleEvidenceTable.vue'
 import {
   previousPayrollMonth,
   payrollPaid,
-  payrollRemaining,
   payrollReviewGroups,
   payrollStatusLabel,
+  payrollMoney,
+  payrollRole,
 } from '@/utils/payroll-workflow'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
@@ -680,8 +709,8 @@ import {
   getPayrollDetail,
   cancelPayrollCorrection,
   type PayrollCorrection,
-  type PayrollPreparationEmployee,
   getPayroll,
+  getPayrollSummary,
   getPayrollDepartments,
   getPayrollHistory,
   getPayrollInput,
@@ -692,9 +721,11 @@ import {
   type PayrollPage,
   type PayrollRecord,
 } from '@/api/core/payroll'
-import { costLabel, costMoney, loadCostDictionaries } from '../cost/cost-dictionaries'
-import { exportCostRows } from '../cost/cost-export'
+import { costLabel, costMoney } from '../cost/cost-dictionaries'
+import { exportPayrollRecords, exportPayrollDetails } from '@/utils/payroll-detail-export'
+import { loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { auditLabel } from '../cost/cost-audit'
+import { payrollRoles } from '@/utils/payroll-scheme'
 const { can } = useSupplyPermissions()
 function thisMonth() {
   const date = new Date()
@@ -703,6 +734,7 @@ function thisMonth() {
 const month = ref(previousPayrollMonth()),
   keyword = ref(''),
   statusCode = ref(''),
+  payrollCategory = ref(''),
   departmentId = ref<number | undefined>(),
   currentPage = ref(1),
   pageSize = ref(20)
@@ -710,8 +742,8 @@ const workflowStages = [
   { code: '', label: '全部', hint: '先进行月度核算，再按处理阶段查看本月薪酬。' },
   {
     code: 'REVIEW',
-    label: '待核对',
-    hint: '点击“核对处理”，在当月核定部门或绩效，保存后自动重算；检查通过即可确认薪酬。',
+    label: '待处理',
+    hint: '存在档案、规则或来源缺项，点击待处理数量查看原因；补齐后重算。',
   },
   {
     code: 'READY',
@@ -729,15 +761,27 @@ const loading = ref(false),
   saving = ref(false)
 const preparationPanel = ref<InstanceType<typeof PayrollPreparationPanel>>(),
   settlementDialog = ref<InstanceType<typeof PayrollSettlementDialog>>()
-const preparation = ref<PayrollPreparationEmployee[]>([])
+const summary = ref<PayrollSummary | null>(null)
+const payrollTable = ref<TableInstance>()
+const selection = ref<PayrollRecord[]>([])
+const batchDialog = ref<InstanceType<typeof PayrollBatchDialog>>()
+const batchBusy = ref(false)
 function stageCount(code: string) {
-  return preparation.value.filter(
-    (e) =>
-      (!departmentId.value || e.departmentId === departmentId.value) &&
-      (!keyword.value || (e.employeeName + e.employeeCode).includes(keyword.value)) &&
-      e.payrollStatus &&
-      (!code || e.payrollStatus === code),
-  ).length
+  if (!summary.value) return '—'
+  return code
+    ? summary.value.statusCounts[code] || 0
+    : Object.values(summary.value.statusCounts).reduce((sum, n) => sum + n, 0)
+}
+async function exportDetail() {
+  if (!detail.value) return
+  exporting.value = true
+  try {
+    await exportPayrollDetails(detail.value)
+  } catch (e) {
+    ElMessage.error(errorMessage(e, '导出明细失败'))
+  } finally {
+    exporting.value = false
+  }
 }
 async function workflowChanged() {
   await Promise.all([load(), preparationPanel.value?.refresh()])
@@ -767,24 +811,13 @@ const moneyFields: {
 }[] = [
   { key: 'baseSalary', label: '底薪' },
   { key: 'performance', label: '绩效' },
-  { key: 'commission', label: '本期提成' },
-  { key: 'heldCommission', label: '待回款提成' },
   { key: 'allowance', label: '补贴' },
-  { key: 'correctionAmount', label: '跨月补差' },
-  { key: 'deduction', label: '扣款' },
+  { key: 'commission', label: '提成' },
+  { key: 'correctionAmount', label: '补发补扣' },
+  { key: 'deduction', label: '其他扣款' },
   { key: 'grossPay', label: '应发工资' },
-  { key: 'netPay', label: '核定实发' },
+  { key: 'netPay', label: '应付工资' },
 ]
-const pageGross = computed(() =>
-    page.value.items.some((r) => r.calculation.grossPay == null)
-      ? null
-      : page.value.items.reduce((sum, r) => sum + Number(r.calculation.grossPay), 0),
-  ),
-  pageNet = computed(() =>
-    page.value.items.some((r) => r.calculation.netPay == null)
-      ? null
-      : page.value.items.reduce((sum, r) => sum + Number(r.calculation.netPay), 0),
-  )
 const calculateVisible = ref(false)
 const determinationExtra = ref<string[]>([])
 const inputVisible = ref(false),
@@ -799,7 +832,7 @@ const inputVisible = ref(false),
     reason: '',
   })
 const detailVisible = ref(false),
-  detailTab = ref('commission'),
+  detailTab = ref('overview'),
   detail = ref<PayrollRecord | null>(null),
   history = ref<CostAudit[]>([]),
   historyLoading = ref(false),
@@ -810,17 +843,26 @@ async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const result = await getPayroll({
+    selection.value = []
+    payrollTable.value?.clearSelection()
+    summary.value = null
+    const query = {
       begin: (currentPage.value - 1) * pageSize.value,
       step: pageSize.value,
       month: month.value,
       keyword: keyword.value || undefined,
       departmentId: departmentId.value || undefined,
       statusCode: statusCode.value || undefined,
-    })
-    if (version === loadVersion) page.value = result
+      payrollCategory: payrollCategory.value || undefined,
+    }
+    const [result, totals] = await Promise.all([getPayroll(query), getPayrollSummary(query)])
+    if (version === loadVersion) {
+      page.value = result
+      summary.value = totals
+    }
   } catch (e) {
     if (version === loadVersion) {
+      summary.value = null
       page.value.items = []
       page.value.total = 0
       loadError.value = errorMessage(e, '薪酬查询失败')
@@ -837,6 +879,7 @@ function reset() {
   keyword.value = ''
   departmentId.value = undefined
   statusCode.value = ''
+  payrollCategory.value = ''
   month.value = previousPayrollMonth()
   search()
 }
@@ -885,7 +928,15 @@ async function editInput(row: PayrollRecord, target?: 'department' | 'performanc
     inputLoading.value = false
   }
 }
+function restoreRuleCalculation() {
+  input.value.baseOverride = null
+  input.value.performanceOverride = null
+  input.value.allowanceOverride = null
+  input.value.departmentOverrideId = null
+  input.value.reason = '恢复员工薪资档案与规则计算'
+}
 async function saveInput() {
+  if (saving.value || inputLoading.value) return
   if (!inputRow.value || !input.value.reason.trim()) {
     inputError.value = '请填写核定说明'
     return
@@ -932,7 +983,7 @@ async function voidCorrection(correction: PayrollCorrection) {
 }
 async function showDetail(row: PayrollRecord, tab?: string) {
   detail.value = row
-  detailTab.value = tab || (row.statusCode === 'REVIEW' ? 'review' : 'commission')
+  detailTab.value = tab || 'overview'
   detailVisible.value = true
   history.value = []
   historyError.value = ''
@@ -959,40 +1010,13 @@ async function exportAll() {
       keyword: keyword.value || undefined,
       departmentId: departmentId.value,
       statusCode: statusCode.value || undefined,
+      payrollCategory: payrollCategory.value || undefined,
     })
     if (!rows.length) {
       ElMessage.info('当前筛选下暂无工资数据')
       return
     }
-    exportCostRows(
-      '薪酬_' + targetMonth,
-      [
-        '月份',
-        '员工编号',
-        '姓名',
-        '部门',
-        '城市',
-        ...moneyFields.map((f) => f.label),
-        '状态',
-        '待核对事项',
-        '已登记发放',
-        '待发金额',
-        '发放日期与凭证',
-      ],
-      rows.map((r) => [
-        r.month,
-        r.employeeCode,
-        r.employeeName,
-        r.departmentName,
-        r.cityName,
-        ...moneyFields.map((f) => r.calculation[f.key]),
-        payrollStatusLabel(r, costLabel('PAYROLL_STATUS', r.statusCode)),
-        r.calculation.issues.join('；'),
-        payrollPaid(r),
-        r.calculation.netPay == null ? null : payrollRemaining(r),
-        (r.payments ?? []).map((p) => `${p.paidDate} / ${p.amount} / ${p.referenceNo}`).join('；'),
-      ]),
-    )
+    await exportPayrollRecords(rows, '薪酬明细_' + targetMonth)
   } catch (e) {
     ElMessage.error(errorMessage(e, '整月导出失败'))
   } finally {
@@ -1001,7 +1025,14 @@ async function exportAll() {
 }
 onMounted(async () => {
   void load()
-  const results = await Promise.allSettled([loadCostDictionaries(), getPayrollDepartments(false)])
+  const results = await Promise.allSettled([
+    loadBusinessDictionaries(
+      ['PAYROLL_STATUS', 'PAYROLL_RULE_KIND', 'COMMISSION_RECIPIENT_ROLE', 'PRODUCT_UNIT'].map(
+        (code) => ({ moduleCode: '', code }),
+      ),
+    ),
+    getPayrollDepartments(false),
+  ])
   const deps = results[1]
   if (deps.status === 'fulfilled') departments.value = deps.value
   results.forEach((r) => {
@@ -1010,10 +1041,173 @@ onMounted(async () => {
 })
 </script>
 <style scoped lang="scss">
-.review-summary {
+.payslip-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 8px 0;
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+.payslip-heading {
+  margin-bottom: 12px;
+}
+.payslip-heading strong {
+  font-size: 18px;
+}
+.payslip-heading .el-button {
+  margin-left: auto;
+}
+.payroll-summary strong,
+.payroll-total {
+  font-variant-numeric: tabular-nums;
+}
+.workflow-filter {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+}
+.workflow-filter :deep(.el-radio-group) {
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.payroll-results-overview {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.payroll-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  font-size: 13px;
+}
+.summary-card {
+  min-width: 0;
+  padding: 16px 20px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--el-border-radius-base);
+  background: var(--el-bg-color);
+}
+.summary-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.summary-label {
+  color: var(--el-text-color-regular);
+  line-height: 24px;
+}
+.summary-completion {
+  color: var(--el-text-color-regular);
+  line-height: 20px;
+}
+.summary-pending {
   color: var(--el-color-warning-dark-2);
+}
+.summary-value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+  line-height: 34px;
   overflow-wrap: anywhere;
 }
+.summary-value strong {
+  font-size: 26px;
+  font-weight: 600;
+}
+.summary-payable .summary-value strong {
+  color: var(--el-color-primary);
+}
+@media (max-width: 900px) {
+  .payroll-summary {
+    grid-template-columns: 1fr;
+  }
+}
+.summary-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--el-border-radius-small);
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: help;
+}
+.summary-help:hover,
+.summary-help:focus-visible {
+  color: var(--el-color-primary);
+}
+.summary-help:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+.workflow-help {
+  white-space: nowrap;
+}
+.payroll-page > .filter-card {
+  flex: 0 0 auto;
+}
+.payroll-page > .filter-card :deep(.el-card__body) {
+  overflow: visible;
+  max-height: none;
+}
+.payroll-page > .filter-card :deep(.el-form) {
+  overflow: visible;
+}
+.payroll-page > .result-heading {
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+.list-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.list-tools .el-button + .el-button {
+  margin-left: 0;
+}
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.row-actions .el-button + .el-button {
+  margin-left: 0;
+}
+.employee-meta {
+  color: var(--el-text-color-regular);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.payroll-total {
+  font-variant-numeric: tabular-nums;
+}
+.payroll-page :deep(.el-pagination) {
+  flex: 0 0 auto;
+  padding: 12px;
+  margin: 0;
+}
+@media (max-width: 1100px) {
+  .payroll-summary {
+    gap: 8px;
+  }
+}
+
 .review-groups {
   margin-bottom: 16px;
 }
@@ -1075,6 +1269,99 @@ onMounted(async () => {
   .result-heading {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+</style>
+
+<style scoped>
+.payroll-v03-page {
+  gap: 18px;
+  overflow: auto;
+}
+.payroll-v03-page .page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.payroll-v03-page .page-heading p {
+  display: block;
+  margin: 8px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+.payroll-v03-page .filter-card {
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+.payroll-v03-page .filter-card :deep(.el-card__body) {
+  padding: 20px;
+}
+.payroll-v03-page .filter-card :deep(.el-form) {
+  display: grid;
+  grid-template-columns: 180px minmax(200px, 1fr) 180px 160px auto;
+  gap: 18px;
+  align-items: end;
+}
+.payroll-v03-page .filter-card :deep(.el-form-item) {
+  margin: 0;
+  min-width: 0;
+}
+.payroll-v03-page .filter-card :deep(.el-date-editor) {
+  width: 100%;
+}
+.payroll-v03-page .filter-card :deep(.el-select) {
+  width: 100%;
+}
+.payroll-v03-page .list-card {
+  flex: 1;
+  min-height: 300px;
+  border-radius: 8px;
+}
+.payroll-v03-page .list-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+  gap: 16px;
+}
+.payroll-list-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.payroll-list-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.payroll-list-heading span,
+.employee-meta {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.payroll-v03-page .result-heading {
+  padding: 0;
+  margin: 0;
+}
+.payroll-v03-page .table-viewport {
+  flex: 1;
+  min-height: 190px;
+}
+.payslip-payable {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.payslip-payable strong {
+  color: var(--el-color-primary);
+  font-size: 24px;
+}
+@media (max-width: 1000px) {
+  .payroll-v03-page .filter-card :deep(.el-form) {
+    grid-template-columns: 1fr 1fr;
   }
 }
 </style>
