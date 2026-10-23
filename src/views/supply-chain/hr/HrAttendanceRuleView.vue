@@ -45,7 +45,7 @@ async function loadDepartments() {
   departmentsLoading.value = true
   departmentError.value = ''
   try {
-    const rows = await getAttendanceDepartments()
+    const rows = await getAttendanceDepartments(true)
     departmentTree(rows)
     departments.value = rows
   } catch (e) {
@@ -132,12 +132,16 @@ const days = ref<number | undefined>(),
 const title = computed(() =>
   mode.value === 'create'
     ? '新增考勤规则'
-    : mode.value === 'view' || rule.value?.locked
+    : mode.value === 'view' || rule.value?.locked || rule.value?.canWrite === false
       ? '查看考勤规则'
       : '修改考勤规则',
 )
 const readOnly = computed(
-  () => mode.value === 'view' || !!rule.value?.locked || !can('hr:attendance-rule:write'),
+  () =>
+    mode.value === 'view' ||
+    !!rule.value?.locked ||
+    rule.value?.canWrite === false ||
+    !can('hr:attendance-rule:write'),
 )
 const duplicate = computed(() => mode.value === 'create' && rule.value?.expectedDays != null)
 const daysDisabled = computed(
@@ -217,7 +221,8 @@ function create() {
   dialogOpen.value = true
 }
 function openRow(row: AttendanceRuleListRow) {
-  mode.value = row.locked || !can('hr:attendance-rule:write') ? 'view' : 'edit'
+  mode.value =
+    row.locked || row.canWrite === false || !can('hr:attendance-rule:write') ? 'view' : 'edit'
   editMonth.value = row.month
   editDepartment.value = row.departmentId ?? 0
   dialogOpen.value = true
@@ -377,7 +382,7 @@ onMounted(() => {
             <el-table-column label="规则状态" width="140"
               ><template #default="{ row }"
                 ><el-tag :type="row.locked ? 'warning' : 'success'" effect="plain">{{
-                  row.locked ? '已锁定' : '可修改'
+                  row.locked ? '已锁定' : row.canWrite === false ? '只读' : '可修改'
                 }}</el-tag></template
               ></el-table-column
             >
@@ -391,9 +396,13 @@ onMounted(() => {
                 ><el-button
                   link
                   type="primary"
-                  :aria-label="`${row.locked || !can('hr:attendance-rule:write') ? '查看' : '修改'}${row.departmentName}考勤规则`"
+                  :aria-label="`${row.locked || row.canWrite === false || !can('hr:attendance-rule:write') ? '查看' : '修改'}${row.departmentName}考勤规则`"
                   @click="openRow(row as AttendanceRuleListRow)"
-                  >{{ row.locked || !can('hr:attendance-rule:write') ? '查看' : '修改' }}</el-button
+                  >{{
+                    row.locked || row.canWrite === false || !can('hr:attendance-rule:write')
+                      ? '查看'
+                      : '修改'
+                  }}</el-button
                 ></template
               ></el-table-column
             >

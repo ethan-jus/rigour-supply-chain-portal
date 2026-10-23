@@ -20,15 +20,27 @@
             file.fileName
           }}</el-button></template
         ></el-table-column
-      ><el-table-column prop="createdBy" label="上传人" min-width="150" /><el-table-column
-        prop="createdTime"
-        label="上传时间"
-        min-width="180"
-    /></el-table>
+      ><el-table-column label="上传人" min-width="150"
+        ><template #default="{ row: file }">{{
+          auditActorLabel(file.createdBy)
+        }}</template></el-table-column
+      ><el-table-column label="上传时间" min-width="180"
+        ><template #default="{ row: file }">{{
+          displayDateTime(file.createdTime)
+        }}</template></el-table-column
+      ></el-table
+    >
+    <CostFilePreview
+      v-model="previewVisible"
+      :name="previewName"
+      :type="previewType"
+      :url="previewUrl"
+    />
   </section>
 </template>
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onBeforeUnmount, onDeactivated, onActivated } from 'vue'
+import CostFilePreview from './CostFilePreview.vue'
 import {
   getCostAttachments,
   uploadCostAttachment,
@@ -38,12 +50,31 @@ import {
   type CostAttachment,
 } from '@/api/core/cost'
 import { errorMessage } from '@/api/core/error'
+import { auditActorLabel } from '@/utils/audit-actor'
+import { displayDateTime } from '@/utils/business-date'
 const props = defineProps<{ category: CostCategory; row: CostRecord; editable: boolean }>()
 const emit = defineEmits<{ changed: [] }>()
 const files = ref<CostAttachment[]>([]),
   loading = ref(false),
   error = ref('')
+const previewVisible = ref(false),
+  previewName = ref(''),
+  previewType = ref(''),
+  previewUrl = ref('')
+let previewRequest = 0
 let version = 0
+let inactive = false
+onDeactivated(() => {
+  inactive = true
+  previewRequest++
+  version++
+  previewVisible.value = false
+  previewUrl.value = ''
+  loading.value = false
+})
+onActivated(() => {
+  if (inactive) { inactive = false; void load() }
+})
 async function load() {
   const v = ++version
   loading.value = true
@@ -71,33 +102,48 @@ async function upload(event: Event) {
   }
   loading.value = true
   error.value = ''
+  const request = version, category = props.category, record = props.row
   try {
-    await uploadCostAttachment(props.category, props.row, file)
+    await uploadCostAttachment(category, record, file)
+    if (inactive || request !== version) return
     emit('changed')
     await load()
   } catch (e) {
-    error.value = errorMessage(e, '上传失败')
+    if (!inactive && request === version) error.value = errorMessage(e, '上传失败')
   } finally {
-    loading.value = false
+    if (!inactive && request === version) loading.value = false
     input.value = ''
   }
 }
 async function open(id: string) {
+  const file = files.value.find((item) => item.id === id)
+  if (!file) return
+  const request = ++previewRequest
   error.value = ''
   try {
-    const url = await getCostAttachmentUrl(props.category, props.row.id, id)
-    const a = document.createElement('a')
-    a.href = url
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
-    a.click()
+    const url = await getCostAttachmentUrl(props.category, props.row.id, file.id)
+    if (inactive || request !== previewRequest) return
+    previewName.value = file.fileName
+    previewType.value = file.contentType
+    previewUrl.value = url
+    previewVisible.value = true
   } catch (e) {
-    error.value = errorMessage(e, '附件打开失败')
+    if (!inactive && request === previewRequest) error.value = errorMessage(e, '附件打开失败')
   }
 }
+onBeforeUnmount(() => {
+  inactive = true
+  version++
+  previewRequest++
+})
+
 watch(
   () => [props.category, props.row.id],
-  () => void load(),
+  () => {
+    previewRequest++
+    previewVisible.value = false
+    void load()
+  },
   { immediate: true },
 )
 </script>

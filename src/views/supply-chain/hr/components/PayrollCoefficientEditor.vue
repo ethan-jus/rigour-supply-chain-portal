@@ -27,12 +27,12 @@
     <el-table-column label="系数取值方式" min-width="170">
       <template #default="{ row }"
         ><el-select v-model="row.mode"
-          ><el-option value="LINEAR" label="完成率乘以下方倍数" /><el-option
+          ><el-option value="LINEAR" label="实际完成率 × 下方系数" /><el-option
             value="FIXED"
-            label="固定绩效系数" /></el-select
+            label="固定使用下方系数" /></el-select
       ></template>
     </el-table-column>
-    <el-table-column label="倍数／系数" min-width="140">
+    <el-table-column label="计分系数" min-width="140">
       <template #default="{ row }"
         ><el-input-number v-model="row.coefficient" :min="0" :precision="4" :controls="false"
       /></template>
@@ -57,7 +57,7 @@
     >增加区间</el-button
   >
   <p class="field-hint">
-    例如：0%～100%按实际完成率；超过100%固定系数1.2。各区间须连续且边界不重叠。
+    完成率区间须从0%连续覆盖至无上限，边界不能重叠。区间、取值方式和计分系数均由HR维护。
   </p>
 </template>
 <script setup lang="ts">

@@ -1,3 +1,4 @@
+import type { PayrollComponentStateChange } from './PayrollComponentStateChange'
 import type { PayrollComponentDefinition } from './PayrollComponentDefinition'
 export interface PayrollComponentVersionView {
   id: string
@@ -8,4 +9,7 @@ export interface PayrollComponentVersionView {
   reason: string
   createdBy: string
   createdTime: string
+  revision?: number
+  deleted?: boolean
+  stateChanges?: PayrollComponentStateChange[]
 }

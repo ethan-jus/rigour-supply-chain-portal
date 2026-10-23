@@ -14,6 +14,14 @@
       >
     </div>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
+    <el-alert v-if="reviewError" :title="reviewError" type="error" :closable="false" />
+    <PayrollRuleReviewPanel
+      :reviews="ruleReviews"
+      subject="PAYROLL"
+      :can-process="can('hr:payroll:confirm')"
+      @locate="locateRuleReview"
+      @resolved="load"
+    />
     <el-card class="filter-card" shadow="never"
       ><el-form label-position="top" :disabled="batchBusy" @submit.prevent="search"
         ><el-form-item label="薪酬月份"
@@ -214,7 +222,7 @@
               payrollMoney(payrollPaid(row as PayrollRecord))
             }}</template></el-table-column
           >
-          <el-table-column label="状态" width="95">
+          <el-table-column label="状态" width="165">
             <template #default="{ row }">
               <el-button
                 v-if="row.statusCode === 'REVIEW'"
@@ -232,6 +240,7 @@
                   costLabel('PAYROLL_STATUS', row.statusCode),
                 )
               }}</el-tag>
+              <el-tag v-if="needsRuleReview(row.id)" type="warning">规则变更待复核</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="170" fixed="right">
@@ -256,10 +265,18 @@
                   >确认</el-button
                 >
                 <el-button
-                  v-if="row.statusCode === 'CONFIRMED' && can('hr:payroll:paid')"
+                  v-if="unlocked(row as PayrollRecord) && can('hr:payroll:calculate')"
                   link
                   type="primary"
                   :disabled="saving || batchBusy"
+                  @click="editInput(row as PayrollRecord)"
+                  >核定薪酬</el-button
+                >
+                <el-button
+                  v-if="row.statusCode === 'CONFIRMED' && can('hr:payroll:paid')"
+                  link
+                  type="primary"
+                  :disabled="saving || batchBusy || needsRuleReview(row.id) || !!reviewError"
                   @click="settlementDialog?.open(row as PayrollRecord, 'paid')"
                   >登记发放</el-button
                 >
@@ -277,11 +294,6 @@
                         v-if="unlocked(row as PayrollRecord) && can('hr:payroll:calculate')"
                         @click="recalculate(row as PayrollRecord)"
                         >重新核算</el-dropdown-item
-                      >
-                      <el-dropdown-item
-                        v-if="unlocked(row as PayrollRecord) && can('hr:payroll:calculate')"
-                        @click="editInput(row as PayrollRecord)"
-                        >人工调整</el-dropdown-item
                       >
                       <el-dropdown-item
                         v-if="
@@ -321,94 +333,160 @@
     </el-card>
     <el-dialog
       v-model="inputVisible"
-      :title="'人工调整 · ' + (inputRow?.employeeName || '') + ' · ' + (inputRow?.month || '')"
-      width="min(680px, 95vw)"
+      :title="'薪酬核定 · ' + (inputRow?.employeeName || '') + ' · ' + (inputRow?.month || '')"
+      width="min(960px, 96vw)"
+      top="3vh"
       :close-on-click-modal="false"
-      ><el-alert v-if="inputError" :title="inputError" type="error" :closable="false" /><el-alert
-        title="只填写需要核定的内容，留空沿用原来源。填写一次说明，保存后自动重算。核定仅影响本人工资及对应订单的提成计算，原始资料保留。"
-        type="info"
-        :closable="false"
-      />
-      <el-button
-        link
-        type="primary"
-        :disabled="inputLoading || saving"
-        @click="restoreRuleCalculation"
-        >清除核定覆盖，恢复规则计算</el-button
-      >
-      <el-form v-loading="inputLoading" label-width="120px"
-        ><el-form-item label="核定部门">
-          <el-tree-select
-            v-model="input.departmentOverrideId"
-            :data="departmentOptionsTree"
-            node-key="id"
-            :props="departmentTreeProps"
-            check-strictly
-            clearable
-            filterable
-            default-expand-all
-            :render-after-expand="false"
-            placeholder="留空沿用任职记录"
-            aria-label="核定部门"
-          />
-          <p class="field-hint">
-            档案部门：{{ inputRow?.departmentName || '未填写' }}。选定后用于
-            {{ inputRow?.month }} 的绩效、补贴及当月订单提成。
-          </p>
-        </el-form-item>
-        <el-form-item label="核定绩效（元）">
-          <el-input-number
-            v-model="input.performanceOverride"
-            :min="0"
-            :precision="2"
-            placeholder="留空按规则计算"
-            aria-label="核定绩效"
-            style="width: 220px; max-width: 100%"
-          />
-          <p class="field-hint">
-            {{
-              inputRow?.calculation.performanceDetail
-                ? '填写打卡与有效拜访绩效＋回款达标绩效的合计'
-                : '填写本月最终绩效金额（含综合系数及折算）'
-            }}；填 0 表示本月不发绩效。
-          </p>
-          <p v-if="inputRow?.calculation.performanceDetail" class="field-hint">
-            当前依据：打卡与有效拜访
-            {{ costMoney(inputRow.calculation.performanceDetail.processPay) }} 元；回款
-            {{ costMoney(inputRow.calculation.performanceDetail.collectionPay) }} 元。
-          </p>
-        </el-form-item>
-        <el-collapse v-model="determinationExtra">
-          <el-collapse-item title="其他金额（按需调整）" name="amount">
-            <el-form-item label="当月底薪（元）"
-              ><el-input-number
-                v-model="input.baseOverride"
+      :close-on-press-escape="!saving"
+      :show-close="!saving"
+      :before-close="closeInput"
+      class="payroll-determination"
+    >
+      <el-alert v-if="inputError" :title="inputError" type="error" :closable="false" />
+      <p class="determination-context">
+        仅核定 {{ inputRow?.employeeName }} 在
+        {{ inputRow?.month }} 的工资。同部门其他员工不受影响。
+      </p>
+      <el-skeleton v-if="inputLoading" :rows="8" animated />
+      <el-form v-else :disabled="saving" label-position="top">
+        <template v-if="monthlyFacts">
+          <el-divider content-position="left">个人绩效与提成</el-divider>
+          <div class="determination-grid">
+            <el-form-item v-if="determiningHeadquarters" label="本月绩效完成率（%）" required>
+              <el-input-number
+                v-model="monthlyFacts.performanceCompletionPercent"
                 :min="0"
-                :precision="2" /></el-form-item
-            ><el-form-item label="当月补贴（元）"
-              ><el-input-number v-model="input.allowanceOverride" :min="0" :precision="2" />
+                :precision="4"
+                aria-label="本月绩效完成率"
+              />
               <p class="field-hint">
-                月内生效、停发或金额变化由 HR 核定，填写原因后覆盖当月补贴合计。
-              </p></el-form-item
-            ><el-form-item label="扣款（元）" required
-              ><el-input-number v-model="input.deduction" :min="0" :precision="2"
-            /></el-form-item>
+                HR按本人的当月表现填写；100表示100%，系统按个人绩效基数及折算规则计算。
+              </p>
+            </el-form-item>
+            <el-form-item label="提成调整金额（元）">
+              <el-input-number
+                v-model="monthlyFacts.commissionAdjustment"
+                :precision="2"
+                aria-label="提成调整金额"
+              />
+              <p class="field-hint">
+                当前核算：{{ payrollMoney(inputRow?.calculation.commission) }}
+                元。正数补发、负数扣回，原始订单提成明细保留。
+              </p>
+            </el-form-item>
+            <el-form-item
+              v-for="metric in monthlyFacts.metrics"
+              :key="metric.code"
+              :label="metricName(metric.code)"
+              required
+            >
+              <el-input-number v-model="metric.value" :min="0" :precision="4" />
+              <el-input
+                v-model="metric.evidence"
+                placeholder="核定依据（留空采用下方统一说明）"
+                maxlength="500"
+              />
+            </el-form-item>
+          </div>
+        </template>
+        <el-divider content-position="left">当月金额调整</el-divider>
+        <p class="field-hint">
+          留空沿用档案和规则计算，填0表示该项不发放。保存后由系统重算，并在工资明细核对最终金额后确认。
+        </p>
+        <div class="determination-grid">
+          <el-form-item label="当月底薪（元）">
+            <el-input-number
+              v-model="input.baseOverride"
+              :min="0"
+              :precision="2"
+              aria-label="核定底薪"
+            />
+            <p class="field-hint">
+              当前核算：{{ payrollMoney(inputRow?.calculation.baseSalary) }} 元
+            </p>
+          </el-form-item>
+          <el-form-item label="核定绩效（元）">
+            <el-input-number
+              v-model="input.performanceOverride"
+              :min="0"
+              :precision="2"
+              placeholder="留空按规则计算"
+              aria-label="核定绩效"
+            />
+            <p class="field-hint">
+              当前核算：{{ payrollMoney(inputRow?.calculation.performance) }}
+              元；填写后作为最终绩效金额。
+            </p>
+          </el-form-item>
+          <el-form-item label="当月补贴（元）">
+            <el-input-number
+              v-model="input.allowanceOverride"
+              :min="0"
+              :precision="2"
+              aria-label="核定补贴"
+            />
+            <p class="field-hint">
+              当前核算：{{ payrollMoney(inputRow?.calculation.allowance) }} 元
+            </p>
+          </el-form-item>
+          <el-form-item label="扣款（元）" required>
+            <el-input-number
+              v-model="input.deduction"
+              :min="0"
+              :precision="2"
+              aria-label="核定扣款"
+            />
+          </el-form-item>
+        </div>
+        <el-button
+          link
+          type="primary"
+          :disabled="inputLoading || saving"
+          @click="restoreRuleCalculation"
+          >清除核定覆盖，恢复规则计算</el-button
+        >
+        <el-collapse v-model="determinationExtra">
+          <el-collapse-item title="任职部门调整（按需填写）" name="department">
+            <el-form-item label="核定部门">
+              <el-tree-select
+                v-model="input.departmentOverrideId"
+                :data="departmentOptionsTree"
+                node-key="id"
+                :props="departmentTreeProps"
+                check-strictly
+                clearable
+                filterable
+                default-expand-all
+                :render-after-expand="false"
+                placeholder="留空沿用任职记录"
+                aria-label="核定部门"
+              />
+              <p class="field-hint">
+                档案部门：{{
+                  inputRow?.departmentName || '未填写'
+                }}。仅调整本人的本月核算归属，不修改同部门其他人的完成率。
+              </p>
+            </el-form-item>
           </el-collapse-item>
         </el-collapse>
-        <el-form-item label="核定说明" required
-          ><el-input
+        <el-form-item label="核定说明" required>
+          <el-input
             v-model="input.reason"
             aria-label="核定说明"
             type="textarea"
             maxlength="500"
-            show-word-limit /></el-form-item></el-form
-      ><template #footer
-        ><el-button @click="inputVisible = false">取消</el-button
-        ><el-button type="primary" :disabled="inputLoading" :loading="saving" @click="saveInput"
+            show-word-limit
+            placeholder="填写本次个人完成率、指标或金额调整的依据"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="saving" @click="closeInput()">取消</el-button>
+        <el-button type="primary" :disabled="inputLoading" :loading="saving" @click="saveInput"
           >保存并重新核算</el-button
-        ></template
-      ></el-dialog
-    >
+        >
+      </template>
+    </el-dialog>
     <el-drawer
       v-model="detailVisible"
       title="员工月度薪酬明细"
@@ -466,7 +544,7 @@
                     link
                     :disabled="saving"
                     @click="editInput(detail, group.determination)"
-                    >人工调整</el-button
+                    >核定薪酬</el-button
                   >
                 </div>
                 <p>{{ group.hint }}</p>
@@ -492,7 +570,7 @@
             <PayrollSchemeResult
               v-if="detail.calculation.scheme"
               :row="detail"
-              @changed="workflowChanged"
+              @determine="editInput(detail)"
             />
             <template v-if="detail.calculation.performanceDetail">
               <h3>每日打卡与有效拜访明细</h3>
@@ -556,7 +634,7 @@
                     ? String(row.data.rate) +
                       (row.data.methodCode === 'PERCENT'
                         ? '%'
-                        : ' 元/' + costLabel('PRODUCT_UNIT', row.data.unitCode))
+                        : ' 元/' + payrollUnitName(row.data.unitCode))
                     : row.data.kindCode === 'CITY_MANAGER'
                       ? row.data.cityName
                       : costMoney(row.data.amount)
@@ -597,7 +675,7 @@
             <h3>发放登记</h3>
             <el-table :data="detail.payments ?? []" border
               ><el-table-column prop="paidDate" label="实际日期" width="120" /><el-table-column
-                label="金额"
+                label="金额（元）"
                 width="120"
                 ><template #default="{ row }">{{
                   costMoney(row.amount)
@@ -605,12 +683,18 @@
               ><el-table-column
                 prop="referenceNo"
                 label="凭证号 / 流水号"
-                min-width="160" /><el-table-column prop="reason" label="说明" min-width="180"
-            /></el-table>
+                min-width="160" /><el-table-column prop="reason" label="说明" min-width="180" />
+              <el-table-column label="发放凭证" min-width="200">
+                <template #default="{ row }">
+                  <PayrollPaymentAttachments :payroll="detail" :payment="row as PayrollPayment" :can-upload="can('hr:payroll:paid')"
+                    @updated="detail = $event" />
+                </template>
+              </el-table-column>
+            </el-table>
             <h3>本月计入的补差</h3>
             <el-table :data="detail.calculation.corrections ?? []" border
               ><el-table-column prop="sourceMonth" label="原工资月份" /><el-table-column
-                label="差额"
+                label="差额（元）"
                 ><template #default="{ row }">{{
                   costMoney(row.amount)
                 }}</template></el-table-column
@@ -618,7 +702,7 @@
             /></el-table>
             <h3>从本单发起的补差</h3>
             <el-table :data="detail.correctionsIssued ?? []" border
-              ><el-table-column prop="targetMonth" label="计入月份" /><el-table-column label="差额"
+              ><el-table-column prop="targetMonth" label="计入月份" /><el-table-column label="差额（元）"
                 ><template #default="{ row }">{{
                   costMoney(row.amount)
                 }}</template></el-table-column
@@ -649,10 +733,12 @@
               ><el-timeline-item
                 v-for="(entry, index) in history"
                 :key="index"
-                :timestamp="entry.occurredTime"
+                :timestamp="displayDateTime(entry.occurredTime)"
                 ><strong>{{ auditLabel(entry.action) }}</strong>
                 <p>{{ entry.reason || '—' }}</p>
-                <p class="field-hint">操作人：{{ entry.actorId }}</p></el-timeline-item
+                <p class="field-hint">
+                  操作人：{{ auditActorLabel(entry.actorId) }}
+                </p></el-timeline-item
               ></el-timeline
             ></el-tab-pane
           ></el-tabs
@@ -678,7 +764,8 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
 import PayrollBatchDialog from './components/PayrollBatchDialog.vue'
@@ -687,9 +774,12 @@ import PayrollSchemeResult from './components/PayrollSchemeResult.vue'
 import PayrollPreparationPanel from './components/PayrollPreparationPanel.vue'
 import PayrollSettlementDialog from './components/PayrollSettlementDialog.vue'
 import PayrollWorkflowActions from './components/PayrollWorkflowActions.vue'
+import PayrollPaymentAttachments from './components/PayrollPaymentAttachments.vue'
 import PayrollCommissionDetail from './components/PayrollCommissionDetail.vue'
 import PayrollSalaryOverview from './components/PayrollSalaryOverview.vue'
 import PayrollRuleEvidenceTable from './components/PayrollRuleEvidenceTable.vue'
+import PayrollRuleReviewPanel from './components/PayrollRuleReviewPanel.vue'
+import { getPayrollRuleReviews, type PayrollRuleReview } from '@/api/core/payroll-scheme/components'
 import {
   previousPayrollMonth,
   payrollPaid,
@@ -714,19 +804,39 @@ import {
   getPayrollDepartments,
   getPayrollHistory,
   getPayrollInput,
-  savePayrollInput,
+  savePayrollDetermination,
   type PayrollCalculation,
   type PayrollInput,
   type PayrollDepartment,
   type PayrollPage,
   type PayrollRecord,
+  type PayrollPayment,
 } from '@/api/core/payroll'
 import { costLabel, costMoney } from '../cost/cost-dictionaries'
+import { payrollUnitName } from '@/utils/payroll-dictionaries'
 import { exportPayrollRecords, exportPayrollDetails } from '@/utils/payroll-detail-export'
 import { loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { auditLabel } from '../cost/cost-audit'
+import { auditActorLabel } from '@/utils/audit-actor'
+import { displayDateTime } from '@/utils/business-date'
 import { payrollRoles } from '@/utils/payroll-scheme'
+import { getPayrollSchemeFacts } from '@/api/core/payroll-scheme'
+import type { PayrollSchemeFactsView } from '@/api/core/payroll-scheme/models/PayrollSchemeFactsView'
 const { can } = useSupplyPermissions()
+const ruleReviews = ref<PayrollRuleReview[]>([]),
+  reviewError = ref('')
+const needsRuleReview = (id: string) => ruleReviews.value.some((review) => review.subjectId === id)
+async function locateRuleReview(review: PayrollRuleReview) {
+  month.value = review.month
+  keyword.value = review.employeeCode
+  statusCode.value = ''
+  departmentId.value = undefined
+  payrollCategory.value = ''
+  currentPage.value = 1
+  await load()
+  const row = page.value.items.find((item) => item.id === review.subjectId)
+  if (row) await showDetail(row, 'review')
+}
 function thisMonth() {
   const date = new Date()
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0')
@@ -831,6 +941,83 @@ const inputVisible = ref(false),
     deduction: 0,
     reason: '',
   })
+const monthlyFacts = ref<PayrollSchemeFactsView | null>(null)
+type DeterminationTarget = Pick<PayrollRecord, 'id' | 'month' | 'employeeCode'>
+const inputTarget = ref<DeterminationTarget | null>(null)
+const initialInputState = ref('')
+let inputGeneration = 0
+const inputState = () => JSON.stringify({ input: input.value, facts: monthlyFacts.value })
+const inputDirty = computed(
+  () =>
+    inputVisible.value &&
+    !inputLoading.value &&
+    !!initialInputState.value &&
+    inputState() !== initialInputState.value,
+)
+function currentInput(serial: number, target: DeterminationTarget) {
+  return (
+    serial === inputGeneration &&
+    inputVisible.value &&
+    inputTarget.value?.id === target.id &&
+    inputTarget.value.month === target.month &&
+    inputTarget.value.employeeCode === target.employeeCode
+  )
+}
+function finishInput() {
+  inputGeneration++
+  inputVisible.value = false
+  inputLoading.value = false
+  inputTarget.value = null
+  initialInputState.value = ''
+}
+async function leaveInput(): Promise<boolean> {
+  if (saving.value || batchBusy.value) {
+    ElMessage.info('正在处理薪酬，请稍候')
+    return false
+  }
+  if (inputDirty.value) {
+    try {
+      await ElMessageBox.confirm('本次薪酬核定尚未保存，确定放弃修改？', '离开薪酬核定', {
+        confirmButtonText: '放弃修改',
+        cancelButtonText: '继续核定',
+        type: 'warning',
+      })
+    } catch {
+      return false
+    }
+  }
+  finishInput()
+  return true
+}
+async function closeInput(done?: () => void) {
+  if (await leaveInput()) done?.()
+}
+onBeforeRouteLeave(leaveInput)
+onBeforeRouteUpdate(leaveInput)
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (inputDirty.value || saving.value || batchBusy.value) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+window.addEventListener('beforeunload', beforeUnload)
+onBeforeUnmount(() => {
+  inputGeneration++
+  loadVersion++
+  window.removeEventListener('beforeunload', beforeUnload)
+})
+const determiningHeadquarters = computed(
+  () =>
+    inputRow.value?.calculation.scheme?.scheme.definition.role === 'HEADQUARTERS' &&
+    inputRow.value?.calculation.scheme?.scheme.definition.performanceMode === 'FIXED',
+)
+const determiningMetrics = computed(() =>
+  inputRow.value?.calculation.scheme?.scheme.definition.performanceMode === 'MANAGER'
+    ? inputRow.value.calculation.scheme.scheme.definition.manager.metrics
+    : [],
+)
+const metricName = (code: string) =>
+  determiningMetrics.value.find((m) => m.code === code)?.name || code
 const detailVisible = ref(false),
   detailTab = ref('overview'),
   detail = ref<PayrollRecord | null>(null),
@@ -842,6 +1029,8 @@ async function load() {
   const version = ++loadVersion
   loading.value = true
   loadError.value = ''
+  ruleReviews.value = []
+  reviewError.value = ''
   try {
     selection.value = []
     payrollTable.value?.clearSelection()
@@ -855,8 +1044,19 @@ async function load() {
       statusCode: statusCode.value || undefined,
       payrollCategory: payrollCategory.value || undefined,
     }
-    const [result, totals] = await Promise.all([getPayroll(query), getPayrollSummary(query)])
+    const [result, totals, reviews] = await Promise.all([
+      getPayroll(query),
+      getPayrollSummary(query),
+      getPayrollRuleReviews('PAYROLL', month.value)
+        .then((items) => ({ items, error: '' }))
+        .catch((e) => ({
+          items: [] as PayrollRuleReview[],
+          error: errorMessage(e, '规则复核状态加载失败，请重试'),
+        })),
+    ])
     if (version === loadVersion) {
+      ruleReviews.value = reviews.items
+      reviewError.value = reviews.error
       page.value = result
       summary.value = totals
     }
@@ -913,19 +1113,46 @@ async function presentCalculation(result?: PayrollRecord, prefix = '已重新核
   }
 }
 async function editInput(row: PayrollRecord, target?: 'department' | 'performance' | 'amount') {
-  inputRow.value = row
-  determinationExtra.value = target === 'amount' ? ['amount'] : []
+  if (!(await leaveInput())) return
+  const serial = ++inputGeneration
+  const selected = { id: row.id, month: row.month, employeeCode: row.employeeCode }
+  inputTarget.value = selected
+  inputRow.value = { ...row }
+  determinationExtra.value = target === 'department' ? ['department'] : []
   inputVisible.value = true
   inputLoading.value = true
   inputError.value = ''
+  monthlyFacts.value = null
   try {
-    input.value = await getPayrollInput(row.month, row.employeeCode)
+    const [amounts, facts] = await Promise.all([
+      getPayrollInput(selected.month, selected.employeeCode),
+      row.calculation.scheme
+        ? getPayrollSchemeFacts(selected.month, selected.employeeCode)
+        : Promise.resolve(null),
+    ])
+    if (!currentInput(serial, selected)) return
+    input.value = amounts
+    monthlyFacts.value = facts && {
+      ...facts,
+      metrics: determiningMetrics.value
+        .filter((m) => m.source === 'MANUAL_CONFIRMED' && m.cityMetric !== 'RECEIPT_AMOUNT')
+        .map(
+          (m) =>
+            facts.metrics.find((v) => v.code === m.code) || {
+              code: m.code,
+              value: null,
+              evidence: '',
+            },
+        ),
+    }
+    initialInputState.value = inputState()
   } catch (e) {
+    if (!currentInput(serial, selected)) return
     inputError.value = errorMessage(e, '月度调整读取失败')
-    inputVisible.value = false
+    finishInput()
     ElMessage.error(inputError.value)
   } finally {
-    inputLoading.value = false
+    if (currentInput(serial, selected)) inputLoading.value = false
   }
 }
 function restoreRuleCalculation() {
@@ -937,19 +1164,43 @@ function restoreRuleCalculation() {
 }
 async function saveInput() {
   if (saving.value || inputLoading.value) return
-  if (!inputRow.value || !input.value.reason.trim()) {
+  const selected = inputTarget.value && { ...inputTarget.value }
+  const serial = inputGeneration
+  if (!selected || !currentInput(serial, selected) || !initialInputState.value) return
+  if (!input.value.reason.trim()) {
     inputError.value = '请填写核定说明'
+    return
+  }
+  if (determiningHeadquarters.value && monthlyFacts.value?.performanceCompletionPercent == null) {
+    inputError.value = '请填写该员工本月绩效完成率'
     return
   }
   saving.value = true
   inputError.value = ''
   try {
-    await savePayrollInput(inputRow.value.month, inputRow.value.employeeCode, input.value)
-    inputVisible.value = false
+    const saved = await savePayrollDetermination(
+      selected.month,
+      selected.employeeCode,
+      {
+        input: { ...input.value },
+        facts: monthlyFacts.value && {
+          ...monthlyFacts.value,
+          reason: input.value.reason,
+          metrics: monthlyFacts.value.metrics.map((m) => ({
+            ...m,
+            evidence: m.evidence.trim() || input.value.reason,
+          })),
+        },
+      },
+    )
+    if (!currentInput(serial, selected)) return
+    input.value = saved.input
+    monthlyFacts.value = saved.facts
+    finishInput()
     try {
-      const results = await calculatePayroll(inputRow.value.month, [inputRow.value.employeeCode])
+      const results = await calculatePayroll(selected.month, [selected.employeeCode])
       await presentCalculation(
-        results.find((r) => r.employeeCode === inputRow.value?.employeeCode),
+        results.find((r) => r.employeeCode === selected.employeeCode && r.month === selected.month),
         '核定已保存并重新核算',
       )
     } catch (e) {
@@ -1023,8 +1274,26 @@ async function exportAll() {
     exporting.value = false
   }
 }
+// BI 原单追溯复用正式详情接口，仍由 HR 校验工资单权限与当前版本。
+const payrollRoute = useRoute()
+async function openLinkedPayroll(value: unknown) {
+  if (typeof value !== 'string' || !value) return
+  try {
+    const row = await getPayrollDetail(value)
+    month.value = row.month
+    await showDetail(row)
+    await load()
+  } catch (e) {
+    ElMessage.error(errorMessage(e, '工资单不存在或当前无访问权限'))
+  }
+}
+watch(
+  () => payrollRoute?.query.sourceId,
+  (value) => void openLinkedPayroll(value),
+)
 onMounted(async () => {
   void load()
+  void openLinkedPayroll(payrollRoute?.query.sourceId)
   const results = await Promise.allSettled([
     loadBusinessDictionaries(
       ['PAYROLL_STATUS', 'PAYROLL_RULE_KIND', 'COMMISSION_RECIPIENT_ROLE', 'PRODUCT_UNIT'].map(
@@ -1273,6 +1542,21 @@ onMounted(async () => {
 }
 </style>
 
+<style>
+.payroll-determination {
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+}
+.payroll-determination .el-dialog__body {
+  overflow: auto;
+}
+.payroll-determination .el-dialog__header,
+.payroll-determination .el-dialog__footer {
+  flex-shrink: 0;
+}
+</style>
+
 <style scoped>
 .payroll-v03-page {
   gap: 18px;
@@ -1362,6 +1646,32 @@ onMounted(async () => {
 @media (max-width: 1000px) {
   .payroll-v03-page .filter-card :deep(.el-form) {
     grid-template-columns: 1fr 1fr;
+  }
+}
+</style>
+
+<style scoped>
+.determination-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 24px;
+}
+.determination-context {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #f4f7fb;
+  color: #52657b;
+}
+.determination-grid .el-input-number {
+  width: 100%;
+}
+.determination-grid .field-hint {
+  width: 100%;
+  margin: 8px 0 0;
+}
+@media (max-width: 640px) {
+  .determination-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

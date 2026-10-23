@@ -65,8 +65,16 @@ export interface PayrollReviewGroup {
 export function payrollReviewGroups(issues: string[] = []): PayrollReviewGroup[] {
   const groups = new Map<string, PayrollReviewGroup>()
   for (const issue of new Set(issues.filter(Boolean))) {
-    const configuredIssue: Omit<PayrollReviewGroup, 'items'> | undefined =
-      /打卡拜访依据暂不可用|数据源.*不可用/.test(issue)
+    const configuredIssue: Omit<PayrollReviewGroup, 'items'> | undefined = issue.includes(
+      '本月绩效完成率',
+    )
+      ? {
+          key: 'personal-completion',
+          label: '个人月度绩效完成率待核定',
+          hint: '在“核定薪酬”中填写该员工本月绩效完成率，与底薪、绩效、补贴和扣款集中核对；保存后重新核算，不影响同部门其他员工。',
+          determination: 'performance',
+        }
+      : /打卡拜访依据暂不可用|数据源.*不可用/.test(issue)
         ? {
             key: 'source-unavailable',
             label: '来源数据暂不可用',
@@ -117,7 +125,7 @@ export function payrollReviewGroups(issues: string[] = []): PayrollReviewGroup[]
             ? {
                 key: 'amount',
                 label: '其他金额待核定',
-                hint: '在“当月核定”的“其他金额”中填写需要调整的金额，填写一次说明后保存重算。',
+                hint: '在“核定薪酬”中填写需要调整的金额及统一核定说明，保存后重新核算。',
                 determination: 'amount',
               }
             : {

@@ -1,0 +1,1041 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>进货与报销 · 字段和流程评审</title>
+    <style>
+      :root {
+        font:
+          14px/1.55 system-ui,
+          sans-serif;
+        color: #23344d;
+        background: #f4f7fb;
+        --blue: #285cdb;
+        --line: #dce4ef;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 8px 14px;
+        color: inherit;
+        background: white;
+      }
+      button.primary {
+        background: var(--blue);
+        color: white;
+        border-color: var(--blue);
+      }
+      button:focus-visible {
+        outline: 3px solid #95b5ff;
+        outline-offset: 2px;
+      }
+      .banner {
+        padding: 10px 24px;
+        background: #fff4d8;
+        color: #674a0b;
+        font-size: 13px;
+      }
+      main {
+        max-width: 1420px;
+        margin: auto;
+        padding: 28px;
+      }
+      .title {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      h1 {
+        margin: 0 0 5px;
+        font-size: 26px;
+      }
+      h2 {
+        font-size: 17px;
+        margin: 0 0 16px;
+      }
+      p {
+        margin: 6px 0;
+        color: #65738a;
+      }
+      .switch {
+        display: flex;
+        gap: 8px;
+        margin: 22px 0;
+      }
+      .switch button[aria-pressed='true'] {
+        color: var(--blue);
+        border-color: var(--blue);
+        background: #edf3ff;
+      }
+      .note {
+        background: #edf3ff;
+        border-left: 3px solid var(--blue);
+        padding: 12px 16px;
+        margin: 16px 0;
+        color: #375378;
+      }
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .toolbar span {
+        margin-left: auto;
+        color: #68778d;
+      }
+      .card {
+        border: 1px solid var(--line);
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .scroll {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 880px;
+        text-align: left;
+      }
+      th {
+        font-size: 12px;
+        color: #627187;
+        background: #f8fafc;
+        font-weight: 600;
+      }
+      th,
+      td {
+        padding: 14px 16px;
+        border-bottom: 1px solid #edf0f6;
+        vertical-align: top;
+      }
+      td small {
+        display: block;
+        color: #76859b;
+        margin-top: 4px;
+        font-size: 12px;
+      }
+      .money {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        text-align: right;
+      }
+      .tag {
+        display: inline-block;
+        background: #edf3ff;
+        color: #315eaa;
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .tag.warn {
+        color: #936300;
+        background: #fff5da;
+      }
+      .link {
+        color: var(--blue);
+        border: 0;
+        padding: 2px 6px;
+        background: transparent;
+      }
+      .action {
+        white-space: nowrap;
+      }
+      .footer-note {
+        font-size: 13px;
+        margin: 14px 0;
+      }
+      .legend {
+        font-size: 12px;
+        border: 1px solid #d5deec;
+        padding: 3px 8px;
+        border-radius: 4px;
+        color: #66748a;
+      }
+      dialog {
+        width: min(1030px, 96vw);
+        max-height: 92dvh;
+        padding: 0;
+        border: 0;
+        border-radius: 12px;
+        color: inherit;
+        box-shadow: 0 20px 80px #14274840;
+      }
+      dialog::backdrop {
+        background: #152b4d70;
+      }
+      .dialog-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      .dialog-head h2 {
+        margin: 0;
+      }
+      form {
+        display: flex;
+        flex-direction: column;
+        max-height: 92dvh;
+      }
+      .form-body {
+        padding: 20px 24px;
+        overflow: auto;
+        min-height: 0;
+      }
+      .group {
+        margin-bottom: 24px;
+      }
+      .group h3 {
+        font-size: 15px;
+        margin: 0 0 14px;
+        border-bottom: 1px solid #edf0f6;
+        padding-bottom: 10px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: #43546c;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        display: block;
+        margin-top: 6px;
+        border: 1px solid #ccd7e5;
+        border-radius: 6px;
+        padding: 9px 11px;
+        background: white;
+        color: #23344d;
+        min-width: 0;
+      }
+      textarea {
+        min-height: 70px;
+        resize: vertical;
+      }
+      .wide {
+        grid-column: 1/-1;
+      }
+      .hint {
+        font-size: 12px;
+        color: #74839a;
+        margin-top: 5px;
+      }
+      .required {
+        color: #c33e4c;
+      }
+      .suggest {
+        color: #836223;
+        font-size: 11px;
+        margin-left: 6px;
+      }
+      .form-foot {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 16px 24px;
+        border-top: 1px solid var(--line);
+        background: #f8fafc;
+        flex-shrink: 0;
+      }
+      .form-foot span {
+        margin-right: auto;
+        font-size: 12px;
+        color: #718099;
+      }
+      #errors {
+        color: #a72e3e;
+        background: #fff0f1;
+        padding: 10px 14px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+      }
+      #errors:empty {
+        display: none;
+      }
+      .detail {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 24px;
+      }
+      .detail div {
+        border-bottom: 1px solid #edf0f6;
+        padding: 10px 0;
+      }
+      .detail span {
+        display: block;
+        font-size: 12px;
+        color: #738198;
+      }
+      #message {
+        padding: 0 0 12px;
+        color: #286b49;
+      }
+      @media (max-width: 700px) {
+        main {
+          padding: 16px;
+        }
+        h1 {
+          font-size: 22px;
+        }
+        .title {
+          flex-wrap: wrap;
+        }
+        .switch {
+          flex-wrap: wrap;
+        }
+        .grid,
+        .detail {
+          grid-template-columns: 1fr;
+        }
+        .form-foot {
+          flex-wrap: wrap;
+          padding: 12px;
+        }
+        .form-foot span {
+          width: 100%;
+        }
+        .form-body {
+          padding: 16px;
+        }
+        .toolbar span {
+          margin-left: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="banner">
+      交互评审样例 · 全部为虚构数据 · 仅在本页内存中操作，刷新即还原 ·
+      标记“建议补充”的字段尚未接入正式系统
+    </div>
+    <main>
+      <div class="title">
+        <div>
+          <h1 id="page-title">进货记录</h1>
+          <p id="page-subtitle"></p>
+        </div>
+        <span class="legend">页面方案 · 不是业务验收结果</span>
+      </div>
+      <nav class="switch" aria-label="切换评审页面">
+        <button id="purchase-tab" aria-pressed="true">成本管理 · 进货记录</button
+        ><button id="expense-tab" aria-pressed="false">人事管理 · 报销费用</button>
+      </nav>
+      <div id="guidance" class="note"></div>
+      <div id="message" role="status"></div>
+      <section class="card" aria-label="费用记录">
+        <div class="toolbar">
+          <label
+            >处理阶段<select id="filter">
+              <option value="">全部记录</option>
+              <option value="DRAFT">待确认</option>
+              <option value="CONFIRMED">已确认</option>
+            </select></label
+          ><button id="new-record" class="primary">新增进货记录</button><span id="count"></span>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+      </section>
+      <p class="footer-note" id="list-note"></p>
+    </main>
+    <dialog id="editor">
+      <form id="record-form" novalidate>
+        <div class="dialog-head">
+          <h2 id="editor-title"></h2>
+          <button type="button" id="close-editor" aria-label="关闭录入">×</button>
+        </div>
+        <div class="form-body">
+          <div id="errors" role="alert"></div>
+          <div id="fields"></div>
+        </div>
+        <div class="form-foot">
+          <span>确认仅表示核对完成，不执行入库、审批或转账。</span
+          ><button type="button" id="save-draft">保存待确认</button
+          ><button type="submit" class="primary">核对并确认</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="details">
+      <div class="dialog-head">
+        <h2>登记详情</h2>
+        <button id="close-detail" aria-label="关闭详情">×</button>
+      </div>
+      <div class="form-body" id="detail-content"></div>
+    </dialog>
+    <script>
+      // 纯评审页面，无 API、上传、存储或后台写入。拟新增字段用于演示预期输入体验。
+      const $ = (id) => document.getElementById(id)
+      const esc = (value) =>
+        String(value ?? '').replace(
+          /[&<>"']/g,
+          (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+        )
+      const types = {
+        OFFICE_SUPPLIES: '办公用品',
+        CONSUMABLE: '办公耗材',
+        TRAVEL: '差旅',
+        ACCOMMODATION: '住宿',
+        TAXI: '交通打车',
+        NETWORK: '网络费用',
+        FIXED_ASSET: '办公固定资产',
+        OFFICE_MOVING: '办公搬运',
+        OFFICE_RENT: '办公室租赁',
+        FREIGHT: '货物运输',
+      }
+      const data = {
+        purchase: [
+          {
+            id: '示例进货-001',
+            date: '2026-10-20',
+            city: '示例城市',
+            supplier: '示例供应商甲',
+            location: '示例中心仓',
+            product: '示例商品 A',
+            spec: '12 瓶/箱',
+            unit: '箱',
+            quantity: '20',
+            price: '80.50',
+            amount: '1610.00',
+            buyer: '示例经办员工',
+            source: '示例送货单-001',
+            proof: '示例送货凭据.pdf',
+            status: 'CONFIRMED',
+          },
+          {
+            id: '示例进货-002',
+            date: '2026-10-21',
+            city: '示例城市',
+            supplier: '',
+            location: '示例城市仓',
+            product: '示例商品 B',
+            spec: '6 袋/箱',
+            unit: '箱',
+            quantity: '',
+            price: '120.00',
+            amount: '',
+            buyer: '示例经办员工',
+            source: '',
+            proof: '',
+            status: 'DRAFT',
+          },
+        ],
+        expense: [
+          {
+            id: '示例报销-001',
+            date: '2026-10-20',
+            city: '示例城市',
+            employee: '示例员工甲',
+            department: '示例营销部',
+            type: 'TAXI',
+            title: '拜访示例客户往返打车',
+            amount: '86.50',
+            purpose: '客户拜访',
+            start: '示例办公室',
+            end: '示例客户门店',
+            rideTime: '2026-10-20T10:00',
+            payee: '示例出行平台',
+            proof: '示例行程凭据.pdf',
+            payment: 'UNPAID',
+            status: 'CONFIRMED',
+          },
+          {
+            id: '示例报销-002',
+            date: '2026-10-21',
+            city: '示例城市',
+            employee: '示例员工乙',
+            department: '示例人事部',
+            type: 'OFFICE_SUPPLIES',
+            title: '采购示例办公用品',
+            item: 'A4 纸',
+            quantity: '5',
+            price: '25',
+            amount: '125.00',
+            purpose: '办公室日常使用',
+            payee: '示例办公用品供应商',
+            proof: '',
+            payment: 'UNPAID',
+            status: 'DRAFT',
+          },
+        ],
+      }
+      let mode = 'purchase',
+        editing = null,
+        draft = {}
+      const money = (value) =>
+        value === '' || value == null
+          ? '待补金额'
+          : Number(value).toLocaleString('zh-CN', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+      const status = (row) =>
+        '<span class="tag ' +
+        (row.status === 'DRAFT' ? 'warn' : '') +
+        '">' +
+        (row.status === 'DRAFT' ? '待确认' : '已确认') +
+        '</span>'
+      function render() {
+        $('page-title').textContent = mode === 'purchase' ? '进货记录' : '报销费用'
+        $('page-subtitle').textContent =
+          mode === 'purchase'
+            ? '按商品规格登记进货事实，核对数量、单价与金额。'
+            : '按员工和费用性质登记，核对用途、凭据与付款记录。'
+        $('purchase-tab').setAttribute('aria-pressed', String(mode === 'purchase'))
+        $('expense-tab').setAttribute('aria-pressed', String(mode === 'expense'))
+        $('guidance').textContent =
+          mode === 'purchase'
+            ? '一行对应一项商品规格的进货记录。进货金额与运费、损耗分别登记；多商品单据可关联同一来源单号。'
+            : '一行对应一项报销费用。办公用品、差旅、住宿和打车显示不同信息；办公室租赁、货运等若已在其他台账登记，先核对同一凭据。'
+        $('new-record').textContent = mode === 'purchase' ? '新增进货记录' : '新增报销费用'
+        const rows = data[mode].filter(
+          (row) => !$('filter').value || row.status === $('filter').value,
+        )
+        $('count').textContent =
+          '共 ' +
+          rows.length +
+          ' 条 · ' +
+          (mode === 'purchase' ? '不同商品和单位不合计数量' : '按费用明细逐项核对')
+        const heads =
+          mode === 'purchase'
+            ? [
+                '日期 / 单号',
+                '商品 / 规格',
+                '供应商 / 收货地',
+                '数量',
+                '进货单价（元）',
+                '金额（元）',
+                '确认状态',
+                '操作',
+              ]
+            : [
+                '日期 / 单号',
+                '报销员工 / 部门',
+                '类型 / 事项',
+                '金额（元）',
+                '凭据',
+                '确认 / 付款',
+                '操作',
+              ]
+        $('table-head').innerHTML =
+          '<tr>' + heads.map((x) => '<th>' + x + '</th>').join('') + '</tr>'
+        $('table-body').innerHTML = rows
+          .map((r) => {
+            const core =
+              mode === 'purchase'
+                ? '<td>' +
+                  esc(r.product) +
+                  '<small>' +
+                  esc(r.spec || '未记录规格') +
+                  '</small></td><td>' +
+                  esc(r.supplier || '待补供应商') +
+                  '<small>' +
+                  esc(r.location || '待补收货地') +
+                  '</small></td><td>' +
+                  esc(r.quantity || '待补数量') +
+                  ' ' +
+                  esc(r.unit) +
+                  '</td><td class="money">' +
+                  esc(money(r.price)) +
+                  '</td><td class="money">' +
+                  esc(money(r.amount)) +
+                  '</td><td>' +
+                  status(r) +
+                  '</td>'
+                : '<td>' +
+                  esc(r.employee) +
+                  '<small>' +
+                  esc(r.department) +
+                  '</small></td><td>' +
+                  esc(types[r.type]) +
+                  '<small>' +
+                  esc(r.title) +
+                  '</small></td><td class="money">' +
+                  esc(money(r.amount)) +
+                  '</td><td>' +
+                  esc(r.proof ? '已附示例凭据' : '待补凭据') +
+                  '</td><td>' +
+                  status(r) +
+                  '<small>' +
+                  (r.payment === 'PAID' ? '已登记付款' : '未付款') +
+                  '</small></td>'
+            return (
+              '<tr><td>' +
+              esc(r.date) +
+              '<small>' +
+              esc(r.id) +
+              '</small></td>' +
+              core +
+              '<td class="action"><button class="link" data-action="detail" data-id="' +
+              r.id +
+              '">详情</button><button class="link" data-action="edit" data-id="' +
+              r.id +
+              '">' +
+              (r.status === 'DRAFT' ? '补齐 / 确认' : '修改') +
+              '</button></td></tr>'
+            )
+          })
+          .join('')
+        $('list-note').textContent =
+          mode === 'purchase'
+            ? '默认突出商品、规格、数量、单价、金额和供应商；来源凭据、经办人、说明及系统留痕放入详情。采购金额不直接作为销售成本。'
+            : '确认状态与付款状态分开。样例中的凭据与分类型字段是拟补充能力；正式系统目前不具备完整的报销凭据、付款流水和审批流程。'
+      }
+      function field(key, label, options = {}) {
+        const value = draft[key] ?? '',
+          mark = options.required ? '<span class="required">*</span> ' : '',
+          proposed = options.proposed ? '<span class="suggest">建议补充</span>' : ''
+        let control
+        if (options.options)
+          control =
+            '<select name="' +
+            key +
+            '">' +
+            Object.entries(options.options)
+              .map(
+                ([v, l]) =>
+                  '<option value="' +
+                  esc(v) +
+                  '" ' +
+                  (v === value ? 'selected' : '') +
+                  '>' +
+                  esc(l) +
+                  '</option>',
+              )
+              .join('') +
+            '</select>'
+        else if (options.area)
+          control = '<textarea name="' + key + '">' + esc(value) + '</textarea>'
+        else
+          control =
+            '<input name="' +
+            key +
+            '" type="' +
+            (options.type || 'text') +
+            '" value="' +
+            esc(value) +
+            '" ' +
+            (options.type === 'number' ? 'min="0" step="any"' : '') +
+            ' ' +
+            (options.readonly ? 'readonly' : '') +
+            ' />'
+        return (
+          '<label class="' +
+          (options.wide ? 'wide' : '') +
+          '">' +
+          mark +
+          label +
+          proposed +
+          control +
+          (options.hint ? '<div class="hint">' + options.hint + '</div>' : '') +
+          '</label>'
+        )
+      }
+      const group = (title, fields) =>
+        '<section class="group"><h3>' +
+        title +
+        '</h3><div class="grid">' +
+        fields +
+        '</div></section>'
+      function fields() {
+        let html = ''
+        if (mode === 'purchase') {
+          html += group(
+            '商品与收货',
+            field('product', '商品', { required: true }) +
+              field('spec', '规格') +
+              field('unit', '单位', { required: true }) +
+              field('supplier', '供应商', { hint: '可先待补，确认前必须填写' }) +
+              field('location', '收货仓库 / 地点') +
+              field('buyer', '业务经办人', {
+                proposed: true,
+                hint: '与系统录入人区分；使用现有员工来源',
+              }),
+          )
+          html += group(
+            '进货数量与金额',
+            field('date', '进货日期', { type: 'date', required: true }) +
+              field('city', '归属城市', { required: true }) +
+              field('quantity', '进货数量', { type: 'number', hint: '确认前须大于 0' }) +
+              field('price', '进货单价（元）', { type: 'number', required: true }) +
+              field('amount', '进货金额（元）', {
+                type: 'number',
+                hint: '未知可留空；与单价×数量有差异时说明',
+              }) +
+              '<div><p>参考金额</p><strong id="reference">—</strong><br><button type="button" id="fill-amount">按单价×数量填入</button></div>' +
+              field('difference', '金额差异 / 零单价说明', { wide: true }),
+          )
+          html += group(
+            '来源与核对',
+            field('source', '系统采购单 / 外部来源单号') +
+              field('proof', '凭据', { readonly: true, hint: '样例凭据仅演示展示，不上传文件' }) +
+              field('remark', '备注', { wide: true, area: true }),
+          )
+        } else {
+          html += group(
+            '费用归属',
+            field('employee', '报销员工', {
+              required: true,
+              options: {
+                示例员工甲: '示例员工甲 · 示例营销部',
+                示例员工乙: '示例员工乙 · 示例人事部',
+              },
+            }) +
+              field('department', '员工部门', {
+                readonly: true,
+                hint: '由员工档案带出，不手工改变归属',
+              }) +
+              field('city', '归属城市', { required: true }) +
+              field('type', '报销类型', { options: types, required: true }) +
+              field('date', '费用发生日期', { type: 'date', required: true }) +
+              field('amount', '报销金额（元）', { type: 'number', required: true }) +
+              field('title', '费用事项', { required: true, wide: true }),
+          )
+          let specific = ''
+          if (['OFFICE_SUPPLIES', 'CONSUMABLE', 'FIXED_ASSET'].includes(draft.type))
+            specific =
+              field('item', '物品名称', { proposed: true }) +
+              field('quantity', '数量', { type: 'number', proposed: true }) +
+              field('price', '单价（元）', { type: 'number', proposed: true }) +
+              field('purpose', '用途 / 领用对象', { proposed: true, wide: true })
+          else if (draft.type === 'TAXI')
+            specific =
+              field('rideTime', '乘车时间', { type: 'datetime-local', proposed: true }) +
+              field('start', '出发地', { proposed: true }) +
+              field('end', '目的地', { proposed: true }) +
+              field('purpose', '出行事由', { proposed: true, wide: true })
+          else if (['TRAVEL', 'ACCOMMODATION'].includes(draft.type))
+            specific =
+              field('from', '开始日期', { type: 'date', proposed: true }) +
+              field('to', '结束日期', { type: 'date', proposed: true }) +
+              field('destination', '目的地 / 住宿地点', { proposed: true }) +
+              field('purpose', '出差事由', { proposed: true, wide: true })
+          else
+            specific =
+              field('from', '服务期间开始', { type: 'date', proposed: true }) +
+              field('to', '服务期间截止', { type: 'date', proposed: true }) +
+              field('purpose', '具体用途', { proposed: true, wide: true })
+          html += group('按费用类型填写', specific)
+          html += group(
+            '凭据与付款记录',
+            field('payee', '供应商 / 收款对象', { proposed: true }) +
+              field('proof', '费用凭据', {
+                readonly: true,
+                proposed: true,
+                hint: '样例不上传文件；正式报销附件接口待补',
+              }) +
+              field('payment', '付款情况', { options: { UNPAID: '未付款', PAID: '已登记付款' } }) +
+              field('noProofReason', '无凭据说明', {
+                proposed: true,
+                wide: true,
+                hint: '有凭据则不必填写；无凭据需说明，由有权人员核对',
+              }) +
+              (draft.payment === 'PAID'
+                ? field('paidDate', '实际付款日期', { type: 'date', proposed: true }) +
+                  field('paidAmount', '实际付款金额（元）', { type: 'number', proposed: true }) +
+                  field('paymentReference', '付款凭据编号', { proposed: true })
+                : '') +
+              field('related', '已有关联成本单号', {
+                proposed: true,
+                wide: true,
+                hint: '仅作为重复核对线索；自动去重和抵扣规则尚未实现',
+              }),
+          )
+        }
+        html += '<button type="button" id="example-proof">使用示例凭据</button>'
+        if (editing?.status === 'CONFIRMED')
+          html += group(
+            '修改已确认记录',
+            field('reason', '变更原因', {
+              required: true,
+              wide: true,
+              area: true,
+              hint: '保存修改后重新进入待确认状态',
+            }),
+          )
+        $('fields').innerHTML = html
+        $('record-form')
+          .querySelectorAll('input,select,textarea')
+          .forEach((el) =>
+            el.addEventListener('input', () => {
+              draft[el.name] = el.value
+              if (el.name === 'quantity' || el.name === 'price') updateReference()
+              if (el.name === 'type') {
+                ;[
+                  'item',
+                  'quantity',
+                  'price',
+                  'purpose',
+                  'rideTime',
+                  'start',
+                  'end',
+                  'from',
+                  'to',
+                  'destination',
+                ].forEach((k) => delete draft[k])
+                fields()
+              }
+              if (el.name === 'payment') fields()
+              if (el.name === 'employee') {
+                draft.department = draft.employee === '示例员工甲' ? '示例营销部' : '示例人事部'
+                fields()
+              }
+            }),
+          )
+        $('example-proof').onclick = () => {
+          draft.proof = '示例费用凭据.pdf'
+          fields()
+        }
+        if ($('fill-amount'))
+          $('fill-amount').onclick = () => {
+            if (draft.price !== '' && draft.quantity && Number(draft.quantity) > 0) {
+              draft.amount = (Number(draft.price) * Number(draft.quantity)).toFixed(2)
+              fields()
+            }
+          }
+        updateReference()
+      }
+      function updateReference() {
+        if ($('reference'))
+          $('reference').textContent =
+            draft.quantity && draft.price !== '' && draft.price != null
+              ? money(Number(draft.quantity) * Number(draft.price))
+              : '待补数量 / 单价'
+      }
+      function openEditor(row) {
+        editing = row || null
+        draft = row
+          ? { ...row }
+          : {
+              date: '2026-10-21',
+              city: '示例城市',
+              type: 'OFFICE_SUPPLIES',
+              payment: 'UNPAID',
+              employee: '示例员工乙',
+              department: '示例人事部',
+              unit: '箱',
+              price: '',
+              amount: '',
+            }
+        $('errors').textContent = ''
+        $('editor-title').textContent =
+          (row ? '编辑' : '新增') + (mode === 'purchase' ? '进货记录' : '报销费用')
+        fields()
+        $('editor').showModal()
+      }
+      function validate(confirm) {
+        const missing = [],
+          need = (k, label) => {
+            if (draft[k] == null || String(draft[k]).trim() === '') missing.push(label)
+          }
+        need('date', '费用日期')
+        need('city', '归属城市')
+        if (mode === 'purchase') {
+          need('product', '商品')
+          need('unit', '单位')
+          need('price', '进货单价')
+          if (confirm) {
+            need('supplier', '供应商')
+            need('quantity', '数量')
+            need('amount', '金额')
+            if (Number(draft.quantity) <= 0) missing.push('数量必须大于 0')
+            if (Number(draft.price) === 0 && !draft.difference) missing.push('零单价说明')
+            if (
+              draft.amount !== '' &&
+              draft.quantity &&
+              Math.abs(
+                Number(draft.amount) -
+                  Math.round(Number(draft.quantity) * Number(draft.price) * 100) / 100,
+              ) > 0.001 &&
+              !draft.difference
+            )
+              missing.push('金额差异说明')
+          }
+        } else {
+          need('employee', '报销员工')
+          need('title', '费用事项')
+          need('amount', '报销金额')
+          if (confirm) {
+            need('purpose', '用途 / 事由')
+            if (!draft.proof && !draft.noProofReason) missing.push('费用凭据或无凭据说明')
+            if (draft.type === 'TAXI') {
+              need('rideTime', '乘车时间')
+              need('start', '出发地')
+              need('end', '目的地')
+            }
+            if (['TRAVEL', 'ACCOMMODATION'].includes(draft.type)) {
+              need('from', '开始日期')
+              need('to', '结束日期')
+              need('destination', '目的地 / 住宿地点')
+            }
+            if (['OFFICE_SUPPLIES', 'CONSUMABLE', 'FIXED_ASSET'].includes(draft.type)) {
+              need('item', '物品名称')
+              need('quantity', '数量')
+              need('price', '单价')
+              if (Number(draft.quantity) <= 0) missing.push('数量必须大于 0')
+            }
+          }
+          if (draft.payment === 'PAID') {
+            need('paidDate', '付款日期')
+            need('paidAmount', '付款金额')
+            need('paymentReference', '付款凭据编号')
+            if (draft.paidAmount !== '' && Number(draft.paidAmount) !== Number(draft.amount))
+              missing.push('已付款须对应全额；部分付款规则尚未设计')
+          }
+        }
+        if (draft.from && draft.to && draft.to < draft.from)
+          missing.push('截止日期不能早于开始日期')
+        ;['amount', 'price', 'quantity', 'paidAmount'].forEach((k) => {
+          if (
+            draft[k] !== '' &&
+            draft[k] != null &&
+            (!Number.isFinite(Number(draft[k])) || Number(draft[k]) < 0)
+          )
+            missing.push('金额和数量须为非负数')
+        })
+        if (confirm && mode === 'expense' && Number(draft.amount) === 0 && !draft.purpose)
+          missing.push('零元说明')
+        if (editing?.status === 'CONFIRMED') need('reason', '变更原因')
+        return [...new Set(missing)]
+      }
+      function save(confirm) {
+        const errors = validate(confirm)
+        if (errors.length) {
+          $('errors').textContent = '请补齐或核对：' + errors.join('、')
+          $('errors').scrollIntoView({ block: 'nearest' })
+          return
+        }
+        const row = {
+          ...draft,
+          id:
+            editing?.id ||
+            '示例' +
+              (mode === 'purchase' ? '进货' : '报销') +
+              '-' +
+              String(data[mode].length + 1).padStart(3, '0'),
+          status: editing?.status === 'CONFIRMED' ? 'DRAFT' : confirm ? 'CONFIRMED' : 'DRAFT',
+        }
+        if (editing) data[mode][data[mode].indexOf(editing)] = row
+        else data[mode].unshift(row)
+        $('editor').close()
+        $('message').textContent =
+          '仅在样例内保存：' + row.id + ' · ' + (row.status === 'DRAFT' ? '待确认' : '已确认')
+        render()
+      }
+      const labels = {
+        date: '费用日期',
+        city: '归属城市',
+        supplier: '供应商',
+        location: '收货地点',
+        product: '商品',
+        spec: '规格',
+        unit: '单位',
+        quantity: '数量',
+        price: '单价',
+        amount: '金额',
+        buyer: '业务经办人',
+        source: '来源单据',
+        proof: '费用凭据',
+        noProofReason: '无凭据说明',
+        difference: '金额说明',
+        employee: '报销员工',
+        department: '部门',
+        title: '费用事项',
+        purpose: '用途 / 事由',
+        start: '出发地',
+        end: '目的地',
+        rideTime: '乘车时间',
+        destination: '目的地 / 住宿地点',
+        from: '期间开始',
+        to: '期间截止',
+        item: '物品',
+        payee: '供应商 / 收款对象',
+        paidDate: '付款日期',
+        paidAmount: '付款金额',
+        paymentReference: '付款凭据编号',
+        related: '关联成本单号',
+        remark: '备注',
+        reason: '变更原因',
+      }
+      $('table-body').onclick = (e) => {
+        const button = e.target.closest('button[data-id]')
+        if (!button) return
+        const row = data[mode].find((r) => r.id === button.dataset.id)
+        if (button.dataset.action === 'edit') {
+          openEditor(row)
+          return
+        }
+        $('detail-content').innerHTML =
+          '<p>' +
+          esc(row.id) +
+          ' · ' +
+          (row.status === 'CONFIRMED' ? '已确认' : '待确认') +
+          '</p><div class="detail">' +
+          Object.entries(labels)
+            .filter(([key]) => row[key] !== undefined)
+            .map(
+              ([key, label]) =>
+                '<div><span>' + label + '</span>' + esc(row[key] || '待补录') + '</div>',
+            )
+            .join('') +
+          '</div><p class="hint">正式页面的系统留痕应展示员工姓名与年月日时分秒；此样例不编造真实操作记录。</p>'
+        $('details').showModal()
+      }
+      $('purchase-tab').onclick = () => {
+        mode = 'purchase'
+        $('filter').value = ''
+        $('message').textContent = ''
+        render()
+      }
+      $('expense-tab').onclick = () => {
+        mode = 'expense'
+        $('filter').value = ''
+        $('message').textContent = ''
+        render()
+      }
+      $('new-record').onclick = () => openEditor()
+      $('filter').onchange = render
+      $('record-form').onsubmit = (e) => {
+        e.preventDefault()
+        save(true)
+      }
+      $('save-draft').onclick = () => save(false)
+      $('close-editor').onclick = () => $('editor').close()
+      $('close-detail').onclick = () => $('details').close()
+      render()
+    </script>
+  </body>
+</html>

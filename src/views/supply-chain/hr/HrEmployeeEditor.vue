@@ -183,8 +183,20 @@
               ><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500"
             /></el-form-item>
           </div>
-          <el-alert v-if="saveError" :title="saveError" type="error" :closable="false" />
         </el-form>
+      </el-tab-pane>
+      <el-tab-pane
+        v-if="can('hr:payroll-rule:read') && isManagerPosition"
+        label="管辖城市"
+        name="city-scope"
+        lazy
+      >
+        <EmployeeCityScopeFields
+          v-if="visible"
+          ref="scopeFields"
+          :employee-code="record?.employeeCode"
+          :can-write="can('hr:payroll-rule:write')"
+        />
       </el-tab-pane>
       <el-tab-pane v-if="can('hr:payroll-rule:read')" label="薪资标准" name="salary" lazy>
         <PayrollComponentView
@@ -196,10 +208,11 @@
         <el-empty v-else description="先保存员工资料，再维护薪资标准" />
       </el-tab-pane>
     </el-tabs>
+    <el-alert v-if="saveError" :title="saveError" type="error" :closable="false" />
     <template #footer
-      ><el-button @click="visible = false">取消</el-button
+      ><el-button @click="visible = false">{{ editorTab === 'salary' ? '关闭' : '取消' }}</el-button
       ><el-button
-        v-if="editorTab === 'basic'"
+        v-if="editorTab !== 'salary'"
         type="primary"
         :disabled="loading || !!loadError"
         :loading="saving"
@@ -212,7 +225,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import PayrollComponentView from './PayrollComponentView.vue'
-import { payrollCategories } from '@/utils/hr-payroll-profile'
+import EmployeeCityScopeFields from './components/EmployeeCityScopeFields.vue'
+import type { HrEmployeeCityScopeCommand } from '@/api/core/hr/models/HrEmployeeCityScopeCommand'
+import { isCityManagerPosition, payrollCategories } from '@/utils/hr-payroll-profile'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getHrEmployee,
@@ -235,7 +250,11 @@ import {
 } from '@/utils/hr-employee-profile'
 const editorTab = ref('basic')
 const visible = defineModel<boolean>({ default: false })
-const props = defineProps<{ record: HrEmployeeRecord | null; departmentId?: number | null }>()
+const props = defineProps<{
+  record: HrEmployeeRecord | null
+  departmentId?: number | null
+  initialTab?: 'basic' | 'city-scope'
+}>()
 const emit = defineEmits<{ saved: [] }>()
 const { can } = useSupplyPermissions()
 const loading = ref(false),
@@ -244,6 +263,8 @@ const loading = ref(false),
   saveError = ref('')
 const departments = ref<HrDepartmentOption[]>([]),
   positions = ref<HrPositionRecord[]>([])
+const savedEmployee = ref<HrEmployeeRecord | null>(null)
+const scopeFields = ref<InstanceType<typeof EmployeeCityScopeFields>>()
 const blankProfile = (): HrEmployeeProfile => ({
   graduationSchool: null,
   major: null,
@@ -284,6 +305,14 @@ const form = reactive(empty()),
   entryDate = ref(''),
   leaveDate = ref('')
 const identity = computed(() => identityDetails(profile.idNumber))
+const isManagerPosition = computed(() =>
+  isCityManagerPosition(
+    positions.value.find((p) => p.positionCode === form.positionCode)?.positionName ??
+      (savedEmployee.value?.positionCode === form.positionCode
+        ? savedEmployee.value.positionName
+        : null),
+  ),
+)
 const tenure = computed(() =>
   serviceLength(entryDate.value, form.employmentStatus === 'LEFT' ? leaveDate.value : null),
 )
@@ -314,11 +343,12 @@ watch(
   },
 )
 watch(visible, async (open) => {
-  editorTab.value = 'basic'
+  editorTab.value = props.initialTab || 'basic'
   if (!open) return
   loading.value = true
   loadError.value = ''
   saveError.value = ''
+  savedEmployee.value = null
   Object.assign(form, empty(), { departmentId: props.departmentId ?? null })
   Object.assign(profile, blankProfile())
   entryDate.value = ''
@@ -342,6 +372,7 @@ watch(visible, async (open) => {
       if (begin >= page.total || !page.items.length) break
     }
     if (detail) {
+      savedEmployee.value = detail
       Object.assign(form, {
         employeeName: detail.employeeName,
         departmentId: detail.departmentId,
@@ -365,6 +396,7 @@ watch(visible, async (open) => {
     loadError.value = e instanceof Error ? e.message : '员工资料加载失败'
   } finally {
     loading.value = false
+    if (editorTab.value === 'city-scope' && !isManagerPosition.value) editorTab.value = 'basic'
   }
 })
 async function save() {
@@ -401,6 +433,14 @@ async function save() {
     saveError.value = '离职日期不能早于入职日期'
     return
   }
+  let cityScopes: HrEmployeeCityScopeCommand[] | undefined
+  try {
+    if (isManagerPosition.value) cityScopes = scopeFields.value?.commands()
+  } catch (e) {
+    editorTab.value = 'city-scope'
+    saveError.value = e instanceof Error ? e.message : '请核对管辖范围'
+    return
+  }
   try {
     if (props.record?.employmentStatus === 'ACTIVE' && form.employmentStatus !== 'ACTIVE')
       await ElMessageBox.confirm(
@@ -423,6 +463,7 @@ async function save() {
           : null,
       profile: normalized,
       regularizationDate: form.regularized ? form.regularizationDate : null,
+      cityScopes,
     })
     visible.value = false
     emit('saved')

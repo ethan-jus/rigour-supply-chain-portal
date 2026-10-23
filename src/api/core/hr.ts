@@ -211,6 +211,7 @@ export interface HrDepartmentCommand {
   establishedDate: string | null
 }
 export interface HrEmployeeCommand {
+  cityScopes?: import('./hr/models/HrEmployeeCityScopeCommand').HrEmployeeCityScopeCommand[] | null
   regularized?: boolean | null
   regularizationDate?: string | null
   payrollCategory?: string | null

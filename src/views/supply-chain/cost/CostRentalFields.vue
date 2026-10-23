@@ -35,7 +35,7 @@
       <el-form-item label="出租方"
         ><el-input v-model="rental.landlordName" maxlength="200"
       /></el-form-item>
-      <el-form-item label="合同号"
+      <el-form-item label="合同编号"
         ><el-input v-model="rental.contractNo" maxlength="100"
       /></el-form-item>
       <el-form-item label="租期开始"

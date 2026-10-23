@@ -1,8 +1,9 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 import Attendance from '@/views/supply-chain/hr/HrAttendanceView.vue'
 import * as api from '@/api/core/hr-attendance'
+import * as ruleApi from '@/api/core/payroll-scheme/components'
 import {
   seedBusinessDictionaryForTest,
   clearBusinessDictionariesForTest,
@@ -20,6 +21,11 @@ vi.mock('@/api/core/hr-attendance', () => ({
   getAttendanceRule: vi.fn(),
   saveAttendanceRule: vi.fn(),
   confirmAttendanceRecord: vi.fn(),
+  reopenAttendanceRecord: vi.fn(),
+}))
+vi.mock('@/api/core/payroll-scheme/components', () => ({
+  getPayrollRuleReviews: vi.fn().mockResolvedValue([]),
+  resolvePayrollRuleReview: vi.fn(),
 }))
 const result = (): api.AttendanceView => ({
   month: '2026-09',
@@ -81,6 +87,7 @@ const result = (): api.AttendanceView => ({
 let wrapper: VueWrapper | undefined
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(ruleApi.getPayrollRuleReviews).mockResolvedValue([])
   permissions.write = true
   clearBusinessDictionariesForTest()
   seedBusinessDictionaryForTest('HR', 'ATTENDANCE_STATUS', [
@@ -110,6 +117,7 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
+  ElMessageBox.close()
   wrapper?.unmount()
   wrapper = undefined
   document.body.innerHTML = ''
@@ -127,6 +135,52 @@ async function click(label: string) {
   await flushPromises()
 }
 describe('一期考勤', () => {
+  it('allows HR to reopen a reviewed confirmation and retains registered exception periods', async () => {
+    const confirmed = result()
+    const row = confirmed.page.items[0]!
+    row.attendanceStatus = 'CONFIRMED'
+    row.revision = 3
+    row.exceptions = [
+      {
+        start: '2026-09-03T09:00:00',
+        end: '2026-09-03T18:00:00',
+        kind: 'ACTIVITY',
+        reason: '客户活动报备',
+      },
+    ]
+    const reopened = result()
+    reopened.page.items[0]!.exceptions = row.exceptions
+    vi.mocked(api.getAttendance).mockResolvedValueOnce(confirmed).mockResolvedValue(reopened)
+    vi.mocked(ruleApi.getPayrollRuleReviews).mockResolvedValue([
+      {
+        id: 'R1',
+        subject: 'ATTENDANCE',
+        subjectId: '2026-09:E1',
+        employeeCode: 'E1',
+        employeeName: '测试员工甲',
+        month: '2026-09',
+        ruleName: '销售考勤规则',
+        action: 'DISABLE',
+        reason: '工作日历需要复核',
+        time: '2026-09-20T10:00:00Z',
+      },
+    ])
+    const page = await open()
+    expect(page.text()).toContain('规则变更待复核')
+    await click('撤销确认')
+    const prompt = new DOMWrapper(document.body.querySelector('.el-message-box')!)
+    await prompt.get('textarea').setValue('按调整后的考勤日历重新核定')
+    await prompt.get('button.el-button--primary').trigger('click')
+    await flushPromises()
+    expect(api.reopenAttendanceRecord).toHaveBeenCalledWith(
+      '2026-09',
+      expect.objectContaining({ employeeCode: 'E1', revision: 3 }),
+      '按调整后的考勤日历重新核定',
+    )
+    await page.get('button[aria-label="确认测试员工甲考勤"]').trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('客户活动报备')
+  })
   it('keeps the requested page while the next page is loading', async () => {
     const first = result()
     first.page.total = 45
@@ -231,6 +285,7 @@ describe('一期考勤', () => {
     textarea.dispatchEvent(new Event('input', { bubbles: true }))
     await click('确认考勤')
     expect(api.confirmAttendanceRecord).toHaveBeenCalledWith('2026-09', 'E1', {
+      exceptions: [],
       actualDaysOverride: null,
       absentDaysOverride: null,
       leaveTypeCode: 'NONE',
@@ -260,11 +315,47 @@ describe('一期考勤', () => {
       .find((component) => component.props('ariaLabel') === '请假类型')!
     select.vm.$emit('update:modelValue', 'ANNUAL')
     await flushPromises()
+    await page.get('textarea[aria-label="缺卡原因"]').setValue('年假半天，已核对')
     await click('确认考勤')
     expect(api.confirmAttendanceRecord).toHaveBeenLastCalledWith('2026-09', 'E2', {
+      exceptions: [],
       actualDaysOverride: 20.5,
       absentDaysOverride: 0.5,
       leaveTypeCode: 'ANNUAL',
+      reason: '年假半天，已核对',
+      revision: 0,
+    })
+  })
+  it('submits the exact start and end times entered for each exception date', async () => {
+    const page = await open()
+    await page.get('button[aria-label="确认测试员工甲考勤"]').trigger('click')
+    await flushPromises()
+    const editor = page.getComponent({ name: 'AttendanceExceptionEditor' })
+    editor.getComponent({ name: 'ElDatePicker' }).vm.$emit('update:modelValue', '2026-09-08')
+    editor.getComponent({ name: 'ElTimePicker' }).vm.$emit('update:modelValue', ['09:15', '12:30'])
+    await editor.get('input[aria-label="异常说明"]').setValue('上午活动报备已核对')
+    await click('添加异常记录')
+    for (const [label, value] of [
+      ['实际出勤天数', '25.5'],
+      ['缺勤天数', '0.5'],
+    ]) {
+      const input = page.get(`input[aria-label="${label}"]`)
+      await input.setValue(value)
+      await input.trigger('change')
+    }
+    await click('确认考勤')
+    expect(api.confirmAttendanceRecord).toHaveBeenLastCalledWith('2026-09', 'E1', {
+      exceptions: [
+        {
+          start: '2026-09-08T09:15:00',
+          end: '2026-09-08T12:30:00',
+          kind: 'COMPENSATORY_LEAVE',
+          reason: '上午活动报备已核对',
+        },
+      ],
+      actualDaysOverride: 25.5,
+      absentDaysOverride: 0.5,
+      leaveTypeCode: 'NONE',
       reason: '',
       revision: 0,
     })
@@ -277,6 +368,7 @@ describe('一期考勤', () => {
       actualDaysOverride: 20.5,
       absentDaysOverride: 0,
       leaveTypeCode: 'SICK',
+      reason: '病假已核对',
       revision: 3,
     })
     vi.mocked(api.getAttendance).mockResolvedValue(data)
@@ -292,12 +384,66 @@ describe('一期考勤', () => {
     await click('恢复计算')
     await click('确认考勤')
     expect(api.confirmAttendanceRecord).toHaveBeenLastCalledWith('2026-09', 'E1', {
+      exceptions: [],
       actualDaysOverride: null,
       absentDaysOverride: null,
       leaveTypeCode: 'SICK',
-      reason: '',
+      reason: '病假已核对',
       revision: 3,
     })
+  })
+  it.each(['COMP_TIME', 'PERSONAL', 'SICK', 'ANNUAL'])(
+    'requires a nonblank reason for leave type %s, including dictionary extensions',
+    async (type) => {
+      const page = await open()
+      await page.get('button[aria-label="确认测试员工甲考勤"]').trigger('click')
+      await flushPromises()
+      const select = page
+        .findAllComponents({ name: 'ElSelect' })
+        .find((component) => component.props('ariaLabel') === '请假类型')!
+      select.vm.$emit('update:modelValue', type)
+      await flushPromises()
+      const textarea = page.get('textarea[aria-label="缺卡原因"]')
+      expect(textarea.attributes('aria-required')).toBe('true')
+      expect(textarea.element.closest('.el-form-item')?.classList.contains('is-required')).toBe(
+        true,
+      )
+      await textarea.setValue('   ')
+      await click('确认考勤')
+      expect(api.confirmAttendanceRecord).not.toHaveBeenCalled()
+      expect(document.body.textContent).toContain('请假类型不为“无”时，请填写缺卡原因')
+      await textarea.setValue('  请假已核对  ')
+      await click('确认考勤')
+      expect(api.confirmAttendanceRecord).toHaveBeenLastCalledWith(
+        '2026-09',
+        'E1',
+        expect.objectContaining({ leaveTypeCode: type, reason: '请假已核对' }),
+      )
+    },
+  )
+  it('makes the reason optional again when switching the leave type back to none', async () => {
+    const page = await open()
+    await page.get('button[aria-label="确认测试员工甲考勤"]').trigger('click')
+    await flushPromises()
+    const select = page
+      .findAllComponents({ name: 'ElSelect' })
+      .find((component) => component.props('ariaLabel') === '请假类型')!
+    select.vm.$emit('update:modelValue', 'SICK')
+    await flushPromises()
+    await click('确认考勤')
+    expect(api.confirmAttendanceRecord).not.toHaveBeenCalled()
+    select.vm.$emit('update:modelValue', 'NONE')
+    await flushPromises()
+    const textarea = page.get('textarea[aria-label="缺卡原因"]')
+    expect(textarea.attributes('aria-required')).toBe('false')
+    expect(textarea.element.closest('.el-form-item')?.classList.contains('is-required')).toBe(false)
+    await textarea.setValue('  ')
+    await click('确认考勤')
+    expect(api.confirmAttendanceRecord).toHaveBeenLastCalledWith(
+      '2026-09',
+      'E1',
+      expect.objectContaining({ leaveTypeCode: 'NONE', reason: '' }),
+    )
   })
   it('rejects non-half-day input and preserves an explicit manual zero', async () => {
     const page = await open()
@@ -361,7 +507,7 @@ describe('一期考勤', () => {
     const page = await open()
     await page.get('button[aria-label="确认测试员工甲考勤"]').trigger('click')
     await flushPromises()
-    expect(document.body.textContent).toContain('确认后将锁定当前考勤结果')
+    expect(document.body.textContent).toContain('规则变更产生待复核任务时，可由 HR 撤销确认')
     const confirmed = result()
     confirmed.page.items[0]!.attendanceStatus = 'CONFIRMED'
     vi.mocked(api.getAttendance).mockResolvedValueOnce(confirmed)

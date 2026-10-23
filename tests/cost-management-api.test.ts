@@ -4,6 +4,7 @@ import { apiClient } from '@/api/core/client'
 import {
   changeCostStatus,
   getCosts,
+  getCostEmployees,
   saveCost,
   uploadCostAttachment,
   type CostCommand,
@@ -37,6 +38,38 @@ const command: CostCommand = {
   reason: '',
 }
 describe('cost service contracts', () => {
+  it('报销员工引用传递城市及费用日期，未筛选调用保持兼容', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue([])
+    const query = { cityCode: '4201', cityName: '武汉市', costDate: '2026-10-22' }
+    await getCostEmployees('expenses', query)
+    expect(apiClient.get).toHaveBeenLastCalledWith('/hr/expenses/employees', {
+      params: query,
+      stayOnUnauthorized: true,
+    })
+    await getCostEmployees('expenses')
+    expect(apiClient.get).toHaveBeenLastCalledWith('/hr/expenses/employees', {
+      stayOnUnauthorized: true,
+    })
+  })
+  it('人事报销没有返回录入时间时，不把修改时间伪装为录入时间', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      total: 1,
+      begin: 0,
+      step: 20,
+      items: [
+        {
+          id: 'expense',
+          data: { employeeCode: 'E1' },
+          employeeName: '测试员工',
+          updatedTime: '2026-10-21T00:00:00Z',
+        },
+      ],
+    })
+    const result = await getCosts('expenses', { begin: 0, step: 20 })
+    expect(result.items[0]?.createdTime).toBe('')
+    expect(result.items[0]?.updatedTime).toBe('2026-10-21T00:00:00Z')
+    expect(result.items[0]?.ownerEmployeeName).toBe('测试员工')
+  })
   it.each(['marketing', 'logistics'] as const)(
     'keeps %s attachment binary data as multipart instead of the client default JSON',
     async (category) => {

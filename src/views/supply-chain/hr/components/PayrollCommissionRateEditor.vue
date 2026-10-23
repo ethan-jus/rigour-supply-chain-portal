@@ -19,22 +19,34 @@
       <template v-else
         ><span>元／</span
         ><el-select v-model="rule.unitCode" filterable placeholder="单位"
-          ><el-option
-            v-for="unit in costOptions('PRODUCT_UNIT')"
-            :key="unit.value"
-            v-bind="unit" /></el-select
+          ><el-option v-for="unit in unitOptions" :key="unit.value" v-bind="unit" /></el-select
       ></template>
     </template>
   </div>
 </template>
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import type { PayrollSchemeCommissionRule } from '@/api/core/payroll-scheme/models/PayrollSchemeCommissionRule'
 import { costOptions } from '../../cost/cost-dictionaries'
+import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
 const rule = defineModel<PayrollSchemeCommissionRule>({ required: true })
+const unitOptions = computed(() => {
+  const options = costOptions('PRODUCT_UNIT')
+  if (!rule.value.unitCode || options.some((unit) => unit.value === rule.value.unitCode))
+    return options
+  // Retain the label for a saved, disabled unit without offering it as a new selection.
+  return [
+    ...options,
+    { value: rule.value.unitCode, label: payrollUnitName(rule.value.unitCode), disabled: true },
+  ]
+})
 function changeMethod(value: string) {
   rule.value.excluded = value === 'NONE'
   if (value !== 'NONE') rule.value.method = value
 }
+onMounted(() => {
+  void loadPayrollProductUnits()
+})
 </script>
 <style scoped>
 .commission-rate {

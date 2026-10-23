@@ -1,6 +1,10 @@
+import type { PayrollPreview } from './payroll/models/PayrollPreview'
 import type { PayrollSchemeSnapshotView } from './payroll-scheme/models/PayrollSchemeSnapshotView'
+import type { PayrollDeterminationCommand } from './payroll/models/PayrollDeterminationCommand'
+import type { PayrollDeterminationView } from './payroll/models/PayrollDeterminationView'
 import type { PayrollCommissionTraceView } from './payroll-scheme/models/PayrollCommissionTraceView'
 import { apiClient } from './client'
+import { ApiError } from './error'
 import type { CostEmployee, CostAudit } from './cost'
 export type PayrollRuleKind = 'BASE' | 'COMMISSION' | 'PERFORMANCE' | 'ALLOWANCE' | 'CITY_MANAGER'
 export interface PayrollRuleCommand {
@@ -249,6 +253,16 @@ export const savePayrollInput = (month: string, employeeCode: string, data: Payr
     data,
     options,
   )
+export const savePayrollDetermination = (
+  month: string,
+  employeeCode: string,
+  data: PayrollDeterminationCommand,
+) =>
+  apiClient.put<PayrollDeterminationView>(
+    `${base}/determinations/${encodeURIComponent(month)}/${encodeURIComponent(employeeCode)}`,
+    data,
+    options,
+  )
 export const changePayrollStatus = (
   row: PayrollRecord,
   action: 'confirm' | 'reopen',
@@ -301,14 +315,7 @@ export interface PayrollPreparation {
   month: string
   employees: PayrollPreparationEmployee[]
 }
-export interface PayrollPreview {
-  sourceChanged?: boolean
-  previousFingerprint?: string | null
-  currentFingerprint?: string | null
-  employeeCode: string
-  employeeName: string
-  issues: string[]
-}
+export type { PayrollPreview } from './payroll/models/PayrollPreview'
 export interface PayrollProfilePatch {
   probationSalary?: string | null
   regularSalary?: string | null
@@ -326,6 +333,16 @@ export interface PayrollPayment {
   amount: number
   referenceNo: string
   reason: string
+  createdTime: string
+  attachments?: PayrollPaymentAttachment[]
+}
+export interface PayrollPaymentAttachment {
+  id: string
+  fileName: string
+  contentType: string
+  size: number
+  createdBy: string
+  createdByName: string
   createdTime: string
 }
 export interface PayrollCorrection {
@@ -349,8 +366,18 @@ export const previewPayroll = (month: string, employeeCodes: string[]) =>
   )
 export const updatePayrollProfiles = (employees: PayrollProfilePatch[], reason: string) =>
   apiClient.put<void>(`${base}/employee-profiles`, { employees, reason }, options)
-export const exportPayroll = (params: PayrollQuery) =>
-  apiClient.get<PayrollRecord[]>(`${base}/export`, { params, ...options, timeout: 120000 })
+export async function exportPayroll(params: PayrollQuery): Promise<PayrollRecord[]> {
+  const read = () => apiClient.get<PayrollRecord[]>(`${base}/export`, {
+    params, ...options, timeout: 120000, errorFeedback: 'inline',
+  })
+  try {
+    return await read()
+  } catch (error) {
+    // 只读导出可重新建立一次授权快照；无权访问和所有写入操作都不能据此重试。
+    if (!(error instanceof ApiError) || error.code !== 'IAM_AUTHORIZATION_CHANGED') throw error
+    return read()
+  }
+}
 export const getPayrollDetail = (id: string) =>
   apiClient.get<PayrollRecord>(`${base}/${encodeURIComponent(id)}`, options)
 export const registerPayrollPayment = (

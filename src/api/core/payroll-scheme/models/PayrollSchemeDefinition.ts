@@ -1,3 +1,4 @@
+import type { PayrollPersonalPolicy } from './PayrollPersonalPolicy'
 import type { PayrollRuleReferences } from './PayrollRuleReferences'
 import type { PayrollManagerPolicy } from './PayrollManagerPolicy'
 import type { PayrollProrationPolicy } from './PayrollProrationPolicy'
@@ -8,6 +9,7 @@ import type { PayrollSchemeCommissionPolicy } from './PayrollSchemeCommissionPol
 import type { PayrollWorkCalendar } from './PayrollWorkCalendar'
 
 export interface PayrollSchemeDefinition {
+  personalPolicy?: PayrollPersonalPolicy | null
   ruleReferences?: PayrollRuleReferences | null
   name: string
   role: string

@@ -125,6 +125,16 @@ function findItem(items: DictItemView[], rawValue: string) {
   return matches.length === 1 ? matches[0] : undefined
 }
 
+/** Read the configured name without treating an unresolved code as a business label. */
+export function businessDictionaryItemName(
+  moduleCode: string,
+  code: string,
+  value: string | number | null | undefined,
+): string | undefined {
+  if (value == null || String(value).trim() === '') return undefined
+  return findItem(snapshot(moduleCode, code).items, String(value).trim())?.dictionaryItemName
+}
+
 /** 从当前租户最终生效的服务端字典解析显示名称。 */
 export function businessDictionaryLabel(
   moduleCode: string,
@@ -135,9 +145,8 @@ export function businessDictionaryLabel(
   if (value === null || value === undefined || value === '') return '-'
   const rawValue = String(value).trim()
   if (!rawValue) return '-'
-  const current = snapshot(moduleCode, code)
-  const item = findItem(current.items, rawValue)
-  if (item) return item.dictionaryItemName
+  const name = businessDictionaryItemName(moduleCode, code, rawValue)
+  if (name) return name
   void subject
   return rawValue
 }

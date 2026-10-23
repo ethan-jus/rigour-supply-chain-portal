@@ -20,6 +20,7 @@
       <el-radio-button value="SALES">销售人员</el-radio-button>
       <el-radio-button value="CITY_MANAGER">城市总</el-radio-button>
       <el-radio-button value="TRAINEE_MANAGER">见习城市总</el-radio-button>
+      <el-radio-button value="HEADQUARTERS">总部人员</el-radio-button>
       <el-radio-button value="">全部身份</el-radio-button>
     </el-radio-group>
     <div class="rule-filters">
@@ -31,7 +32,7 @@
       />
       <el-select v-model="statusFilter" clearable placeholder="全部状态" aria-label="规则状态">
         <el-option
-          v-for="state in ['当前生效', '待生效', '已到期', '历史版本']"
+          v-for="state in ['使用中', '待生效', '已停用', '已到期', '历史版本']"
           :key="state"
           :value="state"
           :label="state"
@@ -85,12 +86,19 @@
     <div class="rule-table-panel">
       <div class="rule-list-heading">
         <h3>{{ title }}列表</h3>
-        <span>共 {{ displayRows.length }} 条标准</span
+        <span
+          >共 {{ ruleGroups.length }} 条规则<template
+            v-if="kind === 'COMMISSION' || kind === 'ALLOWANCE'"
+            >，{{ displayRows.length }} 条标准</template
+          ></span
         ><el-button :loading="loading" @click="load">刷新</el-button>
       </div>
-      <el-table v-loading="loading" :data="pageRows" border>
+      <el-table v-loading="loading" :data="pageRows" :span-method="ruleNameSpan" border>
         <el-table-column
           label="规则编码 / 名称"
+          column-key="rule"
+          class-name="rule-group-cell"
+          align="center"
           :min-width="kind === 'SALARY' ? 200 : 215"
           fixed="left"
           ><template #default="{ row }"
@@ -101,12 +109,21 @@
         <el-table-column
           v-if="kind !== 'COMMISSION'"
           label="人员身份"
+          column-key="role"
+          class-name="rule-group-cell"
+          align="center"
           :width="kind === 'SALARY' ? 90 : 120"
           ><template #default="{ row }">{{
             roleName(row.definition.role)
           }}</template></el-table-column
         >
-        <el-table-column v-if="kind !== 'SALARY'" label="适用部门" min-width="180"
+        <el-table-column
+          v-if="kind !== 'SALARY'"
+          label="适用部门"
+          column-key="department"
+          class-name="rule-group-cell"
+          align="center"
+          min-width="180"
           ><template #default="{ row }">{{
             row.definition.departmentIds
               .map((id: number) => departments.find((d) => d.id === id)?.name || id)
@@ -147,14 +164,12 @@
           </el-table-column>
         </template>
         <template v-else-if="kind === 'ATTENDANCE'">
-          <el-table-column label="工作制" min-width="145"
-            ><template #default="{ row }"
-              >{{ row.definition.calendar?.alternateAnchor ? '大小周' : '固定周' }}
-              <div class="field-hint">
-                {{ weekdaysLabel(row.definition.calendar?.weekdays || []) }}
-              </div></template
-            ></el-table-column
-          >
+          <el-table-column label="工作日安排" min-width="145">
+            <template #default>
+              按日历配置
+              <div class="field-hint">工作日与休息日以规则日历为准</div>
+            </template>
+          </el-table-column>
           <el-table-column label="归日窗口（北京时间）" min-width="185"
             ><template #default="{ row }"
               >{{ row.definition.calendar?.window.start?.slice(0, 5) }} 至
@@ -199,18 +214,31 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="版本 / 状态" width="110"
+        <el-table-column
+          label="状态"
+          column-key="state"
+          class-name="rule-group-cell"
+          align="center"
+          width="110"
           ><template #default="{ row }"
-            ><div class="field-hint">v{{ row.version }}</div>
-            <el-tag
+            ><el-tag
               :type="
-                stateOf(row as PayrollComponentVersionView) === '当前生效' ? 'success' : 'info'
+                stateOf(row as PayrollComponentVersionView) === '使用中'
+                  ? 'success'
+                  : stateOf(row as PayrollComponentVersionView) === '已停用'
+                    ? 'warning'
+                    : 'info'
               "
               >{{ stateOf(row as PayrollComponentVersionView) }}</el-tag
             ></template
           ></el-table-column
         >
-        <el-table-column label="生效期间" :min-width="kind === 'SALARY' ? 160 : 200"
+        <el-table-column
+          label="生效期间"
+          column-key="period"
+          class-name="rule-group-cell"
+          align="center"
+          :min-width="kind === 'SALARY' ? 160 : 200"
           ><template #default="{ row }"
             >{{ row.definition.effectiveFrom }} 至
             {{
@@ -218,26 +246,93 @@
             }}</template
           ></el-table-column
         >
-        <el-table-column v-if="kind !== 'SALARY' || historyOnly" label="版本创建时间" width="180">
+        <el-table-column
+          v-if="kind !== 'SALARY' || historyOnly"
+          label="创建时间"
+          column-key="created"
+          class-name="rule-group-cell"
+          align="center"
+          width="180"
+        >
           <template #default="{ row }">{{ versionTime(row.createdTime) }}</template>
         </el-table-column>
 
-        <el-table-column label="操作" :width="kind === 'SALARY' ? 160 : 200" fixed="right"
+        <el-table-column
+          label="操作"
+          column-key="actions"
+          class-name="rule-group-cell"
+          align="center"
+          width="260"
+          fixed="right"
           ><template #default="{ row }">
             <el-button link type="primary" @click="open(row as PayrollComponentVersionView)"
               >查看</el-button
             >
             <el-button
               v-if="
-                !historyOnly && can(writePermission) && isLatest(row as PayrollComponentVersionView)
+                !historyOnly &&
+                can(writePermission) &&
+                isLatest(row as PayrollComponentVersionView) &&
+                stateOf(row as PayrollComponentVersionView) === '待生效'
+              "
+              link
+              type="primary"
+              :disabled="!!ruleBusy"
+              @click="open(row as PayrollComponentVersionView, false, true)"
+              >修改</el-button
+            >
+            <el-button
+              v-if="
+                !historyOnly &&
+                can(writePermission) &&
+                isLatest(row as PayrollComponentVersionView) &&
+                stateOf(row as PayrollComponentVersionView) === '待生效'
+              "
+              link
+              type="danger"
+              :disabled="!!ruleBusy"
+              @click="actRule(row as PayrollComponentVersionView, 'DELETE')"
+              >删除</el-button
+            >
+            <el-button
+              v-if="
+                !historyOnly &&
+                can(writePermission) &&
+                stateOf(row as PayrollComponentVersionView) === '使用中'
+              "
+              link
+              type="warning"
+              :disabled="!!ruleBusy"
+              @click="actRule(row as PayrollComponentVersionView, 'DISABLE')"
+              >停用</el-button
+            >
+            <el-button
+              v-if="
+                !historyOnly &&
+                can(writePermission) &&
+                stateOf(row as PayrollComponentVersionView) === '已停用'
+              "
+              link
+              type="primary"
+              :disabled="!!ruleBusy"
+              @click="actRule(row as PayrollComponentVersionView, 'ENABLE')"
+              >重新启用</el-button
+            >
+            <el-button
+              v-if="
+                kind === 'SALARY' &&
+                !historyOnly &&
+                can(writePermission) &&
+                isLatest(row as PayrollComponentVersionView) &&
+                stateOf(row as PayrollComponentVersionView) === '使用中'
               "
               link
               type="primary"
               @click="open(row as PayrollComponentVersionView, true)"
-              >{{ kind === 'SALARY' ? '调整薪资' : '调整规则' }}</el-button
+              >调整薪资</el-button
             >
-            <el-button link @click="history = rows.filter((v) => v.ruleId === row.ruleId)"
-              >变更记录</el-button
+            <el-button link @click="showHistory(row as PayrollComponentVersionView)"
+              >操作记录</el-button
             >
           </template></el-table-column
         >
@@ -245,7 +340,7 @@
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
-        :total="displayRows.length"
+        :total="ruleGroups.length"
         :page-sizes="[20, 50, 100]"
         layout="total, sizes, prev, pager, next"
       />
@@ -253,23 +348,41 @@
     <el-dialog
       append-to-body
       :model-value="history.length > 0"
-      title="规则变更记录"
+      title="规则操作记录"
       width="850px"
       @close="history = []"
     >
+      <el-alert v-if="historyError" :title="historyError" type="error" :closable="false" />
+      <el-table
+        v-if="operationRows.length || historyLoading"
+        :data="operationRows"
+        v-loading="historyLoading"
+      >
+        <el-table-column label="操作" width="100"
+          ><template #default="{ row }">{{ operationLabel(row.action) }}</template></el-table-column
+        >
+        <el-table-column prop="reason" label="操作原因" />
+        <el-table-column label="操作人" width="150"
+          ><template #default="{ row }">{{ auditActorLabel(row.actor) }}</template></el-table-column
+        >
+        <el-table-column label="操作时间" width="180"
+          ><template #default="{ row }">{{ versionTime(row.time) }}</template></el-table-column
+        >
+      </el-table>
       <el-table :data="history"
         ><el-table-column prop="version" label="版本" width="80" /><el-table-column
           prop="definition.effectiveFrom"
           label="生效日期"
           width="130"
         /><el-table-column prop="reason" label="变更说明" />
-        <el-table-column prop="createdBy" label="操作人" min-width="120" />
+        <el-table-column label="操作人" min-width="120"
+          ><template #default="{ row }">{{
+            auditActorLabel(row.createdBy)
+          }}</template></el-table-column
+        >
         <el-table-column label="操作时间" min-width="180"
           ><template #default="{ row }">{{
-            new Date(row.createdTime).toLocaleString('zh-CN', {
-              timeZone: 'Asia/Shanghai',
-              hour12: false,
-            })
+            versionTime(row.createdTime)
           }}</template></el-table-column
         >
         <el-table-column label="操作" width="80"
@@ -285,9 +398,13 @@
       append-to-body
       v-model="visible"
       :title="`${readonly ? '查看' : '维护'}${ruleName}`"
+      class="payroll-rule-editor"
       width="min(1200px, 95vw)"
+      top="4vh"
       destroy-on-close
       :close-on-click-modal="false"
+      :close-on-press-escape="!saving"
+      :show-close="!saving"
       :before-close="closeEditor"
     >
       <el-alert v-if="editorError" :title="editorError" type="error" :closable="false" />
@@ -300,12 +417,10 @@
       <div>
         <el-form label-position="top" :disabled="readonly || saving">
           <div class="scheme-grid">
-            <el-form-item label="规则编码"
-              ><el-input
-                :model-value="ruleCode"
-                placeholder="保存后自动生成"
-                readonly /></el-form-item
-            ><el-form-item label="规则名称" required
+            <el-form-item
+              label="规则名称"
+              required
+              :class="{ 'rule-name-wide': kind === 'ALLOWANCE' || kind === 'PERFORMANCE' }"
               ><el-input v-model="form.name" maxlength="120"
             /></el-form-item>
             <el-form-item
@@ -314,14 +429,14 @@
               required
               ><el-select
                 v-model="form.role"
-                :disabled="readonly || (!!previousId && kind !== 'SALARY')"
+                :disabled="readonly || (!!previousId && !replacePending && kind !== 'SALARY')"
                 @change="changeRole"
                 ><el-option v-for="r in roles" :key="r.value" v-bind="r" /></el-select
             ></el-form-item>
             <el-form-item v-if="kind !== 'SALARY'" label="适用部门" required
               ><el-tree-select
                 v-model="form.departmentIds"
-                :disabled="readonly || !!previousId"
+                :disabled="readonly || (!!previousId && !replacePending)"
                 :data="departmentOptions"
                 :props="{ label: 'name', children: 'children' }"
                 node-key="id"
@@ -357,6 +472,7 @@
               v-model="grades"
           /></template>
           <PayrollSchemeCommissionEditor
+            ref="commissionEditor"
             :disabled="readonly"
             v-else-if="kind === 'COMMISSION'"
             v-model="form"
@@ -395,12 +511,14 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref, toRaw, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { errorMessage } from '@/api/core/error'
+import { auditActorLabel } from '@/utils/audit-actor'
+import { displayDateTime as versionTime } from '@/utils/business-date'
 import {
   getPayrollDepartments,
   getPayrollProductCategories,
@@ -408,7 +526,14 @@ import {
   type PayrollCategory,
 } from '@/api/core/payroll'
 import { getAttendanceDepartments } from '@/api/core/hr-attendance'
-import { getPayrollComponents, savePayrollComponent } from '@/api/core/payroll-scheme/components'
+import {
+  getPayrollComponents,
+  savePayrollComponent,
+  actPayrollComponent,
+  getPayrollComponentOperations,
+  type PayrollComponentAction,
+  type PayrollRuleOperation,
+} from '@/api/core/payroll-scheme/components'
 import type { PayrollComponentVersionView } from '@/api/core/payroll-scheme/models/PayrollComponentVersionView'
 import type { PayrollComponentDefinition } from '@/api/core/payroll-scheme/models/PayrollComponentDefinition'
 import type { PayrollComponentListRow } from '@/api/core/payroll-scheme/models/PayrollComponentListRow'
@@ -416,8 +541,13 @@ import type { PayrollCommissionRow } from '@/api/core/payroll-scheme/models/Payr
 import type { PayrollSchemeCommissionRule } from '@/api/core/payroll-scheme/models/PayrollSchemeCommissionRule'
 import { newPayrollScheme, payrollRoles as roles, prorationOptions } from '@/utils/payroll-scheme'
 import { commissionRows, commissionRowTotal } from '@/utils/payroll-commission-rows'
-import { costLabel } from '../cost/cost-dictionaries'
-import { componentVersionState, visibleComponentVersions } from '@/utils/payroll-component-versions'
+import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
+import {
+  componentVersionState,
+  visibleComponentVersions,
+  componentListGroupKey,
+  groupComponentListRows,
+} from '@/utils/payroll-component-versions'
 import { departmentTree } from '@/utils/hr-department-tree'
 import PayrollSalaryEditor from './components/PayrollSalaryEditor.vue'
 import PayrollAllowanceEditor from './components/PayrollAllowanceEditor.vue'
@@ -457,10 +587,10 @@ const description = computed(
     ({
       SALARY: '维护本员工底薪与绩效基数',
       ALLOWANCE: '维护交通、话费、电脑等补贴项目、金额及发放口径',
-      PERFORMANCE: '维护销售及城市总的考核算法、权重和新人保护',
+      PERFORMANCE: '维护销售、城市总及总部人员的绩效计算规则；个人月度完成率在月度薪酬中核定',
       COMMISSION: '引用 ERP 商品分类与规格，维护销售和城市总提成标准',
       ATTENDANCE:
-        '仅维护工资计算使用的工作日期、免考日期和跨日归属口径；原始打卡由销售打卡服务提供',
+        '维护部门工作日历和跨日归属口径；个人免考核日期在员工薪资标准中维护，原始打卡由销售打卡服务提供',
     })[kind.value],
 )
 const ruleName = computed(
@@ -482,6 +612,64 @@ const writePermission = computed(() =>
 )
 const rows = ref<PayrollComponentVersionView[]>([]),
   history = ref<PayrollComponentVersionView[]>([])
+const operationRows = ref<PayrollRuleOperation[]>([])
+const historyLoading = ref(false),
+  historyError = ref(''),
+  ruleBusy = ref('')
+const operationLabel = (action: string) =>
+  ({ MODIFY: '修改', DELETE: '删除', DISABLE: '停用', ENABLE: '重新启用' })[action] || action
+async function showHistory(row: PayrollComponentVersionView) {
+  history.value = rows.value.filter((v) => v.ruleId === row.ruleId)
+  operationRows.value = []
+  historyError.value = ''
+  historyLoading.value = true
+  try {
+    operationRows.value = await getPayrollComponentOperations(row.id)
+  } catch (e) {
+    historyError.value = errorMessage(e, '操作记录加载失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+async function actRule(row: PayrollComponentVersionView, action: PayrollComponentAction) {
+  if (ruleBusy.value) return
+  const label = operationLabel(action)
+  const message =
+    action === 'DELETE'
+      ? '删除后该待生效规则不再参与核算，操作记录保留。请填写删除原因。'
+      : action === 'DISABLE'
+        ? '立即停止本月及以后新核算使用本规则；已确认记录标记待复核，已发放工资通过补差处理。请填写停用原因。'
+        : '立即恢复本月及以后使用本规则；系统检查范围冲突，并将已确认记录标记待复核。请填写启用原因。'
+  let reason: string
+  try {
+    const result = await ElMessageBox.prompt(message, `${label}：${row.definition.name}`, {
+      confirmButtonText: label,
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputValidator: (value) =>
+        (!!value?.trim() && value.trim().length <= 1000) || '请填写1至1000字操作原因',
+    })
+    reason = result.value.trim()
+  } catch {
+    return
+  }
+  ruleBusy.value = row.id
+  error.value = ''
+  try {
+    const result = await actPayrollComponent(row, action, reason, crypto.randomUUID())
+    const impact = result.attendanceReviews + result.payrollReviews
+    ElMessage.success(
+      impact
+        ? `规则已${label}，${result.attendanceReviews}条考勤、${result.payrollReviews}条薪酬标记待复核`
+        : `规则已${label}`,
+    )
+    await load()
+  } catch (e) {
+    error.value = errorMessage(e, `${label}失败，请刷新后重试`)
+  } finally {
+    ruleBusy.value = ''
+  }
+}
 const departments = ref<PayrollDepartment[]>([]),
   categories = ref<PayrollCategory[]>([])
 const departmentOptions = computed(() => departmentTree(departments.value))
@@ -490,8 +678,6 @@ const keyword = ref(''),
 const roleFilter = ref(kind.value === 'PERFORMANCE' ? 'SALES' : '')
 const monthFilter = ref('')
 const categoryFilter = ref<number>()
-const weekdaysLabel = (days: number[]) =>
-  days.map((day) => ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1]).join('、')
 function resetFilters() {
   keyword.value = ''
   statusFilter.value = ''
@@ -547,9 +733,37 @@ const displayRows = computed<PayrollComponentListRow[]>(() =>
 )
 const page = ref(1)
 const pageSize = ref(20)
+const ruleGroups = computed(() => groupComponentListRows(displayRows.value))
 const pageRows = computed(() =>
-  displayRows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value),
+  ruleGroups.value
+    .slice((page.value - 1) * pageSize.value, page.value * pageSize.value)
+    .flatMap((group) => group.rows),
 )
+function ruleNameSpan({
+  row,
+  rowIndex,
+  column,
+}: {
+  row: PayrollComponentListRow
+  rowIndex: number
+  column: { columnKey?: string }
+}) {
+  if (
+    !['rule', 'role', 'department', 'state', 'period', 'created', 'actions'].includes(
+      column.columnKey || '',
+    )
+  )
+    return [1, 1]
+  // A code identifies the group; dates, statuses and actions still belong to their exact record.
+  const sameGroup = (other?: PayrollComponentListRow) =>
+    !!other &&
+    componentListGroupKey(other) === componentListGroupKey(row) &&
+    (column.columnKey === 'rule' || other.id === row.id)
+  if (sameGroup(pageRows.value[rowIndex - 1])) return [0, 0]
+  let rowspan = 1
+  while (sameGroup(pageRows.value[rowIndex + rowspan])) rowspan++
+  return [rowspan, 1]
+}
 watch(
   [
     keyword,
@@ -570,7 +784,7 @@ function rateLabel(rule?: PayrollSchemeCommissionRule) {
   if (rule.value == null) return '未设置'
   return rule.method === 'PERCENT'
     ? `${rule.value}%`
-    : `${money(rule.value)} 元 / ${costLabel('PRODUCT_UNIT', rule.unitCode)}`
+    : `${money(rule.value)} 元 / ${payrollUnitName(rule.unitCode)}`
 }
 function totalLabel(row?: PayrollCommissionRow) {
   if (!row) return '不计提'
@@ -579,7 +793,7 @@ function totalLabel(row?: PayrollCommissionRow) {
   if (total.method === 'NONE') return '不计提'
   return total.method === 'PERCENT'
     ? `${total.value}%`
-    : `${money(total.value)} 元 / ${costLabel('PRODUCT_UNIT', total.unitCode)}`
+    : `${money(total.value)} 元 / ${payrollUnitName(total.unitCode)}`
 }
 function commissionScope(row: PayrollCommissionRow) {
   const rule = row.sales
@@ -612,10 +826,15 @@ function salaryAmounts(row: PayrollComponentVersionView) {
       ]
 }
 function managerSummary(row: PayrollComponentVersionView) {
+  const performance = row.definition.performance
+  if (performance?.mode === 'NONE') return '不参与绩效核算'
+  if (performance?.mode === 'FIXED')
+    return row.definition.role === 'HEADQUARTERS'
+      ? '个人绩效基数 × 本月完成率；HR按员工、月份分别核定'
+      : '按个人绩效基数及折算规则计算'
   return (
-    row.definition.performance?.manager?.metrics
-      .map((metric) => `${metric.name} ${metric.weight}%`)
-      .join('；') || '—'
+    performance?.manager?.metrics.map((metric) => `${metric.name} ${metric.weight}%`).join('；') ||
+    '—'
   )
 }
 function standardSummary(row: PayrollComponentVersionView) {
@@ -634,17 +853,25 @@ function standardSummary(row: PayrollComponentVersionView) {
     return d.performance.mode === 'SALES'
       ? '打卡与有效拜访 + 回款考核'
       : d.performance.mode === 'MANAGER'
-        ? '指标加权完成率 → 综合绩效系数'
-        : '固定绩效'
+        ? d.performance.manager?.calculationMode === 'ACTUAL_COMPLETION'
+          ? '单项指标计分 × 权重后汇总'
+          : '历史规则：综合完成率匹配阶梯系数'
+        : d.performance.mode === 'NONE'
+          ? '不计绩效'
+          : d.role === 'HEADQUARTERS'
+            ? '按个人月度完成率'
+            : '固定绩效'
   if (d.commission) return `${d.commission.rules.length} 条商品标准 · 整单付清后计提`
-  return '工作日历、跨日归属与免考日期'
+  return '部门工作日历与跨日归属'
 }
-const grades = ref<PayrollGradeBand[]>([]),
-  ruleCode = ref('')
+const grades = ref<PayrollGradeBand[]>([])
+const commissionEditor = ref<{ validate: () => string | null } | null>(null)
 const form = ref(newPayrollScheme()),
   previousId = ref<string | null>(null),
   requestId = ref(''),
   reason = ref('')
+const replacePending = ref(false),
+  editRevision = ref<number>()
 const salaryComparison = computed(() => {
   const previous = rows.value.find((row) => row.id === previousId.value)
   const oldAmounts = previous ? salaryAmounts(previous) : []
@@ -682,16 +909,18 @@ const readonly = ref(false),
   error = ref(''),
   editorError = ref('')
 const roleName = (role: string) => roles.find((r) => r.value === role)?.label || '全部身份'
-const versionTime = (value: string) =>
-  value
-    ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
-    : '—'
 const initialEditor = ref('')
 const editorState = () =>
   JSON.stringify({ form: form.value, grades: grades.value, reason: reason.value })
-async function closeEditor(done?: () => void) {
-  if (saving.value) return
-  if (!readonly.value && editorState() !== initialEditor.value) {
+const editorDirty = computed(
+  () => visible.value && !readonly.value && editorState() !== initialEditor.value,
+)
+async function closeEditor(done?: () => void): Promise<boolean> {
+  if (saving.value || ruleBusy.value) {
+    ElMessage.info('正在处理规则，请稍候')
+    return false
+  }
+  if (editorDirty.value) {
     try {
       await ElMessageBox.confirm('修改尚未保存，关闭后将丢弃本次修改。', '关闭规则配置', {
         confirmButtonText: '放弃修改',
@@ -699,12 +928,26 @@ async function closeEditor(done?: () => void) {
         type: 'warning',
       })
     } catch {
-      return
+      return false
     }
   }
   if (done) done()
   else visible.value = false
+  return true
 }
+onBeforeRouteLeave(() => closeEditor())
+onBeforeRouteUpdate(() => closeEditor())
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (editorDirty.value || saving.value || ruleBusy.value) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+window.addEventListener('beforeunload', beforeUnload)
+onBeforeUnmount(() => {
+  loadRequest++
+  window.removeEventListener('beforeunload', beforeUnload)
+})
 function changeRole() {
   if (form.value.role !== 'SALES') {
     form.value.allowances = []
@@ -715,18 +958,19 @@ function changeRole() {
     form.value.baseSalary.mode = 'TIERS'
   }
 }
-function open(row?: PayrollComponentVersionView, next = false) {
+function open(row?: PayrollComponentVersionView, next = false, replace = false) {
   form.value = newPayrollScheme()
   if (kind.value === 'PERFORMANCE' && roleFilter.value) {
     form.value.role = roleFilter.value
     changeRole()
   }
   grades.value = form.value.baseSalary.tiers.map(({ amount: _amount, ...band }) => band)
-  ruleCode.value = row?.ruleCode || ''
-  previousId.value = next && row ? row.id : null
-  readonly.value = (!!row && !next) || !can(writePermission.value)
+  replacePending.value = replace
+  editRevision.value = replace ? (row?.revision ?? 1) : undefined
+  previousId.value = (next || replace) && row ? row.id : null
+  readonly.value = (!!row && !next && !replace) || !can(writePermission.value)
   requestId.value = crypto.randomUUID()
-  reason.value = row && !next ? row.reason : ''
+  reason.value = row && !next && !replace ? row.reason : ''
   editorError.value = ''
   if (row) {
     const d = structuredClone(toRaw(row.definition))
@@ -757,6 +1001,12 @@ function open(row?: PayrollComponentVersionView, next = false) {
     form.value.departmentIds = []
     if (!row) form.value.name = '员工薪资标准'
   }
+  if (!readonly.value && kind.value === 'PERFORMANCE') {
+    form.value.manager.calculationMode = 'ACTUAL_COMPLETION'
+    form.value.manager.cap = null
+    form.value.manager.steps = []
+    form.value.sales.processProtectionDays ??= 10
+  }
   initialEditor.value = editorState()
   visible.value = true
 }
@@ -768,7 +1018,10 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const result = await getPayrollComponents(kind.value, props.employeeCode)
+    const [result] = await Promise.all([
+      getPayrollComponents(kind.value, props.employeeCode),
+      kind.value === 'COMMISSION' ? loadPayrollProductUnits() : Promise.resolve(),
+    ])
     if (request === loadRequest) rows.value = result
   } catch (e) {
     if (request === loadRequest) error.value = errorMessage(e, '规则加载失败')
@@ -778,6 +1031,13 @@ async function load() {
 }
 async function save() {
   if (saving.value) return
+  if (kind.value === 'COMMISSION') {
+    const validationMessage = commissionEditor.value?.validate()
+    if (validationMessage) {
+      editorError.value = validationMessage
+      return
+    }
+  }
   saving.value = true
   editorError.value = ''
   try {
@@ -785,6 +1045,8 @@ async function save() {
     await savePayrollComponent({
       requestId: requestId.value,
       previousId: previousId.value,
+      replacePending: replacePending.value,
+      revision: editRevision.value,
       reason: reason.value,
       definition: {
         name: f.name,
@@ -797,6 +1059,7 @@ async function save() {
         salary:
           kind.value === 'SALARY'
             ? {
+                personalPolicy: f.personalPolicy,
                 baseSalary: f.baseSalary,
                 performanceBase: f.performanceBase,
                 proration: { ...f.proration, allowance: 'NONE' },
@@ -855,6 +1118,19 @@ onMounted(async () => {
 })
 </script>
 <style scoped>
+:global(.el-dialog.payroll-rule-editor) {
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+}
+:global(.payroll-rule-editor > .el-dialog__body) {
+  min-height: 0;
+  overflow-y: auto;
+}
+:global(.payroll-rule-editor > .el-dialog__header),
+:global(.payroll-rule-editor > .el-dialog__footer) {
+  flex-shrink: 0;
+}
 .rule-filters {
   display: flex;
   flex-wrap: wrap;
@@ -879,6 +1155,9 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 24px;
+}
+.rule-name-wide {
+  grid-column: 1 / -1;
 }
 :deep(.field-hint) {
   color: var(--el-text-color-secondary);
@@ -924,6 +1203,9 @@ onMounted(async () => {
   background: white;
   border: 1px solid var(--el-border-color-light);
   border-radius: 8px;
+}
+:deep(.el-table__body td.rule-group-cell) {
+  vertical-align: middle;
 }
 .rule-list-heading {
   display: flex;

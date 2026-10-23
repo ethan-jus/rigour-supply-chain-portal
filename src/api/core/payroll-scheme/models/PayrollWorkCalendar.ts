@@ -1,6 +1,8 @@
 import type { PayrollWorkWindow } from './PayrollWorkWindow'
 
 export interface PayrollWorkCalendar {
+  source?: 'STATUTORY' | 'MANUAL' | 'STATUTORY_SNAPSHOT' | null
+  referenceVersion?: string | null
   alternateWeekdays: number[]
   alternateAnchor: string | null
   weekdays: number[]

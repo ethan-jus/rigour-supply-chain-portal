@@ -8,4 +8,6 @@ export interface PayrollMetricDefinition {
   weight: number | null
   steps: PayrollMetricStep[]
   cap: number | null
+  cityMetric?: string | null
+  scoringMode?: 'ACTUAL' | 'TIERED' | null
 }

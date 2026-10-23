@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import PayrollRuleReviewPanel from './components/PayrollRuleReviewPanel.vue'
+import { getPayrollRuleReviews, type PayrollRuleReview } from '@/api/core/payroll-scheme/components'
+import AttendanceExceptionEditor from './components/AttendanceExceptionEditor.vue'
+import type { AttendanceExceptionPeriod } from '@/api/core/hr-attendance'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
@@ -17,6 +21,7 @@ import {
   getAttendance,
   getAttendanceDepartments,
   confirmAttendanceRecord,
+  reopenAttendanceRecord,
   type AttendanceView,
   type AttendanceRow,
   type AttendanceFilters,
@@ -24,6 +29,50 @@ import {
 } from '@/api/core/hr-attendance'
 
 const { can } = useSupplyPermissions()
+const ruleReviews = ref<PayrollRuleReview[]>([]),
+  reviewError = ref('')
+const needsRuleReview = (code: string) =>
+  ruleReviews.value.some((review) => review.employeeCode === code)
+function locateRuleReview(review: PayrollRuleReview) {
+  Object.assign(filters, {
+    month: review.month,
+    employeeCode: review.employeeCode,
+    employeeName: '',
+    departmentId: undefined,
+    attendanceStatus: '',
+  })
+  search()
+}
+async function reopen(row: AttendanceRow) {
+  let reason: string
+  try {
+    const result = await ElMessageBox.prompt(
+      '原确认结果保留在操作记录中。撤销后请重新核定出勤、缺勤和异常记录，再确认考勤。',
+      `撤销考勤确认：${row.employeeName}`,
+      {
+        confirmButtonText: '撤销确认',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputValidator: (value) =>
+          (!!value?.trim() && value.trim().length <= 500) || '请填写1至500字撤销原因',
+      },
+    )
+    reason = result.value.trim()
+  } catch {
+    return
+  }
+  saving.value = true
+  error.value = ''
+  try {
+    await reopenAttendanceRecord(appliedFilters.value.month, row, reason)
+    ElMessage.success('已撤销确认，请核定后重新确认考勤')
+    await load()
+  } catch (e) {
+    error.value = errorMessage(e, '撤销确认失败')
+  } finally {
+    saving.value = false
+  }
+}
 const initialFilters = (): AttendanceFilters => ({
   month: attendanceMonth(),
   employeeName: '',
@@ -51,6 +100,8 @@ const selected = ref<AttendanceRow | null>(null)
 const actualOverride = ref<number | undefined>(undefined)
 const absentOverride = ref<number | undefined>(undefined)
 const leaveType = ref('NONE')
+const reasonRequired = computed(() => leaveType.value !== 'NONE')
+const exceptions = ref<AttendanceExceptionPeriod[]>([])
 const leaveDictionary = 'ATTENDANCE_LEAVE_TYPE'
 const statusDictionary = 'ATTENDANCE_STATUS'
 const statusLoading = ref(false)
@@ -116,14 +167,26 @@ async function load() {
   const id = ++request
   loading.value = true
   error.value = ''
+  ruleReviews.value = []
+  reviewError.value = ''
   data.value = null
   try {
-    const result = await getAttendance({
-      ...appliedFilters.value,
-      begin: (page.value - 1) * 20,
-      step: 20,
-    })
+    const [result, reviews] = await Promise.all([
+      getAttendance({
+        ...appliedFilters.value,
+        begin: (page.value - 1) * 20,
+        step: 20,
+      }),
+      getPayrollRuleReviews('ATTENDANCE', appliedFilters.value.month)
+        .then((items) => ({ items, error: '' }))
+        .catch((e) => ({
+          items: [] as PayrollRuleReview[],
+          error: errorMessage(e, '规则复核状态加载失败，请重试'),
+        })),
+    ])
     if (id === request) {
+      ruleReviews.value = reviews.items
+      reviewError.value = reviews.error
       data.value = result
       total.value = result.page.total
       const lastPage = Math.max(1, Math.ceil(result.page.total / 20))
@@ -165,6 +228,7 @@ function edit(row: AttendanceRow) {
   selected.value = row
   editMonth.value = data.value!.month
   reason.value = row.reason
+  exceptions.value = (row.exceptions || []).map((period) => ({ ...period }))
   actualOverride.value = row.actualDaysOverride ?? undefined
   absentOverride.value = row.absentDaysOverride ?? undefined
   leaveType.value = row.leaveTypeCode
@@ -196,10 +260,15 @@ async function save() {
     editorError.value = '请选择当前启用的请假类型'
     return
   }
+  if (reasonRequired.value && !reason.value.trim()) {
+    editorError.value = '请假类型不为“无”时，请填写缺卡原因'
+    return
+  }
   saving.value = true
   editorError.value = ''
   try {
     await confirmAttendanceRecord(editMonth.value, selected.value.employeeCode, {
+      exceptions: exceptions.value,
       actualDaysOverride: actualOverride.value ?? null,
       absentDaysOverride: absentOverride.value ?? null,
       leaveTypeCode: leaveType.value,
@@ -303,6 +372,14 @@ onMounted(() => {
       </template>
     </SupplyListFilters>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
+    <el-alert v-if="reviewError" :title="reviewError" type="error" :closable="false" />
+    <PayrollRuleReviewPanel
+      :reviews="ruleReviews"
+      subject="ATTENDANCE"
+      :can-process="can('hr:attendance:write')"
+      @locate="locateRuleReview"
+      @resolved="load"
+    />
     <template v-if="data">
       <el-alert
         v-if="data.page.items.some((row) => row.expectedDays == null)"
@@ -361,7 +438,9 @@ onMounted(() => {
         <el-table-column prop="departmentName" label="部门" min-width="150" show-overflow-tooltip />
         <el-table-column label="应出勤天数" width="120" align="right"
           ><template #default="{ row }">
-            <div>{{ row.expectedDays ?? '未设置' }}</div>
+            <div>
+              {{ row.ruleSource === 'DISABLED' ? '规则已停用' : (row.expectedDays ?? '未设置') }}
+            </div>
             <span v-if="row.expectedDays != null" class="hint">{{
               row.ruleSource === 'DEPARTMENT' ? '本部门规则' : '公司默认'
             }}</span>
@@ -391,7 +470,7 @@ onMounted(() => {
         <el-table-column label="请假类型" width="110">
           <template #default="{ row }">{{ leaveLabel(row.leaveTypeCode) }}</template>
         </el-table-column>
-        <el-table-column label="考勤状态" width="110">
+        <el-table-column label="考勤状态" width="165">
           <template #default="{ row }">
             <el-tag
               :type="row.attendanceStatus === 'CONFIRMED' ? 'success' : 'warning'"
@@ -399,6 +478,9 @@ onMounted(() => {
             >
               {{ statusLabel(row.attendanceStatus) }}
             </el-tag>
+            <el-tag v-if="needsRuleReview(row.employeeCode)" type="warning" effect="plain"
+              >规则变更待复核</el-tag
+            >
           </template>
         </el-table-column>
         <el-table-column prop="reason" label="缺卡原因" min-width="240" show-overflow-tooltip
@@ -413,8 +495,16 @@ onMounted(() => {
               :aria-label="`确认${row.employeeName}考勤`"
               @click="edit(row as AttendanceRow)"
               >考勤确认</el-button
-            ></template
-          ></el-table-column
+            >
+            <el-button
+              v-if="row.attendanceStatus === 'CONFIRMED' && needsRuleReview(row.employeeCode)"
+              link
+              type="warning"
+              :disabled="saving"
+              @click="reopen(row as AttendanceRow)"
+              >撤销确认</el-button
+            >
+          </template></el-table-column
         >
         <template #empty>{{
           loading ? '加载中' : error ? '加载失败，请重试' : '暂无员工'
@@ -434,7 +524,9 @@ onMounted(() => {
     <el-dialog
       v-model="editing"
       title="考勤确认"
-      width="min(640px, 94vw)"
+      class="attendance-confirm-dialog"
+      width="min(780px, 94vw)"
+      top="5vh"
       :close-on-click-modal="!saving"
       :close-on-press-escape="!saving"
       :show-close="!saving"
@@ -539,7 +631,13 @@ onMounted(() => {
             <el-button link type="primary" @click="loadLeaveTypes(true)">重载字典</el-button>
           </div>
         </el-form-item>
-        <el-form-item label="缺卡原因">
+        <AttendanceExceptionEditor
+          :key="`${selected?.employeeCode}-${editMonth}`"
+          v-model="exceptions"
+          :month="editMonth"
+          :disabled="saving"
+        />
+        <el-form-item label="缺卡原因" :required="reasonRequired">
           <el-input
             v-model="reason"
             type="textarea"
@@ -548,12 +646,15 @@ onMounted(() => {
             show-word-limit
             :disabled="saving"
             aria-label="缺卡原因"
-            placeholder="填写缺卡日期、原因或调整说明"
+            :aria-required="reasonRequired"
+            :placeholder="
+              reasonRequired ? '请填写缺卡日期、原因或调整说明' : '选填：缺卡日期、原因或调整说明'
+            "
           />
         </el-form-item>
       </el-form>
       <el-alert
-        title="确认后将锁定当前考勤结果，后续打卡和规则变化不再更新，也不能再次修改。"
+        title="确认后保存本次结果。规则变更产生待复核任务时，可由 HR 撤销确认、重新核定并再次确认。"
         type="warning"
         :closable="false"
       />
@@ -576,12 +677,39 @@ onMounted(() => {
       <div class="dates">
         <el-tag v-for="date in daysRow?.dates" :key="date" size="large">{{ date }}</el-tag>
       </div>
+      <el-table v-if="daysRow?.exceptions?.length" :data="daysRow.exceptions" border>
+        <el-table-column prop="start" label="异常开始时间" /><el-table-column
+          prop="end"
+          label="结束时间（不含）"
+        /><el-table-column prop="reason" label="核定说明" />
+      </el-table>
       <el-empty v-if="!daysRow?.dates.length" description="本月暂无已提交的打卡记录" />
     </el-dialog>
   </section>
 </template>
 
 <style scoped>
+:global(.attendance-confirm-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  padding: 0;
+  border-radius: 8px;
+}
+:global(.attendance-confirm-dialog .el-dialog__header) {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+:global(.attendance-confirm-dialog .el-dialog__body) {
+  overflow-y: auto;
+  padding: 0 24px 20px;
+}
+:global(.attendance-confirm-dialog .el-dialog__footer) {
+  padding: 16px 24px;
+  border-top: 1px solid var(--el-border-color-light);
+  background: var(--el-fill-color-extra-light);
+  border-radius: 0 0 8px 8px;
+}
 .attendance-reference {
   display: flex;
   flex-wrap: wrap;

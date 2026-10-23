@@ -4,7 +4,7 @@
     <el-form-item label="费用类型" required>
       <CostDictSelect v-model="form.typeCode" code="MARKETING_EXPENSE_TYPE" />
     </el-form-item>
-    <el-form-item label="归属城市" required>
+    <el-form-item label="费用归属" required>
       <CostCitySelect
         v-model="form.cityCode"
         :action="action"
@@ -26,37 +26,82 @@
   />
   <div class="cost-field-grid">
     <el-form-item label="经办人" required>
-      <div class="full-width">
-        <el-select
-          v-model="form.ownerEmployeeCode"
-          filterable
-          clearable
-          placeholder="选择已有员工；无档案可手填"
-          @change="emit('employee')"
-        >
-          <el-option
-            v-for="employee in employees"
-            :key="employee.employeeCode"
-            :value="employee.employeeCode"
-            :label="`${employee.employeeName} · ${employee.employeeCode}${employee.departmentName ? ' · ' + employee.departmentName : ''}`"
-          />
-        </el-select>
-        <el-input
-          v-if="!form.ownerEmployeeCode"
-          v-model="form.ownerName"
-          maxlength="120"
-          placeholder="手填实际经办人姓名"
-          class="manual-name"
-        />
-        <p v-else class="field-hint">
-          {{ selectedEmployee?.departmentName || '员工所属部门未提供' }}
-        </p>
-      </div>
+      <CostEntryMode v-model="employeeMode" label="经办人">
+        <template #linked>
+          <el-select
+            v-model="form.ownerEmployeeCode"
+            filterable
+            clearable
+            :loading="employeeLoading"
+            placeholder="搜索并选择员工"
+            @change="chooseEmployee"
+          >
+            <el-option
+              v-if="form.ownerEmployeeCode && !selectedEmployee"
+              :value="form.ownerEmployeeCode"
+              :label="form.ownerName || '名称待核对'"
+            />
+            <el-option
+              v-for="employee in employees"
+              :key="employee.employeeCode"
+              :value="employee.employeeCode"
+              :label="[employee.employeeName, employee.departmentName].filter(Boolean).join(' · ')"
+            />
+            <template #empty>
+              <div class="employee-empty" :role="employeeError ? 'alert' : 'status'">
+                <span>{{ employeeLoading ? '正在加载…' : employeeError || '未找到匹配员工' }}</span>
+                <el-button
+                  v-if="employeeError"
+                  link
+                  type="primary"
+                  @click="emit('reloadEmployees')"
+                >
+                  重新加载
+                </el-button>
+                <el-button
+                  v-else-if="!employeeLoading"
+                  link
+                  type="primary"
+                  @click="employeeMode = 'MANUAL'"
+                  >手动填写经办人</el-button
+                >
+              </div>
+            </template>
+          </el-select>
+          <span v-if="employeeError" role="alert" class="employee-error">
+            {{ employeeError }}
+            <el-button link type="primary" @click="emit('reloadEmployees')">重新加载</el-button>
+          </span>
+          <span v-else-if="selectedEmployee?.departmentName" class="field-hint">
+            {{ selectedEmployee.departmentName }}
+          </span>
+        </template>
+        <template #manual>
+          <el-input v-model="form.ownerName" maxlength="120" placeholder="填写实际经办人姓名" />
+        </template>
+      </CostEntryMode>
     </el-form-item>
     <el-form-item label="收款方">
       <el-input v-model="form.payeeName" maxlength="200" placeholder="公司或个人名称（可选）" />
     </el-form-item>
   </div>
+  <template v-if="form.marketing">
+    <h3 class="cost-section-title">投放与合作信息</h3>
+    <div class="cost-field-grid">
+      <el-form-item label="投放渠道／平台"
+        ><el-input
+          v-model="form.marketing.channelName"
+          maxlength="200"
+          placeholder="如线下推广、广告平台或合作渠道"
+      /></el-form-item>
+      <el-form-item label="服务期间开始"
+        ><el-date-picker v-model="form.marketing.serviceFrom" value-format="YYYY-MM-DD"
+      /></el-form-item>
+      <el-form-item label="服务期间截止"
+        ><el-date-picker v-model="form.marketing.serviceTo" value-format="YYYY-MM-DD"
+      /></el-form-item>
+    </div>
+  </template>
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -64,15 +109,45 @@ import type { CostCommand, CostEmployee } from '@/api/core/cost'
 import CostCitySelect from './CostCitySelect.vue'
 import CostRecordBasics from './CostRecordBasics.vue'
 import CostDictSelect from './CostDictSelect.vue'
-const props = defineProps<{ action: string; employees: CostEmployee[] }>()
+import CostEntryMode from './CostEntryMode.vue'
+import { useCostEntryMode } from './use-cost-entry-mode'
+const props = defineProps<{
+  action: string
+  employees: CostEmployee[]
+  employeeLoading?: boolean
+  employeeError?: string
+}>()
 const form = defineModel<CostCommand>({ required: true })
-const emit = defineEmits<{ city: []; cities: [{ code: string; name: string }[]]; employee: [] }>()
+const emit = defineEmits<{
+  city: []
+  cities: [{ code: string; name: string }[]]
+  reloadEmployees: []
+}>()
+const employeeMode = useCostEntryMode(form, {
+  empty: { ownerEmployeeCode: null, ownerName: '', departmentId: null } as Pick<
+    CostCommand,
+    'ownerEmployeeCode' | 'ownerName' | 'departmentId'
+  >,
+  isLinked: (value) => !!value.ownerEmployeeCode,
+  hasName: (value) => !!value.ownerName?.trim(),
+  toManual: (value) => ({ ...value, ownerEmployeeCode: null, departmentId: null }),
+})
 const selectedEmployee = computed(() =>
   props.employees.find((employee) => employee.employeeCode === form.value.ownerEmployeeCode),
 )
+function chooseEmployee() {
+  form.value.ownerEmployeeCode ||= null
+  form.value.ownerName = selectedEmployee.value?.employeeName || ''
+  form.value.departmentId = selectedEmployee.value?.departmentId ?? null
+}
 </script>
 <style scoped>
-.manual-name {
-  margin-top: 8px;
+.employee-empty {
+  padding: 14px 20px;
+  color: var(--el-text-color-secondary);
+}
+.employee-error {
+  color: var(--el-color-danger);
+  font-size: 12px;
 }
 </style>

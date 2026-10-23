@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>成本流程验证 · 虚构测试数据</title>
+    <style>
+      #preview-controls {
+        padding: 8px 14px;
+        background: #fff7dd;
+        color: #613d08;
+        font: 13px system-ui;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      #preview-controls select {
+        padding: 3px;
+      }
+      #app .console,
+      #app .console__main,
+      #app .console-navigation {
+        height: calc(100dvh - 45px);
+        min-height: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="preview-controls">
+      隔离验证 · 全部为虚构数据 · 不连接业务服务
+      <label
+        >验证角色
+        <select id="preview-role">
+          <option value="operator">业务经办</option>
+          <option value="marketing">营销人员</option>
+          <option value="hr">人事</option>
+          <option value="boss">老板（只读）</option>
+        </select></label
+      >
+    </div>
+    <div id="app"></div>
+    <script type="module" src="./cost-workflow-preview.ts"></script>
+  </body>
+</html>

@@ -233,7 +233,7 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     { key: 'product-sales', title: '商品销售统计' },
     { key: 'gross-profit', title: '销售毛利分析' },
     { key: 'payment-risk', title: '回款风险看板' },
-    { key: 'city-cost', title: '城市成本看板' },
+    { key: 'city-cost', title: '成本数据看板' },
     { key: 'inventory-risk', title: '库存风险看板' },
   ]),
   ...directPages('hr', '人事与绩效', 'hr-payroll-service', [

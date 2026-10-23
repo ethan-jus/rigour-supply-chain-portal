@@ -62,10 +62,12 @@
             v-bind="option" /></el-select
       ></el-form-item>
     </div>
+    <PayrollPersonalPolicyEditor v-model="form" :disabled="disabled" />
   </el-form>
 </template>
 <script setup lang="ts">
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
+import PayrollPersonalPolicyEditor from './PayrollPersonalPolicyEditor.vue'
 import { prorationOptions } from '@/utils/payroll-scheme'
 defineProps<{ disabled?: boolean }>()
 const form = defineModel<PayrollSchemeDefinition>({ required: true })

@@ -6,11 +6,16 @@ import PayrollPreparationPanel from '@/views/supply-chain/hr/components/PayrollP
 import {
   getPayrollPreparation,
   calculatePayroll,
+  previewPayroll,
   type PayrollPreparationEmployee,
   type PayrollRecord,
 } from '@/api/core/payroll'
 
-vi.mock('@/api/core/payroll', () => ({ getPayrollPreparation: vi.fn(), calculatePayroll: vi.fn() }))
+vi.mock('@/api/core/payroll', () => ({
+  getPayrollPreparation: vi.fn(),
+  calculatePayroll: vi.fn(),
+  previewPayroll: vi.fn(),
+}))
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => true }),
 }))
@@ -134,6 +139,52 @@ describe('选择核算人员', () => {
       await flushPromises()
       expect(calculatePayroll).toHaveBeenCalledExactlyOnceWith('2026-09', ['A'])
       expect(wrapper.text()).toContain('已处理 1／1 人')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+  it('已发放人员可只读试算对比，缺少资料不会被展示为零元，也不保存工资', async () => {
+    const employee = {
+      employeeCode: 'L',
+      employeeName: '已发放员工',
+      locked: true,
+      canCalculate: false,
+      payrollCategory: 'HEADQUARTERS',
+      profileIssues: [],
+      ruleIssues: ['员工薪资标准未配置'],
+    }
+    vi.mocked(getPayrollPreparation).mockResolvedValue({
+      month: '2026-09',
+      employees: [employee],
+    } as never)
+    vi.mocked(previewPayroll).mockResolvedValue([
+      {
+        employeeCode: 'L',
+        employeeName: '已发放员工',
+        savedStatus: 'PAID',
+        issues: ['员工薪资标准未配置'],
+        calculation: { netPay: null, issues: ['员工薪资标准未配置'] },
+        previousCalculation: { netPay: 8000 },
+      },
+    ] as never)
+    const wrapper = mount(PayrollPreparationPanel, {
+      props: { modelValue: true, month: '2026-09' },
+      global: { plugins: [ElementPlus], stubs: { ElDialog: Dialog } },
+    })
+    try {
+      await flushPromises()
+      expect(wrapper.text()).toContain('规则待完善 1 人')
+      await wrapper
+        .findAll('button')
+        .find((b) => b.text() === '只读试算')!
+        .trigger('click')
+      await flushPromises()
+      expect(previewPayroll).toHaveBeenCalledExactlyOnceWith('2026-09', ['L'])
+      expect(calculatePayroll).not.toHaveBeenCalled()
+      expect(wrapper.text()).toContain('应付 待核定 元')
+      await wrapper.setProps({ month: '2026-10' })
+      await flushPromises()
+      expect(wrapper.text()).not.toContain('应付 待核定 元')
     } finally {
       wrapper.unmount()
     }

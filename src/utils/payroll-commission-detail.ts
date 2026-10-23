@@ -2,6 +2,9 @@ import type { PayrollDetail, PayrollRecord } from '@/api/core/payroll'
 import type { PayrollCommissionCategory } from '@/api/core/payroll/models/PayrollCommissionCategory'
 import type { PayrollCommissionProduct } from '@/api/core/payroll/models/PayrollCommissionProduct'
 
+export const commissionCountExplanation =
+  '订单数按订单去重；商品提成记录按订单中的商品行及提成角色分别统计，包含待核定记录，不是商品件数。'
+
 export const commissionRole = (role: string) =>
   (
     ({ SALES: '销售提成', CITY_MANAGER: '城市总提成', CITY_TEAM: '团队提成' }) as Record<

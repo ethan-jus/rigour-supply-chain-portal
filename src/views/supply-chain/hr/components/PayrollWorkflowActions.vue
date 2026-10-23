@@ -14,7 +14,7 @@
           :disabled="busy"
           @click="$emit('adjust')"
         >
-          人工调整
+          核定薪酬
         </el-button>
         <el-button
           v-if="row.statusCode === 'REVIEW' && canCalculate"

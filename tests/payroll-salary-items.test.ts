@@ -95,4 +95,40 @@ describe('工资组成展示与核算快照对账', () => {
     expect(rows.find((r) => r.name === '城市总绩效')?.amount).toBe(598.8)
     expect(rows.find((r) => r.name === '实际发放')?.amount).toBe(1500)
   })
+  it.each([
+    ['ACTUAL_COMPLETION', '单项指标计分后的加权发放比例'],
+    ['TIERED', '历史规则：绩效基数 × 综合阶梯系数'],
+  ])('城市总工资组成按快照的%s口径解释，不混淆历史算法', (mode, basis) => {
+    const data = record()
+    data.calculation.performanceDetail = null
+    const definition = data.calculation.scheme!.scheme.definition
+    definition.role = 'CITY_MANAGER'
+    definition.performanceMode = 'MANAGER'
+    definition.manager = { calculationMode: mode } as typeof definition.manager
+    expect(payrollSalaryItems(data).find((r) => r.name === '城市总绩效')?.basis).toContain(basis)
+  })
+  it.each([80, 0, null])('总部工资组成显示本人的月度完成率%s，缺失不默认为满额', (percent) => {
+    const data = record()
+    data.calculation.performanceDetail = null
+    data.calculation.scheme!.scheme.definition.role = 'HEADQUARTERS'
+    data.calculation.scheme!.scheme.definition.performanceMode = 'FIXED'
+    data.calculation.scheme!.performanceCompletionPercent = percent
+    expect(payrollSalaryItems(data).find((r) => r.name === '总部人员绩效')?.basis).toContain(
+      `本人当月绩效完成率（${percent == null ? '待核定' : percent + '%'}）`,
+    )
+    data.calculation.input.performanceOverride = 1500
+    data.calculation.input.reason = '本月人工调整'
+    expect(payrollSalaryItems(data).find((r) => r.name === '总部人员绩效')?.basis).toBe(
+      'HR 核定：本月人工调整',
+    )
+  })
+  it('不计绩效的规则不展示完成率或系数计算说明', () => {
+    const data = record()
+    data.calculation.performanceDetail = null
+    data.calculation.scheme!.scheme.definition.role = 'HEADQUARTERS'
+    data.calculation.scheme!.scheme.definition.performanceMode = 'NONE'
+    expect(payrollSalaryItems(data).find((r) => r.name === '总部人员绩效')?.basis).toBe(
+      '本月规则不计绩效',
+    )
+  })
 })

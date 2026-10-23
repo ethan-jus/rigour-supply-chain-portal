@@ -60,7 +60,7 @@
         >
         <el-table-column prop="senderName" label="发货方" min-width="150" />
         <el-table-column prop="receiverName" label="收货方" min-width="150" />
-        <el-table-column label="归属城市" width="130"
+        <el-table-column label="费用归属" width="130"
           ><template #default="{ row }">{{
             cityName(row as CostSource)
           }}</template></el-table-column
@@ -106,7 +106,7 @@ const options = computed(() => [
   ...new Map([...props.sources, ...pageRows.value].map((r) => [r.id, r])).values(),
 ])
 const cityName = (r: CostSource) =>
-  props.cities?.find((city) => city.code === r.cityCode)?.name || r.cityCode || '城市待核对'
+  props.cities?.find((city) => city.code === r.cityCode)?.name || '城市待核对'
 const label = (r: CostSource) =>
   `${r.originalNo || r.documentNo} · ${r.senderName || '待核对'} → ${r.receiverName || '待核对'} · ${cityName(r)} · ${r.documentDate || '日期待核对'} · ${r.statusCode}`
 let version = 0,

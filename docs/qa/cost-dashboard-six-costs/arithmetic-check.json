@@ -1,0 +1,23 @@
+{
+  "data": "synthetic fixtures only",
+  "period": "2026-09",
+  "operatingExpenses": "282977.52",
+  "categories": {
+    "purchase": "505492.06",
+    "loss": "19410.05",
+    "freight": "31846.80",
+    "warehouse": "103553.21",
+    "office": "55327.79",
+    "marketing": "71280.93",
+    "expense": "10968.73",
+    "labor": "10000.06"
+  },
+  "payrollComponents": {
+    "baseSalary": "8000.02",
+    "performance": "1000",
+    "commission": "1000.04",
+    "allowance": "0",
+    "correctionAmount": "0"
+  },
+  "result": "PASS"
+}

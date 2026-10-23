@@ -232,4 +232,26 @@ describe('供应链工作台', () => {
     expect(search.find('.entry-search__results').exists()).toBe(false)
     expect(search.find('input').exists()).toBe(false)
   })
+  it('菜单重新读取保留用户正在浏览的模块，路由变化与权限撤销仍重新定位', async () => {
+    const hr = node('supply.hr.menu', '人事与绩效', null, [
+      node('supply.hr.employees', '员工档案', '/supply-chain/hr/employees'),
+    ])
+    const orders = node('supply.order.menu', '订单管理', null, [order, payments])
+    const nodes = [home, orders, hr]
+    const { global, router } = await render(nodes)
+    await router.push(order.routePath!)
+    const sidebar = mount(ConsoleSidebar, { props: { nodes }, global })
+    wrappers.push(sidebar)
+    await sidebar.get('button[aria-label="人事与绩效"]').trigger('click')
+    expect(sidebar.get('.secondary-nav').text()).toContain('员工档案')
+    await sidebar.setProps({ nodes: structuredClone(nodes) })
+    expect(sidebar.get('.secondary-nav').text()).toContain('员工档案')
+    await router.push(payments.routePath!)
+    await flushPromises()
+    expect(sidebar.get('.secondary-nav').text()).toContain('收款记录')
+    await sidebar.get('button[aria-label="人事与绩效"]').trigger('click')
+    await sidebar.setProps({ nodes: [home, orders] })
+    expect(sidebar.get('.secondary-nav').text()).not.toContain('员工档案')
+    expect(sidebar.get('.secondary-nav').text()).toContain('收款记录')
+  })
 })

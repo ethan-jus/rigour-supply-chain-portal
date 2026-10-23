@@ -1,0 +1,10 @@
+export type CostCategory =
+  | 'warehouse'
+  | 'office'
+  | 'marketing'
+  | 'freight'
+  | 'expense'
+  | 'labor'
+  | 'premises_unknown'
+  | 'purchase'
+  | 'loss'

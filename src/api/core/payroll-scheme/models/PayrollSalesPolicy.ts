@@ -1,6 +1,7 @@
 import type { PayrollTargetStage } from './PayrollTargetStage'
 
 export interface PayrollSalesPolicy {
+  processProtectionDays?: number | null
   processPercent: number | null
   dailyCheckins: number
   checkinPenalty: number | null

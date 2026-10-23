@@ -5,7 +5,6 @@ import { Search, Refresh, Edit } from '@element-plus/icons-vue'
 import { errorMessage } from '@/api/core/error'
 import {
   getTargetSettings,
-  getPayrollTargetMetrics,
   saveTargetSettings,
   getTargetHistory,
   type TargetSettings,
@@ -15,19 +14,7 @@ import {
   type TargetChange,
   type TargetHistory,
 } from '@/api/core/hr-target-settings'
-import {
-  targetMetrics as businessMetrics,
-  targetCell,
-  targetKey,
-  targetValueError,
-} from './target-settings-model'
-const metricMode = ref('BUSINESS')
-const payrollMetrics = ref<
-  import('@/api/core/payroll-scheme/models/PayrollTargetMetricView').PayrollTargetMetricView[]
->([])
-const targetMetrics = computed(() =>
-  metricMode.value === 'BUSINESS' ? businessMetrics : payrollMetrics.value,
-)
+import { targetMetrics, targetCell, targetKey, targetValueError } from './target-settings-model'
 const month = ref(
   new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Shanghai',
@@ -36,10 +23,6 @@ const month = ref(
   }).format(new Date()),
 )
 const dimension = ref<TargetDimension>('CITY')
-watch(metricMode, (value) => {
-  if (value === 'PAYROLL') dimension.value = 'SALES_OWNER'
-  selection.value = []
-})
 const data = ref<TargetSettings | null>(null)
 const busy = ref(false),
   saving = ref(false),
@@ -72,14 +55,10 @@ async function load() {
   data.value = null
   selection.value = []
   try {
-    const [result, metrics] = await Promise.all([
-      getTargetSettings(requestedMonth),
-      getPayrollTargetMetrics(),
-    ])
-    payrollMetrics.value = metrics
+    const result = await getTargetSettings(requestedMonth)
     // Reject incomplete values instead of inventing frontend defaults.
     for (const subject of result.subjects)
-      for (const metric of targetMetrics.value) targetCell(result, subject, metric.code)
+      for (const metric of targetMetrics) targetCell(result, subject, metric.code)
     if (id === loadId) data.value = result
   } catch (e) {
     if (id === loadId) error.value = errorMessage(e, '指标加载失败，请重试')
@@ -146,7 +125,7 @@ function edit(subjects: TargetSubject[]) {
   editingSubjects.value = subjects.filter((s) => s.writable)
   if (!editingSubjects.value.length) return
   draft.value = Object.fromEntries(
-    targetMetrics.value.map((m) => [
+    targetMetrics.map((m) => [
       m.code,
       {
         checked: subjects.length === 1,
@@ -161,7 +140,7 @@ function edit(subjects: TargetSubject[]) {
 function review() {
   editorError.value = ''
   const changes: TargetChange[] = []
-  for (const metric of targetMetrics.value) {
+  for (const metric of targetMetrics) {
     const field = draft.value[metric.code]!
     if (!field.checked) continue
     const invalid = targetValueError(metric.code, field.value)
@@ -171,10 +150,7 @@ function review() {
     }
     for (const subject of editingSubjects.value) {
       const existing = cell(subject, metric.code)
-      if (
-        Number(field.value) !== existing.value ||
-        (metricMode.value === 'PAYROLL' && existing.revision === 0)
-      )
+      if (Number(field.value) !== existing.value)
         changes.push({
           dimensionType: subject.dimensionType,
           code: subject.code,
@@ -245,7 +221,7 @@ function changeName(change: TargetChange) {
 }
 function metricName(metric: string) {
   return (
-    targetMetrics.value.find((m) => m.code === metric)?.label ??
+    targetMetrics.find((m) => m.code === metric)?.label ??
     (
       { NEW_CUSTOMER: '新增合作客户（旧指标）', REPEAT_CUSTOMER: '复购客户（旧指标）' } as Record<
         string,
@@ -274,18 +250,8 @@ function metricName(metric: string) {
         aria-label="指标月份"
       />
     </header>
-    <el-radio-group v-model="metricMode" :disabled="locked" style="margin: 12px 0">
-      <el-radio-button value="BUSINESS">经营指标</el-radio-button
-      ><el-radio-button value="PAYROLL">薪酬绩效目标</el-radio-button>
-    </el-radio-group>
-    <el-alert
-      v-if="metricMode === 'PAYROLL'"
-      title="销售未单独核定时按入职阶段目标；首月免考由绩效规则决定。城市总在人员维度维护所辖城市合计目标。指标实际值由薪酬核算读取业务来源或月度核定。"
-      type="info"
-      :closable="false"
-    />
     <div class="target-controls">
-      <nav v-if="metricMode === 'BUSINESS'" class="target-tabs" aria-label="指标类型">
+      <nav class="target-tabs" aria-label="指标类型">
         <button
           :class="{ active: dimension === 'CITY' }"
           :aria-pressed="dimension === 'CITY'"
@@ -401,16 +367,7 @@ function metricName(metric: string) {
                   >
                 </td>
                 <td v-for="metric in targetMetrics" :key="metric.code" class="target-number">
-                  {{
-                    metricMode === 'PAYROLL' &&
-                    cell(subject, metric.code).revision === 0 &&
-                    cell(subject, metric.code).value === 0
-                      ? '未单独核定'
-                      : format(cell(subject, metric.code).value)
-                  }}
-                  <small v-if="metricMode === 'PAYROLL'">{{
-                    cell(subject, metric.code).revision > 0 ? '人工核定' : '规则默认 / 保护期'
-                  }}</small>
+                  {{ format(cell(subject, metric.code).value) }}
                 </td>
                 <td class="target-actions">
                   <el-button

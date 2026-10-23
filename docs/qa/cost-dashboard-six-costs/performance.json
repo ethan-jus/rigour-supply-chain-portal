@@ -1,0 +1,1 @@
+{"p95Ms":1116.905833,"facts":100000,"maxMs":1143.962875,"csvRows":70460,"csvMs":203.764791,"csvBytes":9530704,"scope":"local in-memory service only; excludes HTTP, database loading, auth server and source refresh","concurrentReaders":20,"p50Ms":1101.179167}

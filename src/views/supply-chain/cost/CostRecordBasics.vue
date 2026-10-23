@@ -6,7 +6,7 @@
     <el-form-item :label="dateLabel" required>
       <el-date-picker v-model="form.costDate" value-format="YYYY-MM-DD" />
     </el-form-item>
-    <el-form-item v-if="showCity" label="归属城市" required>
+    <el-form-item v-if="showCity" label="费用归属" required>
       <CostCitySelect
         v-model="form.cityCode"
         :action="action"
@@ -15,7 +15,7 @@
         @change="emit('city')"
       />
     </el-form-item>
-    <el-form-item :label="amountLabel" :required="requiredAmount">
+    <el-form-item v-if="!hideAmount" :label="amountLabel" :required="requiredAmount">
       <div class="full-width">
         <el-input-number
           v-model="form.amount"
@@ -42,6 +42,7 @@ defineProps<{
   showCity?: boolean
   month?: boolean
   requiredAmount?: boolean
+  hideAmount?: boolean
 }>()
 const form = defineModel<CostCommand>({ required: true })
 const emit = defineEmits<{ city: []; cities: [{ code: string; name: string }[]] }>()

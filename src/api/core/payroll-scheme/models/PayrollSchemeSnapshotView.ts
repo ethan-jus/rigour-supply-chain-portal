@@ -8,6 +8,8 @@ export interface PayrollSchemeSnapshotView {
   salaryTier: string
   achievement: number | null
   performanceBase: number | null
+  performanceCompletionPercent?: number | null
+  commissionAdjustment?: number | null
   metrics: PayrollMetricResultView[]
   managerCompletion?: number | null
   managerCoefficient: number | null

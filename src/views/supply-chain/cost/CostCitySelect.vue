@@ -5,7 +5,7 @@
     :clearable="clearable"
     filterable
     :loading="loading"
-    :placeholder="placeholder || '选择归属城市'"
+    :placeholder="placeholder || '选择经营城市或总部'"
     @visible-change="
       (open) => {
         if (open) void load()
@@ -13,15 +13,10 @@
     "
     @change="emit('change')"
   >
-    <el-option
-      v-for="city in options"
-      :key="city.code"
-      :value="city.code"
-      :label="city.name + ' · ' + city.code"
-    />
+    <el-option v-for="city in options" :key="city.code" :value="city.code" :label="city.name" />
     <template #empty
       ><div class="city-empty" role="status">
-        {{ loading ? '正在加载城市…' : failure || '暂无授权城市，请联系管理员配置范围' }}
+        {{ loading ? '正在加载费用归属…' : failure || '暂无授权费用归属，请联系管理员配置范围' }}
         <el-button v-if="failure" link type="primary" @click.stop="load">重新加载</el-button>
       </div></template
     >
@@ -48,7 +43,14 @@ const cities = ref<{ code: string; name: string }[]>([]),
   failure = ref('')
 const options = computed(() =>
   value.value && !cities.value.some((c) => c.code === value.value)
-    ? [...cities.value, { code: value.value, name: props.snapshot || value.value }]
+    ? [
+        ...cities.value,
+        {
+          code: value.value,
+          name:
+            props.snapshot && props.snapshot !== value.value ? props.snapshot : '归属名称待核对',
+        },
+      ]
     : cities.value,
 )
 let version = 0
@@ -63,7 +65,7 @@ async function load() {
       emit('loaded', rows)
     }
   } catch (e) {
-    if (current === version) failure.value = errorMessage(e, '城市加载失败，请重试')
+    if (current === version) failure.value = errorMessage(e, '费用归属加载失败，请重试')
   } finally {
     if (current === version) loading.value = false
   }

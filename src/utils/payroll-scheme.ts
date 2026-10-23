@@ -2,6 +2,7 @@ import type { PayrollMetricStep } from '@/api/core/payroll-scheme/models/Payroll
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import type { PayrollMetricDefinition } from '@/api/core/payroll-scheme/models/PayrollMetricDefinition'
 import type { PayrollSchemeCommissionRule } from '@/api/core/payroll-scheme/models/PayrollSchemeCommissionRule'
+import { newStatutoryWorkCalendar } from './hr-work-calendar'
 export const payrollRoles = [
   { value: 'SALES', label: '销售' },
   { value: 'CITY_MANAGER', label: '城市总' },
@@ -39,12 +40,49 @@ export function newPayrollMetric(): PayrollMetricDefinition {
     code: crypto.randomUUID(),
     name: '',
     source: 'MANUAL_CONFIRMED',
+    cityMetric: null,
     target: null,
     weight: null,
-    // Historical per-metric bands remain readable; new policies use global completion bands.
+    scoringMode: 'TIERED',
     cap: null,
-    steps: [],
+    steps: managerMetricScoringSteps(),
   }
+}
+export function managerMetricScoringSteps(): PayrollMetricStep[] {
+  return [
+    {
+      lower: 0,
+      upper: 1,
+      lowerInclusive: true,
+      upperInclusive: false,
+      mode: 'LINEAR',
+      coefficient: 1,
+    },
+    {
+      lower: 1,
+      upper: 1.5,
+      lowerInclusive: true,
+      upperInclusive: false,
+      mode: 'FIXED',
+      coefficient: 1,
+    },
+    {
+      lower: 1.5,
+      upper: 2,
+      lowerInclusive: true,
+      upperInclusive: false,
+      mode: 'FIXED',
+      coefficient: 1.2,
+    },
+    {
+      lower: 2,
+      upper: null,
+      lowerInclusive: true,
+      upperInclusive: false,
+      mode: 'FIXED',
+      coefficient: 1.5,
+    },
+  ]
 }
 export function newSchemeCommission(): PayrollSchemeCommissionRule {
   return {
@@ -122,6 +160,7 @@ export function newPayrollScheme(): PayrollSchemeDefinition {
       minimumSeconds: 600,
       visitPenalty: 30,
       firstMonthExempt: true,
+      processProtectionDays: 10,
       resultCap: 1,
       targets: [
         { fromMonth: 2, toMonth: 2, target: 5000 },
@@ -131,18 +170,11 @@ export function newPayrollScheme(): PayrollSchemeDefinition {
     manager: {
       metrics: [],
       protection: { unit: 'MONTHS', count: 1, assessUnprotectedOnly: true },
-      cap: 1.2,
-      steps: managerCompletionSteps(),
+      calculationMode: 'ACTUAL_COMPLETION',
+      cap: null,
+      steps: [],
     },
-    calendar: {
-      alternateWeekdays: [],
-      alternateAnchor: null,
-      weekdays: [],
-      workDays: [],
-      restDays: [],
-      exemptDays: [],
-      window: { start: '09:00:00', end: '06:00:00', nextDay: true, outside: 'IGNORE' },
-    },
+    calendar: newStatutoryWorkCalendar(),
     proration: { base: 'NONE', performance: 'NONE', allowance: 'NONE' },
     allowances: [
       { code: 'VEHICLE', name: '交通补贴', amount: 500 },

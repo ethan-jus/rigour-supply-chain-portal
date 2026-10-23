@@ -6,6 +6,7 @@ import {
 } from 'axios'
 import { apiClient, registerUnauthorizedSessionHandler } from '@/api'
 import * as token from '@/utils/token'
+import { requestFailureNotices, dismissRequestFailure } from '@/utils/request-feedback'
 
 function adapter(data: unknown) {
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => ({
@@ -60,6 +61,18 @@ afterEach(() => {
 })
 
 describe('API响应解包', () => {
+  it('页面自行展示的取数错误不重复弹全局通知，默认请求保留通知', async () => {
+    requestFailureNotices.value.forEach(notice => dismissRequestFailure(notice.id))
+    await expect(apiClient.get('/calendar', {
+      adapter: unauthorizedAdapter({ status: 404 }), errorFeedback: 'inline',
+    })).rejects.toMatchObject({ code: 'NOT_FOUND', silent: true })
+    expect(requestFailureNotices.value).toHaveLength(0)
+    await expect(apiClient.get('/other-resource', {
+      adapter: unauthorizedAdapter({ status: 404 }),
+    })).rejects.toMatchObject({ code: 'NOT_FOUND', silent: false })
+    expect(requestFailureNotices.value).toHaveLength(1)
+    requestFailureNotices.value.forEach(notice => dismissRequestFailure(notice.id))
+  })
   const invoice = { id: '9007199254740993', amount: '123.40' }
   const envelope = (data: unknown) => ({
     code: 'OK', message: 'success', data,
@@ -165,6 +178,7 @@ describe('API 401分类与会话恢复', () => {
 
     await expect(apiClient.get('/orders/sales', {
       stayOnUnauthorized: true,
+      errorFeedback: 'inline',
       adapter: unauthorizedAdapter({ marker: 'IAM_TOKEN_INVALID' }),
     })).rejects.toMatchObject({
       code: 'IAM_TOKEN_INVALID',

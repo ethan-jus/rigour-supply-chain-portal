@@ -1,11 +1,5 @@
 <template>
   <section class="city-manager-panel">
-    <el-alert
-      v-if="assignmentOnly"
-      title="此处维护管辖城市和任期。工资与商品提成在对应规则入口维护；同一人管理多个城市，只生成一份月度工资。"
-      type="info"
-      :closable="false"
-    />
     <SupplyListFilters :loading="loading" @search="search" @reset="reset">
       <el-form-item label="城市总">
         <el-select
@@ -23,10 +17,10 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="所辖城市">
+      <el-form-item label="管辖城市">
         <el-select
           v-model="cityFilter"
-          aria-label="所辖城市筛选"
+          aria-label="管辖城市筛选"
           filterable
           clearable
           placeholder="全部城市"
@@ -42,82 +36,43 @@
     </SupplyListFilters>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
     <div class="manager-results">
-      <span>匹配 {{ groups.length }} 位城市总 · {{ matchedRecords }} 条任职配置</span>
+      <span>共 {{ groups.length }} 位城市总</span>
       <el-button :loading="loading" @click="reload">刷新</el-button>
     </div>
-    <div v-loading="loading" class="manager-groups">
-      <el-empty
-        v-if="!loading && !loadError && !groups.length"
-        description="暂无匹配的城市总任职配置"
-      />
-      <section v-for="group in visibleGroups" :key="group.employeeCode" class="manager-group">
-        <header class="manager-group__heading">
-          <div>
-            <strong>{{ employeeName(group.employeeCode) }}</strong>
-            <span class="muted manager-code">{{ group.employeeCode }}</span>
-            <el-tag type="info"
-              >{{ new Set(group.assignments.map((r) => r.data.cityCode)).size }} 个城市{{
-                appliedCity ? '（筛选结果）' : ''
-              }}</el-tag
-            >
-          </div>
-          <div class="manager-actions">
-            <el-button
-              v-if="canWrite"
-              type="primary"
-              @click="$emit('addCity', group.assignments[0]!)"
-              >增加管辖城市</el-button
-            >
-          </div>
-        </header>
-        <el-table :data="group.assignments" border row-key="id" class="business-table">
-          <el-table-column prop="data.cityName" label="所辖城市" min-width="130" fixed="left" />
-          <el-table-column prop="data.effectiveFrom" label="任期开始" width="115" />
-          <el-table-column label="任期结束" width="125"
-            ><template #default="{ row }">{{
-              row.data.effectiveTo === '9999-12-31' ? '未设结束日期' : row.data.effectiveTo
-            }}</template></el-table-column
+    <div class="manager-list">
+      <el-table
+        v-loading="loading"
+        :data="visibleGroups"
+        row-key="employeeCode"
+        height="100%"
+        class="business-table"
+        :empty-text="loadError ? '管辖范围加载失败，请刷新重试' : '暂无匹配的城市总'"
+      >
+        <el-table-column label="城市总" min-width="160">
+          <template #default="{ row }"
+            ><strong>{{ employeeName(row.employeeCode) }}</strong></template
           >
-          <el-table-column label="任期状态" width="100"
-            ><template #default="{ row }"
-              ><el-tag
-                :type="managerTermStatus(row as PayrollRule) === '任期中' ? 'success' : 'info'"
-                >{{ managerTermStatus(row as PayrollRule) }}</el-tag
-              ></template
-            ></el-table-column
+        </el-table-column>
+        <el-table-column label="当前管辖城市" min-width="300">
+          <template #default="{ row }">
+            <span v-if="row.cities.length" class="city-names">{{ cityNames(row.cities) }}</span>
+            <span v-else class="muted">暂无在管城市</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="canOpenEmployee"
+          label="操作"
+          width="150"
+          align="center"
+          fixed="right"
+        >
+          <template #default="{ row }"
+            ><el-button link type="primary" @click="$emit('openEmployee', row.employeeCode)"
+              >查看员工档案</el-button
+            ></template
           >
-          <el-table-column v-if="!assignmentOnly" label="本人销售提成" min-width="145"
-            ><template #default="{ row }">{{
-              row.data.includeOwnSalesCommission == null
-                ? '待明确'
-                : row.data.includeOwnSalesCommission
-                  ? '另计销售提成'
-                  : '不另计销售提成'
-            }}</template></el-table-column
-          >
-          <el-table-column v-if="!assignmentOnly" label="团队计入比例" width="130"
-            ><template #default="{ row }"
-              >{{ row.data.cityCommission?.teamPercent ?? 100 }}%</template
-            ></el-table-column
-          >
-          <el-table-column v-if="!assignmentOnly" label="独立商品提成" min-width="150"
-            ><template #default="{ row }">{{
-              row.data.cityCommission?.products == null
-                ? '沿用部门商品标准'
-                : row.data.cityCommission.products.length
-                  ? row.data.cityCommission.products.length + ' 个商品型号'
-                  : '不计提'
-            }}</template></el-table-column
-          >
-          <el-table-column label="操作" width="90" fixed="right"
-            ><template #default="{ row }"
-              ><el-button link type="primary" @click="$emit('edit', row as PayrollRule)">{{
-                canWrite ? '编辑' : '查看'
-              }}</el-button></template
-            ></el-table-column
-          >
-        </el-table>
-      </section>
+        </el-table-column>
+      </el-table>
     </div>
     <el-pagination
       v-model:current-page="currentPage"
@@ -137,12 +92,10 @@ import { completePages, managerGroups, managerTermStatus } from '../city-manager
 const props = defineProps<{
   employees: PayrollEmployee[]
   cities: { code: string; name: string }[]
-  canWrite: boolean
-  assignmentOnly?: boolean
+  canOpenEmployee: boolean
 }>()
 defineEmits<{
-  edit: [PayrollRule]
-  addCity: [PayrollRule]
+  openEmployee: [string]
 }>()
 const rules = ref<PayrollRule[]>([]),
   loading = ref(false),
@@ -158,7 +111,7 @@ const employeeName = (code: string) =>
 const managerOptions = computed(() =>
   managerGroups(rules.value).map((g) => ({
     code: g.employeeCode,
-    label: `${employeeName(g.employeeCode)} · ${g.employeeCode}`,
+    label: employeeName(g.employeeCode),
   })),
 )
 const cityOptions = computed(() => {
@@ -172,11 +125,32 @@ const cityOptions = computed(() => {
   })
   return [...options.values()]
 })
-const groups = computed(() => managerGroups(rules.value, appliedManager.value, appliedCity.value))
-const matchedRecords = computed(() => groups.value.reduce((n, g) => n + g.assignments.length, 0))
+const groups = computed(() =>
+  managerGroups(rules.value, appliedManager.value)
+    .map((group) => ({
+      employeeCode: group.employeeCode,
+      cities: [
+        ...new Map(
+          group.assignments
+            .filter((row) => managerTermStatus(row) === '任期中' && row.data.cityCode)
+            .map((row) => [
+              row.data.cityCode!,
+              { code: row.data.cityCode!, name: row.data.cityName || '城市名称未维护' },
+            ]),
+        ).values(),
+      ],
+    }))
+    // 按城市筛选负责人，仍展示该负责人全部在管城市。
+    .filter(
+      (group) => !appliedCity.value || group.cities.some((city) => city.code === appliedCity.value),
+    ),
+)
 const visibleGroups = computed(() =>
   groups.value.slice((currentPage.value - 1) * 10, currentPage.value * 10),
 )
+function cityNames(cities: { name: string }[]) {
+  return cities.map((city) => city.name).join('，')
+}
 function search() {
   appliedManager.value = managerFilter.value
   appliedCity.value = cityFilter.value
@@ -206,7 +180,7 @@ async function reload() {
   } catch (e) {
     if (id === version) {
       rules.value = []
-      loadError.value = errorMessage(e, '提成配置加载失败')
+      loadError.value = errorMessage(e, '管辖范围加载失败')
     }
   } finally {
     if (id === version) loading.value = false
@@ -226,8 +200,7 @@ defineExpose({ reload })
   flex-direction: column;
   gap: 16px;
 }
-.manager-results,
-.manager-group__heading {
+.manager-results {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -236,32 +209,17 @@ defineExpose({ reload })
 .manager-results {
   flex-shrink: 0;
 }
-.manager-groups {
+.manager-list {
   flex: 1;
-  min-height: 180px;
-  overflow: auto;
-}
-.manager-group {
-  padding: 16px;
+  min-height: 220px;
+  overflow: hidden;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
-  margin-bottom: 16px;
 }
-.manager-group__heading {
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-.manager-code {
-  margin: 0 12px;
-  font-size: 13px;
-}
-.manager-actions {
-  display: flex;
-  gap: 8px;
-}
-.manager-actions :deep(.el-button + .el-button) {
-  margin-left: 0;
+.city-names {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
 }
 .muted {
   color: var(--el-text-color-regular);
@@ -270,19 +228,5 @@ defineExpose({ reload })
 .el-pagination {
   flex-shrink: 0;
   justify-content: flex-end;
-}
-@media (max-width: 640px) {
-  .manager-group {
-    padding: 12px;
-  }
-  .manager-group__heading > div:first-child {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-  .manager-code {
-    margin: 0;
-  }
 }
 </style>

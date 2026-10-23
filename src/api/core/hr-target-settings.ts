@@ -62,8 +62,3 @@ export const getTargetHistory = (month: string, dimensionType: TargetDimension, 
     ...options,
     params: { month, dimensionType, code },
   })
-
-export const getPayrollTargetMetrics = () =>
-  apiClient.get<
-    import('./payroll-scheme/models/PayrollTargetMetricView').PayrollTargetMetricView[]
-  >(`${root}/payroll-metrics`, options)

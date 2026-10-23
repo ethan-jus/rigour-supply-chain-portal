@@ -19,7 +19,14 @@ import {
 vi.mock('@/views/supply-chain/hr/PayrollComponentView.vue', () => ({
   default: { template: '<div>员工薪资标准</div>' },
 }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
+vi.mock('@/views/supply-chain/hr/components/EmployeeCityScope.vue', () => ({
+  default: {
+    props: ['employee'],
+    template: '<div class="employee-city-scope">管辖城市：{{ employee.employeeName }}</div>',
+  },
+}))
+const links = vi.hoisted(() => ({ query: {} as Record<string, string>, canUpdate: true }))
+vi.mock('vue-router', () => ({ useRoute: () => links }))
 vi.mock('@/api/core/hr', () => ({
   getHrEmployee: vi.fn(),
   getDhbBindingRisks: vi.fn(),
@@ -29,7 +36,9 @@ vi.mock('@/api/core/hr', () => ({
   hrOrganizationApi: { employeeDepartments: vi.fn(), saveEmployee: vi.fn(), assignments: vi.fn() },
 }))
 vi.mock('@/composables/useSupplyPermissions', () => ({
-  useSupplyPermissions: () => ({ can: () => true }),
+  useSupplyPermissions: () => ({
+    can: (permission: string) => (permission === 'hr:employee:update' ? links.canUpdate : true),
+  }),
 }))
 vi.mock('@/stores/navigation', () => ({ useNavigationStore: () => ({ getNavigation: () => [] }) }))
 const Dialog = defineComponent({
@@ -46,6 +55,8 @@ const deps = [
 ]
 beforeEach(() => {
   vi.resetAllMocks()
+  links.query = {}
+  links.canUpdate = true
   vi.mocked(getDhbBindingRisks).mockResolvedValue([])
   vi.mocked(hrOrganizationApi.employeeDepartments).mockResolvedValue(deps)
   vi.mocked(getHrPositions).mockResolvedValue({
@@ -55,6 +66,37 @@ beforeEach(() => {
   vi.mocked(getHrEmployees).mockResolvedValue({ items: [], total: 0, begin: 0, step: 20 })
   vi.spyOn(ElMessage, 'success').mockReturnValue({ close: vi.fn() })
   vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+})
+
+it('城市总汇总跳转直接打开同一份员工档案的管辖页签，不要求员工基本资料修改权限', async () => {
+  links.query = { cityScopeEmployeeCode: 'M1' }
+  links.canUpdate = false
+  const row = {
+    id: '9',
+    employeeCode: 'M1',
+    employeeName: '测试城市总',
+    positionName: '城市总',
+    employmentStatus: 'ACTIVE',
+  } as HrEmployeeRecord
+  vi.mocked(getHrEmployees).mockImplementation(async (params) => ({
+    items: params.employeeCode ? [row] : [],
+    total: params.employeeCode ? 1 : 0,
+    begin: 0,
+    step: params.step,
+  }))
+  vi.mocked(getHrEmployee).mockResolvedValue(row)
+  vi.mocked(hrOrganizationApi.assignments).mockResolvedValue([])
+  wrapper = mount(Employees, {
+    global: {
+      plugins: [ElementPlus, createPinia()],
+      stubs: { HrEmployeeEditor: true, ElDialog: Dialog },
+    },
+  })
+  await flushPromises()
+  expect(getHrEmployees).toHaveBeenCalledWith({ begin: 0, step: 2, employeeCode: 'M1' })
+  expect(wrapper.get('.employee-city-scope').text()).toContain('管辖城市：测试城市总')
+  expect(wrapper.findAllComponents({ name: 'ElTabs' })[0]!.props('modelValue')).toBe('city-scope')
+  expect(hrOrganizationApi.saveEmployee).not.toHaveBeenCalled()
 })
 afterEach(() => {
   wrapper?.unmount()

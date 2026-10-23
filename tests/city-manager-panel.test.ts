@@ -56,7 +56,7 @@ async function open() {
         { code: 'SJZ', name: '石家庄市' },
         { code: 'TS', name: '唐山市' },
       ],
-      canWrite: true,
+      canOpenEmployee: true,
     },
     global: { plugins: [ElementPlus] },
   })
@@ -118,8 +118,18 @@ describe('城市总完整规则分组', () => {
   })
 })
 
-describe('城市总提成分组', () => {
-  it('显示同一负责人的两城任期，负责人和城市分别筛选并可重置', async () => {
+describe('城市总管辖汇总', () => {
+  it('只汇总并跳转档案，不提供第二套管辖或提成编辑入口', async () => {
+    await open()
+    expect(wrapper.text()).not.toContain('增加管辖城市')
+    expect(wrapper.text()).not.toContain('编辑')
+    expect(wrapper.text()).not.toContain('独立商品提成')
+    await click('查看员工档案')
+    expect(wrapper.emitted('openEmployee')).toEqual([['M1']])
+    await wrapper.setProps({ canOpenEmployee: false })
+    expect(wrapper.text()).not.toContain('查看员工档案')
+  })
+  it('一人一行显示全部在管城市，按城市筛选后也不隐藏该人的其他城市', async () => {
     vi.mocked(getPayrollRules).mockResolvedValue(
       page([
         rule('one'),
@@ -128,19 +138,23 @@ describe('城市总提成分组', () => {
       ]),
     )
     await open()
-    expect(wrapper.findAll('.manager-group')).toHaveLength(2)
-    expect(wrapper.findAll('.manager-group')[0]!.text()).toContain('2 个城市')
-    expect(wrapper.text()).toContain('已结束')
+    expect(wrapper.findAllComponents({ name: 'ElTable' })).toHaveLength(1)
+    expect(wrapper.findAll('th').map((th) => th.text())).toEqual(['城市总', '当前管辖城市', '操作'])
+    expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(2)
+    expect(wrapper.text()).toContain('暂无在管城市')
+    expect(wrapper.text()).not.toContain('任期开始')
+    expect(wrapper.text()).not.toContain('备注')
     await filter('城市总筛选', 'M1')
-    await filter('所辖城市筛选', 'TS')
+    await filter('管辖城市筛选', 'TS')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(wrapper.findAll('.manager-group')).toHaveLength(1)
-    const group = wrapper.get('.manager-group').text()
+    expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(1)
+    const group = wrapper.get('.el-table__body-wrapper .el-table__row').text()
     expect(group).toContain('唐山市')
-    expect(group).not.toContain('石家庄市')
+    expect(group).toContain('石家庄市')
+    expect(group).toContain('石家庄市，唐山市')
     await click('重置')
-    expect(wrapper.findAll('.manager-group')).toHaveLength(2)
+    expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(2)
   })
   it('按负责人分页，翻页不拆分同一人的城市', async () => {
     const rows = [
@@ -150,11 +164,29 @@ describe('城市总提成分组', () => {
     ]
     vi.mocked(getPayrollRules).mockResolvedValue(page(rows))
     await open()
-    expect(wrapper.findAll('.manager-group')).toHaveLength(10)
-    expect(wrapper.findAll('.manager-group')[0]!.text()).toContain('2 个城市')
+    expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(10)
+    expect(wrapper.get('.el-table__body-wrapper .el-table__row').text()).toContain('唐山市')
     wrapper.getComponent({ name: 'ElPagination' }).vm.$emit('update:current-page', 2)
     await flushPromises()
-    expect(wrapper.findAll('.manager-group')).toHaveLength(1)
-    expect(wrapper.get('.manager-group').text()).toContain('M11')
+    expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(1)
+    expect(wrapper.get('.el-table__body-wrapper .el-table__row').text()).toContain('M11')
+  })
+  it('当前城市不包含未来、已结束或停用任期；同一城市只展示一次', async () => {
+    vi.mocked(getPayrollRules).mockResolvedValue(
+      page([
+        rule('active'),
+        rule('duplicate'),
+        rule('future', 'M1', 'TS', { effectiveFrom: '2026-10-15' }),
+        rule('ended', 'M2', 'TS', { effectiveTo: '2026-10-13' }),
+        rule('disabled', 'M2', 'TS', { enabled: false }),
+      ]),
+    )
+    await open()
+    expect(wrapper.findAll('.city-names')).toHaveLength(1)
+    expect(wrapper.find('.city-names').text()).toBe('石家庄市')
+    await filter('管辖城市筛选', 'TS')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(0)
   })
 })

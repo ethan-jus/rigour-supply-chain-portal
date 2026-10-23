@@ -11,6 +11,7 @@
   </div>
   <p class="field-hint">
     整单付清后计提。展开分类查看商品，再展开商品查看订单；金额取自本次核算快照。
+    <span v-if="mode === 'category'">{{ commissionCountExplanation }}</span>
   </p>
   <el-table
     v-if="mode === 'category'"
@@ -38,7 +39,7 @@
             <el-table-column prop="role" label="提成角色" width="110" />
             <el-table-column label="计提数量" width="105" align="right"
               ><template #default="{ row }"
-                >{{ row.quantity }} {{ costLabel('PRODUCT_UNIT', row.unit) }}</template
+                >{{ row.quantity }} {{ payrollUnitName(row.unit) }}</template
               ></el-table-column
             >
             <el-table-column label="计提基数" width="120" align="right"
@@ -69,16 +70,16 @@
       </template>
     </el-table-column>
     <el-table-column prop="name" label="ERP 商品分类" min-width="220" />
-    <el-table-column prop="orderCount" label="订单数" width="90" align="right" />
-    <el-table-column prop="lineCount" label="计提明细数" width="110" align="right" />
+    <el-table-column prop="orderCount" label="订单数（笔）" width="110" align="right" />
+    <el-table-column prop="lineCount" label="商品提成记录（条）" width="160" align="right" />
     <el-table-column v-if="pendingCount" label="已计算（元）" width="140" align="right"
       ><template #default="{ row }">{{ payrollMoney(row.knownAmount) }}</template></el-table-column
     >
     <el-table-column
       v-if="pendingCount"
       prop="pendingCount"
-      label="待核定明细数"
-      width="120"
+      label="待核定记录（条）"
+      width="150"
       align="right"
     />
     <el-table-column label="分类提成合计（元）" width="170" align="right"
@@ -90,11 +91,11 @@
   <PayrollCommissionOrderTable v-else :lines="lines" />
 </template>
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import type { PayrollDetail } from '@/api/core/payroll'
-import { commissionCategories } from '@/utils/payroll-commission-detail'
+import { commissionCategories, commissionCountExplanation } from '@/utils/payroll-commission-detail'
 import { payrollMoney } from '@/utils/payroll-workflow'
-import { costLabel } from '../../cost/cost-dictionaries'
+import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
 import PayrollCommissionOrderTable from './PayrollCommissionOrderTable.vue'
 const props = defineProps<{ lines: PayrollDetail[]; total: number | null }>()
 const mode = ref('category')
@@ -108,7 +109,10 @@ const rateText = (method: string | null, rate: number | null, unit: string) =>
     ? '未匹配'
     : method === 'PERCENT'
       ? `${rate}%`
-      : `${rate} 元/${costLabel('PRODUCT_UNIT', unit)}`
+      : `${rate} 元/${payrollUnitName(unit)}`
+onMounted(() => {
+  void loadPayrollProductUnits()
+})
 </script>
 <style scoped>
 .commission-toolbar {

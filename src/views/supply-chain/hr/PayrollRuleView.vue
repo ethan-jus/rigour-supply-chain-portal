@@ -3,100 +3,54 @@
     <div class="page-heading">
       <div>
         <SupplyPageTitle>城市总管理</SupplyPageTitle>
-        <p>维护负责人、管辖城市和任期；薪资标准在各规则入口维护。</p>
+        <p>汇总员工档案中的管辖城市与任期；资料统一在员工档案维护。</p>
       </div>
-      <el-button v-if="can('hr:payroll-rule:write')" type="primary" @click="edit()"
-        >新增任职</el-button
-      >
+      <el-button v-if="can('hr:employee:read')" @click="openEmployee()">前往员工档案</el-button>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <CityManagerPanel
       ref="panel"
-      assignment-only
       :employees="employees"
       :cities="cities"
-      :can-write="can('hr:payroll-rule:write')"
-      @edit="edit"
-      @add-city="addCity"
-    />
-    <CityCommissionEditor
-      ref="editor"
-      assignment-only
-      :employees="employees"
-      :cities="cities"
-      :can-write="can('hr:payroll-rule:write')"
-      @saved="panel?.reload()"
+      :can-open-employee="can('hr:employee:read')"
+      @open-employee="openEmployee"
     />
   </section>
 </template>
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated } from 'vue'
+import { useRouter } from 'vue-router'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
-import {
-  getPayrollEmployees,
-  type PayrollEmployee,
-  type PayrollRule,
-  type PayrollRuleCommand,
-} from '@/api/core/payroll'
+import { getPayrollEmployees, type PayrollEmployee } from '@/api/core/payroll'
 import { getCostCities } from '@/api/core/cost'
 import { errorMessage } from '@/api/core/error'
-import { loadCostDictionaries } from '../cost/cost-dictionaries'
 import CityManagerPanel from './components/CityManagerPanel.vue'
-import CityCommissionEditor from './components/CityCommissionEditor.vue'
 const { can } = useSupplyPermissions()
+const router = useRouter()
 const employees = ref<PayrollEmployee[]>([]),
   cities = ref<{ code: string; name: string }[]>([]),
   error = ref('')
-const panel = ref<InstanceType<typeof CityManagerPanel>>(),
-  editor = ref<InstanceType<typeof CityCommissionEditor>>()
-function blank(): PayrollRuleCommand {
-  return {
-    requestId: crypto.randomUUID(),
-    revision: null,
-    name: '',
-    kindCode: 'CITY_MANAGER',
-    employeeCode: null,
-    departmentIds: [],
-    cityCode: null,
-    cityName: null,
-    includeOwnSalesCommission: true,
-    productId: null,
-    productVariantId: null,
-    productName: null,
-    unitCode: null,
-    categoryId: null,
-    categoryName: null,
-    groupCode: null,
-    recipientRoleCode: 'CITY_MANAGER',
-    methodCode: null,
-    rate: null,
-    amount: null,
-    effectiveFrom: '',
-    effectiveTo: '9999-12-31',
-    enabled: true,
-    remark: '',
-    allowanceTypeCode: null,
-    fixedAllowance: null,
-    performancePolicy: null,
-  }
-}
-function edit(row?: PayrollRule) {
-  editor.value?.open(blank(), row)
-}
-function addCity(row: PayrollRule) {
-  editor.value?.open(blank(), undefined, row.data.employeeCode || undefined)
+const panel = ref<InstanceType<typeof CityManagerPanel>>()
+function openEmployee(employeeCode?: string) {
+  if (!can('hr:employee:read')) return
+  void router.push({
+    path: '/supply-chain/hr/employees',
+    query: employeeCode ? { cityScopeEmployeeCode: employeeCode } : {},
+  })
 }
 onMounted(async () => {
-  const values = await Promise.allSettled([
-    getPayrollEmployees(true),
-    getCostCities(),
-    loadCostDictionaries(),
-  ])
+  const values = await Promise.allSettled([getPayrollEmployees(true), getCostCities()])
   if (values[0].status === 'fulfilled') employees.value = values[0].value
   if (values[1].status === 'fulfilled') cities.value = values[1].value
   const failure = values.find((v) => v.status === 'rejected')
   if (failure?.status === 'rejected') error.value = errorMessage(failure.reason, '任职选项加载失败')
+})
+// 页面被工作台缓存时，从档案返回后重新读取同一份管辖记录。
+let activated = false
+onActivated(() => {
+  if (activated) void panel.value?.reload()
+  activated = true
 })
 </script>
 <style scoped>

@@ -1,10 +1,19 @@
-import { commissionCategories, payrollAppliedRules } from '@/utils/payroll-commission-detail'
+import {
+  commissionCategories,
+  commissionRole,
+  commissionCountExplanation,
+  payrollAppliedRules,
+} from '@/utils/payroll-commission-detail'
 import type { PayrollRecord } from '@/api/core/payroll'
 import { payrollPaid, payrollRemaining, payrollStatusLabel } from '@/utils/payroll-workflow'
 import { payrollSalaryItems } from '@/utils/payroll-salary-items'
+import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
+import { appendPayrollPaymentEvidence } from '@/utils/payroll-payment-export'
+import { businessDateTime } from '@/utils/business-date'
 
 /** Export persisted server evidence for the complete authorized result, never browser calculations. */
 export async function buildPayrollWorkbook(records: PayrollRecord[]) {
+  await loadPayrollProductUnits()
   const { Workbook } = await import('exceljs')
   const workbook = new Workbook()
   const identity = (row: PayrollRecord) => [row.month, row.employeeCode, row.employeeName]
@@ -17,11 +26,26 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
     const page = workbook.addWorksheet(name)
     page.addRow([...headers, ...columns])
     values.forEach((row) => page.addRow(row.map((value) => value ?? '待核定')))
-    page.getRow(1).font = { bold: true }
+    page.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    page.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF245A86' } }
+    page.getRow(1).height = 34
+    page.eachRow((row, index) => {
+      row.alignment = { vertical: 'middle', wrapText: true }
+      if (index > 1) {
+        row.height = 32
+        row.eachCell((cell, column) => {
+          const label = [...headers, ...columns][column - 1] || ''
+          if (typeof cell.value === 'number' && label.includes('（元）')) cell.numFmt = '#,##0.00;[Red]-#,##0.00'
+          if (typeof cell.value === 'number' && ['完成率', '发放比例', '加权贡献'].some(word => label.includes(word))) cell.numFmt = '0.00%'
+          if (typeof cell.value === 'number' && label === '权重（%）') cell.numFmt = '0.00"%"'
+        })
+      }
+    })
     page.views = [{ state: 'frozen', ySplit: 1 }]
     page.columns.forEach((column) => {
       column.width = 22
     })
+    page.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '1:1' }
     page.autoFilter = {
       from: { row: 1, column: 1 },
       to: { row: 1, column: headers.length + columns.length },
@@ -31,30 +55,28 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
     '薪酬概览',
     [
       '部门',
-      '城市',
+      '费用归属',
       '薪资标准',
-      '版本',
-      '底薪',
-      '绩效',
-      '补贴',
-      '提成',
-      '补发补扣',
-      '其他扣款',
-      '应发',
-      '应付工资',
+      '底薪（元）',
+      '绩效（元）',
+      '补贴（元）',
+      '提成（元）',
+      '补发补扣（元）',
+      '其他扣款（元）',
+      '应发（元）',
+      '应付工资（元）',
       '状态',
-      '已登记发放',
-      '待发金额',
-      '凭证',
+      '已登记发放（元）',
+      '待发金额（元）',
+      '发放凭证',
     ],
     records.map((row) => {
       const c = row.calculation
       return [
         ...identity(row),
         row.departmentName,
-        row.cityName,
+        row.calculation.scheme?.scheme.definition.role === 'HEADQUARTERS' ? '总部' : row.cityName,
         c.scheme?.scheme.definition.name || '历史规则',
-        c.scheme?.scheme.version,
         c.baseSalary,
         c.performance,
         c.allowance,
@@ -66,9 +88,8 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
         payrollStatusLabel(row, ''),
         payrollPaid(row),
         c.netPay == null ? null : payrollRemaining(row),
-        (row.payments || [])
-          .map((p) => `${p.paidDate} / ${p.amount} / ${p.referenceNo}`)
-          .join('；'),
+        row.payments?.some(p => p.attachments?.length)
+          ? '见发放凭证页' : '-',
       ]
     }),
   )
@@ -96,21 +117,22 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
       '数量',
       '单位',
       '计提基数',
+      '基数单位',
       '标准',
+      '标准单位',
       '方法',
       '付清日期',
-      '计提金额',
-      '本期发放',
+      '计提金额（元）',
+      '本期发放（元）',
       '规则',
-      '版本',
       '说明',
       'ERP 分类',
       '规格编码',
       '规则编码',
       '订单日期',
-      '订单金额',
-      '截至核算日累计回款',
-      '截至核算日退款',
+      '订单金额（元）',
+      '截至核算日累计回款（元）',
+      '截至核算日退款（元）',
       '回款依据截止日期',
     ],
     records.flatMap((row) =>
@@ -118,18 +140,19 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
         ...identity(row),
         d.orderNo,
         d.productName,
-        d.recipientRoleCode,
+        commissionRole(d.recipientRoleCode),
         d.trace?.cityCode,
         d.quantity,
-        d.unitCode,
+        payrollUnitName(d.unitCode),
         d.trace?.baseAmount,
+        d.trace?.method === 'PERCENT' ? '元' : payrollUnitName(d.unitCode),
         d.trace?.rate,
-        d.trace?.method,
+        d.trace?.method === 'PERCENT' ? '%' : `元/${payrollUnitName(d.unitCode)}`,
+        d.trace?.method === 'PERCENT' ? '按金额比例' : d.trace?.method === 'QUANTITY' ? '按商品数量' : '历史快照未记录',
         d.trace?.fullyPaidDate,
         d.accrued,
         d.released,
         d.ruleName,
-        d.ruleRevision,
         d.message,
         d.trace?.product?.categoryPath,
         d.trace?.product?.variantCode,
@@ -186,14 +209,21 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
       return [...groups.values()].map((g) => [
         ...identity(row),
         g.label,
-        g.role,
+        commissionRole(g.role),
         g.incomplete ? null : g.amount / 100,
         g.releasedIncomplete ? null : g.released / 100,
       ])
     })
   sheet(
     '商品分类汇总',
-    ['ERP 分类', '订单数', '计提明细数', '已计算提成', '待核定明细数', '提成合计'],
+    [
+      'ERP 分类',
+      '订单数（笔）',
+      '商品提成记录（条）',
+      '已计算提成（元）',
+      '待核定记录（条）',
+      '提成合计（元）',
+    ],
     records.flatMap((row) =>
       commissionCategories(row.calculation.details).map((c) => [
         ...identity(row),
@@ -206,27 +236,35 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
       ]),
     ),
   )
+  workbook.getWorksheet('商品分类汇总')!.getCell('F1').note = commissionCountExplanation
   sheet(
     '实际使用规则',
-    ['类型', '规则编码', '规则名称', '版本', '生效日期', '结束日期'],
+    ['类型', '规则编码', '规则名称', '生效日期', '结束日期'],
     records.flatMap((row) =>
       payrollAppliedRules(row).map((r) => [
         ...identity(row),
-        r.kind,
+        ({ SALARY: '薪资档案', PERFORMANCE: '绩效规则', ATTENDANCE: '考勤规则',
+          ALLOWANCE: '补贴规则', COMMISSION: '提成规则' } as Record<string, string>)[r.kind] || '历史规则',
         r.ruleCode,
         r.name,
-        r.version,
         r.effectiveFrom,
         r.effectiveTo,
       ]),
     ),
   )
-  sheet('商品型号汇总', ['商品型号', '受益角色', '计提合计', '本期发放'], grouped('product'))
-  sheet('商品组汇总', ['规则商品组', '受益角色', '计提合计', '本期发放'], grouped('rule'))
-  sheet('城市汇总', ['城市', '受益角色', '计提合计', '本期发放'], grouped('city'))
+  sheet('商品型号汇总', ['商品型号', '受益角色', '计提合计（元）', '本期发放（元）'], grouped('product'))
+  sheet('商品组汇总', ['规则商品组', '受益角色', '计提合计（元）', '本期发放（元）'], grouped('rule'))
+  sheet('城市汇总', ['城市', '受益角色', '计提合计（元）', '本期发放（元）'], grouped('city'))
   sheet(
     '城市总绩效汇总',
-    ['绩效基数', '加权完成率', '综合绩效系数', '保护期天数', '考核期天数', '本月绩效'],
+    [
+      '绩效基数（元）',
+      '实际绩效完成率',
+      '计分后发放比例／历史综合系数',
+      '保护期（天）',
+      '考核期（天）',
+      '本月绩效（元）',
+    ],
     records.flatMap((row) => {
       const s = row.calculation.scheme
       return s?.scheme.definition.performanceMode === 'MANAGER'
@@ -246,7 +284,7 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
   )
   sheet(
     '城市总绩效',
-    ['指标', '实际', '目标', '权重', '完成率', '加权贡献', '依据'],
+    ['指标', '实际', '目标', '权重（%）', '完成率（%）', '计分系数', '加权贡献（%）', '依据'],
     records.flatMap((row) =>
       (row.calculation.scheme?.metrics || []).map((m) => [
         ...identity(row),
@@ -255,6 +293,11 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
         m.target,
         m.weight,
         m.completion,
+        m.coefficient ??
+          (row.calculation.scheme?.scheme.definition.manager.metrics.find((v) => v.code === m.code)
+            ?.scoringMode === 'TIERED'
+            ? '待核定'
+            : '不适用'),
         m.contribution,
         m.evidence,
       ]),
@@ -263,13 +306,13 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
   sheet(
     '销售绩效',
     [
-      '打卡与有效拜访绩效额度',
-      '缺卡与缺拜访扣减',
-      '打卡与有效拜访绩效（折算前）',
-      '回款达标绩效额度',
-      '回款目标',
-      '整单付清业绩',
-      '回款达标绩效（折算前）',
+      '打卡与有效拜访绩效额度（元）',
+      '缺卡与缺拜访扣减（元）',
+      '打卡与有效拜访绩效（折算前）（元）',
+      '回款达标绩效额度（元）',
+      '回款目标（元）',
+      '整单付清业绩（元）',
+      '回款达标绩效（折算前）（元）',
     ],
     records.flatMap((row) => {
       const p = row.calculation.performanceDetail
@@ -291,7 +334,7 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
   )
   sheet(
     '每日过程明细',
-    ['日期', '打卡', '有效拜访', '缺卡', '缺拜访', '原始扣减（封顶前）', '核算状态'],
+    ['日期', '打卡', '有效拜访', '缺卡', '缺拜访', '原始扣减（封顶前）（元）', '核算状态'],
     records.flatMap((row) =>
       (row.calculation.performanceDetail?.days || []).map((d) => [
         ...identity(row),
@@ -307,7 +350,7 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
   )
   sheet(
     '工资更正',
-    ['原工资月份', '计入月份', '更正金额', '原因', '来源工资单'],
+    ['原工资月份', '计入月份', '更正金额（元）', '原因'],
     records.flatMap((row) =>
       (row.calculation.corrections || []).map((c) => [
         ...identity(row),
@@ -315,7 +358,6 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
         c.targetMonth,
         c.amount,
         c.reason,
-        c.sourcePayrollId,
       ]),
     ),
   )
@@ -324,6 +366,7 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
     ['说明'],
     records.flatMap((row) => row.calculation.issues.map((issue) => [...identity(row), issue])),
   )
+  await appendPayrollPaymentEvidence(workbook, records)
   return workbook
 }
 
@@ -337,7 +380,8 @@ export async function exportPayrollRecords(records: PayrollRecord[], filename: s
   )
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `${filename}.xlsx`
+  const exportedAt = businessDateTime(new Date()).replaceAll('-', '').replaceAll(':', '').replace(' ', '_')
+  anchor.download = `${filename}_${exportedAt}.xlsx`
   anchor.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

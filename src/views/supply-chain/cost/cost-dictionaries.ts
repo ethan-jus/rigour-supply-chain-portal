@@ -12,20 +12,13 @@ export const COST_DICTIONARIES = [
   'COST_PAYMENT_STATUS',
   'COST_STATUS',
   'COST_PREMISES_TYPE',
-  'PAYROLL_COMMISSION_METHOD',
-  'PAYROLL_STATUS',
-  'PAYROLL_RULE_KIND',
-  'PAYROLL_ALLOWANCE_TYPE',
-  'PAYROLL_PERFORMANCE_MODE',
-  'PAYROLL_FIRST_MONTH_MODE',
-  'COMMISSION_RECIPIENT_ROLE',
   'PRODUCT_UNIT',
 ] as const
 export const loadCostDictionaries = (category?: string) => {
   const byCategory: Record<string, string[]> = {
     logistics: ['COST_LOGISTICS_LEG', 'COST_PAYER', 'COST_TRANSPORT_METHOD', 'WAREHOUSE_TYPE'],
     marketing: ['MARKETING_EXPENSE_TYPE'],
-    expenses: ['REIMBURSEMENT_EXPENSE_TYPE'],
+    expenses: ['REIMBURSEMENT_EXPENSE_TYPE', 'COST_LOGISTICS_LEG'],
     'warehouse-rentals': ['COST_PREMISES_TYPE'],
     'office-rentals': ['COST_PREMISES_TYPE'],
     purchases: ['PRODUCT_UNIT'],

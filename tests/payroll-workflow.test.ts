@@ -19,6 +19,22 @@ import {
 import { apiClient } from '@/api/core/client'
 vi.mock('@/api/core/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }))
 describe('月度薪酬流程', () => {
+  it('个人完成率缺失直接引导统一薪酬核定，不引导核查销售打卡', () => {
+    const groups = payrollReviewGroups(['请由HR核定该员工本月绩效完成率'])
+    expect(groups).toMatchObject([
+      {
+        key: 'personal-completion',
+        determination: 'performance',
+        label: '个人月度绩效完成率待核定',
+      },
+    ])
+    expect(groups[0]!.hint).toContain('核定薪酬')
+    expect(groups[0]!.hint).toContain('不影响同部门其他员工')
+    expect(groups[0]!.hint).not.toContain('打卡')
+    const amount = payrollReviewGroups(['补贴金额需核对'])[0]!
+    expect(amount.hint).toContain('核定薪酬')
+    expect(amount.hint).not.toContain('当月核定')
+  })
   it('待核对事项合并同类日期和订单，去重后保留全部原始原因', () => {
     const issues = [
       '2026-09-01：打卡记录待审核',

@@ -2,6 +2,55 @@ import { logisticsRoute } from './cost-logistics'
 import { costSourceLabel, externalDocuments, externalSourceName } from './cost-source'
 import type { CostRecord } from '@/api/core/cost'
 import { costLabel, costMoney } from './cost-dictionaries'
+import { auditActorLabel } from '@/utils/audit-actor'
+import { displayDateTime } from '@/utils/business-date'
+import type { CostCategory } from '@/api/core/cost'
+
+/** 业务导出采用固定字段清单，操作记录、技术来源及内部标识仅用于系统内追溯。 */
+export function costExportHeaders(category: CostCategory): string[] {
+  const business: Record<CostCategory, string[]> = {
+    purchases: ['供应商', '仓库', '商品名称', '规格', '单位', '进货单价', '数量'],
+    losses: ['仓库', '商品名称', '规格', '单位', '数量', '发生地点', '损耗原因'],
+    logistics: ['物流类型', '发货方', '收货方', '承运方', '运单号', '费用承担方'],
+    'warehouse-rentals': ['费用月份', '场地名称', '面积（㎡）', '出租方', '合同编号'],
+    'office-rentals': ['费用月份', '场地名称', '面积（㎡）', '出租方', '合同编号'],
+    marketing: ['事项', '费用类型', '投放渠道', '收款方', '经办人', '活动服务期间'],
+    expenses: [
+      '费用月份',
+      '报销员工',
+      '费用类型',
+      '费用用途／出差事由',
+      '物品或服务',
+      '数量',
+      '单位',
+      '单价',
+      '开始日期',
+      '结束日期',
+      '出发地',
+      '目的地',
+      '寄送内容',
+      '收件客户 / 合作方',
+      '快递公司',
+      '运单号',
+    ],
+  }
+  return ['费用单号', '费用日期', '费用归属', ...business[category], '金额', '确认状态']
+}
+
+/** 复用已展示的业务值，同时将不同运输环节归并为统一的发货方、收货方列。 */
+export function costExportFields(row: CostRecord): { label: string; value: string | number }[] {
+  const fields = costSnapshotFields(row, false)
+  const route = row.data.logistics ? logisticsRoute(row.data.logistics, row.sources) : undefined
+  return [
+    ...fields.map((field) =>
+      field.label === '金额' ? { ...field, value: row.data.amount ?? '' } : field,
+    ),
+    { label: '报销员工', value: row.ownerEmployeeName || '' },
+    { label: '费用用途／出差事由', value: row.data.expense?.purpose || '' },
+    { label: '发货方', value: route?.senderName || '' },
+    { label: '收货方', value: route?.receiverName || '' },
+  ]
+}
 const names: Record<string, string> = {
   CREATE: '新增',
   ATTACHMENT_ADDED: '添加附件',
@@ -14,6 +63,7 @@ const names: Record<string, string> = {
   BEFORE_CALCULATE: '重新核算前',
   PAID: '登记发放',
   PAYMENT_REGISTER: '登记实际发放',
+  PAYMENT_ATTACHMENT_ADD: '补充发放凭证',
   BEFORE_REOPEN: '撤回确认前快照',
   REOPEN: '撤回确认',
   CORRECTION_CREATE: '创建跨月补差',
@@ -25,6 +75,7 @@ const names: Record<string, string> = {
   BEFORE_RULE_UPDATE: '规则修改前',
   INPUT_BEFORE: '月度调整前',
   INPUT_SAVE: '月度调整',
+  EXPENSE_ATTACHMENT: '上传报销凭据',
   EXPENSE_SAVE: '保存报销',
   EXPENSE_BEFORE: '报销修改前',
   EXPENSE_CONFIRMED: '确认报销',
@@ -41,7 +92,10 @@ export function parseSnapshot(value?: string) {
 }
 
 /** 审计展示业务字段，避免将内部请求编号和原始 JSON 放进操作流程。 */
-export function costSnapshotFields(snapshot: unknown): { label: string; value: string }[] {
+export function costSnapshotFields(
+  snapshot: unknown,
+  includeAudit = true,
+): { label: string; value: string }[] {
   if (!snapshot || typeof snapshot !== 'object') return []
   const row = snapshot as Record<string, unknown>
   const data = row.data as Record<string, unknown> | undefined
@@ -52,16 +106,24 @@ export function costSnapshotFields(snapshot: unknown): { label: string; value: s
       fields.push({ label, value: String(value) })
   }
   add('费用单号', row.documentNo)
-  add('录入人', row.createdBy)
-  add('录入时间', row.createdTime)
-  add('修改人', row.updatedBy)
-  add('修改时间', row.updatedTime)
+  if (includeAudit) {
+    add('录入人', auditActorLabel(typeof row.createdBy === 'string' ? row.createdBy : undefined))
+    add(
+      '录入时间',
+      displayDateTime(typeof row.createdTime === 'string' ? row.createdTime : undefined),
+    )
+    add('修改人', auditActorLabel(typeof row.updatedBy === 'string' ? row.updatedBy : undefined))
+    add(
+      '修改时间',
+      displayDateTime(typeof row.updatedTime === 'string' ? row.updatedTime : undefined),
+    )
+  }
   add('事项', data.title)
   if (row.categoryCode === 'MARKETING')
     add('费用类型', costLabel('MARKETING_EXPENSE_TYPE', data.typeCode as string))
   if (row.categoryCode === 'EXPENSE')
     add('费用类型', costLabel('REIMBURSEMENT_EXPENSE_TYPE', data.typeCode as string))
-  add('归属城市', data.cityName)
+  add('费用归属', data.cityName)
   add('经办人', row.ownerEmployeeName ?? row.employeeName ?? data.ownerName)
   add('费用日期', data.costDate)
   add('费用月份', data.costMonth)
@@ -99,6 +161,35 @@ export function costSnapshotFields(snapshot: unknown): { label: string; value: s
   add('确认状态', costLabel('COST_STATUS', row.statusCode as string))
   add('付款状态', costLabel('COST_PAYMENT_STATUS', data.paymentStatusCode as string))
   add('备注', data.remark)
+  const expense = data.expense as Record<string, unknown> | undefined
+  if (expense) {
+    for (const [key, label] of Object.entries({
+      purpose: ['TRAVEL', 'ACCOMMODATION', 'TAXI'].includes(String(data.typeCode))
+        ? '出差事项'
+        : '费用用途',
+      payeeName: '收款对象',
+      itemName: '物品或服务',
+      quantity: '数量',
+      unit: '单位',
+      unitPrice: '单价',
+      amountReason: '金额说明',
+      tripReference: '出差事项编号',
+      startDate: '开始日期',
+      endDate: '结束日期',
+      departure: '出发地',
+      destination: '目的地',
+      evidenceNo: '凭据编号',
+      noEvidenceReason: '无凭据说明',
+    }))
+      add(label, expense[key])
+    if (data.typeCode === 'COURIER' && expense.courier) {
+      const courier = expense.courier as Record<string, unknown>
+      add('寄送内容', courier.contents)
+      add('收件客户 / 合作方', courier.recipientName)
+      add('快递公司', courier.companyName)
+      add('运单号', courier.trackingNo)
+    }
+  }
   const transport = data.logistics as Record<string, unknown> | undefined
   if (transport) {
     add('物流类型', costLabel('COST_LOGISTICS_LEG', transport.legCode as string))
@@ -149,7 +240,10 @@ export function costSnapshotFields(snapshot: unknown): { label: string; value: s
       lossReason: '损耗原因',
       amountReason: '金额说明',
     }))
-      add(label, goods[key])
+      add(
+        label,
+        key === 'unit' && goods[key] ? costLabel('PRODUCT_UNIT', goods[key] as string) : goods[key],
+      )
     add('仓库', row.warehouseName)
   }
   const marketing = data.marketing as Record<string, unknown> | undefined

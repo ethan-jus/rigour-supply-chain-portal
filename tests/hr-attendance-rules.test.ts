@@ -100,6 +100,29 @@ async function chooseDepartment(id: number) {
 }
 
 describe('考勤规则列表', () => {
+  it('keeps inherited company rules read-only for a writer limited to a department', async () => {
+    const rows = list()
+    rows.page.items[0]!.canWrite = false
+    rows.page.items[1]!.canWrite = true
+    vi.mocked(api.getAttendanceRules).mockResolvedValue(rows)
+    vi.mocked(api.getAttendanceRule).mockResolvedValue({
+      month: '2026-10',
+      departmentId: null,
+      expectedDays: 26,
+      revision: 1,
+      companyExpectedDays: 26,
+      locked: false,
+      canWrite: false,
+    })
+    await open()
+    expect(api.getAttendanceDepartments).toHaveBeenCalledWith(true)
+    expect(wrapper.find('button[aria-label="修改销售一部考勤规则"]').exists()).toBe(true)
+    await wrapper.get('button[aria-label="查看公司默认考勤规则"]').trigger('click')
+    await flushPromises()
+    expect(dialog().text()).not.toContain('保存规则')
+    expect(wrapper.get('input[aria-label="应出勤天数"]').attributes('disabled')).toBeDefined()
+    expect(api.saveAttendanceRule).not.toHaveBeenCalled()
+  })
   it('shows rule records and independently filters company default, month and lock state', async () => {
     await open()
     expect(wrapper.text()).toContain('2026-10 考勤规则')

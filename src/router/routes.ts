@@ -908,14 +908,14 @@ export const constantRoutes: RouteRecordRaw[] = [
       {
         path: 'bi/city-cost',
         name: 'SupplyBiCityCost',
-        component: () => import('@/views/supply-chain/bi/IndexView.vue'),
+        component: () => import('@/views/supply-chain/bi/CostDashboardView.vue'),
         meta: {
-          title: '城市成本看板',
+          title: '成本数据看板',
           requiresAuth: true,
           applicationCode: 'SUPPLY_CHAIN',
           routeKey: 'supply.bi.city-cost',
           dashboardSection: 'city-cost',
-          permission: 'analytics:dashboard:read',
+          permission: 'analytics:cost-dashboard:read',
         },
       },
       {

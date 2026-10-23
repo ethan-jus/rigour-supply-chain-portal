@@ -1,4 +1,22 @@
-import type { CostRecord, CostExternalDocument, CostSource } from '@/api/core/cost'
+import type {
+  CostRecord,
+  CostExternalDocument,
+  CostSource,
+  CostCategory,
+  CostCommand,
+} from '@/api/core/cost'
+
+export function relatedCostCategory(data: CostCommand): CostCategory | null {
+  const link = data.expense?.relatedCost
+  if (!link) return null
+  if (link.source === 'ORDER' && link.category === 'LOGISTICS') return 'logistics'
+  if (link.source !== 'ERP') return null
+  if (link.category === 'PURCHASE') return 'purchases'
+  if (link.category === 'MARKETING') return 'marketing'
+  if (link.category === 'RENTAL')
+    return data.expense?.costCategory === 'warehouse' ? 'warehouse-rentals' : 'office-rentals'
+  return null
+}
 
 export const externalSourceName = (system: string | null | undefined) =>
   system === 'DHB' || system === 'DINGHUOBAO'
@@ -22,6 +40,7 @@ export function sourceLabel(source: CostSource): string {
 }
 
 export function costSourceLabel(row: CostRecord): string {
+  if (row.data.expense?.relatedCost) return '报销登记 · 已关联原费用'
   const docs = externalDocuments(row)
   const linked = new Set(docs.filter((d) => d.linkedId).map((d) => d.linkedId))
   const labels = [

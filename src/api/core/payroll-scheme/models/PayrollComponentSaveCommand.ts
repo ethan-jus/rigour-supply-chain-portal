@@ -4,4 +4,6 @@ export interface PayrollComponentSaveCommand {
   previousId: string | null
   definition: PayrollComponentDefinition
   reason: string
+  replacePending?: boolean
+  revision?: number
 }

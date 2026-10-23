@@ -7,25 +7,38 @@ const names = reactive(new Map<string, string>())
 const pending = new Set<string>()
 let identity = '',
   scheduled = false
-async function flush() {
+let flushing: Promise<void> | undefined
+function flush(): Promise<void> {
   scheduled = false
-  const key = identity,
-    batch = [...pending].slice(0, 100)
-  batch.forEach((id) => pending.delete(id))
-  try {
-    const result = await apiClient.post<Record<string, string>>(
-      '/scdp/audit-actors/resolve',
-      batch,
-      { stayOnUnauthorized: true },
-    )
-    if (key === identity) for (const id of batch) names.set(id, result[id] || '姓名未记录')
-  } catch {
-    if (key === identity) for (const id of batch) names.set(id, '姓名暂不可用')
-  }
-  if (pending.size && !scheduled) {
-    scheduled = true
-    queueMicrotask(() => void flush())
-  }
+  if (flushing) return flushing
+  flushing = (async () => {
+    while (pending.size) {
+      const key = identity,
+        batch = [...pending].slice(0, 100)
+      batch.forEach((id) => pending.delete(id))
+      try {
+        const result = await apiClient.post<Record<string, string>>(
+          '/scdp/audit-actors/resolve',
+          batch,
+          { stayOnUnauthorized: true },
+        )
+        if (key === identity) for (const id of batch) names.set(id, result[id] || '姓名未记录')
+      } catch {
+        if (key === identity) for (const id of batch) names.set(id, '姓名暂不可用')
+      }
+    }
+  })().finally(() => {
+    flushing = undefined
+  })
+  return flushing
+}
+
+/** 导出等非响应式场景先等待姓名查询完成，避免将“加载中”写入文件。 */
+export async function loadAuditActorNames(values: (string | null | undefined)[]): Promise<void> {
+  const key = getAuthorizationHeader() ?? ''
+  values.forEach(auditActorLabel)
+  await flush()
+  if (key !== (getAuthorizationHeader() ?? '')) throw new Error('登录身份已变化，请重新导出')
 }
 export function auditActorLabel(value: string | null | undefined): string {
   const id = value?.trim()

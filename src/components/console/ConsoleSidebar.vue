@@ -56,11 +56,7 @@
         <Expand />
       </button>
     </nav>
-    <section
-      v-show="!workspace.collapsed"
-      id="console-secondary-nav"
-      class="secondary-nav"
-    >
+    <section v-show="!workspace.collapsed" id="console-secondary-nav" class="secondary-nav">
       <div class="secondary-nav__brand">供应链数字化平台</div>
       <header class="secondary-nav__heading">
         <strong>{{ isHome ? '工作空间' : selected?.displayName || '应用菜单' }}</strong
@@ -117,8 +113,13 @@
             >
           </section>
         </template>
-        <template v-else-if="isHr">
-          <section v-for="group in hrGroups" :key="group.title" class="hr-nav-group">
+        <template v-else-if="isHr || isCost">
+          <section
+            v-for="group in isCost ? costGroups : hrGroups"
+            :key="group.title"
+            class="hr-nav-group"
+            :class="{ 'cost-nav-group': isCost }"
+          >
             <h2>{{ group.title }}</h2>
             <ConsoleNavTree :nodes="group.nodes" />
           </section>
@@ -141,6 +142,7 @@ import {
   selectEntries,
 } from '@/utils/console-navigation'
 import { hrNavigationSections } from '@/utils/hr-navigation'
+import { costNavigationSections } from '@/utils/cost-navigation'
 import { useConsoleWorkspace } from '@/stores/console-workspace'
 import ConsoleNavTree from './ConsoleNavTree.vue'
 import ConsoleNavIcon from './ConsoleNavIcon.vue'
@@ -165,6 +167,8 @@ const secondaryNodes = computed(() =>
     : roots.value.filter((node) => node.routePath !== '/supply-chain'),
 )
 const isHr = computed(() => selected.value?.routeKey.split('.')[1] === 'hr')
+const isCost = computed(() => selected.value?.routeKey.split('.')[1] === 'cost')
+const costGroups = computed(() => costNavigationSections(secondaryNodes.value))
 const hrGroups = computed(() => hrNavigationSections(secondaryNodes.value))
 const shortcuts = computed(() => selectEntries(entries.value, homeShortcutPaths))
 const analysis = computed(() => selectEntries(entries.value, homeAnalysisPaths))
@@ -201,7 +205,11 @@ function selectModule(node: NavigationNode) {
 }
 watch(
   [() => route.path, roots],
-  () => {
+  ([path], previous) => {
+    // 在线授权刷新会替换菜单对象；路径没变且所选模块仍获授权时，
+    // 保留用户正在浏览的模块，避免二级菜单突然跳回当前业务页。
+    if (path === previous?.[0] && roots.value.some((node) => node.id === selectedId.value))
+      return
     const active = roots.value.find(
       (node) =>
         node.routePath === route.path ||
@@ -216,9 +224,23 @@ watch(
   () => {
     if (window.matchMedia?.('(max-width: 760px)').matches) workspace.collapsed = true
   },
+  { immediate: true },
 )
 </script>
 <style scoped lang="scss">
+.hr-nav-group.cost-nav-group h2 {
+  margin: 10px 12px 4px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.cost-nav-group :deep(.nav-item) {
+  min-height: 36px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+.hr-nav-group.cost-nav-group {
+  margin-bottom: 4px;
+}
 .console-navigation {
   display: grid;
   grid-template-columns: 76px 220px;

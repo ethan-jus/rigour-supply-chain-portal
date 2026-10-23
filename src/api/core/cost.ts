@@ -72,6 +72,34 @@ export interface CostWarehouse {
   address?: string
   name?: string
 }
+export type ExpenseCostCategory =
+  'expense' | 'office' | 'warehouse' | 'freight' | 'marketing' | 'purchase'
+export interface ExpenseCourier {
+  contents: string
+  recipientName: string
+  companyName: string
+  trackingNo: string
+}
+export interface CostExpenseDetails {
+  costCategory: ExpenseCostCategory
+  purpose: string
+  courier?: ExpenseCourier | null
+  payeeName?: string | null
+  itemName?: string | null
+  quantity?: number | null
+  unit?: string | null
+  unitPrice?: number | null
+  amountReason?: string | null
+  tripReference?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  departure?: string | null
+  destination?: string | null
+  evidenceNo?: string | null
+  noEvidenceReason?: string | null
+  freightLeg?: string | null
+  relatedCost?: { source: 'ERP' | 'ORDER'; category: string; id: string; revision: number } | null
+}
 export interface CostCommand {
   requestId: string
   revision: number | null
@@ -87,6 +115,7 @@ export interface CostCommand {
   costMonth?: string | null
   ownerName?: string | null
   payeeName?: string | null
+  expense?: CostExpenseDetails | null
   goods?: CostGoods | null
   marketing?: { channelName: string; serviceFrom: string | null; serviceTo: string | null } | null
   externalDocuments?: CostExternalDocument[]
@@ -163,6 +192,8 @@ export interface CostAudit {
   snapshotJson?: string
 }
 interface ExpenseCommand {
+  costMonth?: string | null
+  expense?: CostExpenseDetails | null
   requestId: string
   revision: number | null
   title: string
@@ -177,6 +208,9 @@ interface ExpenseCommand {
   reason: string
 }
 interface ExpenseRecord {
+  createdTime?: string
+  createdBy?: string
+  updatedBy?: string
   id: string
   documentNo: string
   statusCode: string
@@ -208,7 +242,7 @@ function fromExpense(row: ExpenseRecord): CostRecord {
     sources: [],
     warehouseName: null,
     ownerEmployeeName: row.employeeName,
-    createdTime: row.updatedTime,
+    createdTime: row.createdTime || '',
   }
 }
 const scopedQuery = (category: CostCategory, params: CostQuery): CostQuery =>
@@ -239,6 +273,8 @@ export async function saveCost(
 ): Promise<CostRecord> {
   const path = `${base(category)}${id ? '/' + encodeURIComponent(id) : ''}`
   if (category !== 'expenses') {
+    const source = { ...data }
+    delete source.expense
     const {
       rental,
       logistics,
@@ -249,7 +285,7 @@ export async function saveCost(
       marketing,
       externalDocuments,
       ...common
-    } = data
+    } = source
     const command =
       category === 'logistics'
         ? { ...common, logistics }
@@ -268,6 +304,8 @@ export async function saveCost(
       : apiClient.post<CostRecord>(path, command, options)
   }
   const command: ExpenseCommand = {
+    costMonth: data.costMonth,
+    expense: data.expense,
     requestId: data.requestId,
     revision: data.revision,
     title: data.title,
@@ -306,16 +344,24 @@ export const getCostSources = (legCode: string, keyword: string, cityCode?: stri
     params: { legCode, keyword, cityCode, begin },
     ...options,
   })
-export const getCostEmployees = (category: 'marketing' | 'expenses') =>
-  apiClient.get<CostEmployee[]>(`${base(category)}/employees`, options)
-export const getCostWarehouses = (category: CostCategory, keyword = '') =>
-  apiClient.get<CostWarehouse[]>(
-    `/erp/costs/${category === 'office-rentals' ? 'warehouse-rentals' : category}/warehouses`,
-    {
-      params: { keyword },
-      ...options,
-    },
+export const getCostEmployees = (
+  category: 'marketing' | 'expenses',
+  query?: { cityCode: string; cityName: string; costDate?: string },
+) =>
+  apiClient.get<CostEmployee[]>(
+    `${base(category)}/employees`,
+    query ? { ...options, params: query } : options,
   )
+export const getCostWarehouses = (category: CostCategory, keyword = '') =>
+  apiClient
+    .get<CostWarehouse[]>(
+      `/erp/costs/${category === 'office-rentals' ? 'warehouse-rentals' : category}/warehouses`,
+      {
+        params: { keyword },
+        ...options,
+      },
+    )
+    .then((rows) => rows.map((row) => ({ ...row, label: row.name || row.label })))
 
 export const getCostCities = (action?: string) =>
   apiClient.get<{ code: string; name: string }[]>('/crm/cost-city-references', {
@@ -389,8 +435,12 @@ export const getCostPurchaseOrders = (
       ...options,
     },
   )
-export const getCost = (category: CostCategory, id: string) =>
-  apiClient.get<CostRecord>(`${base(category)}/${encodeURIComponent(id)}`, options)
+export const getCost = async (category: CostCategory, id: string): Promise<CostRecord> => {
+  const path = `${base(category)}/${encodeURIComponent(id)}`
+  return category === 'expenses'
+    ? fromExpense(await apiClient.get<ExpenseRecord>(path, options))
+    : apiClient.get<CostRecord>(path, options)
+}
 
 export const exportCosts = (category: CostCategory, params: CostQuery) =>
   category === 'expenses'

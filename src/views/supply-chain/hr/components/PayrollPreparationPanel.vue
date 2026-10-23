@@ -2,14 +2,16 @@
   <el-dialog
     v-model="visible"
     :title="`生成月度薪酬 · ${month}`"
-    width="min(980px, 96vw)"
+    width="min(1180px, 96vw)"
+    class="payroll-preparation-dialog"
     :close-on-click-modal="false"
     :close-on-press-escape="!busy"
     :show-close="!busy"
   >
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <p class="hint">
-      按员工薪资档案及当月考勤、绩效、补贴、提成规则计算。生成后逐人核对薪酬明细；已确认、已发放工资自动跳过。
+      先检查档案和规则，再试算核对。试算不保存工资；生成后由 HR
+      逐人核定、确认。已确认和已发放记录支持试算对比。
     </p>
     <div class="preparation-summary">
       <el-date-picker
@@ -56,10 +58,12 @@
         :disabled="busy"
         style="width: 220px"
       />
-      <el-select v-model="filter" :disabled="busy" style="width: 150px"
+      <el-select v-model="filter" :disabled="busy" style="width: 150px" aria-label="准备状态"
         ><el-option label="全部员工" value="all" /><el-option
           label="尚未生成"
-          value="uncalculated" /><el-option label="可生成／重算" value="eligible"
+          value="uncalculated" /><el-option label="可生成／重算" value="eligible" /><el-option
+          label="档案待完善"
+          value="missing" /><el-option label="规则待完善" value="rules"
       /></el-select>
       <el-button :disabled="busy || loading" @click="selectEligible">选择筛选结果</el-button>
       <el-button :disabled="busy || !selected.length" @click="table?.clearSelection()"
@@ -68,6 +72,11 @@
       <el-checkbox v-model="onlySelected" :disabled="busy">仅看已选</el-checkbox>
       <span>已选 {{ selectedEligible.length }} 人</span>
     </div>
+    <p class="preparation-counts" aria-live="polite">
+      本月人员 {{ scoped.length }} 人 · 可生成 {{ eligible.length }} 人 · 档案待完善
+      {{ scoped.filter((e) => e.profileIssues.length).length }} 人 · 规则待完善
+      {{ scoped.filter((e) => e.ruleIssues.length).length }} 人 · 当前筛选 {{ filtered.length }} 人
+    </p>
     <el-table
       ref="table"
       v-loading="loading"
@@ -108,11 +117,31 @@
       </el-table-column>
       <el-table-column label="说明" min-width="200"
         ><template #default="{ row }">{{
-          row.locked ? '已锁定，自动跳过' : row.profileIssues.join('；') || '按当月规则计算'
+          [
+            ...(row.locked ? ['已锁定，仅可试算对比'] : []),
+            ...(row.leaveDate && row.leaveDate < month + '-01'
+              ? ['离职后结算：仅提成及历史更正']
+              : []),
+            ...row.profileIssues,
+            ...row.ruleIssues,
+          ].join('；') || '档案与规则检查通过，业务依据以试算为准'
         }}</template></el-table-column
       >
+      <el-table-column label="核对" width="100" fixed="right"
+        ><template #default="{ row }"
+          ><el-button
+            v-if="can('hr:payroll:calculate')"
+            link
+            type="primary"
+            :disabled="busy"
+            @click="runPreview([row as PayrollPreparationEmployee])"
+            >只读试算</el-button
+          ></template
+        ></el-table-column
+      >
     </el-table>
-    <div v-if="busy || outcomes.length" aria-live="polite">
+    <PayrollPreviewResults v-if="previews.length" :results="previews" :month="month" />
+    <div v-if="(busy && operation === 'generate') || outcomes.length" aria-live="polite">
       <el-progress
         :percentage="progress"
         :status="busy ? undefined : outcomes.some((r) => r.failed) ? 'warning' : 'success'"
@@ -128,16 +157,22 @@
       /></el-table>
     </div>
     <template #footer>
-      <el-button v-if="busy" :disabled="stopRequested" @click="stopRequested = true"
-        >停止后续生成</el-button
-      >
+      <el-button v-if="busy" :disabled="stopRequested" @click="stopRequested = true">{{
+        operation === 'preview' ? '停止后续试算' : '停止后续生成'
+      }}</el-button>
       <el-button :disabled="busy" @click="visible = false">{{
         outcomes.length ? '查看工资列表' : '关闭'
       }}</el-button>
       <el-button
         v-if="can('hr:payroll:calculate')"
+        :disabled="busy || loading || !selected.length"
+        @click="runPreview(selected)"
+        >试算已选 {{ selected.length }} 人</el-button
+      >
+      <el-button
+        v-if="can('hr:payroll:calculate')"
         type="primary"
-        :loading="busy"
+        :loading="busy && operation === 'generate'"
         :disabled="loading || !selectedEligible.length"
         @click="run()"
         >开始计算 {{ selectedEligible.length }} 人</el-button
@@ -152,8 +187,11 @@ import { errorMessage } from '@/api/core/error'
 import {
   getPayrollPreparation,
   calculatePayroll,
+  previewPayroll,
+  type PayrollPreview,
   type PayrollPreparationEmployee,
 } from '@/api/core/payroll'
+import PayrollPreviewResults from './PayrollPreviewResults.vue'
 import { eligiblePayrollEmployees, runPayrollEmployees } from '@/utils/payroll-workflow'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { costLabel } from '../../cost/cost-dictionaries'
@@ -217,6 +255,34 @@ const filtered = computed(() =>
         (filter.value === 'rules' && e.ruleIssues.length)),
   ),
 )
+const previews = ref<PayrollPreview[]>([])
+const operation = ref<'preview' | 'generate'>('generate')
+async function runPreview(people: PayrollPreparationEmployee[]) {
+  if (busy.value || !people.length) return
+  busy.value = true
+  operation.value = 'preview'
+  error.value = ''
+  previews.value = []
+  stopRequested.value = false
+  const targetMonth = props.month
+  try {
+    await runPayrollEmployees(
+      people.map((e) => e.employeeCode),
+      async (code) => {
+        try {
+          const result = await previewPayroll(targetMonth, [code])
+          if (!disposed.value && targetMonth === props.month) previews.value.push(...result)
+        } catch (e) {
+          error.value = `${people.find((person) => person.employeeCode === code)?.employeeName || code}：${errorMessage(e, '试算失败，可单独重试')}`
+        }
+      },
+      () => {},
+      () => !stopRequested.value,
+    )
+  } finally {
+    busy.value = false
+  }
+}
 let version = 0
 async function refresh() {
   const current = ++version
@@ -258,6 +324,7 @@ const progress = computed(() =>
 async function run() {
   if (busy.value || !selectedEligible.value.length) return
   busy.value = true
+  operation.value = 'generate'
   stopRequested.value = false
   outcomes.value = []
   completed.value = 0
@@ -305,6 +372,7 @@ watch(
     table.value?.clearSelection()
     selected.value = []
     outcomes.value = []
+    previews.value = []
     void refresh()
   },
   { immediate: true },
@@ -325,6 +393,14 @@ defineExpose({ refresh })
   flex-wrap: wrap;
   margin: 16px 0;
 }
+.preparation-summary :deep(.el-select) {
+  width: 180px;
+}
+.preparation-counts {
+  color: var(--el-text-color-regular);
+  line-height: 1.6;
+}
+
 .hint {
   color: var(--el-text-color-regular);
   font-size: 13px;
@@ -332,5 +408,20 @@ defineExpose({ refresh })
 }
 .el-alert {
   margin-bottom: 12px;
+}
+</style>
+
+<style>
+.payroll-preparation-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+}
+.payroll-preparation-dialog .el-dialog__body {
+  overflow: auto;
+}
+.payroll-preparation-dialog .el-dialog__header,
+.payroll-preparation-dialog .el-dialog__footer {
+  flex-shrink: 0;
 }
 </style>

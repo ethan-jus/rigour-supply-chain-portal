@@ -116,7 +116,7 @@
             :default-sort="{ prop: 'createdTime', order: 'descending' }"
             :row-class-name="employeeRowClass"
             @sort-change="sortChanged"
-            @row-click="openDetail"
+            @row-click="(row: HrEmployeeRecord) => openDetail(row)"
           >
             <el-table-column
               prop="employeeCode"
@@ -236,6 +236,7 @@
       v-model="editorVisible"
       :record="editing"
       :department-id="departmentId"
+      :initial-tab="editorInitialTab"
       @saved="load"
     />
     <el-dialog
@@ -244,6 +245,7 @@
       class="employee-detail"
       width="min(1200px,calc(100vw - 32px))"
       align-center
+      destroy-on-close
     >
       <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
       <el-skeleton v-else-if="!detail" :rows="8" animated />
@@ -374,6 +376,18 @@
               ></el-table
             >
           </el-tab-pane>
+          <el-tab-pane
+            v-if="can('hr:payroll-rule:read') && isCityManagerPosition(detail.positionName)"
+            label="管辖城市"
+            name="city-scope"
+            lazy
+          >
+            <EmployeeCityScope
+              :key="detail.employeeCode"
+              :employee="detail"
+              @edit="editCityScope"
+            />
+          </el-tab-pane>
           <el-tab-pane v-if="can('hr:payroll-rule:read')" label="薪资标准" name="salary" lazy>
             <PayrollComponentView
               :key="detail.employeeCode"
@@ -410,6 +424,7 @@ import { ElMessage } from 'element-plus'
 import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
 import HrEmployeeEditor from './HrEmployeeEditor.vue'
 import PayrollComponentView from './PayrollComponentView.vue'
+import EmployeeCityScope from './components/EmployeeCityScope.vue'
 import {
   getHrEmployee,
   getDhbBindingRisks,
@@ -425,6 +440,7 @@ import {
 } from '@/api/core/hr'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import {
+  isCityManagerPosition,
   payrollCategories,
   payrollCategoryLabel,
   regularizationLabel,
@@ -471,6 +487,7 @@ const editorVisible = ref(false),
   detailError = ref(''),
   assignments = ref<HrAssignment[]>([])
 const detailTab = ref('basic')
+const editorInitialTab = ref<'basic' | 'city-scope'>('basic')
 const identity = computed(() => identityDetails(detail.value?.profile?.idNumber))
 let requestId = 0,
   detailRequest = 0
@@ -524,9 +541,15 @@ function reset() {
   departmentId.value = rootDepartmentId()
   search()
 }
-function openEditor(row?: HrEmployeeRecord) {
+function openEditor(row?: HrEmployeeRecord, tab: 'basic' | 'city-scope' = 'basic') {
+  editorInitialTab.value = tab
   editing.value = row ?? null
   editorVisible.value = true
+}
+function editCityScope() {
+  if (!detail.value || !can('hr:employee:update') || !can('hr:payroll-rule:write')) return
+  detailVisible.value = false
+  openEditor(detail.value, 'city-scope')
 }
 function rootDepartmentId() {
   const ids = new Set(departments.value.map((d) => d.id))
@@ -582,10 +605,10 @@ async function loadDepartments() {
     directoryError.value = e instanceof Error ? e.message : '部门树加载失败'
   }
 }
-async function openDetail(row: HrEmployeeRecord) {
+async function openDetail(row: HrEmployeeRecord, tab = 'basic') {
   const request = ++detailRequest
   detailVisible.value = true
-  detailTab.value = 'basic'
+  detailTab.value = tab
   detail.value = null
   detailError.value = ''
   assignments.value = []
@@ -596,6 +619,8 @@ async function openDetail(row: HrEmployeeRecord) {
     ])
     if (request === detailRequest) {
       detail.value = value
+      if (tab === 'city-scope' && !isCityManagerPosition(value.positionName))
+        detailTab.value = 'basic'
       assignments.value = history
     }
   } catch (e) {
@@ -613,15 +638,31 @@ function statusLabel(value: string) {
     )[value] || value
   )
 }
+let linkRequest = 0
 async function applyPayrollLink() {
+  const request = ++linkRequest
   if (route.query.payrollMissing === '1') {
     payrollMissing.value = true
     search()
+  }
+  const code = route.query.cityScopeEmployeeCode
+  if (typeof code === 'string' && can('hr:employee:read') && can('hr:payroll-rule:read')) {
+    try {
+      const result = await getHrEmployees({ begin: 0, step: 2, employeeCode: code })
+      if (request !== linkRequest) return
+      const row = result.items.find((item) => item.employeeCode === code)
+      if (!row) throw new Error('未找到员工档案，或无权查看该员工')
+      await openDetail(row, 'city-scope')
+    } catch (e) {
+      if (request === linkRequest) ElMessage.error(e instanceof Error ? e.message : '读取员工失败')
+    }
+    return
   }
   const id = route.query.payrollEmployeeId
   if (typeof id === 'string') {
     try {
       const row = await getHrEmployee(id)
+      if (request !== linkRequest) return
       if (can('hr:employee:update')) openEditor(row)
       else await openDetail(row)
     } catch (e) {
@@ -630,7 +671,11 @@ async function applyPayrollLink() {
   }
 }
 watch(
-  () => [route.query.payrollMissing, route.query.payrollEmployeeId],
+  () => [
+    route.query.payrollMissing,
+    route.query.payrollEmployeeId,
+    route.query.cityScopeEmployeeCode,
+  ],
   () => {
     void applyPayrollLink()
   },

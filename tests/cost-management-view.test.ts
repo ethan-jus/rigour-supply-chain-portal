@@ -42,6 +42,8 @@ vi.mock('@/utils/business-dictionary', () => ({
           { value: 'PROMOTION', label: '推广活动' },
           { value: 'ADVERTISING', label: '广告费' },
           { value: 'ENDORSEMENT', label: '代言费' },
+          { value: 'PERSONNEL_COST', label: '人员成本' },
+          { value: 'COMMISSION', label: '佣金提成' },
         ]
       : [],
 }))
@@ -80,6 +82,87 @@ async function render(advanced = true) {
   if (more && advanced) await more.trigger('click')
 }
 describe('cost management workflow', () => {
+  it.each([
+    'purchases',
+    'losses',
+    'logistics',
+    'warehouse-rentals',
+    'office-rentals',
+    'marketing',
+    'expenses',
+  ])('opens every record state from 查看 with read-only access in %s', async (category) => {
+    state.route.path =
+      category === 'expenses' ? '/supply-chain/hr/expenses' : '/supply-chain/cost/' + category
+    vi.mocked(getCosts).mockResolvedValue({
+      ...empty,
+      total: 3,
+      items: ['DRAFT', 'CONFIRMED', 'VOID'].map((statusCode, index) => ({
+        id: String(index),
+        documentNo: 'CST-' + statusCode,
+        statusCode,
+        revision: 1,
+        categoryCode: 'LOGISTICS',
+        data: {
+          requestId: 'view-' + index,
+          revision: null,
+          typeCode: null,
+          departmentId: null,
+          ownerEmployeeCode: null,
+          paymentStatusCode: 'UNPAID',
+          logistics: null,
+          rental: null,
+          remark: '',
+          reason: '',
+          title: '模拟费用',
+          cityCode: 'C1',
+          cityName: '武汉',
+          costDate: '2026-10-01',
+          amount: 35,
+        },
+        sources: [],
+        warehouseName: null,
+        ownerEmployeeName: null,
+        createdTime: '2026-10-01T01:00:00Z',
+        updatedTime: '2026-10-01T01:00:00Z',
+      })),
+    } as CostPage)
+    await render(false)
+    const buttons = wrapper!.findAll('button').filter((button) => button.text() === '查看')
+    expect(buttons).toHaveLength(3)
+    expect(
+      wrapper!.findAll('button').some((button) => ['编辑', '确认', '作废'].includes(button.text())),
+    ).toBe(false)
+    for (let index = 0; index < buttons.length; index++) {
+      await buttons[index]!.trigger('click')
+      const drawer = wrapper!
+        .findAllComponents({ name: 'ElDrawer' })
+        .find(
+          (component) =>
+            component.props('title') === 'CST-' + ['DRAFT', 'CONFIRMED', 'VOID'][index],
+        )!
+      expect(drawer.props('modelValue')).toBe(true)
+    }
+  })
+  it.each([
+    ['PERSONNEL_COST', '人员成本'],
+    ['COMMISSION', '佣金提成'],
+  ])('filters marketing costs by the new dictionary type %s', async (typeCode, label) => {
+    state.route.path = '/supply-chain/cost/marketing'
+    state.permissions = new Set(['erp:cost:marketing:read'])
+    await render(false)
+    await wrapper!
+      .findAll('button')
+      .find((button) => button.text() === label)!
+      .trigger('click')
+    await flushPromises()
+    expect(getCosts).toHaveBeenLastCalledWith(
+      'marketing',
+      expect.objectContaining({ typeCode, begin: 0 }),
+    )
+    const typeSelect = wrapper!.findComponent({ name: 'CostDictSelect' })
+    expect(typeSelect.props('code')).toBe('MARKETING_EXPENSE_TYPE')
+    expect(typeSelect.props('modelValue')).toBe(typeCode)
+  })
   it('keeps marketing keywords visible and submits the chosen dictionary type', async () => {
     state.route.path = '/supply-chain/cost/marketing'
     state.permissions = new Set(['erp:cost:marketing:read'])
@@ -211,7 +294,7 @@ describe('cost management workflow', () => {
       .findAll('button')
       .find((button) => button.text() === '更多筛选')!
       .trigger('click')
-    await wrapper!.get('input[aria-label="租赁合同号"]').setValue('LEASE-1')
+    await wrapper!.get('input[aria-label="租赁合同编号"]').setValue('LEASE-1')
     await wrapper!.get('.supply-list-filters form').trigger('submit')
     await flushPromises()
     expect(getCosts).toHaveBeenLastCalledWith('warehouse-rentals', {

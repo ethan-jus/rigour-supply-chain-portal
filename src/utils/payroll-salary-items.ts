@@ -11,6 +11,8 @@ export function payrollSalaryItems(record: PayrollRecord): PayrollSalaryItem[] {
   const s = c.scheme
   const p = c.performanceDetail
   const isManager = ['CITY_MANAGER', 'TRAINEE_MANAGER'].includes(s?.scheme.definition.role || '')
+  const isHeadquarters = s?.scheme.definition.role === 'HEADQUARTERS'
+  const performanceMode = s?.scheme.definition.performanceMode
   const tier = s?.scheme.definition.baseSalary.tiers.find((t) => t.code === s.salaryTier)
   const base = tier?.amount ?? s?.scheme.definition.baseSalary.fixedAmount
   const result: PayrollSalaryItem[] = [
@@ -54,16 +56,22 @@ export function payrollSalaryItems(record: PayrollRecord): PayrollSalaryItem[] {
       })
   } else
     result.push({
-      name: isManager ? '城市总绩效' : '绩效',
+      name: isManager ? '城市总绩效' : isHeadquarters ? '总部人员绩效' : '绩效',
       standard: s?.performanceBase,
       change: difference(c.performance, s?.performanceBase),
       amount: c.performance,
       basis:
         c.input.performanceOverride != null
           ? `HR 核定：${c.input.reason}`
-          : isManager
-            ? '绩效基数 × 综合系数；保护期和折算见绩效明细'
-            : '按本月绩效规则及折算依据计算',
+          : performanceMode === 'NONE'
+            ? '本月规则不计绩效'
+            : isManager && performanceMode === 'MANAGER'
+              ? s?.scheme.definition.manager?.calculationMode === 'ACTUAL_COMPLETION'
+                ? '绩效基数 × 单项指标计分后的加权发放比例；保护期和折算见绩效明细'
+                : '历史规则：绩效基数 × 综合阶梯系数；保护期和折算见绩效明细'
+              : isHeadquarters && performanceMode === 'FIXED'
+                ? `个人绩效基数 × 本人当月绩效完成率（${s?.performanceCompletionPercent == null ? '待核定' : s.performanceCompletionPercent + '%'}），再执行绩效折算`
+                : '按本月绩效规则及折算依据计算',
     })
   const allowances = s?.scheme.definition.allowances ?? []
   if (allowances.length) {

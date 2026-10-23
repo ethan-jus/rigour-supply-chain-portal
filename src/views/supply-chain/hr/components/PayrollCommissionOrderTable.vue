@@ -16,25 +16,30 @@
       }}</template></el-table-column
     >
     <el-table-column prop="sourceEmployeeCode" label="销售员工编号" width="165" />
-    <el-table-column label="数量" width="100" align="right"
+    <el-table-column label="已付清商品数量" width="100" align="right"
       ><template #default="{ row }"
-        >{{ row.quantity }} {{ costLabel('PRODUCT_UNIT', row.unitCode) }}</template
+        >{{ row.quantity }} {{ payrollUnitName(row.unitCode) }}</template
       ></el-table-column
     >
-    <el-table-column label="计提基数" width="125" align="right"
-      ><template #default="{ row }">{{
+    <el-table-column label="回款计提金额（元）" width="160" align="right">
+      <template #default="{ row }">{{
+        row.trace?.method === 'PERCENT' ? payrollMoney(row.trace?.baseAmount) : '—'
+      }}</template>
+    </el-table-column>
+    <el-table-column label="数量计提基数" width="140" align="right">
+      <template #default="{ row }">{{
         row.trace?.method === 'QUANTITY'
-          ? row.trace?.baseAmount
-          : payrollMoney(row.trace?.baseAmount)
-      }}</template></el-table-column
-    >
+          ? `${row.trace.baseAmount} ${payrollUnitName(row.unitCode)}`
+          : '—'
+      }}</template>
+    </el-table-column>
     <el-table-column label="提成标准" width="120" align="right"
       ><template #default="{ row }">{{
         row.trace?.rate == null
           ? '未匹配'
           : row.trace.method === 'PERCENT'
             ? `${row.trace.rate}%`
-            : `${row.trace.rate} 元/${costLabel('PRODUCT_UNIT', row.unitCode)}`
+            : `${row.trace.rate} 元/${payrollUnitName(row.unitCode)}`
       }}</template></el-table-column
     >
     <el-table-column label="本月提成（元）" width="135" align="right"
@@ -93,13 +98,13 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { PayrollDetail } from '@/api/core/payroll'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { payrollMoney } from '@/utils/payroll-workflow'
 import { commissionRole } from '@/utils/payroll-commission-detail'
-import { costLabel } from '../../cost/cost-dictionaries'
+import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
 defineProps<{ lines: PayrollDetail[] }>()
 const selected = ref<PayrollDetail | null>(null)
 const router = useRouter()
@@ -112,4 +117,7 @@ function openReceipts() {
   })
   selected.value = null
 }
+onMounted(() => {
+  void loadPayrollProductUnits()
+})
 </script>

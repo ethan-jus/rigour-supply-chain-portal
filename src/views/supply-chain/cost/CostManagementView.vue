@@ -6,6 +6,11 @@
         <p>{{ description }}</p>
       </div>
       <div class="heading-actions">
+        <el-button
+          v-if="category === 'expenses' && can('hr:expense:write')"
+          @click="expenseBatchVisible = true"
+          >批量录入</el-button
+        >
         <el-button :aria-expanded="advancedFilters" @click="advancedFilters = !advancedFilters">{{
           advancedFilters ? '收起筛选' : '更多筛选'
         }}</el-button>
@@ -14,6 +19,21 @@
         >
       </div>
     </div>
+    <div class="cost-workflow-guide" role="note">
+      <span>{{ workflowHint }}</span>
+      <span v-if="category === 'marketing'"
+        >员工底薪、绩效、提成归入人力成本；同一费用已在报销或薪酬登记的，请勿重复录入。</span
+      >
+      <span v-else-if="category === 'expenses'"
+        >办公用品、差旅、打车等按实际用途登记；同一费用已在其他成本台账登记的，请先核对，避免重复。</span
+      >
+    </div>
+    <CostExpenseBatch
+      v-if="category === 'expenses'"
+      v-model="expenseBatchVisible"
+      :employees="employees"
+      @saved="load"
+    />
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
     <div v-if="category === 'logistics'" class="logistics-segments" aria-label="按运输环节筛选">
       <button
@@ -92,13 +112,13 @@
           aria-label="费用类型"
         />
       </el-form-item>
-      <el-form-item label="归属城市">
+      <el-form-item label="费用归属">
         <CostCitySelect
           v-model="filters.cityCode"
           :action="permission + ':read'"
           clearable
-          placeholder="全部城市"
-          aria-label="归属城市"
+          placeholder="全部费用归属"
+          aria-label="费用归属"
           @loaded="rememberCities"
         />
       </el-form-item>
@@ -139,13 +159,13 @@
           <el-option v-for="w in warehouses" :key="w.value" :label="w.label" :value="w.value" />
         </el-select>
       </el-form-item>
-      <el-form-item v-if="isRental && advancedFilters" label="租赁合同号">
+      <el-form-item v-if="isRental && advancedFilters" label="租赁合同编号">
         <el-input
           v-model="filters.contractNo"
           clearable
           maxlength="100"
-          placeholder="请输入租赁合同号"
-          aria-label="租赁合同号"
+          placeholder="请输入租赁合同编号"
+          aria-label="租赁合同编号"
         />
       </el-form-item>
       <el-form-item v-if="category === 'purchases'" label="供应商"
@@ -201,7 +221,7 @@
           aria-label="来源单号"
         />
       </el-form-item>
-      <el-form-item label="确认状态">
+      <el-form-item v-if="advancedFilters" label="确认状态">
         <CostDictSelect
           v-model="filters.statusCode"
           code="COST_STATUS"
@@ -237,7 +257,7 @@
           aria-label="费用截止日期"
         />
       </el-form-item>
-      <el-form-item v-if="isRental" label="费用月份"
+      <el-form-item v-if="isRental || category === 'expenses'" label="费用月份"
         ><el-date-picker v-model="filters.costMonth" type="month" value-format="YYYY-MM"
       /></el-form-item>
       <el-form-item
@@ -285,38 +305,66 @@
             value="UNKNOWN" /></el-select
       ></el-form-item>
     </SupplyListFilters>
-    <div
-      class="cost-summary"
-      v-if="!loadError && category !== 'expenses'"
-      aria-label="本类成本统计"
-    >
+    <div class="cost-summary" v-if="!loadError" aria-label="本类成本统计">
       <div>
-        <span>已登记金额</span><strong>{{ summaryMoney(page.registeredAmount) }}</strong>
+        <span>{{ page.missingAmountCount ? '已登记金额（已知部分）' : '已登记金额' }}</span
+        ><strong>{{ summaryMoney(page.registeredAmount) }}</strong>
       </div>
       <div>
         <span>已确认金额</span><strong>{{ summaryMoney(page.confirmedAmount) }}</strong>
       </div>
-      <div>
+      <div v-if="category !== 'expenses'">
         <span>待补金额</span
         ><strong>{{
           page.missingAmountCount == null ? '—' : page.missingAmountCount + ' 条'
         }}</strong>
+        <el-button link type="primary" :disabled="loading" @click="filterStage('MISSING')"
+          >查看待补记录</el-button
+        >
+      </div>
+      <div v-else>
+        <span>已确认且已付款</span><strong>{{ summaryMoney(page.paidAmount) }}</strong>
       </div>
       <div>
         <span>待确认</span
         ><strong>{{ page.pendingCount == null ? '—' : page.pendingCount + ' 条' }}</strong>
+        <el-button link type="primary" :disabled="loading" @click="filterStage('DRAFT')"
+          >查看待确认记录</el-button
+        >
       </div>
     </div>
     <el-card shadow="never" class="list-card">
-      <div class="supply-list-toolbar">
-        <span
-          >共 {{ page.total }} 条记录<template
-            v-if="category === 'expenses' && page.confirmedAmount != null"
-          >
-            · 已确认金额 ¥{{ costMoney(page.confirmedAmount) }} · 待确认
-            {{ page.pendingCount }} 条</template
-          ></span
+      <div class="cost-record-stages" role="group" aria-label="按处理阶段查看费用">
+        <button
+          v-for="stage in recordStages"
+          :key="stage.code"
+          type="button"
+          :aria-pressed="activeStage === stage.code"
+          :class="{ active: activeStage === stage.code }"
+          :disabled="loading"
+          @click="filterStage(stage.code)"
         >
+          {{ stage.label }}
+        </button>
+      </div>
+      <div class="supply-list-toolbar">
+        <div class="cost-result-caption">
+          <span
+            >共 {{ page.total }} 条记录<template
+              v-if="category === 'expenses' && page.confirmedAmount != null"
+            >
+              · 已确认金额 ¥{{ costMoney(page.confirmedAmount) }} · 待确认
+              {{ page.pendingCount }} 条</template
+            ></span
+          >
+          <small
+            >按当前筛选汇总，金额不含作废记录。{{
+              category === 'expenses' ? '已确认与付款状态分别记录。' : '待补金额不按 0 元计算。'
+            }}<template v-if="page.missingAmountCount">
+              另有 {{ page.missingAmountCount }} 条金额待补，未计入小计。</template
+            ></small
+          >
+        </div>
         <div class="supply-list-actions">
           <el-switch v-model="showExtraColumns" active-text="显示补充列" aria-label="显示补充列" />
           <el-button
@@ -350,23 +398,44 @@
             >
           </el-empty></template
         >
-        <el-table-column label="费用单号" width="200" fixed="left"
+        <el-table-column label="单据 / 归属" min-width="220"
           ><template #default="{ row }"
             ><el-button link type="primary" @click="showDetail(row as CostRecord)">{{
               row.documentNo
-            }}</el-button></template
+            }}</el-button>
+            <div class="ledger-subline">
+              {{ row.data.cityName || '待费用归属' }} ·
+              {{ isRental ? row.data.costMonth : row.data.costDate }}
+            </div></template
           ></el-table-column
         >
-        <el-table-column v-if="isRental" prop="data.costMonth" label="费用月份" width="110" />
-        <el-table-column v-else prop="data.costDate" :label="dateLabel" width="115" />
+        <el-table-column v-if="category === 'expenses'" label="费用日期 / 月份" width="135">
+          <template #default="{ row }"
+            >{{ row.data.costDate }}<br /><small
+              >所属月 {{ row.data.costMonth || row.data.costDate?.slice(0, 7) }}</small
+            ></template
+          >
+        </el-table-column>
         <el-table-column
-          v-if="category !== 'logistics'"
+          v-else-if="isRental && showExtraColumns"
+          prop="data.costMonth"
+          label="费用月份"
+          width="110"
+        />
+        <el-table-column
+          v-else-if="showExtraColumns"
+          prop="data.costDate"
+          :label="dateLabel"
+          width="105"
+        />
+        <el-table-column
+          v-if="category !== 'logistics' && showExtraColumns"
           prop="data.cityName"
-          label="归属城市"
+          label="费用归属"
           width="120"
         />
         <el-table-column
-          v-if="typeDictionary"
+          v-if="typeDictionary && (category !== 'logistics' || showExtraColumns)"
           :label="category === 'logistics' ? '运输环节' : '类型'"
           width="180"
           ><template #default="{ row }">{{
@@ -376,45 +445,48 @@
         <el-table-column
           v-if="category === 'logistics'"
           label="运输路线（供应商／仓库／客户）"
-          min-width="340"
+          min-width="220"
           ><template #default="{ row }"
             ><CostLogisticsRoute
               :logistics="row.data.logistics ?? null"
               :sources="row.sources"
-              compact /></template
-        ></el-table-column>
+              compact
+            />
+            <small class="field-hint"
+              >承运方：{{ row.data.logistics?.carrierName || '待补录' }}</small
+            ></template
+          ></el-table-column
+        >
         <el-table-column
-          v-if="category === 'logistics'"
+          v-if="category === 'logistics' && showExtraColumns"
           prop="data.cityName"
-          label="归属城市"
+          label="费用归属"
           width="120"
         />
         <template v-if="isGoods">
+          <el-table-column label="商品 / 规格" min-width="190">
+            <template #default="{ row }">
+              <strong>{{ row.data.goods?.productName || '待补商品' }}</strong>
+              <div class="ledger-subline">
+                {{ row.data.goods?.specification || '未记录规格' }} ·
+                {{ costLabel('PRODUCT_UNIT', row.data.goods?.unit) }}
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column
-            prop="data.goods.productName"
-            label="商品"
-            min-width="160"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            prop="data.goods.specification"
-            label="规格"
-            min-width="120"
-            show-overflow-tooltip
-          />
-          <el-table-column prop="data.goods.unit" label="单位" width="80" />
-          <el-table-column
-            v-if="category === 'purchases'"
-            prop="data.goods.unitPrice"
-            label="进货单价（元）"
-            width="140"
-            align="right"
-          />
-          <el-table-column label="数量" width="110"
-            ><template #default="{ row }">{{
-              row.data.goods?.quantity ?? '待补数量'
-            }}</template></el-table-column
+            :label="category === 'purchases' ? '数量 × 单价' : '损耗数量'"
+            width="155"
           >
+            <template #default="{ row }">
+              <span
+                >{{ row.data.goods?.quantity ?? '待补数量' }}
+                {{ costLabel('PRODUCT_UNIT', row.data.goods?.unit) }}</span
+              >
+              <div v-if="category === 'purchases'" class="ledger-subline">
+                单价 {{ row.data.goods?.unitPrice ?? '待补' }} 元
+              </div>
+            </template>
+          </el-table-column>
         </template>
         <template v-if="isRental">
           <el-table-column
@@ -462,6 +534,11 @@
           min-width="180"
         />
         <template v-if="category === 'marketing'">
+          <el-table-column prop="data.marketing.channelName" label="投放渠道／平台" min-width="150"
+            ><template #default="{ row }">{{
+              row.data.marketing?.channelName || '未记录渠道'
+            }}</template></el-table-column
+          >
           <el-table-column label="经办人" width="120"
             ><template #default="{ row }">{{
               row.ownerEmployeeName || row.data.ownerName || '待补录'
@@ -470,9 +547,7 @@
           <el-table-column prop="data.payeeName" label="收款方／合作方" min-width="180" />
         </template>
         <el-table-column
-          v-if="
-            category !== 'expenses' && ((!isRental && category !== 'marketing') || showExtraColumns)
-          "
+          v-if="category !== 'expenses' && showExtraColumns"
           label="单据来源"
           width="180"
           ><template #default="{ row }"
@@ -483,9 +558,13 @@
           ></el-table-column
         >
         <template v-if="category === 'logistics'">
-          <el-table-column prop="data.logistics.carrierName" label="承运方" min-width="150" />
-          <el-table-column prop="data.logistics.trackingNo" label="运单号" min-width="160" />
-          <el-table-column label="运费（元）" width="135" align="right"
+          <el-table-column
+            v-if="showExtraColumns"
+            prop="data.logistics.trackingNo"
+            label="运单号"
+            min-width="160"
+          />
+          <el-table-column label="运费（元）" width="120" align="right"
             ><template #default="{ row }">{{
               costMoney(row.data.amount)
             }}</template></el-table-column
@@ -496,7 +575,12 @@
             }}</template></el-table-column
           >
         </template>
-        <el-table-column v-if="isRental" prop="data.costDate" label="费用日期" width="115" />
+        <el-table-column
+          v-if="isRental && showExtraColumns"
+          prop="data.costDate"
+          label="费用日期"
+          width="115"
+        />
         <el-table-column
           v-if="isRental && showExtraColumns"
           prop="data.rental.landlordName"
@@ -517,7 +601,7 @@
             costLabel('COST_PAYMENT_STATUS', row.data.paymentStatusCode)
           }}</template></el-table-column
         >
-        <el-table-column label="确认状态" width="100"
+        <el-table-column label="确认状态" width="100" fixed="right"
           ><template #default="{ row }"
             ><el-tag
               :type="
@@ -531,8 +615,9 @@
             ></template
           ></el-table-column
         >
-        <el-table-column label="操作" fixed="right" width="205"
+        <el-table-column label="操作" fixed="right" width="230"
           ><template #default="{ row }"
+            ><el-button link type="primary" @click="showDetail(row as CostRecord)">查看</el-button
             ><el-button
               v-if="row.statusCode !== 'VOID' && can(permission + ':write')"
               link
@@ -543,7 +628,8 @@
               v-if="row.statusCode === 'DRAFT' && can(permission + ':confirm')"
               link
               type="primary"
-              :disabled="saving"
+              :disabled="saving || row.data.amount == null"
+              :title="row.data.amount == null ? '补齐金额后可确认' : undefined"
               @click="transition(row as CostRecord, 'confirm')"
               >确认</el-button
             ><el-button
@@ -572,9 +658,9 @@
     <el-dialog
       v-model="editorVisible"
       :title="(editingId ? '编辑' : '新增') + title"
-      :width="category === 'expenses' ? '800px' : 'min(1120px, 96vw)'"
+      :width="category === 'expenses' ? 'min(800px, 96vw)' : 'min(1120px, 96vw)'"
       top="5vh"
-      :class="{ 'cost-record-dialog': category !== 'expenses' }"
+      class="cost-record-dialog"
       :close-on-click-modal="false"
       destroy-on-close
       :before-close="closeEditor"
@@ -586,11 +672,11 @@
         type="warning"
         :closable="false"
       />
-      <p v-if="category !== 'expenses'">保存后可在详情上传图片或票据附件。</p>
       <el-form
-        :label-position="category === 'expenses' ? 'left' : 'top'"
-        :label-width="category === 'expenses' ? '130px' : undefined"
+        label-position="top"
         class="cost-editor"
+        :disabled="saving"
+        :inert="saving || undefined"
       >
         <h3 v-if="form.logistics || category === 'expenses'" class="cost-section-title">
           {{ form.logistics ? '运输环节与归属' : '报销事项' }}
@@ -605,111 +691,64 @@
               code="COST_LOGISTICS_LEG"
               @update:model-value="clearSources"
           /></el-form-item>
-          <el-form-item label="归属城市" required
+          <el-form-item label="费用归属" required
             ><CostCitySelect
               v-model="form.cityCode"
               :action="permission + ':write'"
               :snapshot="form.cityName"
-              aria-label="费用归属城市"
+              aria-label="费用归属"
               @loaded="rememberCities"
               @change="selectCity"
           /></el-form-item>
         </div>
         <template v-if="form.logistics">
-          <CostLogisticsRoute :logistics="form.logistics" :sources="selectedSources" />
+          <CostLogisticsRoute
+            v-if="selectedSources.length"
+            :logistics="form.logistics"
+            :sources="selectedSources"
+          />
           <h3 class="cost-section-title">运输双方与来源</h3>
           <el-form-item label="来源录入方式" required
             ><el-radio-group v-model="form.logistics.entryMode" @change="changeEntryMode"
+              ><el-radio-button value="NONE">直接登记（无来源单据）</el-radio-button
               ><el-radio-button value="LINKED" :disabled="form.logistics.legCode === 'TRANSFER'"
                 >选择系统单据</el-radio-button
               ><el-radio-button value="MANUAL">手工补录单据</el-radio-button
               ><el-radio-button value="MIXED" :disabled="form.logistics.legCode === 'TRANSFER'"
                 >混合来源／补关联</el-radio-button
-              ><el-radio-button value="NONE">无来源单据</el-radio-button></el-radio-group
+              ></el-radio-group
             ></el-form-item
           >
+          <el-alert
+            v-if="form.logistics.entryMode === 'LINKED'"
+            title="供应商、客户及仓库由所选单据带入。需要自行选择或填写运输双方时，请切换“直接登记”或“手工补录单据”。"
+            type="info"
+            :closable="false"
+          />
           <template v-if="form.logistics.entryMode !== 'LINKED'">
             <el-alert
               v-if="form.logistics.entryMode !== 'NONE'"
-              title="用于补录订货宝已有、但尚未同步到本系统的单据。只保存来源信息，不生成采购、销售或库存业务。"
+              title="请按原单填写单号、日期及运输双方信息。"
               type="info"
               :closable="false"
             />
-            <div class="manual-route-fields cost-field-grid">
-              <el-form-item :label="routeRoles.sender" required>
-                <div class="full-width">
-                  <CostReferenceSelect
-                    v-if="form.logistics.legCode === 'PURCHASE'"
-                    v-model="form.logistics.supplierId"
-                    :loader="supplierOptions"
-                    :snapshot="form.logistics.senderName"
-                    placeholder="搜索已有供应商；未收录可在下方手填"
-                    @change="
-                      (r) => {
-                        if (r) form.logistics!.senderName = r.name
-                      }
-                    "
-                  />
-                  <CostReferenceSelect
-                    v-else
-                    v-model="form.logistics.sourceWarehouseId"
-                    :loader="warehouseOptions"
-                    :snapshot="form.logistics.senderName"
-                    :placeholder="'搜索' + routeRoles.sender + '；未收录可在下方手填'"
-                    @change="(r) => chooseWarehouse('source', r)"
-                  />
-                  <el-input
-                    v-if="!form.logistics.supplierId && !form.logistics.sourceWarehouseId"
-                    v-model="form.logistics.senderName"
-                    :placeholder="'手动填写' + routeRoles.sender + '名称'"
-                    maxlength="200"
-                  />
-                </div>
-              </el-form-item>
-              <el-form-item :label="routeRoles.receiver" required>
-                <div class="full-width">
-                  <CostReferenceSelect
-                    v-if="form.logistics.legCode === 'DELIVERY'"
-                    v-model="form.logistics.customerId"
-                    :loader="customerOptions"
-                    :snapshot="form.logistics.receiverName"
-                    :reset-key="form.cityCode"
-                    placeholder="搜索本城市客户；未收录可在下方手填"
-                    @change="
-                      (r) => {
-                        if (r) form.logistics!.receiverName = r.name
-                      }
-                    "
-                  />
-                  <CostReferenceSelect
-                    v-else
-                    v-model="form.logistics.targetWarehouseId"
-                    :loader="warehouseOptions"
-                    :snapshot="form.logistics.receiverName"
-                    :placeholder="'搜索' + routeRoles.receiver + '；未收录可在下方手填'"
-                    @change="(r) => chooseWarehouse('target', r)"
-                  />
-                  <el-input
-                    v-if="!form.logistics.customerId && !form.logistics.targetWarehouseId"
-                    v-model="form.logistics.receiverName"
-                    :placeholder="'手动填写' + routeRoles.receiver + '名称'"
-                    maxlength="200"
-                  />
-                </div>
-              </el-form-item>
-              <el-form-item label="发货地址"
-                ><el-input
-                  v-model="form.logistics.originAddress"
-                  maxlength="500"
-                  :placeholder="routeRoles.sender + '的发货地址'"
-              /></el-form-item>
-              <el-form-item label="收货地址"
-                ><el-input
-                  v-model="form.logistics.destinationAddress"
-                  maxlength="500"
-                  :placeholder="routeRoles.receiver + '的收货地址'"
-              /></el-form-item>
-            </div>
+            <CostLogisticsParties
+              :key="
+                form.logistics.legCode +
+                ':' +
+                form.cityCode +
+                ':' +
+                form.logistics.entryMode +
+                ':' +
+                form.logistics.sourceIds.join(',')
+              "
+              v-model="form.logistics"
+              :city-code="form.cityCode"
+              :suppliers="supplierOptions"
+              :customers="customerOptions"
+              :warehouses="warehouseOptions"
+              @warehouse="chooseWarehouse"
+            />
             <div
               v-for="(_doc, index) in form.logistics.externalDocuments"
               :key="index"
@@ -844,54 +883,72 @@
           </div>
         </template>
         <el-form-item v-if="category === 'expenses'" label="费用类型" required
-          ><CostDictSelect v-model="form.typeCode" :code="typeDictionary"
+          ><CostDictSelect
+            v-model="form.typeCode"
+            :code="typeDictionary"
+            placeholder="请选择费用类型"
         /></el-form-item>
-        <el-form-item v-if="category === 'expenses'" label="归属城市" required
+        <el-form-item v-if="category === 'expenses'" label="费用归属" required
           ><CostCitySelect
             v-model="form.cityCode"
             :action="permission + ':write'"
             :snapshot="form.cityName"
-            aria-label="费用归属城市"
+            aria-label="费用归属"
             @loaded="rememberCities"
             @change="selectCity"
         /></el-form-item>
-        <el-form-item v-if="category === 'expenses'" label="关联员工" required
-          ><el-select v-model="form.ownerEmployeeCode" filterable clearable @change="selectEmployee"
-            ><el-option
-              v-for="e in employees"
-              :key="e.employeeCode"
-              :label="employeeLabel(e)"
-              :value="e.employeeCode" /></el-select
-        ></el-form-item>
+        <el-form-item v-if="category === 'expenses'" label="关联员工" required>
+          <CostExpenseEmployeeSelect
+            v-model="form.ownerEmployeeCode"
+            :city-code="form.cityCode"
+            :city-name="form.cityName"
+            :cost-date="form.costDate"
+            :snapshot="form.ownerName || editingEmployeeName"
+            :disabled="saving"
+            @picked="applyExpenseEmployee"
+            @loading="expenseEmployeeLoading = $event"
+          />
+        </el-form-item>
         <CostMarketingFields
           v-if="category === 'marketing'"
           v-model="form"
           :employees="employees"
+          :employee-loading="employeeLoading"
+          :employee-error="employeeError"
           :action="permission + ':write'"
           @city="selectCity"
           @cities="rememberCities"
-          @employee="selectEmployee"
+          @reload-employees="references"
         />
         <CostGoodsFields
           v-if="form.goods"
           v-model="form.goods"
+          v-model:amount="form.amount"
           :category="category"
           :persisted="!!editingId"
           :city-code="form.cityCode"
           :purchase-snapshot="sources[0]?.documentNo"
           :warehouse-snapshot="editingWarehouseName"
           @city="choosePurchaseCity"
-          @suggest-amount="(amount) => (form.amount = amount)"
           ><template #occurrence
             ><CostRecordBasics
               v-model="form"
               :date-label="dateLabel"
               :amount-label="amountLabel"
+              :hide-amount="category === 'purchases'"
               show-city
               :action="permission + ':write'"
               @city="selectCity"
               @cities="rememberCities" /></template
         ></CostGoodsFields>
+        <CostAttachmentEditor
+          v-if="category === 'losses'"
+          v-model="pendingAttachments"
+          :category="category"
+          :row="editorAttachmentRow"
+          :disabled="saving"
+          @busy="attachmentBusy = $event"
+        />
         <CostRentalFields
           v-if="form.rental"
           v-model="form.rental"
@@ -899,7 +956,7 @@
           :warehouse-snapshot="editingWarehouseName"
           :warehouses="warehouseOptions"
           ><template #city
-            ><el-form-item label="归属城市" required
+            ><el-form-item label="费用归属" required
               ><CostCitySelect
                 v-model="form.cityCode"
                 :action="permission + ':write'"
@@ -923,19 +980,19 @@
           :action="permission + ':write'"
           required-amount
         />
+        <CostExpenseFields v-if="category === 'expenses'" v-model="form">
+          <template #evidence>
+            <CostAttachmentEditor
+              v-model="pendingAttachments"
+              :category="category"
+              :row="editorAttachmentRow"
+              :disabled="saving"
+              @busy="attachmentBusy = $event"
+            />
+          </template>
+        </CostExpenseFields>
         <el-collapse v-if="category !== 'expenses'"
           ><el-collapse-item title="补充信息与凭据（可选）" name="extra">
-            <template v-if="form.marketing">
-              <el-form-item label="投放渠道／平台"
-                ><el-input v-model="form.marketing.channelName" maxlength="200"
-              /></el-form-item>
-              <el-form-item label="服务期间开始"
-                ><el-date-picker v-model="form.marketing.serviceFrom" value-format="YYYY-MM-DD"
-              /></el-form-item>
-              <el-form-item label="服务期间截止"
-                ><el-date-picker v-model="form.marketing.serviceTo" value-format="YYYY-MM-DD"
-              /></el-form-item>
-            </template>
             <el-form-item v-if="category !== 'marketing'" label="费用标题"
               ><el-input v-model="form.title" maxlength="200" placeholder="留空时根据业务对象生成"
             /></el-form-item>
@@ -974,11 +1031,18 @@
         /></el-form-item> </el-form
       ><template #footer
         ><el-button @click="closeEditor(() => (editorVisible = false))">取消</el-button
-        ><el-button type="primary" :loading="saving" @click="save">保存</el-button></template
+        ><el-button
+          type="primary"
+          :loading="saving"
+          :disabled="!!form.goods?.productId && !form.goods.variantId"
+          @click="save"
+          >保存</el-button
+        ></template
       >
     </el-dialog>
     <el-drawer v-model="detailVisible" :title="detail?.documentNo" size="min(900px, 95vw)"
       ><template v-if="detail">
+        <CostRelatedSource v-if="detail.data.expense?.relatedCost" :data="detail.data" />
         <template v-if="detail.data.logistics">
           <h3>{{ logisticsRoles(detail.data.logistics.legCode).title }}</h3>
           <el-tag>{{ costSourceLabel(detail) }}</el-tag>
@@ -996,13 +1060,38 @@
           </el-descriptions>
         </section>
         <CostAttachments
-          v-if="category !== 'expenses'"
           :category="category"
           :row="detail"
           :editable="can(permission + ':write')"
           @changed="refreshDetail"
-        /> </template
-    ></el-drawer>
+        />
+      </template>
+      <template #footer>
+        <div v-if="detail" class="heading-actions">
+          <el-button
+            v-if="detail.statusCode !== 'VOID' && can(permission + ':write')"
+            :disabled="saving"
+            @click="editDetail"
+            >编辑费用</el-button
+          >
+          <el-button
+            v-if="detail.statusCode === 'DRAFT' && can(permission + ':confirm')"
+            type="primary"
+            :loading="saving"
+            :disabled="detail.data.amount == null"
+            @click="transition(detail, 'confirm')"
+            >核对并确认</el-button
+          >
+          <el-button
+            v-if="detail.statusCode !== 'VOID' && can(permission + ':void')"
+            :disabled="saving"
+            @click="transition(detail, 'void')"
+            >作废</el-button
+          >
+          <el-button @click="detailVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-drawer>
     <el-drawer v-model="historyVisible" title="操作记录" size="min(700px, 95vw)"
       ><el-alert
         v-if="historyError"
@@ -1013,10 +1102,10 @@
         ><el-timeline-item
           v-for="(item, index) in history"
           :key="index"
-          :timestamp="item.occurredTime"
+          :timestamp="displayDateTime(item.occurredTime)"
           ><strong>{{ auditLabel(item.action) }}</strong>
           <p>{{ item.reason || '—' }}</p>
-          <p class="field-hint">操作人：{{ item.actorId }}</p>
+          <p class="field-hint">操作人：{{ auditActorLabel(item.actorId) }}</p>
           <el-collapse
             ><el-collapse-item title="查看当时记录">
               <el-descriptions :column="1" border>
@@ -1037,7 +1126,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
@@ -1068,21 +1157,41 @@ import {
   type CostWarehouse,
 } from '@/api/core/cost'
 import CostAttachments from './CostAttachments.vue'
+import CostAttachmentEditor from './CostAttachmentEditor.vue'
+import {
+  CostAttachmentSaveSession,
+  usesEntryAttachments,
+  type CostAttachmentDraft,
+} from './cost-attachment-draft'
 import CostRecordBasics from './CostRecordBasics.vue'
 import CostMarketingFields from './CostMarketingFields.vue'
+import CostExpenseBatch from './CostExpenseBatch.vue'
+import CostExpenseFields from './CostExpenseFields.vue'
+import CostExpenseEmployeeSelect from './CostExpenseEmployeeSelect.vue'
 import CostGoodsFields from './CostGoodsFields.vue'
+import CostRelatedSource from './CostRelatedSource.vue'
+import { costConfirmationGaps, costSaveGaps } from './cost-entry-review'
 import CostRentalFields from './CostRentalFields.vue'
 import CostCitySelect from './CostCitySelect.vue'
 import CostDocumentSelect from './CostDocumentSelect.vue'
 import CostReferenceSelect, { type ReferenceOption } from './CostReferenceSelect.vue'
 import CostExternalDocumentFields from './CostExternalDocumentFields.vue'
 import CostLogisticsRoute from './CostLogisticsRoute.vue'
+import CostLogisticsParties from './CostLogisticsParties.vue'
 import { logisticsLegs, logisticsRoles } from './cost-logistics'
 import { costSourceLabel, costSourceNumbers } from './cost-source'
 import CostDictSelect from './CostDictSelect.vue'
 import { costLabel, costMoney, costOptions, loadCostDictionaries } from './cost-dictionaries'
 import { exportCostRows } from './cost-export'
-import { auditLabel, parseSnapshot, costSnapshotFields } from './cost-audit'
+import {
+  auditLabel,
+  parseSnapshot,
+  costSnapshotFields,
+  costExportHeaders,
+  costExportFields,
+} from './cost-audit'
+import { auditActorLabel } from '@/utils/audit-actor'
+import { displayDateTime } from '@/utils/business-date'
 const route = useRoute(),
   { can } = useSupplyPermissions()
 const category = computed<CostCategory>(() =>
@@ -1170,7 +1279,9 @@ const objectFilterLabel = computed(() =>
 )
 const marketingTypes = computed(() =>
   costOptions('MARKETING_EXPENSE_TYPE').filter((item) =>
-    ['PROMOTION', 'ADVERTISING', 'ENDORSEMENT'].includes(item.value),
+    ['PROMOTION', 'ADVERTISING', 'ENDORSEMENT', 'PERSONNEL_COST', 'COMMISSION'].includes(
+      item.value,
+    ),
   ),
 )
 const summaryMoney = (amount: number | null | undefined) =>
@@ -1184,6 +1295,25 @@ const description = computed(() =>
         ? '按场地与费用月份登记租赁费，押金单列，不自动分摊。'
         : '手工登记、核对并保留记录。',
 )
+const workflowHint = computed(
+  () =>
+    ({
+      purchases: '登记商品进货价和数量 → 核对采购凭据 → 确认。进货金额与损耗分别核查。',
+      losses: '登记损耗商品、数量和原因 → 补齐损耗金额 → 核对确认。',
+      logistics: '选择运输环节 → 登记实际双方与运费 → 补齐金额、核对确认。',
+      'warehouse-rentals': '按仓库、面积和费用月份登记租金 → 核对同仓同月记录 → 确认。',
+      'office-rentals': '按办公室、面积和费用月份登记租金 → 核对同场地同月记录 → 确认。',
+      marketing: '登记推广、广告或代言事项 → 补齐渠道、经办人与凭据 → 核对确认。',
+      expenses: '按归属人登记费用与付款情况 → 补齐用途、明细和凭据 → 核对确认。',
+    })[category.value],
+)
+const recordStages = computed(() => [
+  { code: '', label: '全部记录' },
+  ...(category.value === 'expenses' ? [] : [{ code: 'MISSING', label: '待补金额' }]),
+  { code: 'DRAFT', label: '待确认' },
+  { code: 'CONFIRMED', label: '已确认' },
+  { code: 'VOID', label: '已作废' },
+])
 const emptyFilters = () => ({
   documentNo: '',
   title: '',
@@ -1214,6 +1344,14 @@ const advancedFilters = ref(false)
 const filters = ref(emptyFilters()),
   currentPage = ref(1),
   pageSize = ref(20)
+const activeStage = computed(() =>
+  filters.value.missingAmount ? 'MISSING' : filters.value.statusCode,
+)
+function filterStage(stage: string) {
+  filters.value.missingAmount = stage === 'MISSING' ? 'true' : ''
+  filters.value.statusCode = stage === 'MISSING' ? '' : stage
+  search()
+}
 const appliedFilters = ref<Omit<CostQuery, 'begin' | 'step'>>({})
 const hasAppliedFilters = computed(() => Object.keys(appliedFilters.value).length > 0)
 const page = ref<CostPage>({ total: 0, begin: 0, step: 20, items: [] }),
@@ -1223,11 +1361,27 @@ const page = ref<CostPage>({ total: 0, begin: 0, step: 20, items: [] }),
 const employees = ref<CostEmployee[]>([]),
   warehouses = ref<CostWarehouse[]>([]),
   cities = ref<{ code: string; name: string }[]>([])
+const employeeLoading = ref(false),
+  employeeError = ref('')
+let referenceVersion = 0
+const expenseBatchVisible = ref(false)
 const editorVisible = ref(false),
   editorError = ref(''),
   editingId = ref<string | null>(null),
   editingConfirmed = ref(false),
   editingWarehouseName = ref('')
+const editingEmployeeName = ref('')
+const expenseEmployeeLoading = ref(false)
+const pendingAttachments = ref<CostAttachmentDraft[]>([])
+const editorAttachmentRow = ref<CostRecord | null>(null)
+const attachmentBusy = ref(false)
+let attachmentSession = new CostAttachmentSaveSession()
+function resetAttachments(row: CostRecord | null = null) {
+  pendingAttachments.value = []
+  editorAttachmentRow.value = row
+  attachmentBusy.value = false
+  attachmentSession = new CostAttachmentSaveSession()
+}
 const sources = ref<CostSource[]>([])
 const detailVisible = ref(false),
   detail = ref<CostRecord | null>(null),
@@ -1269,16 +1423,29 @@ const detailSections = computed(() => {
 })
 const initialEditorValue = ref('')
 const dirty = computed(
-  () => editorVisible.value && JSON.stringify(form.value) !== initialEditorValue.value,
+  () =>
+    editorVisible.value &&
+    (JSON.stringify(form.value) !== initialEditorValue.value ||
+      pendingAttachments.value.some((file) => file.status !== 'uploaded')),
 )
 async function discardChanges(): Promise<boolean> {
+  if (saving.value || attachmentBusy.value) {
+    ElMessage.info('正在处理费用或附件，请稍候')
+    return false
+  }
   if (!dirty.value) return true
   try {
-    await ElMessageBox.confirm('当前录入尚未保存，确定离开？', '未保存的成本记录', {
-      confirmButtonText: '放弃修改',
-      cancelButtonText: '继续编辑',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      attachmentSession.savedRecord
+        ? '费用已保存，离开将放弃尚未保存的修改及未上传附件，确定离开？'
+        : '当前录入尚未保存，确定离开？',
+      '离开费用录入',
+      {
+        confirmButtonText: '放弃修改',
+        cancelButtonText: '继续编辑',
+        type: 'warning',
+      },
+    )
     return true
   } catch {
     return false
@@ -1290,7 +1457,7 @@ async function closeEditor(done: () => void) {
 onBeforeRouteLeave(discardChanges)
 onBeforeRouteUpdate(discardChanges)
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (dirty.value) {
+  if (dirty.value || saving.value || attachmentBusy.value) {
     event.preventDefault()
     event.returnValue = ''
   }
@@ -1339,7 +1506,7 @@ function blank(): CostCommand {
     logistics:
       category.value === 'logistics'
         ? {
-            entryMode: filters.value.typeCode === 'TRANSFER' ? 'MANUAL' : 'LINKED',
+            entryMode: defaultLogisticsEntryMode(filters.value.typeCode || 'PURCHASE'),
             senderName: '',
             receiverName: '',
             originAddress: '',
@@ -1407,11 +1574,10 @@ async function load() {
   } catch (e) {
     if (version === requestVersion) {
       page.value = {
-        ...page.value,
+        total: 0,
+        begin: 0,
+        step: pageSize.value,
         items: [],
-        confirmedAmount: undefined,
-        paidAmount: undefined,
-        pendingCount: undefined,
       }
       loadError.value = errorMessage(e, '费用查询失败')
     }
@@ -1454,6 +1620,9 @@ function changePageSize(value: number) {
 }
 async function references() {
   const selected = category.value
+  const version = ++referenceVersion
+  employeeLoading.value = selected === 'marketing' || selected === 'expenses'
+  employeeError.value = ''
   const results = await Promise.allSettled([
     loadCostDictionaries(selected),
     getCostCities(permission.value + ':read'),
@@ -1464,10 +1633,12 @@ async function references() {
       ? getCostWarehouses(selected)
       : Promise.resolve([]),
   ])
-  if (selected !== category.value) return
+  if (selected !== category.value || version !== referenceVersion) return
+  employeeLoading.value = false
   const [, area, people, storage] = results
   if (area.status === 'fulfilled') rememberCities(area.value)
   if (people.status === 'fulfilled') employees.value = people.value
+  else employeeError.value = errorMessage(people.reason, '员工资料加载失败，请重试')
   if (storage.status === 'fulfilled') warehouses.value = storage.value
   for (const result of results)
     if (result.status === 'rejected')
@@ -1476,15 +1647,15 @@ async function references() {
 function rememberCities(rows: { code: string; name: string }[]) {
   cities.value = [...new Map([...cities.value, ...rows].map((row) => [row.code, row])).values()]
   const selected = rows.find((row) => row.code === form.value.cityCode)
-  if (editorVisible.value && selected) form.value.cityName = selected.name
+  if (editorVisible.value && selected && !form.value.cityName) form.value.cityName = selected.name
 }
 function employeeLabel(e: CostEmployee) {
-  return (
-    e.employeeName + ' · ' + e.employeeCode + (e.departmentName ? ' · ' + e.departmentName : '')
-  )
+  return [e.employeeName, e.departmentName].filter(Boolean).join(' · ')
 }
 const previousLeg = ref('PURCHASE')
 function edit(row?: CostRecord) {
+  resetAttachments(row || null)
+  editingEmployeeName.value = row?.ownerEmployeeName || ''
   editingWarehouseName.value = row?.warehouseName || ''
   editingId.value = row?.id ?? null
   editingConfirmed.value = row?.statusCode === 'CONFIRMED'
@@ -1505,6 +1676,12 @@ function edit(row?: CostRecord) {
   form.value.externalDocuments ??= []
   form.value.ownerName ??= row?.ownerEmployeeName || ''
   initialEditorValue.value = JSON.stringify(form.value)
+  // 子表单会初始化月份、录入方式等默认值；这些初始化不应触发“未保存修改”。
+  const openedForm = form.value
+  void nextTick(() => {
+    if (editorVisible.value && form.value === openedForm)
+      initialEditorValue.value = JSON.stringify(form.value)
+  })
   void references()
 }
 async function clearSources() {
@@ -1539,8 +1716,7 @@ async function clearSources() {
       deliveryStops: [],
       externalDocuments: [],
     })
-    form.value.logistics.entryMode =
-      form.value.logistics.legCode === 'TRANSFER' ? 'MANUAL' : 'LINKED'
+    form.value.logistics.entryMode = defaultLogisticsEntryMode(form.value.logistics.legCode)
     changeEntryMode()
   }
   sources.value = []
@@ -1589,6 +1765,8 @@ function selectSources() {
     }
   }
   if (logistics.entryMode === 'MIXED') {
+    if (logistics.legCode === 'PURCHASE' && first.senderName !== logistics.senderName)
+      logistics.supplierId = null
     if (first.senderName) logistics.senderName = first.senderName
     if (logistics.legCode !== 'DELIVERY') logistics.receiverName = first.receiverName
     if (first.warehouseId) logistics.sourceWarehouseId = first.warehouseId
@@ -1627,17 +1805,22 @@ function selectCity() {
     form.value.logistics.receiverName = ''
   }
 }
-function selectEmployee() {
-  form.value.ownerEmployeeCode ||= null
-  form.value.ownerName =
-    employees.value.find((e) => e.employeeCode === form.value.ownerEmployeeCode)?.employeeName ||
-    form.value.ownerName
-  form.value.departmentId =
-    employees.value.find((e) => e.employeeCode === form.value.ownerEmployeeCode)?.departmentId ??
-    null
+function applyExpenseEmployee(employee: CostEmployee | null) {
+  form.value.ownerName = employee?.employeeName || ''
+  form.value.departmentId = employee?.departmentId ?? null
 }
 async function save() {
   if (saving.value) return
+  if (attachmentBusy.value || expenseEmployeeLoading.value) {
+    ElMessage.info('正在读取员工或附件，请稍候再保存')
+    return
+  }
+  const gaps = costSaveGaps(category.value, form.value)
+  if (gaps.length) {
+    editorError.value = '请补充：' + gaps.join('、')
+    ElMessage.warning(editorError.value)
+    return
+  }
   if (!form.value.title.trim() && category.value !== 'marketing' && category.value !== 'expenses')
     form.value.title = form.value.goods?.productName
       ? `${title.value} · ${form.value.goods.productName}`
@@ -1646,19 +1829,17 @@ async function save() {
         : form.value.logistics
           ? `${routeRoles.value.title}运费`
           : title.value
-  if (
-    !form.value.title.trim() ||
-    !form.value.cityCode ||
-    !form.value.costDate ||
-    (category.value === 'expenses' && (!form.value.ownerEmployeeCode || form.value.amount == null))
-  ) {
-    editorError.value = '请填写费用事项、归属城市、日期、金额及归属人等必填信息'
-    return
-  }
   saving.value = true
   editorError.value = ''
   try {
-    if (!isRental.value) form.value.costMonth = form.value.costDate.slice(0, 7)
+    if (
+      !isRental.value &&
+      !(
+        category.value === 'expenses' &&
+        ['OFFICE_RENT', 'NETWORK'].includes(form.value.typeCode || '')
+      )
+    )
+      form.value.costMonth = form.value.costDate.slice(0, 7)
     if (form.value.rental) form.value.typeCode = form.value.rental.premisesType || 'WAREHOUSE'
     if (category.value === 'losses' && form.value.goods && !form.value.reason?.trim()) {
       const goods = form.value.goods
@@ -1732,20 +1913,42 @@ async function save() {
         }
       }
     }
-    const saved = await saveCost(category.value, editingId.value, form.value)
-    if (category.value !== 'expenses') showDetail(saved)
+    const saved = usesEntryAttachments(category.value)
+      ? await attachmentSession.save(
+          category.value,
+          editingId.value,
+          form.value,
+          pendingAttachments.value,
+          (row) => {
+            editingId.value = row.id
+            editingConfirmed.value = false
+            form.value.revision = row.revision
+            editorAttachmentRow.value = row
+            initialEditorValue.value = JSON.stringify(form.value)
+          },
+        )
+      : await saveCost(category.value, editingId.value, form.value)
+    showDetail(saved)
     editorVisible.value = false
-    ElMessage.success('费用已保存')
+    ElMessage.success(pendingAttachments.value.length ? '费用及附件已保存' : '费用已保存')
     await load()
   } catch (e) {
     editorError.value = errorMessage(e, '保存失败')
+    ElMessage.error(editorError.value)
+    if (attachmentSession.savedRecord) await load()
   } finally {
     saving.value = false
   }
 }
 async function transition(row: CostRecord, action: 'confirm' | 'void') {
+  if (saving.value) return
   if (action === 'confirm' && row.data.amount == null) {
     ElMessage.warning('请先补齐金额再确认')
+    return
+  }
+  const gaps = costConfirmationGaps(category.value, row.data)
+  if (action === 'confirm' && gaps.length) {
+    ElMessage.warning('请先编辑补齐：' + gaps.join('、'))
     return
   }
   const required = action === 'void' || Number(row.data.amount) === 0
@@ -1754,7 +1957,7 @@ async function transition(row: CostRecord, action: 'confirm' | 'void') {
     const answer = await ElMessageBox.prompt(
       action === 'void'
         ? '作废后不再计入有效登记金额，请填写原因。'
-        : '请核对本条记录，确认不会执行库存或付款操作。0 元费用需填写说明。',
+        : `请确认费用信息：${row.documentNo}，${row.data.cityName}，${row.data.costMonth || row.data.costDate}，${costMoney(row.data.amount)} 元。`,
       action === 'void' ? '作废费用' : '确认费用',
       {
         inputPlaceholder: required ? '必填：操作原因' : '操作说明（可选）',
@@ -1769,7 +1972,8 @@ async function transition(row: CostRecord, action: 'confirm' | 'void') {
   }
   saving.value = true
   try {
-    await changeCostStatus(category.value, row, action, reason)
+    const updated = await changeCostStatus(category.value, row, action, reason)
+    if (detail.value?.id === row.id) detail.value = updated
     ElMessage.success('操作成功')
     await load()
   } catch (e) {
@@ -1781,6 +1985,11 @@ async function transition(row: CostRecord, action: 'confirm' | 'void') {
 function showDetail(row: CostRecord) {
   detail.value = row
   detailVisible.value = true
+}
+async function editDetail() {
+  if (!detail.value) return
+  await edit(detail.value)
+  if (editorVisible.value) detailVisible.value = false
 }
 async function refreshDetail() {
   if (!detail.value) return
@@ -1827,16 +2036,9 @@ async function exportPage() {
       if (!result.items.length || begin >= 50000)
         throw new Error('导出范围过大或结果发生变化，请缩小筛选范围后重试')
     }
-    const fields = rows.map((r) => [
-      ...costSnapshotFields(r).map((field) =>
-        field.label === '金额' ? { ...field, value: r.data.amount ?? '' } : field,
-      ),
-      { label: '金额状态', value: r.data.amount == null ? '待补金额' : '已登记' },
-      { label: '记录ID', value: r.id },
-      { label: '版本', value: String(r.revision) },
-      { label: '单据来源', value: costSourceLabel(r) },
-    ])
-    const headers = Array.from(new Set(fields.flatMap((f) => f.map((v) => v.label))))
+    if (selected !== category.value) return
+    const fields = rows.map(costExportFields)
+    const headers = costExportHeaders(selected)
     await exportCostRows(
       name,
       headers,
@@ -1853,6 +2055,18 @@ function changeEntryMode() {
   if (!logistics) return
   editorError.value = ''
   if (logistics.entryMode === 'MANUAL' || logistics.entryMode === 'NONE') {
+    // 解除采购单关联时保留已核实的双方快照；供应商编码不能当作供应商 ID 使用。
+    const purchase = logistics.legCode === 'PURCHASE' ? selectedSources.value[0] : undefined
+    if (purchase) {
+      logistics.senderName = purchase.senderName
+      logistics.receiverName = purchase.receiverName
+      logistics.supplierId = null
+      logistics.customerId = null
+      logistics.sourceWarehouseId = null
+      logistics.targetWarehouseId = purchase.targetWarehouseId
+      logistics.originAddress ||= purchase.originAddress || ''
+      logistics.destinationAddress ||= purchase.destinationAddress || ''
+    }
     logistics.sourceIds = []
     sources.value = []
     logistics.deliveryStops = []
@@ -1876,6 +2090,9 @@ function changeEntryMode() {
   }
   if (logistics.entryMode === 'MIXED') selectSources()
 }
+function defaultLogisticsEntryMode(leg: string) {
+  return leg === 'PURCHASE' ? 'NONE' : leg === 'TRANSFER' ? 'MANUAL' : 'LINKED'
+}
 function newExternalDocument(type: string, senderName = '', receiverName = '') {
   return {
     sourceSystem: 'DHB' as const,
@@ -1895,7 +2112,7 @@ const warehouseOptions = async (keyword: string, begin: number) =>
         label: [
           w.label,
           w.warehouseTypeCode ? costLabel('WAREHOUSE_TYPE', w.warehouseTypeCode) : '',
-          cities.value.find((c) => c.code === w.regionCode)?.name || w.regionCode,
+          cities.value.find((c) => c.code === w.regionCode)?.name,
         ]
           .filter(Boolean)
           .join(' · '),
@@ -1907,13 +2124,13 @@ const warehouseOptions = async (keyword: string, begin: number) =>
 const supplierOptions = async (keyword: string, begin: number) =>
   (await getCostReferences('logistics', 'suppliers', keyword, null, begin)).map((r) => ({
     ...r,
-    label: r.name + ' · ' + r.code,
+    label: r.name,
   }))
 const customerOptions = async (keyword: string, begin: number) =>
   form.value.cityCode
     ? (await getCostCustomers(form.value.cityCode, keyword, begin)).map((r) => ({
         ...r,
-        label: r.name + ' · ' + r.code,
+        label: r.name,
       }))
     : []
 function chooseWarehouse(side: 'source' | 'target', row: ReferenceOption | null) {
@@ -1954,6 +2171,8 @@ watch(
 watch(
   category,
   () => {
+    resetAttachments()
+    expenseEmployeeLoading.value = false
     advancedFilters.value = false
     showExtraColumns.value = false
     editorVisible.value = false
@@ -1968,13 +2187,46 @@ watch(
   },
   { immediate: true },
 )
+// 看板原单入口直接复用原业务详情查询，由源接口重新校验当前权限。
+watch(
+  () => [category.value, route.query?.sourceId] as const,
+  async ([selected, sourceId], _previous, onCleanup) => {
+    let active = true
+    onCleanup(() => {
+      active = false
+    })
+    detailVisible.value = false
+    detail.value = null
+    if (typeof sourceId !== 'string') return
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sourceId)) {
+      ElMessage.error('原单标识无效')
+      return
+    }
+    try {
+      const record = await getCost(selected, sourceId)
+      if (active) showDetail(record)
+    } catch (reason) {
+      if (active) ElMessage.error(errorMessage(reason, '原单不存在或当前无访问权限'))
+    }
+  },
+  { immediate: true },
+)
 </script>
 <style scoped lang="scss">
+.ledger-subline {
+  margin-top: 5px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .page-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 .source-empty {
   padding: 14px 20px;
@@ -1990,6 +2242,54 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+.cost-workflow-guide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+}
+.cost-workflow-guide span {
+  overflow-wrap: anywhere;
+}
+.cost-record-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+.cost-record-stages button {
+  cursor: pointer;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  color: var(--el-text-color-regular);
+}
+.cost-record-stages button.active {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-5);
+}
+.cost-record-stages button:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+.cost-record-stages button:disabled {
+  cursor: wait;
+}
+.cost-result-caption {
+  display: grid;
+  gap: 4px;
+}
+.cost-result-caption small {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 .page-heading p,
 .field-hint {
@@ -2133,9 +2433,9 @@ pre {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin: 0 0 16px;
+  margin: 0;
   > div {
-    padding: 16px 20px;
+    padding: 10px 14px;
     background: var(--el-bg-color);
     border: 1px solid var(--el-border-color-light);
     border-radius: 6px;
@@ -2151,8 +2451,47 @@ pre {
     font-size: 22px;
     font-weight: 600;
   }
+  .el-button {
+    margin-left: 8px;
+  }
   @media (max-width: 700px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.console--supply-chain .cost-page {
+  // 筛选展开、缩放或低高度窗口时保留整页滚动，避免挤没列表和新增按钮。
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+  > .list-card {
+    min-height: 360px;
+    flex: 1 0 auto;
+  }
+  .supply-list-actions {
+    flex-wrap: wrap;
+  }
+  .supply-list-filters__form {
+    grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  }
+  .supply-list-pagination {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  @media (max-width: 700px) {
+    .heading-actions {
+      width: 100%;
+    }
+    .cost-summary {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .el-pagination__sizes,
+    .el-pagination__jump {
+      display: none;
+    }
+    .el-table__cell.is-fixed-column--left,
+    .el-table__cell.is-fixed-column--right {
+      position: static !important;
+    }
   }
 }
 </style>

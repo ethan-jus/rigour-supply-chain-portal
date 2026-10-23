@@ -11,6 +11,8 @@ declare module 'axios' {
   interface AxiosRequestConfig {
     /** 无明确Token失效marker的业务401保留页面。 */
     stayOnUnauthorized?: boolean
+    /** 页面已有错误说明时，避免再弹全局通知；认证恢复流程仍正常执行。 */
+    errorFeedback?: 'global' | 'inline'
     /** 由路由守卫根据to.fullPath处理会话失效，API层只返回结构化错误。 */
     deferSessionRecovery?: boolean
     /** 仅供会话复核请求使用，防止/me 401递归触发恢复。 */
@@ -237,7 +239,8 @@ function createClient(): ApiClient {
       const body = response.data
       if (!isApiResponse(body)) return body
       if (body.code !== 'OK') {
-        return Promise.reject(new ApiError(body, response.status, undefined, undefined, response.config.skipSessionRecovery))
+        return Promise.reject(new ApiError(body, response.status, undefined, undefined,
+          response.config.skipSessionRecovery || response.config.errorFeedback === 'inline'))
       }
       // 后端 NON_NULL 会省略空 data；响应外壳不能被当作业务对象。
       return body.data ?? null
@@ -317,7 +320,8 @@ function createClient(): ApiClient {
       const body = errorBody && typeof errorBody === 'object' && typeof errorBody.code === 'string'
         ? errorBody : marker ? { code: marker } : {}
       return Promise.reject(new ApiError(body, error.response?.status,
-        requestId ? String(requestId) : '', error.code, error.config?.skipSessionRecovery))
+        requestId ? String(requestId) : '', error.code,
+        error.config?.skipSessionRecovery || error.config?.errorFeedback === 'inline'))
     },
   )
 
