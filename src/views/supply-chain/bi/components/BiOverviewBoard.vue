@@ -440,7 +440,7 @@
                 >{{ money(metric('unpaid_amount')) }}<small>{{ amountUnit }}</small></strong
               >
             </button>
-            <strong v-else class=""
+            <strong v-else
               >{{ money(metric('unpaid_amount')) }}<small>{{ amountUnit }}</small></strong
             >
             <p>同批订单截至查询快照的未收款，不等于全部历史欠款。</p>

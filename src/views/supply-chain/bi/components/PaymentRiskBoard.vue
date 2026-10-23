@@ -1191,7 +1191,8 @@ a:focus-visible {
   color: white;
 }
 table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
   font-variant-numeric: tabular-nums;
 }
@@ -1260,9 +1261,15 @@ table button:hover {
   overflow: auto;
   max-height: 390px;
 }
+.risk-matrix,
+.ranking {
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
 .risk-matrix th,
 .risk-matrix td {
-  border: 1px solid var(--line);
+  border: solid var(--line);
+  border-width: 0 1px 1px 0;
   padding: 9px;
 }
 .risk-matrix td button {
@@ -1377,7 +1384,8 @@ table button:hover {
 }
 .ranking th,
 .ranking td {
-  border: 1px solid var(--line);
+  border: solid var(--line);
+  border-width: 0 1px 1px 0;
   padding: 12px;
 }
 .ranking tbody td {

@@ -644,7 +644,8 @@
     text-align: left;
     cursor: pointer;
     &:hover strong { text-decoration: underline; text-underline-offset: 6px; }
-    &:focus-visible { outline: 2px solid var(--ov-accent); outline-offset: 4px; }
+    &.cyan { color: var(--ov-cyan); }
+    &:focus-visible { outline: 2px solid var(--ov-blue); outline-offset: 4px; }
     &:disabled { cursor: wait; }
   }
   .receipt-rate {
