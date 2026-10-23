@@ -1204,6 +1204,10 @@ td {
   white-space: nowrap;
 }
 thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 var(--line);
   font-weight: 500;
   color: #cbdbea;
   background: #102438;
@@ -1482,6 +1486,7 @@ table button:hover {
   scroll-margin-top: 18px;
 }
 .detail-scroll {
+  max-height: 60vh;
   overflow: auto;
 }
 .detail-scroll td {

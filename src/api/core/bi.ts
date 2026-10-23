@@ -523,3 +523,24 @@ export const registerSupplyDashboardFeishuArchive = (
     command,
     options,
   )
+
+export interface SupplyReceiptDetailRow {
+  id: string
+  paymentNo: string | null
+  orderNo: string | null
+  customerName: string | null
+  regionName: string | null
+  ownerStaffName: string | null
+  occurredAt: string | null
+  orderAmount: number | null
+  paidAmount: number
+  unpaidAmount: number | null
+}
+export interface SupplyReceiptDetails {
+  total: number
+  amount: number
+  items: SupplyReceiptDetailRow[]
+}
+export const getSupplyReceiptDetails = (
+  params: SupplyDashboardQuery & { kind: 'receipts' | 'unpaid'; begin: number; step: number },
+) => apiClient.get<SupplyReceiptDetails>('/analytics/supply/dashboard/receipt-details', { params })
