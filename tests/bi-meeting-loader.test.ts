@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => ({
   trust: vi.fn(),
   analysis: vi.fn(),
   personalGoals: vi.fn(),
+  filters: vi.fn(),
 }))
 vi.mock('@/api/core/bi-sales-dashboard', () => ({ getSalesDashboardAnalysis: mocks.personalGoals }))
 vi.mock('@/api/core/bi-access', () => ({ getBiEffectiveScope: mocks.access }))
 vi.mock('@/api/core/bi', () => ({
+  getSupplyDashboardFilterOptions: mocks.filters,
   getSupplyDashboardOverview: mocks.overview,
   getSupplyDashboardDataTrust: mocks.trust,
   getSupplyDashboardOperatingAnalysis: mocks.analysis,
@@ -58,6 +60,7 @@ beforeEach(() => {
   )
   mocks.trust.mockResolvedValue(null)
   mocks.personalGoals.mockResolvedValue({ goals: [] })
+  mocks.filters.mockResolvedValue({ regions: [], salesOwners: [], customerTypes: [], sourceSystems: [] })
 })
 afterEach(() => vi.useRealTimers())
 describe('会议数据加载与隔离', () => {
