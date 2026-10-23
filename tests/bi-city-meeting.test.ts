@@ -15,6 +15,39 @@ beforeEach(() => {
 })
 
 describe('城市看板口径与主流程', () => {
+  it('进入省级看板后能从下级部门入口切换城市', async () => {
+    const source = cityMeetingFixture()
+    source.regions = [
+      { optionType: 'REGION', optionValue: 'HB', optionLabel: '河北省', usageCount: 0 },
+      {
+        optionType: 'REGION',
+        optionValue: 'TS',
+        optionLabel: '唐山市',
+        usageCount: 1,
+        parentOptionValue: 'HB',
+      },
+    ]
+    source.current.citySalesRanking = [
+      { ...source.current.citySalesRanking[0], dimensionCode: 'TS', salesAmount: 530.4 },
+    ]
+    source.analysis!.cityReceipts = []
+    const wrapper = mount(BiCityMeetingBoard, {
+      props: {
+        snapshot: source,
+        allSnapshot: source,
+        regionCode: 'HB',
+        month: '2026-10',
+        maxMonth: '2026-10',
+        scopeLabel: '全省',
+      },
+      global: { stubs: { EchartsChart: true } },
+    })
+    expect(wrapper.find('.child-departments').text()).toContain('530.40')
+    expect(wrapper.find('.child-departments').text()).toContain('唐山市')
+    await wrapper.find('.child-departments button').trigger('click')
+    expect(wrapper.emitted('city')?.[0]).toEqual(['TS'])
+    wrapper.unmount()
+  })
   it('交易额与到账金额独立排名，回款不能回退到订单累计已收', () => {
     const source = cityMeetingFixture()
     const rows = cityMeetingRows(source)

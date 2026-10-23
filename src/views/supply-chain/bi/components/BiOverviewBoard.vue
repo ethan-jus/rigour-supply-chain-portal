@@ -182,9 +182,7 @@
             </article>
           </div>
           <p class="goal-explanation">
-            单城月默认：交易、到账各{{
-              cityContext ? '100,000元' : '10万元'
-            }}；新增200家、复购100家。年度目标逐月累计，客户数按期间去重。
+            目标取自人事指标设置，完成率按实际值 ÷ 对应目标计算；年度目标逐月累计，0 表示不考核。
           </p>
         </aside>
       </section>
@@ -406,7 +404,18 @@
           </article>
           <article>
             <h3>本期到账</h3>
-            <strong class="cyan"
+            <button
+              v-if="cityContext"
+              class="receipt-detail-button cyan"
+              aria-label="查看本期到账明细"
+              :disabled="loading"
+              @click="receiptDetail = 'receipts'"
+            >
+              <strong
+                >{{ money(metric('receipt_amount')) }}<small>{{ amountUnit }}</small></strong
+              >
+            </button>
+            <strong v-else class="cyan"
               >{{ money(metric('receipt_amount')) }}<small>{{ amountUnit }}</small></strong
             >
             <p>按到账日期统计，不论订单在哪个月成交。</p>
@@ -420,7 +429,18 @@
           </article>
           <article>
             <h3>本期订单未回款</h3>
-            <strong
+            <button
+              v-if="cityContext"
+              class="receipt-detail-button"
+              aria-label="查看本期订单未回款明细"
+              :disabled="loading"
+              @click="receiptDetail = 'unpaid'"
+            >
+              <strong
+                >{{ money(metric('unpaid_amount')) }}<small>{{ amountUnit }}</small></strong
+              >
+            </button>
+            <strong v-else
               >{{ money(metric('unpaid_amount')) }}<small>{{ amountUnit }}</small></strong
             >
             <p>同批订单截至查询快照的未收款，不等于全部历史欠款。</p>
@@ -464,6 +484,13 @@
         </p>
       </div></el-dialog
     >
+    <BiReceiptDetails
+      v-if="receiptDetail && snapshot && cityContext"
+      :kind="receiptDetail"
+      :query="{ ...snapshot.query, from: snapshot.current.from, to: snapshot.current.to }"
+      :city-name="cityContext.name"
+      @close="receiptDetail = null"
+    />
   </main>
 </template>
 
@@ -491,6 +518,9 @@ import {
   targetGauge,
 } from '../overview-model'
 import EchartsChart from './EchartsChart.vue'
+import BiReceiptDetails from './BiReceiptDetails.vue'
+
+const receiptDetail = ref<'receipts' | 'unpaid' | null>(null)
 
 const props = defineProps<{
   snapshot: MeetingSnapshot | null

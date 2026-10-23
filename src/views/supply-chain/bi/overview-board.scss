@@ -636,6 +636,18 @@
       line-height: 1.8;
     }
   }
+  .receipt-detail-button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    &:hover strong { text-decoration: underline; text-underline-offset: 6px; }
+    &.cyan { color: var(--ov-cyan); }
+    &:focus-visible { outline: 2px solid var(--ov-blue); outline-offset: 4px; }
+    &:disabled { cursor: wait; }
+  }
   .receipt-rate {
     text-align: center;
     h3 {

@@ -895,7 +895,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       {
         path: 'bi/payment-risk',
         name: 'SupplyBiPaymentRisk',
-        component: () => import('@/views/supply-chain/bi/IndexView.vue'),
+        component: () => import('@/views/supply-chain/bi/PaymentRiskView.vue'),
         meta: {
           title: '回款风险看板',
           requiresAuth: true,
