@@ -242,7 +242,7 @@
               <tbody>
                 <tr v-for="city in matrix" :key="city.key">
                   <th>
-                    <button @click="filters.region = city.key">{{ city.name }}</button>
+                    <button :title="city.name" @click="filters.region = city.key">{{ city.name }}</button>
                   </th>
                   <td
                     v-for="cell in city.cells"
@@ -1271,6 +1271,19 @@ table button:hover {
   border: solid var(--line);
   border-width: 0 1px 1px 0;
   padding: 9px;
+}
+.risk-matrix th:first-child {
+  box-sizing: border-box;
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+}
+.risk-matrix tbody th button {
+  display: block;
+  width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .risk-matrix td button {
   display: block;
