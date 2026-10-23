@@ -28,7 +28,13 @@ export interface PaymentRiskOrder {
   paidAmount: number
   products: PaymentRiskProduct[]
 }
+export interface PaymentRiskRegion {
+  code: string
+  name: string
+  parentCode: string | null
+}
 export interface PaymentRiskData {
+  regions?: PaymentRiskRegion[]
   generatedAt: string
   dataUpdatedAt: string | null
   categories: PaymentRiskCategory[]

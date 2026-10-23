@@ -242,7 +242,9 @@
               <tbody>
                 <tr v-for="city in matrix" :key="city.key">
                   <th>
-                    <button :title="city.name" @click="filters.region = city.key">{{ city.name }}</button>
+                    <button :title="city.name" @click="filters.region = city.key">
+                      {{ city.name }}
+                    </button>
                   </th>
                   <td
                     v-for="cell in city.cells"
@@ -518,13 +520,14 @@ import {
   unknownKey,
   wan,
 } from '../payment-risk-model'
-import { selectRiskOrders } from '../payment-risk-model'
+import { selectRiskOrders, riskRegionPath, riskDisplayRegion } from '../payment-risk-model'
 import EchartsChart from './EchartsChart.vue'
 
 const props = withDefaults(
   defineProps<{
     data: PaymentRiskData | null
     initialRange: [string, string]
+    initialRegion?: string
     loading?: boolean
     error?: string
     demo?: boolean
@@ -536,8 +539,8 @@ const defaultRange: [string, string] = [...props.initialRange]
 const start = ref(props.initialRange[0])
 const end = ref(props.initialRange[1])
 const rangeError = ref('')
-const filters = ref(emptyRiskFilters())
-const queryFilters = ref(emptyRiskFilters())
+const filters = ref({ ...emptyRiskFilters(), region: props.initialRegion || '' })
+const queryFilters = ref({ ...filters.value })
 const boardElement = ref<HTMLElement | null>(null)
 const fullscreen = ref(false)
 const fullscreenError = ref('')
@@ -572,6 +575,12 @@ watch(
   },
   { deep: true, flush: 'sync' },
 )
+watch(
+  () => props.initialRegion,
+  (region) => {
+    filters.value.region = region || ''
+  },
+)
 const countMode = ref(false)
 const productMode = ref(false)
 const detailsOpen = ref(false)
@@ -580,11 +589,16 @@ const page = ref(1)
 const orders = computed(() => (props.data ? selectRiskOrders(props.data, filters.value) : []))
 const total = computed(() => orderAmount(orders.value))
 const risks = computed(() => riskGroups(orders.value))
-const cities = computed(() =>
-  groupRiskOrders(props.data?.orders || [], (o) => [
-    { key: o.regionCode || unknownKey, name: o.regionName || '城市待确认' },
-  ]),
-)
+const cities = computed(() => {
+  const data = props.data
+  if (!data) return []
+  return groupRiskOrders(data.orders, (o) =>
+    riskRegionPath(data, o.regionCode || unknownKey).map((code) => ({
+      key: code,
+      name: data.regions?.find((r) => r.code === code)?.name || o.regionName || '城市待确认',
+    })),
+  )
+})
 const people = computed(() =>
   groupRiskOrders(props.data?.orders || [], (o) => [
     { key: o.ownerStaffCode || unknownKey, name: o.ownerStaffName || '业务员待确认' },
@@ -606,12 +620,14 @@ const productRanking = computed(() =>
 const months = computed(() => activeOrderMonths(orders.value, ...props.initialRange))
 const matrix = computed(() =>
   groupRiskOrders(orders.value, (o) => [
-    { key: o.regionCode || unknownKey, name: o.regionName || '城市待确认' },
+    riskDisplayRegion(props.data!, o, filters.value.region),
   ]).map((city) => ({
     ...city,
     cells: months.value.map((month) => {
       const matching = orders.value.filter(
-        (o) => (o.regionCode || unknownKey) === city.key && o.orderDate.startsWith(month),
+        (o) =>
+          riskDisplayRegion(props.data!, o, filters.value.region).key === city.key &&
+          o.orderDate.startsWith(month),
       )
       const amount = orderAmount(matching)
       return {
@@ -819,7 +835,7 @@ function drillProduct(key: string) {
   }
 }
 function reset() {
-  filters.value = emptyRiskFilters()
+  filters.value = { ...emptyRiskFilters(), region: props.initialRegion || '' }
   productMode.value = false
 }
 function resetQuery() {

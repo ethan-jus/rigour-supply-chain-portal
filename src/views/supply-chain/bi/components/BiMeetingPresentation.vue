@@ -56,6 +56,7 @@ import { getSalesDashboardAnalysis } from '@/api/core/bi-sales-dashboard'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   getSupplyDashboardOverview,
+  getSupplyDashboardFilterOptions,
   getSupplyDashboardDataTrust,
   getSupplyDashboardOperatingAnalysis,
   type SupplyDashboardQuery,
@@ -68,7 +69,7 @@ import BiMeetingBoard from './BiMeetingBoard.vue'
 import BiOverviewBoard from './BiOverviewBoard.vue'
 import { overviewPeriods } from '../overview-model'
 import BiCityMeetingBoard from './BiCityMeetingBoard.vue'
-import { cityMeetingRows } from '../city-meeting-model'
+import { cityMeetingRows, citySelectionOptions } from '../city-meeting-model'
 
 const props = defineProps<{
   query: SupplyDashboardQuery
@@ -140,22 +141,30 @@ async function load() {
       ...periods.previous,
       ...(cityMode.value ? { regionCode: undefined } : {}),
     }
-    const [currentResult, previousResult, trustResult, analysisResult, previousAnalysisResult] =
-      await Promise.allSettled([
-        getSupplyDashboardOverview(query),
-        getSupplyDashboardOverview(previousQuery),
-        access.globalGovernance ? getSupplyDashboardDataTrust() : Promise.resolve(null),
-        getSupplyDashboardOperatingAnalysis(query),
-        props.embedded && !cityMode.value
-          ? getSupplyDashboardOperatingAnalysis(previousQuery)
-          : Promise.resolve(null),
-      ])
+    const [
+      currentResult,
+      previousResult,
+      trustResult,
+      analysisResult,
+      previousAnalysisResult,
+      regionsResult,
+    ] = await Promise.allSettled([
+      getSupplyDashboardOverview(query),
+      getSupplyDashboardOverview(previousQuery),
+      access.globalGovernance ? getSupplyDashboardDataTrust() : Promise.resolve(null),
+      getSupplyDashboardOperatingAnalysis(query),
+      props.embedded && !cityMode.value
+        ? getSupplyDashboardOperatingAnalysis(previousQuery)
+        : Promise.resolve(null),
+      getSupplyDashboardFilterOptions(),
+    ])
     if (request !== sequence) return
     if (currentResult.status === 'rejected') {
       snapshot.value = null
       throw currentResult.reason
     }
     snapshot.value = {
+      regions: regionsResult.status === 'fulfilled' ? regionsResult.value.regions : undefined,
       current: currentResult.value,
       previous: previousResult.status === 'fulfilled' ? previousResult.value : null,
       query,
@@ -177,7 +186,7 @@ async function load() {
     }
     citySnapshot.value = snapshot.value
     if (cityMode.value) {
-      const available = cityMeetingRows(snapshot.value).filter((row) => row.selectable)
+      const available = citySelectionOptions(snapshot.value)
       const code =
         available.find((row) => row.code === regionCode.value)?.code || available[0]?.code
       if (code) {
@@ -218,7 +227,10 @@ async function openCity(code?: string) {
 }
 async function selectCity(code: string) {
   if (!snapshot.value || !code) return
-  if (code && !cityMeetingRows(snapshot.value).some((row) => row.code === code && row.selectable))
+  if (
+    code &&
+    !citySelectionOptions(snapshot.value).some((row) => row.code === code && row.selectable)
+  )
     return
   const request = ++sequence
   regionCode.value = code
@@ -247,6 +259,7 @@ async function selectCity(code: string) {
     if (request !== sequence) return
     if (current.status === 'rejected') throw current.reason
     citySnapshot.value = {
+      regions: snapshot.value.regions,
       personalGoals: personalGoals.status === 'fulfilled' ? personalGoals.value : null,
       current: current.value,
       previous: previous.status === 'fulfilled' ? previous.value : null,

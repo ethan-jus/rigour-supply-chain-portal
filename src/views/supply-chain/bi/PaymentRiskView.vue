@@ -4,6 +4,9 @@
     :loading="loading"
     :error="error"
     :initial-range="range"
+    :initial-region="
+      typeof route.query.regionCode === 'string' ? route.query.regionCode : undefined
+    "
     @load="load"
   />
 </template>

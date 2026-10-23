@@ -16,6 +16,20 @@
       @city="chooseCity"
     >
       <template #comparison>
+        <section v-if="childDepartments.length" class="child-departments">
+          <h2>下级部门</h2>
+          <div>
+            <button
+              v-for="city in childDepartments"
+              :key="city.code"
+              @click="chooseCity(city.code)"
+            >
+              <strong>{{ city.name }}</strong>
+              <span>本期交易额 {{ moneyYuan(city.sales) }} 元</span>
+              <span>本期到账 {{ moneyYuan(city.receipts) }} 元</span>
+            </button>
+          </div>
+        </section>
         <BiCitySalesComparison
           v-model:receipt="receiptRanking"
           :snapshot="snapshot"
@@ -39,7 +53,8 @@
 import { computed, ref } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 import type { MeetingSnapshot } from '../meeting-model'
-import { cityMeetingRows } from '../city-meeting-model'
+import { citySelectionOptions } from '../city-meeting-model'
+import { moneyYuan } from '../meeting-model'
 import BiOverviewBoard from './BiOverviewBoard.vue'
 import BiCitySalesComparison from './BiCitySalesComparison.vue'
 
@@ -65,19 +80,62 @@ const emit = defineEmits<{
 }>()
 const receiptRanking = ref(false)
 const cityContext = computed(() => {
-  const options = cityMeetingRows(props.allSnapshot).filter((row) => row.selectable)
+  const options = citySelectionOptions(props.allSnapshot)
   return {
     code: props.regionCode,
     name: options.find((row) => row.code === props.regionCode)?.name || '',
     options,
   }
 })
+const childDepartments = computed(() =>
+  (props.allSnapshot?.regions || [])
+    .filter((row) => row.parentOptionValue === props.regionCode)
+    .map((row) => ({
+      code: row.optionValue,
+      name: row.optionLabel,
+      sales:
+        props.snapshot?.current.citySalesRanking.find((r) => r.dimensionCode === row.optionValue)
+          ?.salesAmount ?? 0,
+      receipts:
+        props.snapshot?.analysis?.cityReceipts?.find((r) => r.regionCode === row.optionValue)
+          ?.receiptAmount ?? 0,
+    })),
+)
 function chooseCity(code?: string) {
   if (code && cityContext.value.options.some((row) => row.code === code)) emit('city', code)
 }
 </script>
 
 <style lang="scss">
+.child-departments {
+  margin-bottom: 24px;
+  > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  button {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+    padding: 16px 20px;
+    color: #d4e3f0;
+    background: #10263a;
+    border: 1px solid #32516a;
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover {
+      border-color: #278dff;
+    }
+    strong {
+      color: #fff;
+      font-size: 16px;
+    }
+  }
+}
+
 .city-board-shell {
   position: fixed;
   inset: 0;

@@ -10,6 +10,7 @@ import {
   orderAmount,
   riskGroups,
   selectRiskOrders,
+  riskDisplayRegion,
 } from '@/views/supply-chain/bi/payment-risk-model'
 
 const order: PaymentRiskOrder = {
@@ -62,6 +63,35 @@ const data: PaymentRiskData = {
   orders: [order],
 }
 describe('未结清订单风险整单口径', () => {
+  it('全国按省级汇总，选择省包含子部门，进入后仅展示子部门且不重复计单', () => {
+    const hierarchy: PaymentRiskData = {
+      ...data,
+      regions: [
+        { code: 'HB', name: '河北省', parentCode: null },
+        { code: 'SJZ', name: '石家庄', parentCode: 'HB' },
+        { code: 'TS', name: '唐山市', parentCode: 'HB' },
+      ],
+      orders: [
+        { ...order, orderId: '1', regionCode: 'SJZ', orderAmount: 100 },
+        { ...order, orderId: '2', regionCode: 'TS', orderAmount: 80 },
+        { ...order, orderId: '3', regionCode: 'BJ', orderAmount: 999 },
+      ],
+    }
+    const selected = selectRiskOrders(hierarchy, { ...emptyRiskFilters(), region: 'HB' })
+    expect(orderAmount(selected)).toBe(180)
+    expect(
+      groupRiskOrders(hierarchy.orders, (o) => [riskDisplayRegion(hierarchy, o)]).find(
+        (r) => r.key === 'HB',
+      ),
+    ).toMatchObject({ amount: 180, count: 2 })
+    expect(
+      groupRiskOrders(selected, (o) => [riskDisplayRegion(hierarchy, o, 'HB')]).map((r) => r.key),
+    ).toEqual(['SJZ', 'TS'])
+    expect(orderAmount(selectRiskOrders(hierarchy, { ...emptyRiskFilters(), region: 'TS' }))).toBe(
+      80,
+    )
+    expect(orderAmount(hierarchy.orders)).toBe(1179)
+  })
   it('隐藏所有城市均无未结清金额的月份，保留任一城市有订单的月份', () => {
     const july = { ...order, orderId: '2', regionCode: 'SZ', orderDate: '2026-07-10' }
     const zero = { ...order, orderId: '3', orderDate: '2026-08-10', orderAmount: 0 }

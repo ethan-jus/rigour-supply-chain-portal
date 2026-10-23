@@ -95,10 +95,32 @@ export function attributedProduct(order: PaymentRiskOrder): PaymentRiskProduct {
 }
 
 /** 先确定整单归属，再按归属分类／风险／产品筛选，避免筛选时重复计单或改变风险。 */
+/** Region paths come from the authorized department tree, never from city-name guesses. */
+export function riskRegionPath(data: PaymentRiskData, code: string) {
+  const regions = new Map((data.regions || []).map((r) => [r.code, r]))
+  const path: string[] = []
+  while (code && !path.includes(code)) {
+    path.push(code)
+    code = regions.get(code)?.parentCode || ''
+  }
+  return path
+}
+export function riskDisplayRegion(data: PaymentRiskData, order: PaymentRiskOrder, selected = '') {
+  const path = riskRegionPath(data, order.regionCode || unknownKey)
+  const selectedIndex = path.indexOf(selected)
+  const code =
+    path[selectedIndex > 0 ? selectedIndex - 1 : selectedIndex === 0 ? 0 : path.length - 1]!
+  const region = data.regions?.find((r) => r.code === code)
+  return { key: code, name: region?.name || order.regionName || '城市待确认' }
+}
 export function selectRiskOrders(data: PaymentRiskData, filters: RiskFilters): PaymentRiskOrder[] {
   return [...new Map(data.orders.map((order) => [order.orderId, order])).values()].flatMap(
     (order) => {
-      if (filters.region && (order.regionCode || unknownKey) !== filters.region) return []
+      if (
+        filters.region &&
+        !riskRegionPath(data, order.regionCode || unknownKey).includes(filters.region)
+      )
+        return []
       if (filters.owner && (order.ownerStaffCode || unknownKey) !== filters.owner) return []
       if (filters.month && order.orderDate.slice(0, 7) !== filters.month) return []
       const product = attributedProduct(order)

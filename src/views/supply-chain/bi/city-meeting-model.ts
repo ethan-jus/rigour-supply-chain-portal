@@ -34,6 +34,15 @@ export function cityGoals(snapshot: MeetingSnapshot | null) {
       : Number(businessDate(snapshot.query.from || snapshot.current.from).slice(5, 7)),
   )
 }
+export function citySelectionOptions(snapshot: MeetingSnapshot | null) {
+  return snapshot?.regions?.length
+    ? snapshot.regions.map((row) => ({
+        code: row.optionValue,
+        name: row.optionLabel,
+        selectable: true,
+      }))
+    : cityMeetingRows(snapshot).filter((row) => row.selectable)
+}
 export function cityMeetingRows(snapshot: MeetingSnapshot | null) {
   if (!snapshot) return []
   const data = snapshot.current
