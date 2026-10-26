@@ -42,7 +42,14 @@ const Dialog = defineComponent({
 let wrapper: VueWrapper | undefined
 const deps = [
   { id: 1, parentId: null, departmentName: '总公司', statusCode: 'ACTIVE', sortOrder: 0 },
-  { id: 2, parentId: 1, departmentName: '杭州', statusCode: 'ACTIVE', sortOrder: 0 },
+  {
+    id: 2,
+    parentId: 1,
+    departmentName: '杭州',
+    statusCode: 'ACTIVE',
+    sortOrder: 0,
+    leaderEmployeeCode: 'EMP009',
+  },
 ]
 beforeEach(() => {
   vi.resetAllMocks()
@@ -181,7 +188,7 @@ it('员工资料不再重复维护金额，新建后在薪资标准页签录入'
 })
 
 describe('员工部门筛选', () => {
-  it('默认真实根部门、部门切换和重置、账号搜索与服务端排序', async () => {
+  it('默认入职时间排序、部门切换清除筛选、重置保留当前部门', async () => {
     vi.mocked(getHrEmployees).mockResolvedValue({
       items: [
         {
@@ -206,12 +213,25 @@ describe('员工部门筛选', () => {
     await flushPromises()
     expect(wrapper.getComponent(Sidebar).text()).not.toContain('全部部门')
     expect(getHrEmployees).toHaveBeenLastCalledWith(
-      expect.objectContaining({ departmentId: 1, includeSubDepartments: true }),
+      expect.objectContaining({
+        departmentId: 1,
+        includeSubDepartments: true,
+        sortBy: 'entryDate',
+        sortDirection: 'desc',
+      }),
     )
+    await wrapper.get('input[aria-label="关键词"]').setValue('旧部门关键词')
+    wrapper.findAllComponents({ name: 'ElSelect' })[1]!.vm.$emit('update:modelValue', 'LEFT')
+    wrapper.getComponent({ name: 'ElPagination' }).vm.$emit('update:current-page', 3)
     wrapper.getComponent(Sidebar).vm.$emit('update:modelValue', 2)
     await flushPromises()
     expect(getHrEmployees).toHaveBeenLastCalledWith(
-      expect.objectContaining({ departmentId: 2, begin: 0 }),
+      expect.objectContaining({
+        departmentId: 2,
+        begin: 0,
+        keyword: undefined,
+        employmentStatus: undefined,
+      }),
     )
     await wrapper
       .findAll('button')
@@ -219,7 +239,12 @@ describe('员工部门筛选', () => {
       .trigger('click')
     await flushPromises()
     expect(getHrEmployees).toHaveBeenLastCalledWith(
-      expect.objectContaining({ departmentId: 1, begin: 0 }),
+      expect.objectContaining({
+        departmentId: 2,
+        begin: 0,
+        sortBy: 'entryDate',
+        sortDirection: 'desc',
+      }),
     )
     wrapper.findAllComponents({ name: 'ElSelect' })[0]!.vm.$emit('update:modelValue', 'SALES')
     await wrapper.get('input[aria-label="职级"]').setValue('S1')
@@ -230,15 +255,16 @@ describe('员工部门筛选', () => {
     )
     const headings = wrapper.findAll('th').map((h) => h.text())
     expect(headings).toEqual([
-      '员工编号',
       '姓名',
+      '在职状态',
       '部门',
+      '岗位',
+      '入职时间',
       '手机号',
       '订货宝账号',
-      '岗位',
+      '员工编号',
       '是否转正',
       '薪酬类别',
-      '入职时间',
       '创建时间',
       '关联状态',
       '操作',
@@ -261,6 +287,63 @@ describe('员工部门筛选', () => {
       expect.objectContaining({ keyword: 'sales.login' }),
     )
   })
+})
+
+it('按负责人编号高亮姓名，不误标同名员工，并明确区分四种在职状态', async () => {
+  vi.mocked(getHrEmployees).mockResolvedValue({
+    items: ['ACTIVE', 'PENDING', 'INACTIVE', 'LEFT'].map(
+      (employmentStatus, i) =>
+        ({
+          id: String(i + 1),
+          employeeCode: i === 0 ? 'EMP009' : `OTHER${i}`,
+          employeeName: '同名员工',
+          employmentStatus,
+          departmentId: 2,
+          departmentName: '杭州',
+        }) as HrEmployeeRecord,
+    ),
+    total: 4,
+    begin: 0,
+    step: 20,
+  })
+  wrapper = mount(Employees, {
+    global: {
+      plugins: [ElementPlus, createPinia()],
+      stubs: { HrEmployeeEditor: true, ElDialog: Dialog },
+    },
+  })
+  await flushPromises()
+  const names = wrapper.findAll('.employee-name')
+  expect(names).toHaveLength(4)
+  expect(names[0]!.classes()).toContain('employee-name--leader')
+  expect(names[0]!.attributes('title')).toBe('杭州负责人')
+  expect(names.slice(1).every((n) => !n.classes().includes('employee-name--leader'))).toBe(true)
+  expect(wrapper.findAll('.employment-status').map((n) => n.text())).toEqual([
+    '在职',
+    '待确认',
+    '停用',
+    '离职',
+  ])
+  expect(wrapper.findAll('.employee-left-row')).toHaveLength(1)
+  expect(wrapper.findAll('th').map((n) => n.text())).not.toContain('部门负责人')
+  wrapper.getComponent(Sidebar).vm.$emit('update:modelValue', 2)
+  await flushPromises()
+  expect(wrapper.get('h1').text()).toBe('杭州')
+  expect(wrapper.get('.employee-count').text()).toBe('4 人')
+  wrapper
+    .getComponent(Sidebar)
+    .getComponent({ name: 'ElCheckbox' })
+    .vm.$emit('update:modelValue', false)
+  wrapper.getComponent(Sidebar).getComponent({ name: 'ElCheckbox' }).vm.$emit('change', false)
+  await flushPromises()
+  expect(getHrEmployees).toHaveBeenLastCalledWith(
+    expect.objectContaining({ departmentId: 2, includeSubDepartments: false, begin: 0 }),
+  )
+  wrapper.getComponent({ name: 'ElTable' }).vm.$emit('sort-change', { prop: null, order: null })
+  await flushPromises()
+  expect(getHrEmployees).toHaveBeenLastCalledWith(
+    expect.objectContaining({ sortBy: 'entryDate', sortDirection: 'desc' }),
+  )
 })
 
 describe('关联风险确认', () => {

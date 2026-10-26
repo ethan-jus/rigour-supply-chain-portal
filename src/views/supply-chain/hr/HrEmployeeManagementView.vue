@@ -13,15 +13,44 @@
           ></template
         ></DepartmentSidebar
       >
-      <section class="employee-results">
+      <section class="employee-results" aria-label="员工列表">
+        <header class="employee-directory-header">
+          <div class="department-context">
+            <span class="department-context-icon" aria-hidden="true"
+              ><el-icon><OfficeBuilding /></el-icon
+            ></span>
+            <div class="department-context-copy">
+              <div class="department-title">
+                <h1>{{ selectedDepartment?.departmentName || '员工档案' }}</h1>
+                <span class="employee-count">{{ loading ? '加载中…' : `${data.total} 人` }}</span>
+              </div>
+              <p>
+                {{ includeSubDepartments ? '含下级部门' : '仅当前部门'
+                }}<span>·</span>负责人姓名加粗高亮
+              </p>
+            </div>
+          </div>
+          <div class="directory-actions">
+            <DhbSalespersonSyncButton @completed="refresh" />
+            <el-button :loading="loading" :icon="Refresh" @click="refresh">刷新</el-button>
+            <el-button
+              v-if="can('hr:employee:create')"
+              type="primary"
+              :icon="Plus"
+              @click="openEditor()"
+              >新增员工</el-button
+            >
+          </div>
+        </header>
         <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="reset">
           <template #primary>
             <el-input
               v-model="keyword"
               clearable
               aria-label="关键词"
-              placeholder="姓名 / 手机号 / 员工编号 / 订货宝账号"
-              style="width: 300px"
+              placeholder="姓名 / 手机号 / 编号 / 订货宝账号"
+              class="employee-keyword"
+              :prefix-icon="Search"
             />
             <el-select
               v-model="positionCode"
@@ -91,13 +120,6 @@
               style="width: 110px"
             />
           </template>
-          <template #actions>
-            <DhbSalespersonSyncButton @completed="refresh" />
-            <el-button :loading="loading" @click="refresh">刷新</el-button>
-            <el-button v-if="can('hr:employee:create')" type="primary" @click="openEditor()"
-              >新增员工</el-button
-            >
-          </template>
         </OrderRegisterFilterCard>
         <el-alert v-if="riskError" :title="riskError" type="error" :closable="false" />
         <div v-if="risks.length" class="binding-risk-banner" role="status">
@@ -106,57 +128,92 @@
           <el-button link type="primary" @click="openReviews()">查看并处理</el-button>
         </div>
         <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
+        <div class="employee-list-caption">
+          <span>员工列表</span><span class="sort-hint">{{ sortDescription }}</span>
+        </div>
         <div class="employee-table-viewport">
           <el-table
             v-loading="loading"
             :data="data.items"
             row-key="id"
-            border
+            ref="employeeTable"
             height="100%"
-            :default-sort="{ prop: 'createdTime', order: 'descending' }"
+            table-layout="fixed"
+            :default-sort="{ prop: 'entryDate', order: 'descending' }"
             :row-class-name="employeeRowClass"
             @sort-change="sortChanged"
             @row-click="openDetail"
           >
             <el-table-column
-              prop="employeeCode"
-              sortable="custom"
-              label="员工编号"
-              width="160"
-              fixed="left"
-              show-overflow-tooltip
-            />
-            <el-table-column
               prop="employeeName"
               sortable="custom"
               label="姓名"
-              width="80"
+              min-width="170"
               fixed="left"
               show-overflow-tooltip
-            />
-            <el-table-column prop="departmentName" label="部门" min-width="81" show-overflow-tooltip
-              ><template #default="{ row }">{{
-                row.departmentName || '未分配部门'
-              }}</template></el-table-column
             >
-            <el-table-column prop="mobile" label="手机号" width="125" show-overflow-tooltip />
-            <!-- @vue-generic {HrEmployeeRecord} -->
-            <el-table-column label="订货宝账号" min-width="176" show-overflow-tooltip>
-              <template #default="{ row }"
-                ><span class="dhb-account">{{ row.dhbAccountNames?.join('、') || '—' }}</span>
-                <el-button
-                  v-if="row.dhbAccountNames?.length"
-                  link
-                  aria-label="复制订货宝账号"
-                  @click.stop="copyAccount(row)"
-                  ><el-icon><CopyDocument /></el-icon
-                ></el-button>
+              <template #default="{ row }">
+                <span
+                  :class="[
+                    'employee-name',
+                    { 'employee-name--leader': leaderDepartments.has(row.employeeCode) },
+                  ]"
+                  :title="
+                    leaderDepartments.has(row.employeeCode)
+                      ? `${leaderDepartments.get(row.employeeCode)?.join('、')}负责人`
+                      : undefined
+                  "
+                  >{{ row.employeeName }}</span
+                >
               </template>
+            </el-table-column>
+            <el-table-column prop="employmentStatus" label="在职状态" width="92">
+              <template #default="{ row }">
+                <span :class="['employment-status', statusClass(row.employmentStatus)]"
+                  ><i aria-hidden="true" />{{ statusLabel(row.employmentStatus) }}</span
+                >
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="departmentName"
+              label="部门"
+              min-width="110"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">{{ row.departmentName || '未分配部门' }}</template>
             </el-table-column>
             <el-table-column
               prop="positionName"
               label="岗位"
-              min-width="90"
+              min-width="100"
+              show-overflow-tooltip
+            />
+            <el-table-column prop="entryDate" label="入职时间" sortable="custom" width="120">
+              <template #default="{ row }">{{ dateOnly(row.entryDate) || '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="mobile" label="手机号" width="125" show-overflow-tooltip />
+            <!-- @vue-generic {HrEmployeeRecord} -->
+            <el-table-column label="订货宝账号" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="dhb-account-cell"
+                  ><span class="dhb-account" :title="row.dhbAccountNames?.join('、')">{{
+                    row.dhbAccountNames?.join('、') || '—'
+                  }}</span>
+                  <el-button
+                    v-if="row.dhbAccountNames?.length"
+                    link
+                    aria-label="复制订货宝账号"
+                    @click.stop="copyAccount(row)"
+                    ><el-icon><CopyDocument /></el-icon
+                  ></el-button>
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="employeeCode"
+              sortable="custom"
+              label="员工编号"
+              width="165"
               show-overflow-tooltip
             />
             <el-table-column label="是否转正" width="100">
@@ -172,11 +229,6 @@
                 payrollCategoryLabel(row.payrollCategory)
               }}</template>
             </el-table-column>
-            <el-table-column prop="entryDate" label="入职时间" sortable="custom" width="110"
-              ><template #default="{ row }">{{
-                dateOnly(row.entryDate) || '—'
-              }}</template></el-table-column
-            >
             <el-table-column
               prop="createdTime"
               label="创建时间"
@@ -215,15 +267,18 @@
             >
           </el-table>
         </div>
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="size"
-          :total="data.total"
-          :page-sizes="[20, 50, 100]"
-          layout="total,sizes,prev,pager,next"
-          @current-change="load"
-          @size-change="search"
-        />
+        <footer class="employee-list-footer">
+          <span>在职在前 · 离职在后</span
+          ><el-pagination
+            v-model:current-page="page"
+            v-model:page-size="size"
+            :total="data.total"
+            :page-sizes="[20, 50, 100]"
+            layout="total,sizes,prev,pager,next"
+            @current-change="load"
+            @size-change="search"
+          />
+        </footer>
       </section>
     </div>
     <DhbBindingReviewDrawer
@@ -405,8 +460,15 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import DhbBindingReviewDrawer from './DhbBindingReviewDrawer.vue'
-import { CopyDocument, WarningFilled } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import {
+  CopyDocument,
+  WarningFilled,
+  OfficeBuilding,
+  Plus,
+  Refresh,
+  Search,
+} from '@element-plus/icons-vue'
+import { ElMessage, type TableInstance } from 'element-plus'
 import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
 import HrEmployeeEditor from './HrEmployeeEditor.vue'
 import PayrollComponentView from './PayrollComponentView.vue'
@@ -450,8 +512,32 @@ const risks = ref<DhbBindingRisk[]>([])
 const riskError = ref(''),
   reviewVisible = ref(false),
   reviewEmployeeId = ref<string | null>(null)
-const sortBy = ref('createdTime'),
+const sortBy = ref('entryDate'),
   sortDirection = ref<'asc' | 'desc'>('desc')
+const employeeTable = ref<TableInstance>()
+const selectedDepartment = computed(() =>
+  departments.value.find((d) => d.id === departmentId.value),
+)
+const leaderDepartments = computed(() => {
+  const leaders = new Map<string, string[]>()
+  for (const department of departments.value) {
+    if (!department.leaderEmployeeCode) continue
+    const names = leaders.get(department.leaderEmployeeCode) ?? []
+    names.push(department.departmentName)
+    leaders.set(department.leaderEmployeeCode, names)
+  }
+  return leaders
+})
+const sortDescription = computed(() => {
+  const label =
+    {
+      employeeName: '姓名',
+      employeeCode: '员工编号',
+      entryDate: '入职时间',
+      createdTime: '创建时间',
+    }[sortBy.value] || '入职时间'
+  return `在职优先 · ${label}${sortDirection.value === 'asc' ? '升序' : '倒序'}`
+})
 const positions = ref<HrPositionRecord[]>([])
 const positionCode = ref(''),
   jobGrade = ref('')
@@ -478,6 +564,7 @@ async function load() {
   const request = ++requestId
   loading.value = true
   loadError.value = ''
+  data.value = { items: [], total: 0, begin: (page.value - 1) * size.value, step: size.value }
   try {
     const result = await getHrEmployees({
       begin: (page.value - 1) * size.value,
@@ -510,9 +597,10 @@ function search() {
 }
 function selectDepartment(id: number | null) {
   departmentId.value = id
+  clearFilters()
   search()
 }
-function reset() {
+function clearFilters() {
   keyword.value = ''
   status.value = ''
   regularized.value = undefined
@@ -520,9 +608,13 @@ function reset() {
   payrollMissing.value = false
   positionCode.value = ''
   jobGrade.value = ''
-  includeSubDepartments.value = true
-  departmentId.value = rootDepartmentId()
-  search()
+}
+function reset() {
+  clearFilters()
+  sortBy.value = 'entryDate'
+  sortDirection.value = 'desc'
+  if (employeeTable.value) employeeTable.value.sort('entryDate', 'descending')
+  else search()
 }
 function openEditor(row?: HrEmployeeRecord) {
   editing.value = row ?? null
@@ -537,10 +629,15 @@ function openReviews(id?: string) {
   reviewVisible.value = true
 }
 function employeeRowClass({ row }: { row: HrEmployeeRecord }) {
-  return row.dhbReviewCount ? 'employee-risk-row' : ''
+  return [
+    row.dhbReviewCount ? 'employee-risk-row' : '',
+    row.employmentStatus === 'LEFT' ? 'employee-left-row' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 function sortChanged({ prop, order }: { prop?: string | null; order?: string | null }) {
-  sortBy.value = prop && order ? prop : 'createdTime'
+  sortBy.value = prop && order ? prop : 'entryDate'
   sortDirection.value = order === 'ascending' ? 'asc' : 'desc'
   search()
 }
@@ -603,6 +700,18 @@ async function openDetail(row: HrEmployeeRecord) {
       detailError.value = e instanceof Error ? e.message : '员工详情加载失败'
   }
 }
+function statusClass(value: string) {
+  return (
+    (
+      {
+        ACTIVE: 'is-active',
+        LEFT: 'is-left',
+        INACTIVE: 'is-inactive',
+        PENDING: 'is-pending',
+      } as Record<string, string>
+    )[value] || 'is-pending'
+  )
+}
 function statusLabel(value: string) {
   return (
     (
@@ -640,11 +749,94 @@ onMounted(async () => {
   await applyPayrollLink()
 })
 </script>
-<style scoped>
+<style scoped lang="scss">
+@use '@/assets/styles/variables' as *;
+
 .employee-page :deep(.department-sidebar) {
-  width: 218px;
-  flex-basis: 218px;
+  width: 208px;
+  flex: 0 0 208px;
+  padding: 16px 12px;
   overflow: auto;
+  border-color: $color-border-base;
+  border-radius: $border-radius-lg;
+}
+.employee-page :deep(.el-tree-node__content) {
+  border-radius: 6px;
+  margin: 2px 0;
+  min-height: 34px;
+}
+.employee-page :deep(.el-tree-node.is-current > .el-tree-node__content) {
+  background: #eff6ff;
+  color: $color-primary-dark;
+  font-weight: 600;
+  box-shadow: inset 3px 0 $color-primary;
+}
+.employee-directory-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px 14px;
+  flex: none;
+}
+.department-context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.department-context-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  background: #eff6ff;
+  color: $color-primary;
+  border-radius: 10px;
+  font-size: 20px;
+}
+.department-context-copy {
+  min-width: 0;
+}
+.department-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.department-title h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 26px;
+  color: $color-text-primary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.employee-count {
+  flex: none;
+  border-radius: 6px;
+  background: $color-bg-muted;
+  color: $color-text-secondary;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.department-context-copy p {
+  display: flex;
+  gap: 8px;
+  margin: 3px 0 0;
+  color: $color-text-secondary;
+  font-size: 12px;
+}
+.directory-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.directory-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 .employee-page :deep(.order-register-filter) {
   flex: none;
@@ -652,7 +844,67 @@ onMounted(async () => {
   background: transparent;
 }
 .employee-page :deep(.order-register-filter .el-card__body) {
-  padding: 0 0 12px;
+  padding: 0 18px 14px;
+}
+.employee-keyword {
+  width: clamp(225px, 25vw, 300px);
+}
+.employee-list-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border-top: 1px solid $color-border-lighter;
+  color: $color-text-regular;
+  font-weight: 600;
+  font-size: 13px;
+  flex: none;
+}
+.sort-hint {
+  color: $color-text-secondary;
+  font-size: 12px;
+  font-weight: 400;
+}
+.employee-name {
+  color: $color-text-primary;
+  font-weight: 500;
+}
+.employee-name--leader {
+  color: $color-primary-dark;
+  font-weight: 750;
+}
+.employment-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.employment-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.is-active {
+  background: #ecfdf5;
+  color: #047857;
+}
+.is-left {
+  background: #fff1f2;
+  color: #be123c;
+}
+.is-inactive {
+  background: $color-bg-muted;
+  color: $color-text-secondary;
+}
+.is-pending {
+  background: #fffbeb;
+  color: #92400e;
 }
 .binding-risk-banner {
   display: flex;
@@ -660,7 +912,7 @@ onMounted(async () => {
   gap: 10px;
   flex: none;
   padding: 8px 14px;
-  margin-bottom: 10px;
+  margin: 0 18px 10px;
   background: #fffbeb;
   border: 1px solid #fde68a;
   border-radius: 6px;
@@ -669,11 +921,25 @@ onMounted(async () => {
 .binding-risk-banner .el-button {
   margin-left: auto;
 }
+.dhb-account-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .dhb-account {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
+.dhb-account-cell .el-button {
+  flex: none;
+}
 .muted {
-  color: #94a3b8;
+  color: $color-text-secondary;
+}
+.employee-page :deep(.employee-left-row) {
+  --el-table-tr-bg-color: #fafbfc;
 }
 .employee-page :deep(.employee-risk-row) {
   --el-table-tr-bg-color: #fffbeb;
@@ -704,16 +970,22 @@ onMounted(async () => {
 .employee-table-viewport {
   flex: 1;
   min-height: 0;
-  margin-top: 12px;
 }
 .employee-table-viewport :deep(.el-table) {
-  font-size: 14px;
+  font-size: 13px;
+  --el-table-border-color: #f1f5f9;
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-header-text-color: #64748b;
+  --el-table-row-hover-bg-color: #eff6ff;
 }
 .employee-table-viewport :deep(.cell) {
   white-space: nowrap;
 }
 .employee-table-viewport :deep(.el-table__cell) {
-  padding: 12px 0;
+  padding: 11px 0;
+}
+.employee-table-viewport :deep(.el-table__row) {
+  cursor: pointer;
 }
 .directory-layout :deep(.department-sidebar) {
   overflow: auto;
@@ -721,7 +993,7 @@ onMounted(async () => {
 }
 .directory-layout {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   margin-top: 0;
   min-width: 0;
   flex: 1;
@@ -735,10 +1007,26 @@ onMounted(async () => {
   min-width: 0;
   padding: 0;
   background: #fff;
-  border: 0;
+  border: 1px solid $color-border-base;
+  border-radius: $border-radius-lg;
+  overflow: hidden;
+}
+.employee-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid $color-border-lighter;
+  flex: none;
+}
+.employee-list-footer > span {
+  color: $color-text-secondary;
+  font-size: 12px;
 }
 .el-pagination {
-  margin-top: 16px;
+  margin: 0;
   flex: none;
 }
 .el-alert {
@@ -748,7 +1036,22 @@ h3 {
   font-size: 15px;
   margin: 24px 0 12px;
 }
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
+  .employee-directory-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .directory-actions {
+    margin-left: auto;
+  }
+  .employee-page :deep(.order-register-filter__line) {
+    flex-wrap: wrap;
+  }
+  .employee-page :deep(.order-register-filter__actions) {
+    margin-left: 0;
+  }
+}
+@media (max-width: 1200px) {
   .directory-layout :deep(.department-sidebar) {
     width: auto;
     flex: 0 0 auto;
