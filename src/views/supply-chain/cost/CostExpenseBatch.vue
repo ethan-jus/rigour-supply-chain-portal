@@ -147,6 +147,7 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -173,7 +174,7 @@ interface Row {
   command?: CostCommand
 }
 const newRow = (): Row => ({
-  id: crypto.randomUUID(),
+  id: randomId(),
   date: '',
   type: '',
   title: '',
@@ -320,7 +321,7 @@ async function save() {
         if (e instanceof ApiError && [400, 422].includes(e.status ?? 0)) {
           row.attempted = false
           row.command = undefined
-          row.id = crypto.randomUUID()
+          row.id = randomId()
         }
       }
     }

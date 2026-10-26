@@ -1,3 +1,4 @@
+import { randomId } from '@/utils/random-id'
 import type { PayrollCommissionRow } from '@/api/core/payroll-scheme/models/PayrollCommissionRow'
 import type { PayrollSchemeCommissionRule } from '@/api/core/payroll-scheme/models/PayrollSchemeCommissionRule'
 import { newSchemeCommission } from './payroll-scheme'
@@ -26,7 +27,7 @@ export function commissionRows(rules: PayrollSchemeCommissionRule[]): PayrollCom
     const key = `${rule.rowCode || ''}:${scopeKey(rule)}`
     let group = groups.find((g) => g.key === key && !g[role])
     if (!group) {
-      group = { key, code: rule.rowCode || crypto.randomUUID() }
+      group = { key, code: rule.rowCode || randomId() }
       groups.push(group)
     }
     group[role] = { ...rule, rowCode: group.code }
@@ -36,7 +37,7 @@ export function commissionRows(rules: PayrollSchemeCommissionRule[]): PayrollCom
     const name = nameOf(source)
     const missing = (role: string): PayrollSchemeCommissionRule => ({
       ...source,
-      code: crypto.randomUUID(),
+      code: randomId(),
       rowCode: g.code,
       recipientRole: role,
       name,
@@ -53,7 +54,7 @@ export function commissionRows(rules: PayrollSchemeCommissionRule[]): PayrollCom
 }
 
 export function newCommissionRow(name = ''): PayrollCommissionRow {
-  const code = crypto.randomUUID()
+  const code = randomId()
   return {
     code,
     name,

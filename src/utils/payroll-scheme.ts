@@ -1,3 +1,4 @@
+import { randomId } from '@/utils/random-id'
 import type { PayrollMetricStep } from '@/api/core/payroll-scheme/models/PayrollMetricStep'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import type { PayrollMetricDefinition } from '@/api/core/payroll-scheme/models/PayrollMetricDefinition'
@@ -37,7 +38,7 @@ export function managerCompletionSteps(): PayrollMetricStep[] {
 }
 export function newPayrollMetric(): PayrollMetricDefinition {
   return {
-    code: crypto.randomUUID(),
+    code: randomId(),
     name: '',
     source: 'MANUAL_CONFIRMED',
     cityMetric: null,
@@ -86,7 +87,7 @@ export function managerMetricScoringSteps(): PayrollMetricStep[] {
 }
 export function newSchemeCommission(): PayrollSchemeCommissionRule {
   return {
-    code: crypto.randomUUID(),
+    code: randomId(),
     name: '',
     recipientRole: 'SALES',
     categoryIds: [],

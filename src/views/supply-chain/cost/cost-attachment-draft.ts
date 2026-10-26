@@ -1,3 +1,4 @@
+import { randomId } from '@/utils/random-id'
 import { errorMessage } from '@/api/core/error'
 import {
   getCost,
@@ -78,7 +79,7 @@ export async function appendCostAttachmentFiles(
     if (duplicate) continue
     if (existingCount + result.length >= 20)
       throw new Error('每条记录最多 20 个附件，请移除多余文件')
-    result.push({ id: crypto.randomUUID(), file, status: 'pending', error: '' })
+    result.push({ id: randomId(), file, status: 'pending', error: '' })
   }
   return result
 }

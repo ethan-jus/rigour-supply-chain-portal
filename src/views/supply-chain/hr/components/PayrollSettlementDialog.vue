@@ -80,6 +80,7 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import { ref } from 'vue'
 import PayrollCommissionSummary from './PayrollCommissionSummary.vue'
 import { ElMessage } from 'element-plus'
@@ -131,7 +132,7 @@ async function open(value: PayrollRecord, kind: Action) {
   saving.value = true
   try {
     row.value = await getPayrollDetail(value.id)
-    requestId.value = crypto.randomUUID()
+    requestId.value = randomId()
     paidDate.value = new Date().toLocaleDateString('sv-SE')
     referenceNo.value = ''
     reason.value = ''

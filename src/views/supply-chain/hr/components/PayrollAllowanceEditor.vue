@@ -26,7 +26,7 @@
     >
     <div class="allowance-actions">
       <el-button
-        @click="form.allowances.push({ code: crypto.randomUUID(), name: '', amount: null })"
+        @click="form.allowances.push({ code: randomId(), name: '', amount: null })"
         >增加补贴项目</el-button
       >
     </div>
@@ -52,6 +52,7 @@
   ></el-form-item>
 </template>
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import { computed } from 'vue'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import { prorationOptions } from '@/utils/payroll-scheme'

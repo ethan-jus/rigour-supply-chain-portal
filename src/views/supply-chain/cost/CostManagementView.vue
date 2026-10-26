@@ -1126,6 +1126,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -1466,7 +1467,7 @@ window.addEventListener('beforeunload', beforeUnload)
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 function blank(): CostCommand {
   return {
-    requestId: crypto.randomUUID(),
+    requestId: randomId(),
     revision: null,
     title: '',
     typeCode: null,

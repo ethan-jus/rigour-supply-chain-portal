@@ -511,6 +511,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -656,7 +657,7 @@ async function actRule(row: PayrollComponentVersionView, action: PayrollComponen
   ruleBusy.value = row.id
   error.value = ''
   try {
-    const result = await actPayrollComponent(row, action, reason, crypto.randomUUID())
+    const result = await actPayrollComponent(row, action, reason, randomId())
     const impact = result.attendanceReviews + result.payrollReviews
     ElMessage.success(
       impact
@@ -969,7 +970,7 @@ function open(row?: PayrollComponentVersionView, next = false, replace = false) 
   editRevision.value = replace ? (row?.revision ?? 1) : undefined
   previousId.value = (next || replace) && row ? row.id : null
   readonly.value = (!!row && !next && !replace) || !can(writePermission.value)
-  requestId.value = crypto.randomUUID()
+  requestId.value = randomId()
   reason.value = row && !next && !replace ? row.reason : ''
   editorError.value = ''
   if (row) {

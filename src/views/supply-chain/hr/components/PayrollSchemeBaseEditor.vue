@@ -61,7 +61,7 @@
       <el-button
         @click="
           form.baseSalary.tiers.push({
-            code: crypto.randomUUID(),
+            code: randomId(),
             name: '',
             lower: null,
             upper: null,
@@ -107,7 +107,7 @@
     </el-table>
     <el-button
       v-if="form.role === 'SALES'"
-      @click="form.allowances.push({ code: crypto.randomUUID(), name: '', amount: null })"
+      @click="form.allowances.push({ code: randomId(), name: '', amount: null })"
       >增加补贴</el-button
     >
     <el-divider content-position="left">入离职及出勤折算</el-divider>
@@ -126,6 +126,7 @@
   </el-form>
 </template>
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import { prorationOptions } from '@/utils/payroll-scheme'
 const form = defineModel<PayrollSchemeDefinition>({ required: true })

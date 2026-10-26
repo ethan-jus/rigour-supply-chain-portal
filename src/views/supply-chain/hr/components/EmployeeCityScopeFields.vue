@@ -66,6 +66,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { randomId } from '@/utils/random-id'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { getCostCities } from '@/api/core/cost'
 import { getPayrollRules } from '@/api/core/payroll'
@@ -140,7 +141,7 @@ function add() {
   rows.value.push({
     id: null,
     revision: null,
-    requestId: crypto.randomUUID(),
+    requestId: randomId(),
     cityCode: '',
     cityName: '',
     effectiveFrom: '',
