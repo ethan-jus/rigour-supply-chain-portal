@@ -58,7 +58,6 @@ import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/P
 import { prorationOptions } from '@/utils/payroll-scheme'
 const form = defineModel<PayrollSchemeDefinition>({ required: true })
 const total = computed(() => form.value.allowances.reduce((sum, a) => sum + (a.amount || 0), 0))
-const crypto = globalThis.crypto
 </script>
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;

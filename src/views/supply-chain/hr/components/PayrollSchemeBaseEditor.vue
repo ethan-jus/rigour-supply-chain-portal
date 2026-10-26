@@ -130,7 +130,6 @@ import { randomId } from '@/utils/random-id'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import { prorationOptions } from '@/utils/payroll-scheme'
 const form = defineModel<PayrollSchemeDefinition>({ required: true })
-const crypto = globalThis.crypto
 const prorationFields = [
   { key: 'base', label: '底薪折算' },
   { key: 'performance', label: '绩效折算' },
