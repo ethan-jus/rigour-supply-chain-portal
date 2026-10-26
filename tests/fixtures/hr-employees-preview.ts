@@ -71,7 +71,14 @@ const departments = [
     statusCode: 'ACTIVE',
     sortOrder: 0,
   },
-  { id: 2, parentId: 1, departmentName: '运营部', statusCode: 'ACTIVE', sortOrder: 0 },
+  {
+    id: 2,
+    parentId: 1,
+    departmentName: '运营部',
+    statusCode: 'ACTIVE',
+    sortOrder: 0,
+    leaderEmployeeCode: 'EMP202609160010',
+  },
   { id: 3, parentId: 1, departmentName: '销售部', statusCode: 'ACTIVE', sortOrder: 1 },
   ...[
     '北京市',
@@ -106,7 +113,7 @@ const employees: HrEmployeeRecord[] = names.map((name, i) => ({
   employeeName: name,
   mobile: `180000058${18 + i}`,
   email: null,
-  employmentStatus: 'ACTIVE',
+  employmentStatus: i < 6 ? 'ACTIVE' : i === 6 ? 'PENDING' : i === 7 ? 'INACTIVE' : 'LEFT',
   positionCode: 'OPS',
   positionName: '数据运营',
   departmentId: 2,
@@ -187,14 +194,17 @@ apiClient.defaults.adapter = async (config) => {
     if (q.positionCode && q.positionCode !== 'OPS') items = []
     if (q.employmentStatus) items = items.filter((e) => e.employmentStatus === q.employmentStatus)
     if (q.jobGrade) items = items.filter((e) => e.jobGrade === q.jobGrade)
-    const key = (q.sortBy || 'createdTime') as keyof HrEmployeeRecord
-    items = items
-      .slice()
-      .sort(
-        (a, b) =>
-          String(a[key] || '').localeCompare(String(b[key] || ''), 'zh-CN') *
-          (q.sortDirection === 'asc' ? 1 : -1),
+    const key = (q.sortBy || 'entryDate') as keyof HrEmployeeRecord
+    const statusOrder = (status: string) => (status === 'ACTIVE' ? 0 : status === 'LEFT' ? 2 : 1)
+    items = items.slice().sort((a, b) => {
+      const group = statusOrder(a.employmentStatus) - statusOrder(b.employmentStatus)
+      if (group) return group
+      if (!a[key] || !b[key]) return Number(!a[key]) - Number(!b[key])
+      return (
+        String(a[key]).localeCompare(String(b[key]), 'zh-CN') *
+          (q.sortDirection === 'asc' ? 1 : -1) || Number(b.id) - Number(a.id)
       )
+    })
     body = {
       total: items.length,
       begin: q.begin || 0,

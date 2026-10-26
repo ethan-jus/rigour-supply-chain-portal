@@ -26,6 +26,7 @@ export interface HrEmployeeProfile {
   emergencyPhone: string | null
 }
 export interface HrDepartmentOption {
+  leaderEmployeeCode?: string | null
   id: number
   parentId: number | null
   departmentName: string
