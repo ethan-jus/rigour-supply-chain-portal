@@ -203,8 +203,11 @@ describe('cost Excel export', () => {
       '0.00',
     ],
   ]
-  it('converts the authorized snapshot into a business workbook without recalculating contributions', async () => {
-    const workbook = await buildCostDashboardWorkbook(csv(data))
+  it('exports only business columns and keeps amounts without exposing processing metadata', async () => {
+    const workbook = await buildCostDashboardWorkbook(
+      csv(data),
+      '2026年10月 / 本期 / 武汉市 / 经营费用 / 未付款',
+    )
     const restored = new Workbook()
     await restored.xlsx.load(await workbook.xlsx.writeBuffer())
     const sheet = restored.getWorksheet('支出明细')!
@@ -212,17 +215,56 @@ describe('cost Excel export', () => {
     expect(sheet.getCell('B2').value).toBe('运输,含"装卸"\n送达')
     expect(sheet.getCell('B3').value).toBe('=1+1')
     expect(sheet.getCell('G2').value).toBe(60.1)
-    expect(sheet.getCell('H3').value).toBe(0)
+    expect(sheet.getCell('H3').value).toBe('已确认')
+    expect(sheet.getCell('I3').value).toBe('未付款')
     expect(sheet.getCell('G4').value).toBeNull()
-    expect(sheet.getCell('K3').value).toBe('已关联原费用，不重复计入')
-    expect(sheet.columnCount).toBe(11)
-    expect(restored.worksheets).toHaveLength(1)
+    expect(sheet.columnCount).toBe(9)
+    expect(sheet.getRow(1).values).toEqual([
+      undefined,
+      '单据号',
+      '事项',
+      '费用类别',
+      '费用归属',
+      '费用日期',
+      '费用所属月份',
+      '单据金额（元）',
+      '确认状态',
+      '付款状态',
+    ])
+    expect(restored.worksheets).toHaveLength(2)
+    const note = restored.getWorksheet('导出说明')!
+    expect(note.getCell('B2').value).toBe('2026年10月 / 本期 / 武汉市 / 经营费用 / 未付款')
+    expect(note.getCell('B3').value).toBe('2026-10-01 至 2026-10-22')
+    expect(note.getCell('B5').value).toBe('3 笔')
+    expect(note.getCell('B6').value).toBe('60.10 元')
     expect(JSON.stringify(restored.model)).not.toMatch(
-      /internal-source|internal-snapshot|DIRECT|LINKED|587201Z/,
+      /internal-source|internal-snapshot|DIRECT|LINKED|REVIEW|587201Z|统计处理|成本处理|计入成本金额/,
     )
     expect(sheet.getRow(1).values).not.toEqual(
       expect.arrayContaining(['业务来源', '来源方式', '更新时间']),
     )
+  })
+  it('accepts the current business-only server export as well as historical CSV responses', async () => {
+    const headers = [
+      '单据号',
+      '事项',
+      '费用类别',
+      '城市',
+      '费用日期',
+      '金额（元）',
+      '确认状态',
+      '付款状态',
+      '费用所属月',
+    ]
+    const originalHeaders = data[4]!
+    const content = csv([
+      ['匹配笔数', '3'],
+      headers,
+      ...data.slice(5).map((row) => headers.map((header) => row[originalHeaders.indexOf(header)]!)),
+    ])
+    const workbook = await buildCostDashboardWorkbook(content)
+    expect(workbook.getWorksheet('支出明细')!.columnCount).toBe(9)
+    expect(workbook.getWorksheet('支出明细')!.getCell('G2').value).toBe(60.1)
   })
   it('rejects incomplete or mismatched exports instead of downloading a partial report', async () => {
     expect(() => parseCostCsv('"broken')).toThrow('不完整')

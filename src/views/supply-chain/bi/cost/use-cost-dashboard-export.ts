@@ -9,6 +9,7 @@ import {
   type CostReport,
 } from '@/api/core/bi-cost-dashboard'
 import { errorMessage } from '@/api/core/error'
+import { categories, statusName } from './cost-presentation'
 
 /** A downloadable task belongs to the exact filters and snapshot that created it. */
 export function useCostDashboardExport(
@@ -41,7 +42,24 @@ export function useCostDashboardExport(
     exportSubmitting.value = true
     exportError.value = ''
     const query = { ...request.value }
-    const context = `${query.year}年${query.month === 0 ? '全年' : `${query.month}月`} / ${query.periodSide === 'previous' ? '可比期' : '本期'} / ${query.city ? cities.value.find((city) => city.key === query.city)?.label || query.city : '全部授权归属'}`
+    const context = [
+      `${query.year}年${query.month === 0 ? '全年' : `${query.month}月`}`,
+      query.periodSide === 'previous' ? '可比期' : '本期',
+      query.city
+        ? cities.value.find((city) => city.key === query.city)?.label || '所选费用归属'
+        : '全部授权归属',
+      query.category
+        ? categories[query.category]
+        : query.scope === 'purchase'
+          ? '商品采购'
+          : query.scope === 'loss'
+            ? '商品损耗'
+            : '经营费用',
+      query.payment && query.payment !== 'ALL' ? statusName(query.payment) : '全部付款状态',
+      query.search ? `搜索：${query.search}` : '',
+    ]
+      .filter(Boolean)
+      .join(' / ')
     try {
       const task = await createCostExport(query)
       if (disposed || generation !== exportGeneration) {
@@ -98,7 +116,8 @@ export function useCostDashboardExport(
       const blob = await downloadCostExport(exportTask.value.id)
       if (disposed || generation !== exportGeneration) return
       const { exportCostDashboardWorkbook } = await import('./cost-report-export')
-      if (!disposed && generation === exportGeneration) await exportCostDashboardWorkbook(blob)
+      if (!disposed && generation === exportGeneration)
+        await exportCostDashboardWorkbook(blob, exportContext.value)
     } catch (e) {
       if (!disposed && generation === exportGeneration)
         exportError.value = errorMessage(e, '下载失败，请重新导出')

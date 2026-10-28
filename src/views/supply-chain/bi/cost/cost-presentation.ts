@@ -62,7 +62,7 @@ export const statusName = (v: string) =>
     VOID: '已作废',
     PAID: '已付款',
     UNPAID: '未付款',
-    UNKNOWN: '不适用 / 未记录',
+    UNKNOWN: '未记录',
   })[v] || '未记录'
 /** 费用归集后的类别不改变原单费用类型的字典。 */
 export function detailDimensionValue(
@@ -97,7 +97,8 @@ export function visibleDetailDimensions(
           ['office', 'warehouse', 'premises_unknown'].includes(record.category) &&
           name === '员工' &&
           (!value || value === '未记录')
-        ) && !(
+        ) &&
+        !(
           record.source === 'HR' &&
           values['费用类型'] === 'COURIER' &&
           ['出差或报销事项', '出差目的地', '收款方或合作方'].includes(name) &&
@@ -111,18 +112,21 @@ const theme = {
   textStyle: { color: '#91a8bf', fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif' },
   animationDuration: 200,
 }
+function amountScale(values: number[]) {
+  return values.some((value) => Math.abs(value) >= 10000) ? 10000 : 1
+}
 function amountAxis(values: number[]) {
-  const inTenThousands = values.some((value) => Math.abs(value) >= 10000)
+  const scale = amountScale(values)
   const number = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 })
   return {
     type: 'value' as const,
     min: 0,
     minInterval: 0.01,
-    name: inTenThousands ? '金额（万元）' : '金额（元）',
+    name: scale === 10000 ? '金额（万元）' : '金额（元）',
     nameTextStyle: { color: '#8da4bb' },
     axisLabel: {
       color: '#8da4bb',
-      formatter: (value: number) => number.format(value / (inTenThousands ? 10000 : 1)),
+      formatter: (value: number) => number.format(value / scale),
     },
     splitLine: { lineStyle: { color: '#233b51' } },
   }
@@ -239,99 +243,16 @@ export function line(report: CostReport): EChartsCoreOption {
     ],
   }
 }
-export function waterfall(groups: CostGroup[], before: string, current: string): EChartsCoreOption {
-  let total = Number(before)
-  const starts = [0],
-    rises: (number | '-')[] = [Number(before)],
-    falls: (number | '-')[] = ['-']
-  for (const g of groups) {
-    const delta = Number(g.delta)
-    starts.push(Math.min(total, total + delta))
-    rises.push(delta >= 0 ? delta : '-')
-    falls.push(delta < 0 ? -delta : '-')
-    total += delta
-  }
-  starts.push(0)
-  rises.push(Number(current))
-  falls.push('-')
-  return {
-    ...theme,
-    tooltip: {
-      trigger: 'axis',
-      renderMode: 'richText',
-      formatter: (params: unknown) => {
-        const i = (params as { dataIndex: number }[])[0]?.dataIndex ?? 0
-        return i === 0
-          ? `可比期：${money(before)} 元`
-          : i === groups.length + 1
-            ? `本期：${money(current)} 元`
-            : `${groups[i - 1].label}：${signed(groups[i - 1].delta)} 元`
-      },
-    },
-    grid: { left: 8, right: 10, top: 30, bottom: 12, containLabel: true },
-    xAxis: {
-      type: 'category',
-      data: ['可比期', ...groups.map((g) => g.label), '本期'],
-      axisLabel: { color: '#9bb0c7', interval: 0, width: 65, overflow: 'break', lineHeight: 17 },
-    },
-    yAxis: amountAxis(
-      starts.map((start, i) => start + Math.max(Number(rises[i]) || 0, Number(falls[i]) || 0)),
-    ),
-    series: [
-      {
-        type: 'bar',
-        stack: 'total',
-        silent: true,
-        itemStyle: { color: 'transparent' },
-        emphasis: { itemStyle: { color: 'transparent' } },
-        data: starts,
-      },
-      {
-        name: '增加',
-        labelLayout: { hideOverlap: true },
-        type: 'bar',
-        stack: 'total',
-        barMaxWidth: 30,
-        data: rises.map((value, i) => ({
-          value,
-          label: {
-            show: value !== '-',
-            position: 'top',
-            color: '#e4edf7',
-            fontSize: 10,
-            formatter:
-              i === 0
-                ? money(before)
-                : i === rises.length - 1
-                  ? money(current)
-                  : signed(groups[i - 1].delta),
-          },
-          itemStyle: { color: i === 0 || i === rises.length - 1 ? '#7caaf4' : '#e5b473' },
-        })),
-      },
-      {
-        name: '减少',
-        type: 'bar',
-        stack: 'total',
-        barMaxWidth: 30,
-        labelLayout: { hideOverlap: true },
-        data: falls.map((value, i) => ({
-          value,
-          label: {
-            show: value !== '-',
-            position: 'top',
-            color: '#70c9bc',
-            fontSize: 10,
-            formatter: i > 0 && i <= groups.length ? signed(groups[i - 1].delta) : '',
-          },
-        })),
-        itemStyle: { color: '#70c9bc' },
-      },
-    ],
-  }
-}
 export function eventKey(event: unknown): string | undefined {
   return (event as { data?: { id?: string } })?.data?.id
+}
+
+export function matrixTotal(
+  group: Pick<CostGroup, 'current' | 'delta'>,
+  mode: 'amount' | 'share' | 'delta',
+): string {
+  if (mode === 'share') return Number(group.current) > 0 ? '100.0%' : '—'
+  return mode === 'delta' ? signed(group.delta) : money(group.current)
 }
 
 /** 费用分类字典与录入页共用；稳定分组键保持不变。 */
@@ -383,7 +304,7 @@ export function comparisonCoverageNotice(report: CostReport): string {
 }
 
 export function overviewReading(report: CostReport, comparisonLabel: string): string {
-  if (!report.current.count) return '本期暂无计入经营费用的已确认记录，可查看待确认费用。'
+  if (!report.current.count) return '本期暂无计入经营费用的已确认记录。'
   const first = report.categories
     .filter((item) => Number(item.current) > 0)
     .reduce<CostGroup | undefined>(

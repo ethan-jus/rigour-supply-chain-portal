@@ -49,6 +49,7 @@
         v-for="tab in tabs"
         :key="tab.key"
         :class="{ active: section === tab.key }"
+        :aria-pressed="section === tab.key"
         @click="goSection(tab.key)"
       >
         {{ tab.label }}</button
@@ -82,7 +83,7 @@
         }}。报销按报销权限归集，两期均使用相同授权范围。
       </div>
       <div v-if="report.meta.dataState === 'STALE'" class="cost-message notice" role="alert">
-        当前展示最后成功的完整费用快照，数据更新延迟。更新时间：{{ updatedAt }}。
+        数据更新延迟，当前展示上次更新的费用数据。更新时间：{{ updatedAt }}。
       </div>
       <div v-if="report.current.reviewCount" class="cost-message notice" role="status">
         待核对报销 {{ report.current.reviewCount }} 笔、{{
@@ -131,28 +132,13 @@
           </p>
           <div class="support-grid">
             <div>
-              <h3>未付款费用（不含薪酬）</h3>
+              <h3>未付款单据金额</h3>
               <strong>{{ money(report.current.unpaid) }} 元</strong
               ><button
                 class="text-button"
                 @click="openRecords({ payment: 'UNPAID', status: 'CONFIRMED' })"
               >
                 查看未付款明细
-              </button>
-            </div>
-            <div>
-              <h3>待确认费用</h3>
-              <strong
-                >{{ report.current.draftCount }} 笔 /
-                {{ money(report.current.draftAmount) }} 元</strong
-              ><button class="text-button" @click="openRecords({ status: 'DRAFT' })">
-                查看待确认明细</button
-              ><button
-                v-if="report.current.missingCount"
-                class="text-button"
-                @click="openRecords({ status: 'ALL', missingAmount: true })"
-              >
-                缺金额 {{ report.current.missingCount }} 笔
               </button>
             </div>
             <div>
@@ -185,7 +171,7 @@
           </article>
         </section>
         <div v-if="!report.current.count" class="empty">
-          当前范围没有已确认费用记录；采购、损耗与待确认记录分别查看。
+          当前范围没有已确认费用记录；采购与损耗分别查看。
         </div>
         <section v-if="available.includes('labor')" class="cost-panel payroll-costs">
           <div class="panel-heading">
@@ -209,7 +195,7 @@
             </div>
           </div>
           <p class="chart-note">
-            商品提成明细由原工资单追溯。工资部分发放及待发净额请在薪酬管理查看；本看板不将应发薪酬计入未付款费用。
+            商品提成明细由原工资单追溯。未付款薪酬按应发金额列示，实际待发净额请在月度薪酬查看。
           </p>
         </section>
         <section class="changes-section">
@@ -323,6 +309,7 @@
             v-for="view in perspectives"
             :key="view.key"
             :class="{ active: perspective === view.key }"
+            :aria-pressed="perspective === view.key"
             @click="choosePerspective(view.key)"
           >
             {{ view.label }}
@@ -340,6 +327,7 @@
                   v-for="mode in matrixModes"
                   :key="mode.key"
                   :class="{ active: matrixMode === mode.key }"
+                  :aria-pressed="matrixMode === mode.key"
                   :disabled="mode.key === 'delta' && !report.meta.comparisonAvailable"
                   @click="matrixMode = mode.key"
                 >
@@ -353,7 +341,15 @@
                   <tr>
                     <th>费用归属</th>
                     <th v-for="group in report.categories" :key="group.key">{{ group.label }}</th>
-                    <th>本期合计</th>
+                    <th>
+                      {{
+                        matrixMode === 'delta'
+                          ? '变动合计'
+                          : matrixMode === 'share'
+                            ? '占比合计'
+                            : '本期合计'
+                      }}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -366,6 +362,7 @@
                     <td v-for="group in report.categories" :key="group.key">
                       <button
                         :style="cellStyle(city.key, group.key)"
+                        :aria-label="`${city.label}，${group.label}，${cellText(city.key, group.key)}，查看费用变动`"
                         @click="
                           openAnalysis({ city: city.key, category: group.key as CostCategory })
                         "
@@ -373,7 +370,7 @@
                         {{ cellText(city.key, group.key) }}
                       </button>
                     </td>
-                    <td class="numeric">{{ money(city.current) }}</td>
+                    <td class="numeric">{{ matrixTotal(city, matrixMode) }}</td>
                   </tr>
                   <tr v-if="!report.cityGroups.length">
                     <td :colspan="report.categories.length + 2" class="empty">
@@ -412,7 +409,7 @@
           </div>
         </template>
         <template v-else-if="perspective === 'structure'">
-          <div class="chart-grid">
+          <div class="chart-grid structure-chart-grid">
             <section class="cost-panel">
               <div class="panel-heading">
                 <h2>{{ filters.scope === 'opex' ? '经营费用结构' : '归属费用结构' }}</h2>
@@ -427,16 +424,14 @@
             <section class="cost-panel">
               <div class="panel-heading">
                 <div>
-                  <h2>费用变动构成</h2>
-                  <p class="muted">可比期金额 + 各项增减 = 本期金额</p>
+                  <h2>费用金额对比</h2>
                 </div>
               </div>
-              <EchartsChart
-                v-if="report.meta.comparisonAvailable"
-                :option="waterfall(structureGroups, report.previous.amount, report.current.amount)"
-                :height="280"
+              <CostComparisonBars
+                :groups="structureGroups"
+                :comparable="report.meta.comparisonAvailable"
+                @select="structureDrill"
               />
-              <div v-else class="empty">无可比数据，暂不计算变动构成</div>
             </section>
           </div>
           <section class="cost-panel">
@@ -499,11 +494,8 @@
               <span>期间变动金额</span
               ><strong :class="deltaClass(report.delta)">{{ signed(report.delta) }} 元</strong>
             </div>
-            <div v-if="filters.category === 'labor'">
-              <span>工资发放情况</span><strong>请在薪酬管理查看</strong>
-            </div>
-            <div v-else>
-              <span>未付款费用</span><strong>{{ money(report.current.unpaid) }} 元</strong>
+            <div>
+              <span>未付款单据金额</span><strong>{{ money(report.current.unpaid) }} 元</strong>
             </div>
           </div>
           <div class="chart-grid">
@@ -599,14 +591,6 @@
               </option>
             </select></label
           ><label
-            >确认状态
-            <select v-model="filters.status" aria-label="确认状态" @change="searchRecords">
-              <option value="ALL">全部</option>
-              <option value="CONFIRMED">已确认</option>
-              <option value="DRAFT">待确认</option>
-              <option value="VOID">已作废</option>
-            </select></label
-          ><label
             >付款状态
             <select v-model="filters.payment" aria-label="付款状态" @change="searchRecords">
               <option value="ALL">全部</option>
@@ -646,12 +630,6 @@
             </div>
             <div>
               <span>已确认金额</span><strong>{{ money(records.summary.confirmed) }} 元</strong>
-            </div>
-            <div>
-              <span>待确认已填金额</span><strong>{{ money(records.summary.draft) }} 元</strong>
-            </div>
-            <div>
-              <span>缺金额</span><strong>{{ records.summary.missing }} 笔</strong>
             </div>
           </div>
           <CostRecordsTable :rows="records.items" @detail="openDetail" />
@@ -811,32 +789,10 @@
                 {{ detail.record.amount === null ? '未填' : `${money(detail.record.amount)} 元` }}
               </dd>
             </div>
-            <div v-if="detail.record.costTreatment && detail.record.costTreatment !== 'DIRECT'">
-              <dt>成本处理</dt>
-              <dd>
-                {{
-                  detail.record.costTreatment === 'LINKED'
-                    ? '已由原费用计入，不重复汇总'
-                    : '待核对，暂不计入汇总'
-                }}
-              </dd>
-            </div>
             <div>
               <dt>确认状态 / 付款状态</dt>
               <dd>
                 {{ statusName(detail.record.status) }} / {{ statusName(detail.record.payment) }}
-              </dd>
-            </div>
-            <div v-if="detail.record.sourceSystem">
-              <dt>原始来源</dt>
-              <dd>
-                {{
-                  detail.record.sourceSystem === 'NONE'
-                    ? '手工登记'
-                    : detail.record.sourceSystem
-                      ? externalSourceName(detail.record.sourceSystem)
-                      : '未记录'
-                }}
               </dd>
             </div>
             <div
@@ -873,7 +829,7 @@
         <dl class="definitions">
           <dt>业务确认</dt>
           <dd>
-            确认表示记录纳入统计，不代表审批通过或财务审核完成。本模块不提供审批流、财务审核或付款操作。
+            仅已确认记录进入看板，待确认和已作废记录不纳入展示或导出。确认不代表审批通过或财务审核完成。本模块不提供审批流、财务审核或付款操作。
           </dd>
           <dt>经营费用</dt>
           <dd>
@@ -881,18 +837,19 @@
           </dd>
           <dt>期间对比</dt>
           <dd>
-            按费用实际发生日期、北京时间统计；薪酬、租赁及月度服务按费用所属月统计，不摊入每日曲线。当前月比较截至日对应范围；历史月比较完整自然月；全年固定同比。上期短月及闰日按有效日期裁剪。
+            按费用实际发生日期、北京时间统计；薪酬、租赁及月度服务按费用所属月统计，不摊入每日曲线。当前月比较截至日对应范围；历史月比较完整自然月；全年固定同比。上期短月及闰日按有效日期裁剪。授权费用范围已有可比期记录时，新增费用分类的上期金额按零比较，零基数不计算增长率。
           </dd>
           <dt>占比与变动贡献</dt>
           <dd>
             结构占比以当前范围全量确认金额为分母；变动贡献按全部增加额或全部减少额分别计算。无历史覆盖不推算增幅，零基数显示“—”。
           </dd>
           <dt>付款状态</dt>
-          <dd>已付款、未付款是台账状态，不能据此推算银行实际支付额、逾期或现金流。</dd>
-          <dt>数据与权限</dt>
           <dd>
-            ERP、Order、HR
-            费用台账定期同步后统一发布。来源失败保留同范围最后完整快照并标示时间。原单权限独立校验，费用更正在原业务模块完成。
+            人力薪酬按月度薪酬登记发放状态展示：已发放为已付款，其余为未付款；部分登记但尚未发完仍为未付款。其他费用沿用原台账的付款状态。状态不代表银行实际支付额、逾期或现金流；工资待发净额请查看原工资单。
+          </dd>
+          <dt>数据更新</dt>
+          <dd>
+            费用单据更新后可点击刷新读取最新结果；数据更新延迟时显示上次更新结果及时间。费用更正在原业务单据中完成。
           </dd>
           <dt>采购与损耗</dt>
           <dd>采用成本台账登记金额分别统计，不重算采购订单、库存估值或利润。</dd>
@@ -907,9 +864,9 @@ import { displayDateTime } from '@/utils/business-date'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { type CostCategory, type CostScope } from '@/api/core/bi-cost-dashboard'
 import { ElMessage } from 'element-plus'
-import { externalSourceName } from '../cost/cost-source'
 import EchartsChart from './components/EchartsChart.vue'
 import CostRing from './cost/CostRing.vue'
+import CostComparisonBars from './cost/CostComparisonBars.vue'
 import CostRecordsTable from './cost/CostRecordsTable.vue'
 import { costDialog as vCostDialog } from './cost/cost-dialog'
 import { useCostDashboard } from './cost/use-cost-dashboard'
@@ -927,7 +884,7 @@ import {
   percent,
   signed,
   statusName,
-  waterfall,
+  matrixTotal,
   overviewReading,
   payrollHasRecords,
   comparisonCoverageNotice,

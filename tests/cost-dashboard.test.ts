@@ -6,7 +6,7 @@ import {
   bars,
   line,
   money,
-  waterfall,
+  matrixTotal,
   payrollHasRecords,
   comparisonCoverageNotice,
   overviewReading,
@@ -112,15 +112,31 @@ beforeEach(() => {
 })
 describe('成本看板正式查询交互', () => {
   it('快递详情不提示补充不适用的差旅字段，差旅缺项及真实已填值继续可见', () => {
-    const values = { 费用类型: 'COURIER', 出差或报销事项: '未记录', 出差目的地: '未记录',
-      收款方或合作方: '未记录', 收件客户或合作方: '合作方业务部', 运单号: 'SF001' }
+    const values = {
+      费用类型: 'COURIER',
+      出差或报销事项: '未记录',
+      出差目的地: '未记录',
+      收款方或合作方: '未记录',
+      收件客户或合作方: '合作方业务部',
+      运单号: 'SF001',
+    }
     expect(visibleDetailDimensions({ source: 'HR', category: 'expense' }, values)).toEqual({
-      费用类型: 'COURIER', 收件客户或合作方: '合作方业务部', 运单号: 'SF001',
+      费用类型: 'COURIER',
+      收件客户或合作方: '合作方业务部',
+      运单号: 'SF001',
     })
-    expect(visibleDetailDimensions({ source: 'HR', category: 'expense' }, { ...values, 费用类型: 'TRAVEL' }))
-      .toMatchObject({ 出差目的地: '未记录' })
-    expect(visibleDetailDimensions({ source: 'HR', category: 'expense' }, { ...values, 收款方或合作方: '李四' }))
-      .toMatchObject({ 收款方或合作方: '李四' })
+    expect(
+      visibleDetailDimensions(
+        { source: 'HR', category: 'expense' },
+        { ...values, 费用类型: 'TRAVEL' },
+      ),
+    ).toMatchObject({ 出差目的地: '未记录' })
+    expect(
+      visibleDetailDimensions(
+        { source: 'HR', category: 'expense' },
+        { ...values, 收款方或合作方: '李四' },
+      ),
+    ).toMatchObject({ 收款方或合作方: '李四' })
   })
   it('uses the original reimbursement type after grouping the expense into another cost category', () => {
     for (const category of ['office', 'freight', 'marketing', 'purchase'] as const) {
@@ -292,7 +308,7 @@ describe('成本看板正式查询交互', () => {
     expect(state.request.value.snapshotId).toBe('new')
     wrapper.unmount()
   })
-  it('global filters clear drill and search while retaining visible status/payment', async () => {
+  it('global filters retain payment and always restrict records to confirmed', async () => {
     const { state, wrapper } = setup()
     await flushPromises()
     state.openRecords({ city: 'WH', category: 'office', payment: 'UNPAID', status: 'DRAFT' })
@@ -306,7 +322,7 @@ describe('成本看板正式查询交互', () => {
       compare: 'yoy',
       periodSide: 'current',
       page: 1,
-      status: 'DRAFT',
+      status: 'CONFIRMED',
       payment: 'UNPAID',
     })
     expect(state.drill.value).toEqual({})
@@ -334,7 +350,7 @@ describe('成本看板正式查询交互', () => {
     wrapper.unmount()
   })
 })
-it('keeps cents exact in displayed values and all comparison bars vertical', () => {
+it('keeps cents exact in displayed values and existing city comparison bars vertical', () => {
   expect(money('9007199254740993.01')).toBe('9,007,199,254,740,993.01')
   const groups = Array.from({ length: 10 }, (_, i) => ({
     key: String(i),
@@ -356,10 +372,6 @@ it('keeps cents exact in displayed values and all comparison bars vertical', () 
   expect(option.xAxis.data).toHaveLength(8)
   expect(option.yAxis.min).toBe(0)
   expect(line(report()).series as unknown[]).toHaveLength(1)
-  const bridge = waterfall(groups.slice(0, 1), '50.00', '100.01') as {
-    series: { data: unknown[] }[]
-  }
-  expect(bridge.series[0].data).toEqual([0, 50, 0])
 })
 
 it('金额坐标按实际量级显示元或万元，零值和小额不出现浮点长尾', () => {
@@ -420,4 +432,13 @@ describe('已登记费用与薪酬覆盖提示', () => {
     r.current.count = 0
     expect(overviewReading(r, '较上期')).toContain('暂无计入经营费用的已确认记录')
   })
+})
+
+it('归属矩阵合计随金额、占比和变动视角切换，零金额不伪造占比', () => {
+  const group = { current: '4398.60', delta: '-1601.40' }
+  expect(matrixTotal(group, 'amount')).toBe('4,398.60')
+  expect(matrixTotal(group, 'delta')).toBe('-1,601.40')
+  expect(matrixTotal(group, 'share')).toBe('100.0%')
+  expect(matrixTotal({ current: '0.00', delta: null }, 'share')).toBe('—')
+  expect(matrixTotal({ current: '0.00', delta: null }, 'delta')).toBe('—')
 })

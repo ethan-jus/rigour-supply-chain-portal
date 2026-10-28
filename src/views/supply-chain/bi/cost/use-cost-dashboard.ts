@@ -58,6 +58,7 @@ export function useCostDashboard() {
   const request = computed<CostQuery>(() => ({
     ...filters,
     ...(section.value === 'records' ? drill.value : {}),
+    status: 'CONFIRMED',
     snapshotId: snapshot.value,
   }))
   function clearDrill() {
@@ -211,7 +212,7 @@ export function useCostDashboard() {
     filters.dimension = undefined
     filters.dimensionKey = undefined
     filters.search = undefined
-    filters.status = extra.status || 'CONFIRMED'
+    filters.status = 'CONFIRMED'
     filters.payment = extra.payment || 'ALL'
     filters.missingAmount = extra.missingAmount || false
     filters.page = 1
