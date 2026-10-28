@@ -28,6 +28,17 @@ function render(row = record('REVIEW'), permissions = true) {
 const button = (name: string) => wrapper.findAll('button').find((b) => b.text() === name)
 afterEach(() => wrapper?.unmount())
 describe('薪酬下一步操作', () => {
+  it('考勤未确认或待复核时，确认和发薪入口均拦截并显示后端原因', async () => {
+    render({ ...record('READY'), paymentBlockReason: '该员工当月考勤尚未确认' })
+    expect(button('确认薪酬')!.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('考勤尚未确认')
+    await wrapper.setProps({
+      row: { ...record('CONFIRMED'), paymentBlockReason: '考勤规则变更待复核' },
+    })
+    expect(button('登记发放')!.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('考勤规则变更待复核')
+  })
+
   it('待核对只能重算或调整，不能直接确认；检查通过后才显示确认入口', async () => {
     render()
     expect(wrapper.text()).toContain('当前有 2 类问题待处理')

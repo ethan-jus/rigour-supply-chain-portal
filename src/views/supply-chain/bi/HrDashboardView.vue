@@ -21,7 +21,7 @@
           </div>
         </dl>
         <p class="scope-note">
-          停用 {{ data.summary.inactive }} 人 · 待确认 {{ data.summary.pending }} 人 · 期间有订单
+          期间有订单
           {{ data.summary.orderingEmployees ?? '—' }} 人
         </p>
         <el-alert
@@ -34,7 +34,7 @@
         <div class="chart-grid">
           <section class="dashboard-panel">
             <h2>当前城市人员结构</h2>
-            <p class="scope-note">包含当前在职、离职及其他状态；单位：人</p>
+            <p class="scope-note">包含已填写在职、离职状态的员工；单位：人</p>
             <div class="chart-scroll">
               <EchartsChart :option="cityChart" :height="chartHeight(data.cities)" />
             </div>
@@ -128,6 +128,7 @@ import { getEmployeeAnalytics, type EmployeeStructure } from '@/api/core/bi-empl
 import EchartsChart from './components/EchartsChart.vue'
 import PeopleDashboardFrame from './components/PeopleDashboardFrame.vue'
 import { usePeopleDashboard, snapshotTime as timestamp } from './use-people-dashboard'
+import { employeeEmploymentStatusLabel } from '@/utils/hr-employee-profile'
 
 const { data, loading, error, load } = usePeopleDashboard(getEmployeeAnalytics)
 const search = ref(''),
@@ -156,6 +157,7 @@ const qualityNote = computed(() => {
   return [
     s.missingEntryDate ? `${s.missingEntryDate} 人缺入职日期` : '',
     s.missingDepartment ? `${s.missingDepartment} 人未填写部门` : '',
+    s.total > s.active + s.left ? `${s.total - s.active - s.left} 人未填写在职状态` : '',
     s.unmappedCity ? `${s.unmappedCity} 人的城市尚未关联城市编码，仅在全租户范围展示` : '',
   ]
     .filter(Boolean)
@@ -192,21 +194,13 @@ function structureChart(rows: EmployeeStructure[]) {
         data: rows.map((row) => row.left),
         itemStyle: { color: '#8a98ad' },
       },
-      {
-        name: '停用或待确认',
-        type: 'bar' as const,
-        stack: 'people',
-        data: rows.map((row) => row.total - row.active - row.left),
-        itemStyle: { color: '#d9a64b' },
-      },
     ],
   }
 }
 const cityChart = computed(() => structureChart(data.value?.cities || []))
 const positionChart = computed(() => structureChart(data.value?.positions || []))
 const chartHeight = (rows: EmployeeStructure[]) => Math.max(230, rows.length * 28 + 60)
-const statusName = (value: string) =>
-  ({ ACTIVE: '在职', LEFT: '离职', INACTIVE: '停用', PENDING: '待确认' })[value] || '待确认'
+const statusName = employeeEmploymentStatusLabel
 const money = (value: string | number | null) =>
   value === null
     ? '—'

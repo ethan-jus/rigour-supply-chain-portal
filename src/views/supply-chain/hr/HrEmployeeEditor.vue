@@ -9,11 +9,33 @@
   >
     <el-tabs v-model="editorTab">
       <el-tab-pane label="员工资料" name="basic">
-        <el-form v-loading="loading" label-position="top" :model="form" @submit.prevent="save">
+        <el-form
+          ref="employeeForm"
+          v-loading="loading"
+          label-position="top"
+          :model="validationModel"
+          :rules="requiredRules"
+          :validate-on-rule-change="false"
+          @submit.prevent="save"
+        >
           <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
+          <el-alert
+            v-if="Object.keys(fieldErrors).length"
+            type="error"
+            :closable="false"
+            title="请核对以下资料后再提交"
+          >
+            <ul aria-label="员工资料校验问题">
+              <li v-for="(message, key) in fieldErrors" :key="key">{{ message }}</li>
+            </ul>
+          </el-alert>
           <h3>基本信息</h3>
           <div class="form-grid">
-            <el-form-item label="部门" required
+            <el-form-item
+              label="部门"
+              prop="departmentId"
+              :error="fieldErrors['departmentId']"
+              required
               ><el-tree-select
                 v-model="form.departmentId"
                 :data="departmentTree"
@@ -23,7 +45,11 @@
                 filterable
                 placeholder="请选择部门"
             /></el-form-item>
-            <el-form-item label="岗位" required
+            <el-form-item
+              label="岗位"
+              prop="positionCode"
+              :error="fieldErrors['positionCode']"
+              required
               ><el-select v-model="form.positionCode" filterable placeholder="请选择岗位">
                 <el-option
                   v-for="p in positions"
@@ -31,13 +57,21 @@
                   :value="p.positionCode"
                   :label="p.positionName" /></el-select
             ></el-form-item>
-            <el-form-item label="姓名" required
+            <el-form-item
+              label="姓名"
+              prop="employeeName"
+              :error="fieldErrors['employeeName']"
+              required
               ><el-input v-model="form.employeeName" maxlength="128" placeholder="请输入姓名"
             /></el-form-item>
-            <el-form-item label="手机号"
+            <el-form-item label="手机号" required prop="mobile" :error="fieldErrors['mobile']"
               ><el-input v-model="form.mobile" maxlength="32"
             /></el-form-item>
-            <el-form-item label="身份证号" :error="identity.error"
+            <el-form-item
+              label="身份证号"
+              required
+              prop="profile.idNumber"
+              :error="fieldErrors['profile.idNumber'] || identity.error"
               ><el-input v-model="profile.idNumber" maxlength="18" placeholder="18位居民身份证号"
             /></el-form-item>
             <el-form-item label="出生日期"
@@ -49,10 +83,13 @@
             <el-form-item label="年龄"
               ><el-input :model-value="identity.age" readonly placeholder="自动计算"
             /></el-form-item>
-            <el-form-item label="性别"
+            <el-form-item label="性别" required
               ><el-input :model-value="identity.gender" readonly placeholder="根据身份证自动显示"
             /></el-form-item>
-            <el-form-item label="学历"
+            <el-form-item
+              label="学历"
+              prop="profile.education"
+              :error="fieldErrors['profile.education']"
               ><el-select v-model="profile.education" clearable
                 ><el-option
                   v-for="v in educationOptions"
@@ -63,22 +100,34 @@
           </div>
           <h3>教育信息</h3>
           <div class="form-grid">
-            <el-form-item label="毕业院校" class="span-two"
+            <el-form-item
+              label="毕业院校"
+              prop="profile.graduationSchool"
+              :error="fieldErrors['profile.graduationSchool']"
+              class="span-two"
               ><el-input v-model="profile.graduationSchool" maxlength="128"
             /></el-form-item>
-            <el-form-item label="专业"
+            <el-form-item label="专业" prop="profile.major" :error="fieldErrors['profile.major']"
               ><el-input v-model="profile.major" maxlength="128"
             /></el-form-item>
           </div>
           <h3>任职信息</h3>
           <div class="form-grid">
-            <el-form-item label="职级"
+            <el-form-item label="职级" prop="jobGrade" :error="fieldErrors['jobGrade']"
               ><el-input v-model="form.jobGrade" maxlength="32" placeholder="业务员默认 S1"
             /></el-form-item>
-            <el-form-item label="入职日期"
+            <el-form-item
+              label="入职日期"
+              required
+              prop="entryDate"
+              :error="fieldErrors['entryDate']"
               ><el-date-picker v-model="entryDate" type="date" value-format="YYYY-MM-DD"
             /></el-form-item>
-            <el-form-item label="在职状态"
+            <el-form-item
+              label="在职状态"
+              required
+              prop="employmentStatus"
+              :error="fieldErrors['employmentStatus']"
               ><el-select
                 v-model="form.employmentStatus"
                 :disabled="!!record && !can('hr:employee:status')"
@@ -86,22 +135,30 @@
                 <el-option label="在职" value="ACTIVE" /><el-option
                   label="离职"
                   value="LEFT"
-                /><el-option label="停用" value="INACTIVE" /><el-option
-                  label="待确认"
-                  value="PENDING"
                 /> </el-select
             ></el-form-item>
-            <el-form-item v-if="form.employmentStatus === 'LEFT'" label="离职日期" required
+            <el-form-item
+              v-if="form.employmentStatus === 'LEFT'"
+              label="离职日期"
+              prop="leaveDate"
+              :error="fieldErrors['leaveDate']"
+              required
               ><el-date-picker v-model="leaveDate" type="date" value-format="YYYY-MM-DD"
             /></el-form-item>
             <el-form-item label="工龄"><el-input :model-value="tenure" readonly /></el-form-item>
-            <el-form-item label="合同截止日期"
+            <el-form-item
+              label="合同截止日期"
+              prop="profile.contractEndDate"
+              :error="fieldErrors['profile.contractEndDate']"
               ><el-date-picker
                 v-model="profile.contractEndDate"
                 type="date"
                 value-format="YYYY-MM-DD"
             /></el-form-item>
-            <el-form-item label="参保状态"
+            <el-form-item
+              label="参保状态"
+              prop="profile.socialInsurance"
+              :error="fieldErrors['profile.socialInsurance']"
               ><el-select v-model="profile.socialInsurance" clearable
                 ><el-option
                   v-for="v in insuranceOptions"
@@ -112,7 +169,12 @@
           </div>
           <h3>薪酬身份与转正信息</h3>
           <div class="form-grid">
-            <el-form-item label="薪酬类别" required>
+            <el-form-item
+              label="薪酬类别"
+              prop="payrollCategory"
+              :error="fieldErrors['payrollCategory']"
+              required
+            >
               <el-select
                 v-model="form.payrollCategory"
                 clearable
@@ -127,7 +189,12 @@
                 />
               </el-select>
             </el-form-item>
-            <el-form-item label="是否转正" required>
+            <el-form-item
+              label="是否转正"
+              prop="regularized"
+              :error="fieldErrors['regularized']"
+              required
+            >
               <el-select
                 v-model="form.regularized"
                 placeholder="请选择是否转正"
@@ -139,7 +206,13 @@
                 />
               </el-select>
             </el-form-item>
-            <el-form-item v-if="form.regularized" label="转正日期" required>
+            <el-form-item
+              v-if="form.regularized"
+              label="转正日期"
+              prop="regularizationDate"
+              :error="fieldErrors['regularizationDate']"
+              required
+            >
               <el-date-picker
                 v-model="form.regularizationDate"
                 type="date"
@@ -147,13 +220,33 @@
                 placeholder="实际转正日期"
               />
             </el-form-item>
-            <el-form-item label="试用期"
-              ><el-input v-model="profile.probationPeriod" maxlength="32" placeholder="例如 3个月"
-            /></el-form-item>
+            <el-form-item
+              label="试用期"
+              prop="profile.probationPeriod"
+              :error="fieldErrors['profile.probationPeriod']"
+              ><div class="probation-months">
+                <el-input-number
+                  v-model="probationMonths"
+                  :min="0"
+                  :max="Number.MAX_SAFE_INTEGER"
+                  :precision="0"
+                  :step="1"
+                  placeholder="填写月数"
+                  aria-label="试用期月数"
+                />
+                <span>个月</span>
+              </div>
+              <p v-if="profile.probationPeriod && probationMonths == null" class="section-note">
+                历史记录：{{ profile.probationPeriod }}。请核对后填写数字月数。
+              </p>
+            </el-form-item>
           </div>
           <h3>联系与账户信息</h3>
           <div class="form-grid">
-            <el-form-item label="户口性质"
+            <el-form-item
+              label="户口性质"
+              prop="profile.householdType"
+              :error="fieldErrors['profile.householdType']"
               ><el-select v-model="profile.householdType" clearable
                 ><el-option
                   v-for="v in householdOptions"
@@ -161,25 +254,49 @@
                   :label="v"
                   :value="v" /></el-select
             ></el-form-item>
-            <el-form-item label="户籍地址" class="span-two"
+            <el-form-item
+              label="户籍地址"
+              prop="profile.registeredAddress"
+              :error="fieldErrors['profile.registeredAddress']"
+              class="span-two"
               ><el-input v-model="profile.registeredAddress" maxlength="300"
             /></el-form-item>
-            <el-form-item label="现居住地" class="full-row"
+            <el-form-item
+              label="现居住地"
+              prop="profile.residentialAddress"
+              :error="fieldErrors['profile.residentialAddress']"
+              class="full-row"
               ><el-input v-model="profile.residentialAddress" maxlength="300"
             /></el-form-item>
-            <el-form-item label="银行卡号"
+            <el-form-item
+              label="银行卡号"
+              prop="profile.bankAccount"
+              :error="fieldErrors['profile.bankAccount']"
               ><el-input v-model="profile.bankAccount" maxlength="32"
             /></el-form-item>
-            <el-form-item label="开户行" class="span-two"
+            <el-form-item
+              label="开户行"
+              prop="profile.bankName"
+              :error="fieldErrors['profile.bankName']"
+              class="span-two"
               ><el-input v-model="profile.bankName" maxlength="128"
             /></el-form-item>
-            <el-form-item label="紧急联系人"
+            <el-form-item label="邮箱" prop="email" :error="fieldErrors.email"
+              ><el-input v-model="form.email" maxlength="128" placeholder="选填"
+            /></el-form-item>
+            <el-form-item
+              label="紧急联系人"
+              prop="profile.emergencyContact"
+              :error="fieldErrors['profile.emergencyContact']"
               ><el-input v-model="profile.emergencyContact" maxlength="128"
             /></el-form-item>
-            <el-form-item label="紧急联系方式"
+            <el-form-item
+              label="紧急联系方式"
+              prop="profile.emergencyPhone"
+              :error="fieldErrors['profile.emergencyPhone']"
               ><el-input v-model="profile.emergencyPhone" maxlength="32"
             /></el-form-item>
-            <el-form-item label="备注" class="full-row"
+            <el-form-item label="备注" prop="remark" :error="fieldErrors['remark']" class="full-row"
               ><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500"
             /></el-form-item>
           </div>
@@ -223,12 +340,12 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import PayrollComponentView from './PayrollComponentView.vue'
 import EmployeeCityScopeFields from './components/EmployeeCityScopeFields.vue'
 import type { HrEmployeeCityScopeCommand } from '@/api/core/hr/models/HrEmployeeCityScopeCommand'
 import { isCityManagerPosition, payrollCategories } from '@/utils/hr-payroll-profile'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
   getHrEmployee,
   getHrPositions,
@@ -243,6 +360,9 @@ import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import {
   dateOnly,
   identityDetails,
+  validateEmployeeProfile,
+  probationMonthsValue,
+  employeeEmploymentStatusValue,
   serviceLength,
   educationOptions,
   householdOptions,
@@ -304,6 +424,58 @@ const form = reactive(empty()),
   profile = reactive(blankProfile()),
   entryDate = ref(''),
   leaveDate = ref('')
+const probationMonths = computed({
+  get: () => probationMonthsValue(profile.probationPeriod),
+  set: (value: number | undefined | null) => {
+    profile.probationPeriod = value == null ? null : String(value)
+  },
+})
+const validationModel = computed(() => ({
+  ...form,
+  profile,
+  entryDate: entryDate.value,
+  leaveDate: leaveDate.value,
+}))
+const requiredRules = computed<FormRules>(() => {
+  const fields = {
+    employeeName: '请填写姓名',
+    departmentId: '请选择部门',
+    positionCode: '请选择岗位',
+    mobile: '请填写手机号',
+    'profile.idNumber': '请填写身份证号',
+    entryDate: '请填写入职日期',
+    employmentStatus: '请选择在职状态',
+    payrollCategory: '请选择薪酬类别',
+  }
+  return {
+    ...Object.fromEntries(
+      Object.entries(fields).map(([key, message]) => [
+        key,
+        [{ required: true, message, trigger: ['change', 'blur'] }],
+      ]),
+    ),
+    regularized: [
+      { required: true, type: 'boolean', message: '请选择是否转正', trigger: 'change' },
+    ],
+    regularizationDate: [
+      { required: !!form.regularized, message: '请填写实际转正日期', trigger: 'change' },
+    ],
+    leaveDate: [
+      {
+        required: form.employmentStatus === 'LEFT',
+        message: '离职员工必须填写离职日期',
+        trigger: 'change',
+      },
+    ],
+  }
+})
+const employeeForm = ref<FormInstance>()
+const validationSubmitted = ref(false)
+const fieldErrors = computed(() =>
+  validationSubmitted.value
+    ? validateEmployeeProfile(form, profile, entryDate.value, leaveDate.value)
+    : {},
+)
 const identity = computed(() => identityDetails(profile.idNumber))
 const isManagerPosition = computed(() =>
   isCityManagerPosition(
@@ -348,6 +520,7 @@ watch(visible, async (open) => {
   loading.value = true
   loadError.value = ''
   saveError.value = ''
+  validationSubmitted.value = false
   savedEmployee.value = null
   Object.assign(form, empty(), { departmentId: props.departmentId ?? null })
   Object.assign(profile, blankProfile())
@@ -382,7 +555,7 @@ watch(visible, async (open) => {
         regularizationDate: detail.regularizationDate ?? null,
         payrollCategory: detail.payrollCategory ?? null,
         salaryEffectiveFrom: detail.salaryEffectiveFrom ?? null,
-        employmentStatus: detail.employmentStatus,
+        employmentStatus: employeeEmploymentStatusValue(detail.employmentStatus),
         mobile: detail.mobile,
         email: detail.email,
         remark: detail.remark,
@@ -402,35 +575,11 @@ watch(visible, async (open) => {
 async function save() {
   if (saving.value || loading.value || loadError.value) return
   saveError.value = ''
-  if (!form.employeeName.trim() || !form.departmentId || !form.positionCode) {
-    saveError.value = '请填写姓名并选择部门和岗位'
-    return
-  }
-  if (!form.payrollCategory) {
-    saveError.value = '请选择薪酬类别，由 HR 明确区分总部和销售'
-    return
-  }
-  if (form.regularized == null) {
-    saveError.value = '请选择是否转正，历史档案不会自动推断'
-    return
-  }
-  if (
-    form.regularized &&
-    (!form.regularizationDate || (entryDate.value && form.regularizationDate < entryDate.value))
-  ) {
-    saveError.value = '请填写不早于入职日期的实际转正日期'
-    return
-  }
-  if (identity.value.error) {
-    saveError.value = identity.value.error
-    return
-  }
-  if (form.employmentStatus === 'LEFT' && !leaveDate.value) {
-    saveError.value = '离职员工必须填写离职日期'
-    return
-  }
-  if (form.employmentStatus === 'LEFT' && entryDate.value && leaveDate.value < entryDate.value) {
-    saveError.value = '离职日期不能早于入职日期'
+  validationSubmitted.value = true
+  if (Object.keys(fieldErrors.value).length) {
+    editorTab.value = 'basic'
+    await nextTick()
+    employeeForm.value?.scrollToField(Object.keys(fieldErrors.value)[0]!)
     return
   }
   let cityScopes: HrEmployeeCityScopeCommand[] | undefined
@@ -443,18 +592,20 @@ async function save() {
   }
   try {
     if (props.record?.employmentStatus === 'ACTIVE' && form.employmentStatus !== 'ACTIVE')
-      await ElMessageBox.confirm(
-        '员工离职或停用后，关联业务账号将失去访问资格。',
-        '确认员工状态变更',
-        { type: 'warning' },
-      )
+      await ElMessageBox.confirm('员工离职后，关联业务账号将失去访问资格。', '确认员工状态变更', {
+        type: 'warning',
+      })
     saving.value = true
     const normalized = Object.fromEntries(
       Object.entries(profile).map(([k, v]) => [k, typeof v === 'string' ? v.trim() || null : v]),
     ) as unknown as HrEmployeeProfile
+    normalized.probationPeriod =
+      probationMonths.value == null ? null : String(probationMonths.value)
     await hrOrganizationApi.saveEmployee(props.record ? String(props.record.id) : null, {
       ...form,
       employeeName: form.employeeName.trim(),
+      mobile: form.mobile?.trim() || null,
+      email: form.email?.trim() || null,
       jobGrade: form.jobGrade?.trim() || null,
       entryDate: entryDate.value ? `${entryDate.value}T00:00:00+08:00` : null,
       leaveDate:
@@ -495,6 +646,16 @@ async function save() {
 :global(.employee-editor .el-dialog__footer) {
   padding-top: 16px;
   border-top: 1px solid #e2e8f0;
+}
+
+.probation-months {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.probation-months .el-input-number {
+  flex: 1;
+  min-width: 0;
 }
 
 h3 {

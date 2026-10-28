@@ -26,14 +26,14 @@
         <el-button
           v-if="row.statusCode === 'READY' && canConfirm"
           type="primary"
-          :disabled="busy || !monthEnded"
+          :disabled="busy || !monthEnded || !!row.paymentBlockReason"
           @click="$emit('confirm')"
           >确认薪酬</el-button
         >
         <el-button
           v-if="row.statusCode === 'CONFIRMED' && canPay"
           type="primary"
-          :disabled="busy"
+          :disabled="busy || !!row.paymentBlockReason"
           @click="$emit('paid')"
           >登记发放</el-button
         >
@@ -67,6 +67,8 @@ defineEmits<{
 const unlocked = computed(() => ['REVIEW', 'READY'].includes(props.row.statusCode))
 const monthEnded = computed(() => props.row.month < props.currentMonth)
 const guidance = computed(() => {
+  if (props.row.paymentBlockReason && ['READY', 'CONFIRMED'].includes(props.row.statusCode))
+    return { title: '请先完成当月考勤确认', hint: props.row.paymentBlockReason }
   switch (props.row.statusCode) {
     case 'REVIEW':
       return {

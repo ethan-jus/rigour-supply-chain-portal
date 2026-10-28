@@ -2,6 +2,12 @@ import type { PayrollComponentVersionView } from '@/api/core/payroll-scheme/mode
 import type { PayrollComponentListRow } from '@/api/core/payroll-scheme/models/PayrollComponentListRow'
 import type { PayrollComponentListGroup } from '@/api/core/payroll-scheme/models/PayrollComponentListGroup'
 
+function stateAt(row: PayrollComponentVersionView, date: string) {
+  return (row.stateChanges ?? [])
+    .filter((change) => !change.retired && change.effectiveMonth <= date.slice(0, 7))
+    .sort((a, b) => b.revision - a.revision)[0]
+}
+
 export function componentListGroupKey(row: PayrollComponentListRow): string {
   return row.ruleCode?.trim() || row.ruleId
 }
@@ -24,8 +30,11 @@ export function componentVersionState(
   row: PayrollComponentVersionView,
   versions: PayrollComponentVersionView[],
   date: string,
-): '使用中' | '待生效' | '已停用' | '已到期' | '历史版本' {
+): '使用中' | '待生效' | '已停用' | '已到期' | '历史版本' | '已废弃' {
   const family = versions.filter((other) => !other.deleted && other.ruleId === row.ruleId)
+  if (row.stateChanges?.some((change) => change.retired)) {
+    return family.some((other) => other.version > row.version) ? '历史版本' : '已废弃'
+  }
   if (row.definition.effectiveFrom > date) {
     return family.some(
       (other) =>
@@ -40,10 +49,26 @@ export function componentVersionState(
     .sort((a, b) => b.version - a.version)[0]
   if (selected?.id !== row.id) return '历史版本'
   if (row.definition.effectiveTo < date) return '已到期'
-  const state = (row.stateChanges ?? [])
-    .filter((change) => change.effectiveMonth <= date.slice(0, 7))
-    .sort((a, b) => b.revision - a.revision)[0]
+  const state = stateAt(row, date)
   return state?.enabled === false ? '已停用' : '使用中'
+}
+
+/** Lifecycle dates affect display only; keep the original definition for history and re-enabling. */
+export function componentVersionPeriod(
+  row: PayrollComponentVersionView,
+  versions: PayrollComponentVersionView[],
+  date: string,
+): string {
+  const { effectiveFrom, effectiveTo } = row.definition
+  const configured = `${effectiveFrom} 至 ${effectiveTo === '9999-12-31' ? '长期有效' : effectiveTo}`
+  if (!['已停用', '已废弃'].includes(componentVersionState(row, versions, date))) return configured
+  if (!stateAt(row, date)) return configured
+  const time = new Date(stateAt(row, date)!.time)
+  if (Number.isNaN(time.getTime())) return `${effectiveFrom} 至 已停用（日期待核对）`
+  const stoppedOn = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(time)
+  // A new version saved while its family is stopped has never been enabled.
+  if (stoppedOn < effectiveFrom) return `尚未启用（${stoppedOn} 已停用）`
+  return `${effectiveFrom} 至 ${stoppedOn}`
 }
 
 export function visibleComponentVersions(

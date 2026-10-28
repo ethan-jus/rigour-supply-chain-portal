@@ -22,9 +22,16 @@ export function commissionRows(rules: PayrollSchemeCommissionRule[]): PayrollCom
     sales?: PayrollSchemeCommissionRule
     manager?: PayrollSchemeCommissionRule
   }[] = []
-  for (const rule of rules) {
+  for (const stored of rules) {
+    // Small Java Long values arrive as JSON numbers; selectors use string IDs.
+    const rule = {
+      ...stored,
+      variantIds: stored.variantIds.map(String),
+      excludedVariantIds: stored.excludedVariantIds.map(String),
+    }
     const role = rule.recipientRole === 'CITY_MANAGER' ? 'manager' : 'sales'
-    const key = `${rule.rowCode || ''}:${scopeKey(rule)}`
+    const legacyUnit = rule.rowCode ? '' : rule.method === 'QUANTITY' ? rule.unitCode : '*'
+    const key = `${rule.rowCode || legacyUnit}:${scopeKey(rule)}`
     let group = groups.find((g) => g.key === key && !g[role])
     if (!group) {
       group = { key, code: rule.rowCode || randomId() }
@@ -75,6 +82,49 @@ export function flattenCommissionRows(rows: PayrollCommissionRow[]): PayrollSche
       excludedVariantIds: [...row.sales.excludedVariantIds],
     })),
   )
+}
+
+/** Group units of the same named product scope without changing their saved identities or amounts. */
+export function groupCommissionRows(rows: PayrollCommissionRow[]): PayrollCommissionRow[][] {
+  const groups = new Map<string, PayrollCommissionRow[]>()
+  for (const row of rows) {
+    const scope = row.sales
+    const ordered = (ids: (string | number)[]) => [...new Set(ids.map(String))].sort()
+    const key = JSON.stringify([
+      row.name.trim(),
+      ordered(scope.categoryIds),
+      ordered(scope.excludedCategoryIds),
+      ordered(scope.variantIds),
+      ordered(scope.excludedVariantIds),
+    ])
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(row)
+  }
+  return [...groups.values()]
+}
+
+/** A different amount or row name cannot make identical matching conditions unambiguous. */
+export function duplicateCommissionScope(rows: PayrollCommissionRow[]): string | null {
+  const seen = new Map<string, string>()
+  const ordered = (ids: (string | number)[]) => [...new Set(ids.map(String))].sort()
+  for (const row of rows) {
+    const scope = row.sales
+    for (const rule of [row.sales, row.manager]) {
+      const key = JSON.stringify([
+        rule.recipientRole,
+        scope.variantIds.length ? [] : ordered(scope.categoryIds),
+        ordered(scope.excludedCategoryIds),
+        ordered(scope.variantIds),
+        ordered(scope.excludedVariantIds),
+        rule.method === 'QUANTITY' ? rule.unitCode : '*',
+      ])
+      const previous = seen.get(key)
+      if (previous)
+        return `「${previous}」与「${row.name}」的${rule.recipientRole === 'SALES' ? '销售' : '城市总'}商品范围和计提单位重复，请合并为一条标准；金额不同也不能重复配置`
+      seen.set(key, row.name)
+    }
+  }
+  return null
 }
 
 export function commissionRowTotal(

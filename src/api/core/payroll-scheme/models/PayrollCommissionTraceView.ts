@@ -2,6 +2,7 @@ import type { PayrollAppliedRuleView } from './PayrollAppliedRuleView'
 import type { PayrollProductSnapshotView } from './PayrollProductSnapshotView'
 import type { PayrollOrderSettlementView } from './PayrollOrderSettlementView'
 export interface PayrollCommissionTraceView {
+  collectionAmount?: number | null
   settlement?: PayrollOrderSettlementView | null
   product?: PayrollProductSnapshotView | null
   appliedRule?: PayrollAppliedRuleView | null

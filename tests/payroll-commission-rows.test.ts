@@ -4,9 +4,23 @@ import {
   newCommissionRow,
   flattenCommissionRows,
   commissionRowTotal,
+  duplicateCommissionScope,
+  groupCommissionRows,
 } from '@/utils/payroll-commission-rows'
 
 describe('同一商品的双角色提成标准', () => {
+  it('数字规格ID回显为选择器使用的字符串，并正确配对双角色', () => {
+    const row = newCommissionRow('A300')
+    row.sales.variantIds = [15 as unknown as string]
+    row.sales.excludedVariantIds = [16 as unknown as string]
+    row.manager.variantIds = ['15']
+    row.manager.excludedVariantIds = ['16']
+    const restored = commissionRows([row.sales, row.manager])
+    expect(restored).toHaveLength(1)
+    expect(restored[0]!.sales.variantIds).toEqual(['15'])
+    expect(restored[0]!.manager.excludedVariantIds).toEqual(['16'])
+    expect(row.sales.variantIds).toEqual([15])
+  })
   it('两种提成各保留一条规则，表格合计不生成第三笔提成', () => {
     const row = newCommissionRow('A300')
     row.sales.variantIds = ['15']
@@ -38,5 +52,38 @@ describe('同一商品的双角色提成标准', () => {
     row.sales.categoryIds = [1]
     row.manager.categoryIds = [2]
     expect(commissionRows([row.sales, row.manager])).toHaveLength(2)
+  })
+  it('同型号按套与床分别保留；相同单位重复或改名改金额仍拦截，规格顺序不影响检查', () => {
+    const set = newCommissionRow('A300/A500')
+    set.sales.variantIds = ['15', '16']
+    Object.assign(set.sales, { method: 'QUANTITY', unitCode: 'SET', value: 15 })
+    Object.assign(set.manager, { method: 'QUANTITY', unitCode: 'SET', value: 5 })
+    const bed = newCommissionRow('按床标准')
+    bed.sales.variantIds = ['16', '15']
+    Object.assign(bed.sales, { method: 'QUANTITY', unitCode: 'BED', value: 8 })
+    Object.assign(bed.manager, { method: 'QUANTITY', unitCode: 'BED', value: 2 })
+    expect(duplicateCommissionScope(commissionRows(flattenCommissionRows([set, bed])))).toBeNull()
+    const saved = commissionRows(flattenCommissionRows([set, bed]))
+    expect(saved).toHaveLength(2)
+    expect(saved.map(commissionRowTotal)).toEqual([
+      { method: 'QUANTITY', unitCode: 'SET', value: 20 },
+      { method: 'QUANTITY', unitCode: 'BED', value: 10 },
+    ])
+    bed.name = set.name
+    const another = newCommissionRow('另一组型号')
+    another.sales.variantIds = ['17']
+    const grouped = groupCommissionRows([set, another, bed])
+    expect(grouped.map((group) => group.map((row) => row.code))).toEqual([
+      [set.code, bed.code],
+      [another.code],
+    ])
+    expect(grouped[0]!.map(commissionRowTotal)).toEqual(saved.map(commissionRowTotal))
+    bed.sales.unitCode = 'SET'
+    expect(duplicateCommissionScope([set, bed])).toContain('商品范围和计提单位重复')
+    bed.sales.value = 15
+    expect(duplicateCommissionScope([set, bed])).toContain('重复')
+    bed.sales.variantIds = ['17']
+    bed.manager.variantIds = ['17']
+    expect(duplicateCommissionScope([set, bed])).toBeNull()
   })
 })

@@ -1,5 +1,6 @@
 <template>
   <div class="commission-toolbar">
+    <strong>回款合计：{{ payrollMoney(collectionTotal) }} 元</strong>
     <strong>提成合计：{{ payrollMoney(total) }} 元</strong>
     <span v-if="pendingCount"
       >已计算 {{ payrollMoney(knownAmount) }} 元 · {{ pendingCount }} 条待核定</span
@@ -10,7 +11,7 @@
     >
   </div>
   <p class="field-hint">
-    整单付清后计提。展开分类查看商品，再展开商品查看订单；金额取自本次核算快照。
+    整单付清后计提。展开分类查看商品，再展开商品查看订单；金额取自本次核算快照。回款按整单应收金额和商品金额占比分摊，同一订单商品只累计一次；历史快照缺少依据时显示“待核定”。
     <span v-if="mode === 'category'">{{ commissionCountExplanation }}</span>
   </p>
   <el-table
@@ -42,6 +43,9 @@
                 >{{ row.quantity }} {{ payrollUnitName(row.unit) }}</template
               ></el-table-column
             >
+            <el-table-column label="商品回款额（元）" width="155" align="right">
+              <template #default="{ row }">{{ payrollMoney(row.collectionAmount) }}</template>
+            </el-table-column>
             <el-table-column label="计提基数" width="120" align="right"
               ><template #default="{ row }">{{
                 row.method === 'QUANTITY' ? row.base : payrollMoney(row.base)
@@ -70,6 +74,9 @@
       </template>
     </el-table-column>
     <el-table-column prop="name" label="ERP 商品分类" min-width="220" />
+    <el-table-column label="回款合计（元）" width="155" align="right">
+      <template #default="{ row }">{{ payrollMoney(row.collectionAmount) }}</template>
+    </el-table-column>
     <el-table-column prop="orderCount" label="订单数（笔）" width="110" align="right" />
     <el-table-column prop="lineCount" label="商品提成记录（条）" width="160" align="right" />
     <el-table-column v-if="pendingCount" label="已计算（元）" width="140" align="right"
@@ -93,12 +100,17 @@
 <script setup lang="ts">
 import { onMounted, computed, ref } from 'vue'
 import type { PayrollDetail } from '@/api/core/payroll'
-import { commissionCategories, commissionCountExplanation } from '@/utils/payroll-commission-detail'
+import {
+  commissionCategories,
+  commissionCollections,
+  commissionCountExplanation,
+} from '@/utils/payroll-commission-detail'
 import { payrollMoney } from '@/utils/payroll-workflow'
 import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
 import PayrollCommissionOrderTable from './PayrollCommissionOrderTable.vue'
 const props = defineProps<{ lines: PayrollDetail[]; total: number | null }>()
 const mode = ref('category')
+const collectionTotal = computed(() => commissionCollections(props.lines))
 const categories = computed(() => commissionCategories(props.lines))
 const knownAmount = computed(
   () => categories.value.reduce((s, c) => s + Math.round(c.knownAmount * 100), 0) / 100,

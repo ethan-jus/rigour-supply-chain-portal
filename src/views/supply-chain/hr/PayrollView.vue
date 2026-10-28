@@ -240,6 +240,7 @@
                   costLabel('PAYROLL_STATUS', row.statusCode),
                 )
               }}</el-tag>
+              <p v-if="row.paymentBlockReason" class="field-hint">{{ row.paymentBlockReason }}</p>
               <el-tag v-if="needsRuleReview(row.id)" type="warning">规则变更待复核</el-tag>
             </template>
           </el-table-column>
@@ -260,7 +261,9 @@
                   v-if="row.statusCode === 'READY' && can('hr:payroll:confirm')"
                   link
                   type="primary"
-                  :disabled="saving || batchBusy || row.month >= thisMonth()"
+                  :disabled="
+                    saving || batchBusy || row.month >= thisMonth() || !!row.paymentBlockReason
+                  "
                   @click="settlementDialog?.open(row as PayrollRecord, 'confirm')"
                   >确认</el-button
                 >
@@ -276,7 +279,13 @@
                   v-if="row.statusCode === 'CONFIRMED' && can('hr:payroll:paid')"
                   link
                   type="primary"
-                  :disabled="saving || batchBusy || needsRuleReview(row.id) || !!reviewError"
+                  :disabled="
+                    saving ||
+                    batchBusy ||
+                    needsRuleReview(row.id) ||
+                    !!reviewError ||
+                    !!row.paymentBlockReason
+                  "
                   @click="settlementDialog?.open(row as PayrollRecord, 'paid')"
                   >登记发放</el-button
                 >
@@ -683,11 +692,16 @@
               ><el-table-column
                 prop="referenceNo"
                 label="凭证号 / 流水号"
-                min-width="160" /><el-table-column prop="reason" label="说明" min-width="180" />
+                min-width="160"
+              /><el-table-column prop="reason" label="说明" min-width="180" />
               <el-table-column label="发放凭证" min-width="200">
                 <template #default="{ row }">
-                  <PayrollPaymentAttachments :payroll="detail" :payment="row as PayrollPayment" :can-upload="can('hr:payroll:paid')"
-                    @updated="detail = $event" />
+                  <PayrollPaymentAttachments
+                    :payroll="detail"
+                    :payment="row as PayrollPayment"
+                    :can-upload="can('hr:payroll:paid')"
+                    @updated="detail = $event"
+                  />
                 </template>
               </el-table-column>
             </el-table>
@@ -702,7 +716,8 @@
             /></el-table>
             <h3>从本单发起的补差</h3>
             <el-table :data="detail.correctionsIssued ?? []" border
-              ><el-table-column prop="targetMonth" label="计入月份" /><el-table-column label="差额（元）"
+              ><el-table-column prop="targetMonth" label="计入月份" /><el-table-column
+                label="差额（元）"
                 ><template #default="{ row }">{{
                   costMoney(row.amount)
                 }}</template></el-table-column
@@ -1178,21 +1193,17 @@ async function saveInput() {
   saving.value = true
   inputError.value = ''
   try {
-    const saved = await savePayrollDetermination(
-      selected.month,
-      selected.employeeCode,
-      {
-        input: { ...input.value },
-        facts: monthlyFacts.value && {
-          ...monthlyFacts.value,
-          reason: input.value.reason,
-          metrics: monthlyFacts.value.metrics.map((m) => ({
-            ...m,
-            evidence: m.evidence.trim() || input.value.reason,
-          })),
-        },
+    const saved = await savePayrollDetermination(selected.month, selected.employeeCode, {
+      input: { ...input.value },
+      facts: monthlyFacts.value && {
+        ...monthlyFacts.value,
+        reason: input.value.reason,
+        metrics: monthlyFacts.value.metrics.map((m) => ({
+          ...m,
+          evidence: m.evidence.trim() || input.value.reason,
+        })),
       },
-    )
+    })
     if (!currentInput(serial, selected)) return
     input.value = saved.input
     monthlyFacts.value = saved.facts

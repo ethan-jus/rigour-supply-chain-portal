@@ -18,7 +18,11 @@
       <span v-if="rule.method === 'PERCENT'">%</span>
       <template v-else
         ><span>元／</span
-        ><el-select v-model="rule.unitCode" filterable placeholder="单位"
+        ><el-select
+          v-model="rule.unitCode"
+          filterable
+          placeholder="计提单位"
+          :aria-label="rule.recipientRole === 'SALES' ? '销售计提单位' : '城市总计提单位'"
           ><el-option v-for="unit in unitOptions" :key="unit.value" v-bind="unit" /></el-select
       ></template>
     </template>

@@ -70,6 +70,7 @@ export interface PerformancePolicy {
   laterMonthTarget: number
 }
 export interface PerformanceResult {
+  assessmentOverride?: import('./hr-attendance/models/AttendanceAssessmentOverride').AttendanceAssessmentOverride | null
   processBudget: number | null
   processDeduction: number | null
   processPay: number | null
@@ -149,6 +150,7 @@ export interface PayrollCalculation {
   sourceFingerprint: string
 }
 export interface PayrollRecord {
+  paymentBlockReason?: string | null
   id: string
   month: string
   employeeCode: string
@@ -218,12 +220,14 @@ export const getPayrollProducts = (
   keyword: string,
   categoryId?: number | null,
   productVariantId?: string | null,
+  begin?: number,
 ) =>
   apiClient.get<PayrollProduct[]>(`${base}/products`, {
     params: {
       keyword,
       categoryId: categoryId ?? undefined,
       productVariantId: productVariantId ?? undefined,
+      ...(begin == null ? {} : { begin }),
     },
     ...options,
   })
@@ -367,9 +371,13 @@ export const previewPayroll = (month: string, employeeCodes: string[]) =>
 export const updatePayrollProfiles = (employees: PayrollProfilePatch[], reason: string) =>
   apiClient.put<void>(`${base}/employee-profiles`, { employees, reason }, options)
 export async function exportPayroll(params: PayrollQuery): Promise<PayrollRecord[]> {
-  const read = () => apiClient.get<PayrollRecord[]>(`${base}/export`, {
-    params, ...options, timeout: 120000, errorFeedback: 'inline',
-  })
+  const read = () =>
+    apiClient.get<PayrollRecord[]>(`${base}/export`, {
+      params,
+      ...options,
+      timeout: 120000,
+      errorFeedback: 'inline',
+    })
   try {
     return await read()
   } catch (error) {

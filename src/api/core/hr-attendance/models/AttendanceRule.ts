@@ -6,4 +6,6 @@ export interface AttendanceRule {
   companyExpectedDays: number | null
   canWrite?: boolean
   locked: boolean
+  calendarExpectedDays?: number | null
+  calendarMessage?: string | null
 }

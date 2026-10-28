@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PayrollRuleReviewPanel from './components/PayrollRuleReviewPanel.vue'
 import { getPayrollRuleReviews, type PayrollRuleReview } from '@/api/core/payroll-scheme/components'
 import AttendanceExceptionEditor from './components/AttendanceExceptionEditor.vue'
+import AttendanceAssessmentPanel from './components/AttendanceAssessmentPanel.vue'
+import AttendanceDetail from './components/AttendanceDetail.vue'
+import AttendanceEmploymentPeriod from './components/AttendanceEmploymentPeriod.vue'
 import type { AttendanceExceptionPeriod } from '@/api/core/hr-attendance'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
@@ -21,6 +24,7 @@ import {
   getAttendance,
   getAttendanceDepartments,
   confirmAttendanceRecord,
+  previewAttendanceRecord,
   reopenAttendanceRecord,
   type AttendanceView,
   type AttendanceRow,
@@ -47,7 +51,7 @@ async function reopen(row: AttendanceRow) {
   let reason: string
   try {
     const result = await ElMessageBox.prompt(
-      '原确认结果保留在操作记录中。撤销后请重新核定出勤、缺勤和异常记录，再确认考勤。',
+      '原确认结果会保留。撤销后请重新核定并确认考勤，相关工资需重新核算确认后再发放；已发放记录保留，通过补差处理。',
       `撤销考勤确认：${row.employeeName}`,
       {
         confirmButtonText: '撤销确认',
@@ -100,8 +104,75 @@ const selected = ref<AttendanceRow | null>(null)
 const actualOverride = ref<number | undefined>(undefined)
 const absentOverride = ref<number | undefined>(undefined)
 const leaveType = ref('NONE')
-const reasonRequired = computed(() => leaveType.value !== 'NONE')
+const reasonRequired = computed(() => leaveType.value !== 'NONE' && exceptions.value.length === 0)
 const exceptions = ref<AttendanceExceptionPeriod[]>([])
+const missingCheckinsOverride = ref<number | undefined>()
+const missingVisitsOverride = ref<number | undefined>()
+const assessmentReason = ref('')
+const hasAssessmentOverride = computed(
+  () => missingCheckinsOverride.value != null || missingVisitsOverride.value != null,
+)
+function assessmentPayload() {
+  return hasAssessmentOverride.value
+    ? {
+        assessmentOverride: {
+          missingCheckins: missingCheckinsOverride.value ?? null,
+          missingVisits: missingVisitsOverride.value ?? null,
+          reason: assessmentReason.value.trim(),
+        },
+      }
+    : {}
+}
+const assessment = ref<AttendanceRow['assessment']>(null)
+const assessmentLoading = ref(false),
+  assessmentError = ref('')
+watch(
+  [editing, exceptions, actualOverride, absentOverride],
+  (_, __, onCleanup) => {
+    if (!editing.value || !selected.value) return
+    if (JSON.stringify(exceptions.value) === JSON.stringify(selected.value.exceptions || [])) {
+      assessment.value = selected.value.assessment
+      assessmentError.value = ''
+      assessmentLoading.value = false
+      return
+    }
+    assessment.value = null
+    assessmentLoading.value = false
+    if (exceptions.value.length && (actualOverride.value == null || absentOverride.value == null)) {
+      assessmentError.value = '请先核定实际出勤、缺勤天数，再按请假区间预览次数。'
+      return
+    }
+    assessmentError.value = ''
+    let current = true
+    const timer = setTimeout(async () => {
+      assessmentLoading.value = true
+      try {
+        const row = await previewAttendanceRecord(editMonth.value, selected.value!.employeeCode, {
+          actualDaysOverride: actualOverride.value ?? null,
+          absentDaysOverride: absentOverride.value ?? null,
+          leaveTypeCode: leaveType.value,
+          reason: reason.value,
+          revision: selected.value!.revision,
+          exceptions: exceptions.value,
+        })
+        if (current) assessment.value = row.assessment
+      } catch (e) {
+        if (current) assessmentError.value = errorMessage(e, '次数预览暂不可用')
+      } finally {
+        if (current) assessmentLoading.value = false
+      }
+    }, 400)
+    onCleanup(() => {
+      current = false
+      clearTimeout(timer)
+    })
+  },
+  { deep: true },
+)
+const exceptionExpanded = ref(false)
+const showExceptionEditor = computed(
+  () => leaveType.value !== 'NONE' || exceptions.value.length > 0 || exceptionExpanded.value,
+)
 const leaveDictionary = 'ATTENDANCE_LEAVE_TYPE'
 const statusDictionary = 'ATTENDANCE_STATUS'
 const statusLoading = ref(false)
@@ -141,6 +212,14 @@ async function loadLeaveTypes(refresh = false) {
 }
 const daysOpen = ref(false),
   daysRow = ref<AttendanceRow | null>(null)
+const detailOpen = ref(false),
+  detailRow = ref<AttendanceRow | null>(null),
+  detailMonth = ref('')
+function showDetail(row: AttendanceRow) {
+  detailRow.value = structuredClone(toRaw(row))
+  detailMonth.value = data.value!.month
+  detailOpen.value = true
+}
 const sourceLabels: Record<string, string> = {
   UNLINKED: '待关联打卡账号',
   UNAVAILABLE: '暂不可用',
@@ -211,6 +290,7 @@ function search() {
   }
   editing.value = false
   daysOpen.value = false
+  detailOpen.value = false
   page.value = 1
   void load()
 }
@@ -228,7 +308,11 @@ function edit(row: AttendanceRow) {
   selected.value = row
   editMonth.value = data.value!.month
   reason.value = row.reason
+  missingCheckinsOverride.value = row.assessmentOverride?.missingCheckins ?? undefined
+  missingVisitsOverride.value = row.assessmentOverride?.missingVisits ?? undefined
+  assessmentReason.value = row.assessmentOverride?.reason ?? ''
   exceptions.value = (row.exceptions || []).map((period) => ({ ...period }))
+  exceptionExpanded.value = false
   actualOverride.value = row.actualDaysOverride ?? undefined
   absentOverride.value = row.absentDaysOverride ?? undefined
   leaveType.value = row.leaveTypeCode
@@ -256,18 +340,31 @@ async function save() {
     editorError.value = `天数须在 0 至 ${maxDays.value} 之间，且为 0.5 天的倍数`
     return
   }
+  if (
+    [missingCheckinsOverride.value, missingVisitsOverride.value].some(
+      (value) => value != null && (!Number.isInteger(value) || value < 0 || value > 100000),
+    )
+  ) {
+    editorError.value = '核定缺失次数须为0至100000之间的整数'
+    return
+  }
+  if (hasAssessmentOverride.value && !assessmentReason.value.trim()) {
+    editorError.value = '手工核定次数时，请填写核定说明'
+    return
+  }
   if (!leaveOptions.value.some((option) => option.value === leaveType.value)) {
     editorError.value = '请选择当前启用的请假类型'
     return
   }
   if (reasonRequired.value && !reason.value.trim()) {
-    editorError.value = '请假类型不为“无”时，请填写缺卡原因'
+    editorError.value = '请填写考勤核定说明，或登记具体请假时段及说明'
     return
   }
   saving.value = true
   editorError.value = ''
   try {
     await confirmAttendanceRecord(editMonth.value, selected.value.employeeCode, {
+      ...assessmentPayload(),
       exceptions: exceptions.value,
       actualDaysOverride: actualOverride.value ?? null,
       absentDaysOverride: absentOverride.value ?? null,
@@ -376,7 +473,7 @@ onMounted(() => {
     <PayrollRuleReviewPanel
       :reviews="ruleReviews"
       subject="ATTENDANCE"
-      :can-process="can('hr:attendance:write')"
+      :can-process="can('hr:attendance:read')"
       @locate="locateRuleReview"
       @resolved="load"
     />
@@ -467,6 +564,16 @@ onMounted(() => {
             <div v-if="row.absentDaysOverride != null" class="manual-hint">人工调整</div>
           </template></el-table-column
         >
+        <el-table-column label="缺卡（次）" width="110" align="right">
+          <template #default="{ row }">{{
+            row.assessmentOverride?.missingCheckins ?? row.assessment?.missingCheckins ?? '待核对'
+          }}</template>
+        </el-table-column>
+        <el-table-column label="缺拜访（次）" width="120" align="right">
+          <template #default="{ row }">{{
+            row.assessmentOverride?.missingVisits ?? row.assessment?.missingVisits ?? '待核对'
+          }}</template>
+        </el-table-column>
         <el-table-column label="请假类型" width="110">
           <template #default="{ row }">{{ leaveLabel(row.leaveTypeCode) }}</template>
         </el-table-column>
@@ -483,12 +590,19 @@ onMounted(() => {
             >
           </template>
         </el-table-column>
-        <el-table-column prop="reason" label="缺卡原因" min-width="240" show-overflow-tooltip
+        <el-table-column prop="reason" label="考勤核定说明" min-width="240" show-overflow-tooltip
           ><template #default="{ row }">{{ row.reason || '—' }}</template></el-table-column
         >
-        <el-table-column v-if="can('hr:attendance:write')" label="操作" width="130" fixed="right"
+        <el-table-column v-if="can('hr:attendance:read')" label="操作" width="190" fixed="right"
           ><template #default="{ row }"
             ><el-button
+              link
+              type="primary"
+              :aria-label="`查看${row.employeeName}考勤详情`"
+              @click="showDetail(row as AttendanceRow)"
+              >详情</el-button
+            >
+            <el-button
               v-if="row.attendanceStatus === 'PENDING'"
               link
               type="primary"
@@ -497,10 +611,11 @@ onMounted(() => {
               >考勤确认</el-button
             >
             <el-button
-              v-if="row.attendanceStatus === 'CONFIRMED' && needsRuleReview(row.employeeCode)"
+              v-if="row.attendanceStatus === 'CONFIRMED'"
               link
               type="warning"
               :disabled="saving"
+              :aria-label="`撤销${row.employeeName}考勤确认`"
               @click="reopen(row as AttendanceRow)"
               >撤销确认</el-button
             >
@@ -545,7 +660,75 @@ onMounted(() => {
           >{{ selected?.punchDays != null ? ' 天' : '' }}</span
         >
       </div>
+      <AttendanceEmploymentPeriod
+        :month="editMonth"
+        :entry-date="selected?.entryDate"
+        :leave-date="selected?.leaveDate"
+      />
+      <AttendanceAssessmentPanel
+        :assessment="assessment"
+        :loading="assessmentLoading"
+        :error="assessmentError"
+      />
+      <p class="hint">
+        销售底薪及补助按“（底薪＋补助）÷应出勤×实际出勤”折算；绩效不按出勤比例折减，请假须登记具体时段才免除该时段考核。
+      </p>
       <el-form label-position="top" class="attendance-editor" @submit.prevent="save">
+        <el-divider content-position="left">缺卡与缺拜访核定</el-divider>
+        <p class="field-hint">
+          上方为系统统计；下方可填写核定后的缺失次数（填0表示无缺失）。留空沿用系统统计，确认后用于绩效核算。
+        </p>
+        <div class="attendance-editor-days">
+          <el-form-item label="核定缺卡次数">
+            <el-input-number
+              v-model="missingCheckinsOverride"
+              :min="0"
+              :max="100000"
+              :precision="0"
+              :disabled="saving"
+              placeholder="使用系统统计"
+              aria-label="核定缺卡次数"
+            />
+            <el-button
+              link
+              type="primary"
+              :disabled="saving || missingCheckinsOverride == null"
+              @click="missingCheckinsOverride = undefined"
+              >恢复缺卡统计</el-button
+            >
+          </el-form-item>
+          <el-form-item label="核定缺拜访次数">
+            <el-input-number
+              v-model="missingVisitsOverride"
+              :min="0"
+              :max="100000"
+              :precision="0"
+              :disabled="saving"
+              placeholder="使用系统统计"
+              aria-label="核定缺拜访次数"
+            />
+            <el-button
+              link
+              type="primary"
+              :disabled="saving || missingVisitsOverride == null"
+              @click="missingVisitsOverride = undefined"
+              >恢复缺拜访统计</el-button
+            >
+          </el-form-item>
+        </div>
+        <el-form-item v-if="hasAssessmentOverride" label="次数核定说明" required>
+          <el-input
+            v-model="assessmentReason"
+            type="textarea"
+            :rows="2"
+            maxlength="500"
+            show-word-limit
+            :disabled="saving"
+            aria-label="次数核定说明"
+            placeholder="填写调整次数及核对依据"
+          />
+        </el-form-item>
+        <el-divider content-position="left">出勤天数核定</el-divider>
         <div class="attendance-editor-days">
           <el-form-item label="实际出勤天数">
             <div class="day-input">
@@ -630,14 +813,24 @@ onMounted(() => {
             <span>请假类型字典暂不可用或没有启用项</span>
             <el-button link type="primary" @click="loadLeaveTypes(true)">重载字典</el-button>
           </div>
+          <p class="field-hint">
+            仅作本月请假分类；免考核范围由下方登记的具体请假、调休时段决定，不自动改变出勤天数。
+          </p>
         </el-form-item>
+        <p v-if="!showExceptionEditor" class="field-hint">
+          未登记考勤异常。
+          <el-button link type="primary" :disabled="saving" @click="exceptionExpanded = true">
+            登记缺卡或活动报备
+          </el-button>
+        </p>
         <AttendanceExceptionEditor
+          v-show="showExceptionEditor"
           :key="`${selected?.employeeCode}-${editMonth}`"
           v-model="exceptions"
           :month="editMonth"
           :disabled="saving"
         />
-        <el-form-item label="缺卡原因" :required="reasonRequired">
+        <el-form-item label="考勤核定说明" :required="reasonRequired">
           <el-input
             v-model="reason"
             type="textarea"
@@ -645,16 +838,18 @@ onMounted(() => {
             maxlength="500"
             show-word-limit
             :disabled="saving"
-            aria-label="缺卡原因"
+            aria-label="考勤核定说明"
             :aria-required="reasonRequired"
             :placeholder="
-              reasonRequired ? '请填写缺卡日期、原因或调整说明' : '选填：缺卡日期、原因或调整说明'
+              reasonRequired
+                ? '请填写本月请假或出勤核定依据'
+                : '选填：已填写时段说明时，无需重复填写'
             "
           />
         </el-form-item>
       </el-form>
       <el-alert
-        title="确认后保存本次结果。规则变更产生待复核任务时，可由 HR 撤销确认、重新核定并再次确认。"
+        title="确认后保存本次结果。有员工考勤权限的人员可填写原因撤销确认，重新核定并再次确认。"
         type="warning"
         :closable="false"
       />
@@ -672,11 +867,30 @@ onMounted(() => {
         >
       </template>
     </el-dialog>
+    <el-dialog
+      v-model="detailOpen"
+      title="考勤详情"
+      width="min(1000px, 94vw)"
+      class="attendance-detail-dialog"
+    >
+      <AttendanceDetail
+        v-if="detailRow"
+        :row="detailRow"
+        :month="detailMonth"
+        :leave-text="leaveLabel(detailRow.leaveTypeCode)"
+        :status-text="statusLabel(detailRow.attendanceStatus)"
+      />
+      <template #footer><el-button @click="detailOpen = false">关闭</el-button></template>
+    </el-dialog>
     <el-dialog v-model="daysOpen" title="打卡日期" width="min(560px, 94vw)">
       <p>{{ data?.month }} · {{ daysRow?.employeeName }} · 共 {{ daysRow?.punchDays }} 天</p>
       <div class="dates">
         <el-tag v-for="date in daysRow?.dates" :key="date" size="large">{{ date }}</el-tag>
       </div>
+      <AttendanceAssessmentPanel
+        :assessment="daysRow?.assessment"
+        :adjustment="daysRow?.assessmentOverride"
+      />
       <el-table v-if="daysRow?.exceptions?.length" :data="daysRow.exceptions" border>
         <el-table-column prop="start" label="异常开始时间" /><el-table-column
           prop="end"
@@ -689,6 +903,10 @@ onMounted(() => {
 </template>
 
 <style scoped>
+:global(.attendance-detail-dialog .el-dialog__body) {
+  max-height: 68vh;
+  overflow-y: auto;
+}
 :global(.attendance-confirm-dialog) {
   display: flex;
   flex-direction: column;

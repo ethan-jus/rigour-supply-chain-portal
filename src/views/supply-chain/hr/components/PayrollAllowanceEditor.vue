@@ -25,8 +25,7 @@
       ></el-table
     >
     <div class="allowance-actions">
-      <el-button
-        @click="form.allowances.push({ code: randomId(), name: '', amount: null })"
+      <el-button @click="form.allowances.push({ code: randomId(), name: '', amount: null })"
         >增加补贴项目</el-button
       >
     </div>
@@ -43,8 +42,12 @@
       </div>
     </div>
   </section>
+  <p v-if="form.role === 'SALES'" class="field-hint">
+    销售底薪及补贴按已确认出勤折算，绩效不随出勤比例折减。
+  </p>
   <el-form-item label="补贴折算"
-    ><el-select v-model="form.proration.allowance"
+    ><el-input v-if="form.role === 'SALES'" model-value="按已确认出勤" disabled />
+    <el-select v-else v-model="form.proration.allowance"
       ><el-option
         v-for="option in prorationOptions"
         :key="option.value"

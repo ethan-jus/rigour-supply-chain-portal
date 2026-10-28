@@ -5,18 +5,44 @@ vi.mock('@/auth/browser-session', () => ({ logoutBrowserSession: mocks.logout })
 vi.mock('@/utils/token', () => ({ getToken: () => null, removeToken: mocks.remove }))
 vi.mock('element-plus', () => ({ ElMessage: { error: mocks.error } }))
 import { useAuthStore } from '@/stores/auth'
+import {
+  copyPayrollInterval,
+  copyPayrollIntervalGroup,
+  readCopiedPayrollInterval,
+  readCopiedPayrollIntervalGroup,
+} from '@/utils/payroll-coefficient-clipboard'
 
-beforeEach(() => { setActivePinia(createPinia()); vi.resetAllMocks(); window.history.replaceState({}, '', '/') })
+beforeEach(() => {
+  setActivePinia(createPinia())
+  vi.resetAllMocks()
+  window.history.replaceState({}, '', '/')
+})
 describe('退出与后端会话一致', () => {
   it('后端撤销会话成功后清理本地状态并进入登录页', async () => {
     const auth = useAuthStore()
+    const interval = {
+      lower: 0,
+      upper: null,
+      lowerInclusive: true,
+      upperInclusive: false,
+      mode: 'FIXED',
+      coefficient: 1.9,
+    }
+    copyPayrollInterval(interval)
+    copyPayrollIntervalGroup([interval])
     const calls: string[] = []
-    mocks.logout.mockImplementation(async () => { calls.push('revoke-session') })
-    mocks.remove.mockImplementation(() => { calls.push('clear-local') })
+    mocks.logout.mockImplementation(async () => {
+      calls.push('revoke-session')
+    })
+    mocks.remove.mockImplementation(() => {
+      calls.push('clear-local')
+    })
     await auth.logout()
     expect(calls).toEqual(['revoke-session', 'clear-local'])
     expect(auth.isAuthenticated).toBe(false)
     expect(auth.user).toBeNull()
+    expect(readCopiedPayrollInterval()).toBeNull()
+    expect(readCopiedPayrollIntervalGroup()).toBeNull()
     expect(window.location.hash).toBe('#/login?reason=logout')
   })
   it('撤销失败时提示重试，不假装退出成功', async () => {

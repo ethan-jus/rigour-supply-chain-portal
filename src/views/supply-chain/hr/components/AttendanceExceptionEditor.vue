@@ -2,7 +2,7 @@
   <section class="attendance-exception-editor">
     <el-divider content-position="left">考勤异常登记</el-divider>
     <p class="field-hint">
-      选择调休、活动报备或缺卡日期，支持多天及跨日时间段。登记后请核定上方实际出勤和缺勤天数，确认结果用于薪资折算；原始打卡记录保留。
+      登记具体日期及处理方式：请假、调休时段免除相应打卡拜访任务；活动和缺卡说明作为核定依据。请同时核定出勤天数和缺失次数，原始记录保留。
     </p>
     <el-radio-group v-model="mode" :disabled="disabled" class="entry-mode" aria-label="日期录入方式"
       ><el-radio-button value="DATES">多选日期</el-radio-button
@@ -78,7 +78,7 @@
       aria-label="异常起止时间"
     />
     <div class="exception-fields">
-      <el-form-item label="异常类型" required
+      <el-form-item label="时段处理方式" required
         ><el-select v-model="kind" :disabled="disabled"
           ><el-option v-for="item in kinds" :key="item.value" v-bind="item" /></el-select
       ></el-form-item>
@@ -91,7 +91,7 @@
           placeholder="填写调休或活动依据"
       /></el-form-item>
     </div>
-    <el-button type="primary" plain :disabled="disabled" @click="add">添加异常记录</el-button>
+    <el-button type="primary" :disabled="disabled" @click="add">添加异常记录</el-button>
     <p v-if="error" role="alert" class="entry-error">{{ error }}</p>
     <el-table v-if="model.length" :data="model" border class="exception-records">
       <el-table-column label="类型" width="110"

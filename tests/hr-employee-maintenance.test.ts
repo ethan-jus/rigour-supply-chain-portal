@@ -61,6 +61,7 @@ const deps = [
   },
 ]
 beforeEach(() => {
+  HTMLElement.prototype.scrollIntoView = vi.fn()
   vi.resetAllMocks()
   links.query = {}
   links.canUpdate = true
@@ -126,6 +127,7 @@ it('居中弹窗选择部门岗位，离职日期必填，提交全部个人资�
   field('岗位').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'SALES')
   await field('姓名').get('input').setValue('测试员工')
   field('薪酬类别').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'HEADQUARTERS')
+  await field('手机号').get('input').setValue('13800000000')
   await field('身份证号').get('input').setValue('11010519491231002X')
   expect(field('出生日期').get('input').element.value).toBe('1949-12-31')
   field('在职状态').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'LEFT')
@@ -179,8 +181,11 @@ it('编辑先取详情，避免把列表未返回的个人信息清空', async (
     ...row,
     regularized: false,
     payrollCategory: 'HEADQUARTERS',
+    mobile: '13800000000',
+    entryDate: '2020-01-01T00:00:00+08:00',
     profile: {
-      idNumber: null,
+      idNumber: '11010519491231002X',
+      probationPeriod: '3个月',
       bankName: '原银行',
       bankAccount: '000000000000',
       socialInsurance: '五险',
@@ -189,6 +194,8 @@ it('编辑先取详情，避免把列表未返回的个人信息清空', async (
   await renderEditor(row)
   expect(getHrEmployee).toHaveBeenCalledWith('9')
   expect(field('开户行').get('input').element.value).toBe('原银行')
+  expect(field('试用期').get('input').element.value).toBe('3')
+  expect(field('试用期').text()).toContain('个月')
   await wrapper!
     .findAll('button')
     .find((b) => b.text() === '确定')!
@@ -198,7 +205,7 @@ it('编辑先取详情，避免把列表未返回的个人信息清空', async (
     '9',
     expect.objectContaining({
       revision: 4,
-      profile: expect.objectContaining({ bankName: '原银行' }),
+      profile: expect.objectContaining({ bankName: '原银行', probationPeriod: '3' }),
     }),
   )
 })
@@ -207,6 +214,11 @@ it('员工资料不再重复维护金额，新建后在薪资标准页签录入'
   field('部门').getComponent({ name: 'ElTreeSelect' }).vm.$emit('update:modelValue', 2)
   field('岗位').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'SALES')
   await field('姓名').get('input').setValue('薪资测试员工')
+  await field('手机号').get('input').setValue('13800000000')
+  await field('身份证号').get('input').setValue('11010519491231002X')
+  field('入职日期')
+    .getComponent({ name: 'ElDatePicker' })
+    .vm.$emit('update:modelValue', '2026-01-01')
   field('薪酬类别').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'SALES')
   field('是否转正').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', true)
   await flushPromises()
@@ -227,6 +239,74 @@ it('员工资料不再重复维护金额，新建后在薪资标准页签录入'
       regularizationDate: '2026-09-01',
     }),
   )
+})
+
+it.each(['新增', '编辑'])(
+  '%s提交时一次展示全部基础资料缺项，修改后逐项消除错误且不清空已填数据',
+  async (mode) => {
+    const record =
+      mode === '编辑'
+        ? ({
+            id: '9',
+            employeeCode: 'EMP9',
+            employeeName: '',
+            departmentId: null,
+            positionCode: '',
+            employmentStatus: 'ACTIVE',
+            regularized: false,
+            payrollCategory: null,
+            mobile: null,
+            entryDate: null,
+            profile: null,
+            revision: 4,
+          } as unknown as HrEmployeeRecord)
+        : null
+    if (record) vi.mocked(getHrEmployee).mockResolvedValue(record)
+    await renderEditor(record)
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '确定')!
+      .trigger('click')
+    await flushPromises()
+    const summary = wrapper!.get('[aria-label="员工资料校验问题"]')
+    for (const text of ['姓名', '部门', '岗位', '手机号', '身份证号', '入职日期', '薪酬类别'])
+      expect(summary.text()).toContain(text)
+    expect(wrapper!.text()).not.toMatch(/is required|must be|validation failed/i)
+    expect(hrOrganizationApi.saveEmployee).not.toHaveBeenCalled()
+    await field('姓名').get('input').setValue('已填写的姓名')
+    expect(summary.text()).not.toContain('请填写姓名')
+    expect(summary.text()).toContain('请填写手机号')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '确定')!
+      .trigger('click')
+    expect(field('姓名').get('input').element.value).toBe('已填写的姓名')
+    expect(hrOrganizationApi.saveEmployee).not.toHaveBeenCalled()
+  },
+)
+
+it('薪酬类别清空时显示中文必填提示，试用期输入框只填数字且单位在框外', async () => {
+  await renderEditor()
+  const category = field('薪酬类别').getComponent({ name: 'ElSelect' })
+  category.vm.$emit('update:modelValue', 'SALES')
+  await flushPromises()
+  category.vm.$emit('update:modelValue', '')
+  await flushPromises()
+  expect(field('薪酬类别').text()).toContain('请选择薪酬类别')
+  expect(wrapper!.text()).not.toContain('is required')
+  expect(field('试用期').findComponent({ name: 'ElInputNumber' }).exists()).toBe(true)
+  expect(field('试用期').text()).toContain('个月')
+  const input = field('试用期').get('input')
+  expect(
+    field('在职状态')
+      .getComponent({ name: 'ElSelect' })
+      .findAllComponents({ name: 'ElOption' })
+      .map((option) => option.props('value')),
+  ).toEqual(['ACTIVE', 'LEFT'])
+  await input.setValue('6')
+  await input.trigger('change')
+  expect(input.element.value).toBe('6')
+  expect(hrOrganizationApi.saveEmployee).not.toHaveBeenCalled()
 })
 
 describe('员工部门筛选', () => {
@@ -331,7 +411,7 @@ describe('员工部门筛选', () => {
   })
 })
 
-it('按负责人编号高亮姓名，不误标同名员工，并明确区分四种在职状态', async () => {
+it('按负责人编号高亮姓名，只提供在职与离职，旧来源未核定状态不推断为在职或离职', async () => {
   vi.mocked(getHrEmployees).mockResolvedValue({
     items: ['ACTIVE', 'PENDING', 'INACTIVE', 'LEFT'].map(
       (employmentStatus, i) =>
@@ -362,10 +442,16 @@ it('按负责人编号高亮姓名，不误标同名员工，并明确区分四�
   expect(names.slice(1).every((n) => !n.classes().includes('employee-name--leader'))).toBe(true)
   expect(wrapper.findAll('.employment-status').map((n) => n.text())).toEqual([
     '在职',
-    '待确认',
-    '停用',
+    '—',
+    '—',
     '离职',
   ])
+  expect(
+    wrapper
+      .findAllComponents({ name: 'ElSelect' })[1]!
+      .findAllComponents({ name: 'ElOption' })
+      .map((option) => option.props('value')),
+  ).toEqual(['ACTIVE', 'LEFT'])
   expect(wrapper.findAll('.employee-left-row')).toHaveLength(1)
   expect(wrapper.findAll('th').map((n) => n.text())).not.toContain('部门负责人')
   wrapper.getComponent(Sidebar).vm.$emit('update:modelValue', 2)

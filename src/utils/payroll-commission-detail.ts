@@ -13,14 +13,52 @@ export const commissionRole = (role: string) =>
     >
   )[role] || role
 
+/** Receipts belong to an order line, independently of the number of recipient roles. */
+export function commissionCollections(lines: PayrollDetail[]): number | null {
+  const receipts = new Map<string, number>()
+  for (const line of lines) {
+    const trace = line.trace
+    const amount =
+      trace?.collectionAmount ??
+      (trace?.method === 'PERCENT' && trace.fullyPaidDate ? trace.baseAmount : null)
+    if (amount == null) return null
+    const key = JSON.stringify([
+      trace?.orderId || line.orderNo,
+      trace?.originalLineId || line.sourceLineId,
+    ])
+    const previous = receipts.get(key)
+    if (previous != null && Math.abs(previous - amount) > 0.000001) return null
+    receipts.set(key, amount)
+  }
+  return Math.round([...receipts.values()].reduce((sum, amount) => sum + amount, 0) * 100) / 100
+}
+
+function commissionCategory(line: PayrollDetail) {
+  const product = line.trace?.product
+  const path = (product?.categoryPath || product?.categoryName || '')
+    .split(' / ')
+    .map((s) => s.trim())
+  if (path.includes('台球周边')) {
+    const cloth = path.some((name) => name === '台呢' || name === '台尼')
+    return {
+      key: cloth ? 'BILLIARDS_CLOTH' : 'BILLIARDS_OTHER',
+      name: cloth ? '台球周边 / 台呢' : '台球周边（不含台呢）',
+    }
+  }
+  return {
+    key: product?.categoryId == null ? 'UNKNOWN' : String(product.categoryId),
+    name: product?.categoryPath || product?.categoryName || '历史快照未记录分类',
+  }
+}
+
 /** 分类、规格和规则按稳定 ID 分组；不同单位、单价、受益角色不能混算。只汇总后端快照金额。 */
 export function commissionCategories(lines: PayrollDetail[]): PayrollCommissionCategory[] {
   const categories = new Map<string, { name: string; products: Map<string, PayrollDetail[]> }>()
   for (const line of lines) {
     const product = line.trace?.product
-    const categoryKey = product?.categoryId == null ? 'UNKNOWN' : String(product.categoryId)
+    const { key: categoryKey, name } = commissionCategory(line)
     const category = categories.get(categoryKey) || {
-      name: product?.categoryPath || product?.categoryName || '历史快照未记录分类',
+      name,
       products: new Map<string, PayrollDetail[]>(),
     }
     const key = JSON.stringify([
@@ -47,6 +85,7 @@ export function commissionCategories(lines: PayrollDetail[]): PayrollCommissionC
       const knownAmount = sum(lines.map((d) => d.released))
       return {
         key,
+        collectionAmount: commissionCollections(lines),
         name: first.productName,
         variantCode: trace?.product?.variantCode || '—',
         role: commissionRole(first.recipientRoleCode),
@@ -74,6 +113,7 @@ export function commissionCategories(lines: PayrollDetail[]): PayrollCommissionC
     return {
       key,
       name: group.name,
+      collectionAmount: commissionCollections(all),
       products,
       orderCount: countOrders(all),
       lineCount: all.length,

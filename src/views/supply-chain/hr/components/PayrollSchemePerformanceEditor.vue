@@ -114,14 +114,14 @@
         :title="
           legacyManager
             ? '历史版本按综合完成率匹配阶梯系数，原核算依据保留。'
-            : '绩效工资＝绩效基数 × 各指标加权得分之和。每项指标可按实际完成率或HR配置的阶梯计分，再乘以权重。'
+            : '绩效工资＝绩效基数 × 各指标加权得分之和。每项指标计分后再乘以填写的权重，不要求权重合计为100%，也不自动归一。'
         "
         type="info"
         :closable="false"
       />
       <template v-if="legacyManager">
         <el-divider content-position="left">历史系数规则</el-divider>
-        <PayrollCoefficientEditor v-model="form.manager.steps" />
+        <PayrollCoefficientEditor v-model="form.manager.steps" :disabled="props.disabled" legacy />
       </template>
       <div class="scheme-grid">
         <el-form-item label="保护期长度"
@@ -220,9 +220,9 @@
         </div>
         <template v-if="!legacyManager && metric.scoringMode === 'TIERED'">
           <el-divider content-position="left">单项指标计分区间</el-divider>
-          <PayrollCoefficientEditor v-model="metric.steps" />
+          <PayrollCoefficientEditor v-model="metric.steps" :disabled="props.disabled" />
           <p class="field-hint">
-            由HR维护完成率区间、取值方式及系数；该指标加权贡献＝计分系数 ×
+            由HR维护完成率区间、计分方式及参数；该指标加权贡献＝区间内计分结果 ×
             权重。区间和系数随本次规则保存。
           </p>
         </template>

@@ -21,9 +21,9 @@
         >{{ row.quantity }} {{ payrollUnitName(row.unitCode) }}</template
       ></el-table-column
     >
-    <el-table-column label="回款计提金额（元）" width="160" align="right">
+    <el-table-column label="商品回款额（元）" width="160" align="right">
       <template #default="{ row }">{{
-        row.trace?.method === 'PERCENT' ? payrollMoney(row.trace?.baseAmount) : '—'
+        payrollMoney(commissionCollections([row as PayrollDetail]))
       }}</template>
     </el-table-column>
     <el-table-column label="数量计提基数" width="140" align="right">
@@ -98,6 +98,7 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
+import { commissionCollections } from '@/utils/payroll-commission-detail'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { PayrollDetail } from '@/api/core/payroll'

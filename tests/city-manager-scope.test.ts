@@ -132,6 +132,11 @@ async function editor(position: string) {
   field('部门').getComponent({ name: 'ElTreeSelect' }).vm.$emit('update:modelValue', 1)
   field('岗位').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', position)
   await field('姓名').get('input').setValue('DEV 城市总一体化测试')
+  await field('手机号').get('input').setValue('13800000000')
+  await field('身份证号').get('input').setValue('11010519491231002X')
+  field('入职日期')
+    .getComponent({ name: 'ElDatePicker' })
+    .vm.$emit('update:modelValue', '2026-01-01')
   field('薪酬类别').getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', 'SALES')
   await flushPromises()
 }

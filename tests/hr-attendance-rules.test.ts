@@ -16,6 +16,7 @@ vi.mock('@/api/core/hr-attendance', () => ({
   getAttendanceRules: vi.fn(),
   getAttendanceRule: vi.fn(),
   saveAttendanceRule: vi.fn(),
+  saveAttendanceRules: vi.fn(),
 }))
 const list = (): api.AttendanceRuleList => ({
   month: '2026-10',
@@ -92,10 +93,10 @@ async function setDays(value: string) {
   await field.trigger('change')
 }
 async function chooseDepartment(id: number) {
-  wrapper
+  const selector = wrapper
     .findAllComponents({ name: 'ElTreeSelect' })
     .find((c) => c.props('ariaLabel') === '规则部门')!
-    .vm.$emit('update:modelValue', id)
+  selector.vm.$emit('update:modelValue', selector.props('multiple') ? [id] : id)
   await flushPromises()
 }
 
@@ -190,7 +191,7 @@ describe('考勤规则列表', () => {
     partial.page.items = partial.page.items.slice(1)
     vi.mocked(api.getAttendanceRules).mockResolvedValue(partial)
     await click('刷新')
-    expect(wrapper.text()).toContain('未单独设置规则的部门暂无应出勤标准')
+    expect(wrapper.text()).toContain('无匹配规则时需补录')
   })
   it('disables configured departments and creates an explicit zero-day rule', async () => {
     await open()
@@ -211,12 +212,14 @@ describe('考勤规则列表', () => {
     )
     await setDays('0')
     await click('保存规则')
-    expect(api.saveAttendanceRule).toHaveBeenCalledWith({
-      month: '2026-10',
-      departmentId: 3,
-      expectedDays: 0,
-      revision: 0,
-    })
+    expect(api.saveAttendanceRules).toHaveBeenCalledWith([
+      {
+        month: '2026-10',
+        departmentId: 3,
+        expectedDays: 0,
+        revision: 0,
+      },
+    ])
     expect(api.getAttendanceRules).toHaveBeenLastCalledWith(
       expect.objectContaining({ month: '2026-10', begin: 0, step: 20 }),
     )
@@ -334,13 +337,157 @@ describe('考勤规则列表', () => {
     await flushPromises()
     await setDays('23')
     await click('保存规则')
-    expect(api.saveAttendanceRule).toHaveBeenLastCalledWith({
-      month: '2026-08',
-      departmentId: 3,
-      expectedDays: 23,
-      revision: 0,
-    })
+    expect(api.saveAttendanceRules).toHaveBeenLastCalledWith([
+      {
+        month: '2026-08',
+        departmentId: 3,
+        expectedDays: 23,
+        revision: 0,
+      },
+    ])
   })
+  it('选父部门联动全部下级，分别按各部门生效日历带出天数并一次保存', async () => {
+    const rows = list()
+    rows.configuredDepartmentIds = []
+    vi.mocked(api.getAttendanceRules).mockResolvedValue(rows)
+    vi.mocked(api.getAttendanceRule).mockImplementation(async (month, departmentId = null) => ({
+      month,
+      departmentId,
+      expectedDays: null,
+      revision: 0,
+      companyExpectedDays: 26,
+      locked: false,
+      calendarExpectedDays: departmentId === 1 ? 18 : departmentId === 2 ? 20 : 0,
+      calendarMessage: '已按本部门生效的薪资考勤规则计算',
+    }))
+    await open()
+    await click('新增规则')
+    const selector = wrapper
+      .findAllComponents({ name: 'ElTreeSelect' })
+      .find((c) => c.props('ariaLabel') === '规则部门')!
+    const tree = selector.getComponent({ name: 'ElTree' })
+    await tree.get('[data-key="1"] > .el-tree-node__content input').setValue(true)
+    await flushPromises()
+    expect(tree.vm.getCheckedKeys()).toEqual([1, 2, 3])
+    expect(wrapper.get('input[aria-label="销售部应出勤天数"]').element).toHaveProperty(
+      'value',
+      '18',
+    )
+    expect(wrapper.get('input[aria-label="销售一部应出勤天数"]').element).toHaveProperty(
+      'value',
+      '20',
+    )
+    expect(wrapper.get('input[aria-label="销售二部应出勤天数"]').element).toHaveProperty(
+      'value',
+      '0',
+    )
+    await click('保存规则')
+    expect(api.saveAttendanceRules).toHaveBeenCalledWith([
+      { month: '2026-10', departmentId: 1, expectedDays: 18, revision: 0 },
+      { month: '2026-10', departmentId: 2, expectedDays: 20, revision: 0 },
+      { month: '2026-10', departmentId: 3, expectedDays: 0, revision: 0 },
+    ])
+    expect(api.saveAttendanceRule).not.toHaveBeenCalled()
+  })
+
+  it('父部门下已设置或锁定的子部门保持原记录，取消分支会同时取消其范围', async () => {
+    const rows = list()
+    rows.lockedDepartmentIds = [3]
+    vi.mocked(api.getAttendanceRules).mockResolvedValue(rows)
+    await open()
+    await click('新增规则')
+    const selector = wrapper
+      .findAllComponents({ name: 'ElTreeSelect' })
+      .find((c) => c.props('ariaLabel') === '规则部门')!
+    const tree = selector.getComponent({ name: 'ElTree' })
+    await tree.get('[data-key="1"] > .el-tree-node__content input').setValue(true)
+    await flushPromises()
+    expect(tree.vm.getCheckedKeys()).toEqual([1])
+    expect(tree.vm.getNode(2).checked).toBe(false)
+    expect(tree.vm.getNode(3).checked).toBe(false)
+    await setDays('22')
+    await click('保存规则')
+    expect(api.saveAttendanceRules).toHaveBeenCalledWith([
+      { month: '2026-10', departmentId: 1, expectedDays: 22, revision: 0 },
+    ])
+  })
+
+  it('月份变化重新计算建议天数，缺少日历时提示补录，不沿用旧月份或公司默认数值', async () => {
+    vi.mocked(api.getAttendanceRule).mockImplementation(async (month, departmentId = null) => ({
+      month,
+      departmentId,
+      expectedDays: null,
+      revision: 0,
+      companyExpectedDays: 26,
+      locked: false,
+      calendarExpectedDays: month === '2026-10' ? 22 : null,
+      calendarMessage:
+        month === '2026-10'
+          ? '已按本部门生效的薪资考勤规则计算'
+          : '未匹配到生效的薪资考勤规则，可手工补录',
+    }))
+    await open()
+    await click('新增规则')
+    await chooseDepartment(3)
+    expect(wrapper.get('input[aria-label="应出勤天数"]').element).toHaveProperty('value', '22')
+    wrapper
+      .findAllComponents({ name: 'ElDatePicker' })
+      .find((c) => c.props('ariaLabel') === '规则月份')!
+      .vm.$emit('update:modelValue', '2026-11')
+    await flushPromises()
+    expect(wrapper.get('input[aria-label="应出勤天数"]').element).toHaveProperty('value', '')
+    expect(dialog().text()).toContain('未匹配到生效的薪资考勤规则')
+  })
+
+  it('移除父部门标签会清空子部门，批量失败保留输入并拦截后来锁定的部门', async () => {
+    const rows = list()
+    rows.configuredDepartmentIds = []
+    vi.mocked(api.getAttendanceRules).mockResolvedValue(rows)
+    let locked = false
+    vi.mocked(api.getAttendanceRule).mockImplementation(async (month, departmentId = null) => ({
+      month,
+      departmentId,
+      expectedDays: null,
+      revision: 0,
+      companyExpectedDays: 26,
+      locked: locked && departmentId === 2,
+      calendarExpectedDays: 22,
+    }))
+    await open()
+    await click('新增规则')
+    const selector = wrapper
+      .findAllComponents({ name: 'ElTreeSelect' })
+      .find((c) => c.props('ariaLabel') === '规则部门')!
+    const tree = selector.getComponent({ name: 'ElTree' })
+    await tree.get('[data-key="1"] > .el-tree-node__content input').setValue(true)
+    await flushPromises()
+    await selector
+      .findAll('.el-tag')
+      .find((tag) => tag.text().includes('销售部'))!
+      .get('.el-tag__close')
+      .trigger('click')
+    await flushPromises()
+    expect(tree.vm.getCheckedKeys()).toEqual([])
+    await tree.get('[data-key="1"] > .el-tree-node__content input').setValue(true)
+    await flushPromises()
+    const input = wrapper.get('input[aria-label="销售部应出勤天数"]')
+    await input.setValue('19')
+    await input.trigger('change')
+    locked = true
+    vi.mocked(api.saveAttendanceRules).mockRejectedValueOnce(new Error('对应规则已锁定'))
+    await click('保存规则')
+    expect(dialog().text()).toContain('对应规则已锁定')
+    expect(wrapper.get('input[aria-label="销售部应出勤天数"]').element).toHaveProperty(
+      'value',
+      '19',
+    )
+    expect(dialog().text()).toContain('部分所选部门已锁定')
+    const save = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === '保存规则',
+    )!
+    expect(save.disabled).toBe(true)
+  })
+
   it('keeps readers read-only and shows retry feedback for failed list requests', async () => {
     permissions.write = false
     await open()

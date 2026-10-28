@@ -75,10 +75,6 @@
               style="width: 125px"
             >
               <el-option label="在职" value="ACTIVE" /><el-option label="离职" value="LEFT" />
-              <el-option label="停用" value="INACTIVE" /><el-option
-                label="待确认"
-                value="PENDING"
-              />
             </el-select>
             <el-select
               v-model="regularized"
@@ -371,7 +367,7 @@
                 detail.profile?.major || '—'
               }}</el-descriptions-item>
               <el-descriptions-item label="试用期" :span="2">{{
-                detail.profile?.probationPeriod || '—'
+                probationPeriodLabel(detail.profile?.probationPeriod)
               }}</el-descriptions-item>
               <el-descriptions-item label="户籍地址">{{
                 detail.profile?.registeredAddress || '—'
@@ -508,6 +504,8 @@ import {
   regularizationLabel,
 } from '@/utils/hr-payroll-profile'
 import {
+  probationPeriodLabel,
+  employeeEmploymentStatusLabel,
   auditActor,
   auditTime,
   dateOnly,
@@ -731,21 +729,12 @@ function statusClass(value: string) {
       {
         ACTIVE: 'is-active',
         LEFT: 'is-left',
-        INACTIVE: 'is-inactive',
-        PENDING: 'is-pending',
       } as Record<string, string>
-    )[value] || 'is-pending'
+    )[value] || 'is-unset'
   )
 }
 function statusLabel(value: string) {
-  return (
-    (
-      { ACTIVE: '在职', LEFT: '离职', INACTIVE: '停用', PENDING: '待确认' } as Record<
-        string,
-        string
-      >
-    )[value] || value
-  )
+  return employeeEmploymentStatusLabel(value)
 }
 let linkRequest = 0
 async function applyPayrollLink() {
@@ -943,13 +932,9 @@ onMounted(async () => {
   background: #fff1f2;
   color: #be123c;
 }
-.is-inactive {
+.is-unset {
   background: $color-bg-muted;
   color: $color-text-secondary;
-}
-.is-pending {
-  background: #fffbeb;
-  color: #92400e;
 }
 .binding-risk-banner {
   display: flex;

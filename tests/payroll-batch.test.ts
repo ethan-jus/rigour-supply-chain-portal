@@ -18,6 +18,11 @@ const items = (): PayrollBatchItem[] =>
   ['A', 'B', 'C'].map((id) => ({ record: record(id), status: 'WAITING', message: '' }))
 beforeEach(() => vi.resetAllMocks())
 describe('工资批量操作', () => {
+  it('批量确认跳过当月考勤未确认的工资，仍可重新核算', () => {
+    const row = { ...record('A'), paymentBlockReason: '该员工当月考勤尚未确认' }
+    expect(payrollBatchSkipReason(row, 'confirm', '2026-10')).toContain('考勤尚未确认')
+    expect(payrollBatchSkipReason(row, 'recalculate', '2026-10')).toBe('')
+  })
   it('重算成功后用新工资替换弹窗中的旧金额和版本', async () => {
     const old = record('A', 'REVIEW')
     old.calculation.netPay = null

@@ -32,6 +32,8 @@ export const getAttendanceRules = (
 ) => apiClient.get<AttendanceRuleList>(`${root}/rules`, { ...options, params })
 export const saveAttendanceRule = (data: AttendanceRuleCommand) =>
   apiClient.put<AttendanceRule>(`${root}/rule`, data, options)
+export const saveAttendanceRules = (data: AttendanceRuleCommand[]) =>
+  apiClient.put<AttendanceRule[]>(`${root}/rules`, data, options)
 export const getAttendanceDepartments = (forRules = false) =>
   apiClient.get<AttendanceDepartment[]>(`${root}/departments`, {
     ...options,
@@ -39,6 +41,17 @@ export const getAttendanceDepartments = (forRules = false) =>
   })
 export const getAttendance = (params: AttendanceFilters & { begin: number; step: number }) =>
   apiClient.get<AttendanceView>(root, { ...options, params })
+
+export const previewAttendanceRecord = (
+  month: string,
+  employeeCode: string,
+  command: AttendanceRecordCommand,
+) =>
+  apiClient.post<AttendanceRow>(
+    `${root}/${encodeURIComponent(month)}/${encodeURIComponent(employeeCode)}/preview`,
+    command,
+    options,
+  )
 
 export const confirmAttendanceRecord = (
   month: string,

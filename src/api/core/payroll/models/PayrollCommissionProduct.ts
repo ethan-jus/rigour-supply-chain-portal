@@ -1,5 +1,6 @@
 import type { PayrollDetail } from '../../payroll'
 export interface PayrollCommissionProduct {
+  collectionAmount: number | null
   key: string
   name: string
   variantCode: string

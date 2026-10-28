@@ -32,7 +32,7 @@
       />
       <el-select v-model="statusFilter" clearable placeholder="全部状态" aria-label="规则状态">
         <el-option
-          v-for="state in ['使用中', '待生效', '已停用', '已到期', '历史版本']"
+          v-for="state in ['使用中', '待生效', '已停用', '已废弃', '已到期', '历史版本']"
           :key="state"
           :value="state"
           :label="state"
@@ -239,12 +239,9 @@
           class-name="rule-group-cell"
           align="center"
           :min-width="kind === 'SALARY' ? 160 : 200"
-          ><template #default="{ row }"
-            >{{ row.definition.effectiveFrom }} 至
-            {{
-              row.definition.effectiveTo === '9999-12-31' ? '长期有效' : row.definition.effectiveTo
-            }}</template
-          ></el-table-column
+          ><template #default="{ row }">{{
+            componentVersionPeriod(row as PayrollComponentVersionView, rows, today())
+          }}</template></el-table-column
         >
         <el-table-column
           v-if="kind !== 'SALARY' || historyOnly"
@@ -273,12 +270,19 @@
                 !historyOnly &&
                 can(writePermission) &&
                 isLatest(row as PayrollComponentVersionView) &&
-                stateOf(row as PayrollComponentVersionView) === '待生效'
+                ['待生效', '已停用'].includes(stateOf(row as PayrollComponentVersionView))
               "
               link
               type="primary"
               :disabled="!!ruleBusy"
-              @click="open(row as PayrollComponentVersionView, false, true)"
+              @click="
+                open(
+                  row as PayrollComponentVersionView,
+                  false,
+                  stateOf(row as PayrollComponentVersionView) === '待生效',
+                  stateOf(row as PayrollComponentVersionView) === '已停用',
+                )
+              "
               >修改</el-button
             >
             <el-button
@@ -409,6 +413,12 @@
     >
       <el-alert v-if="editorError" :title="editorError" type="error" :closable="false" />
       <el-alert
+        v-if="editStopped"
+        title="修改将保存为新版本，并保持停用；核对后请在列表中重新启用。历史计算依据保留。"
+        type="info"
+        :closable="false"
+      />
+      <el-alert
         v-if="kind === 'SALARY'"
         title="维护本员工各档位的底薪和绩效基数。金银铜牌区间由绩效规则统一维护；调薪按生效月份保留历史。"
         type="info"
@@ -435,16 +445,27 @@
             ></el-form-item>
             <el-form-item v-if="kind !== 'SALARY'" label="适用部门" required
               ><el-tree-select
+                ref="departmentScopeSelect"
                 v-model="form.departmentIds"
-                :disabled="readonly || (!!previousId && !replacePending)"
+                :disabled="departmentScopeLocked"
                 :data="departmentOptions"
                 :props="{ label: 'name', children: 'children' }"
                 node-key="id"
                 multiple
-                check-strictly
+                :check-strictly="departmentScopeLocked"
                 show-checkbox
                 filterable
-            /></el-form-item>
+                collapse-tags
+                collapse-tags-tooltip
+                :max-collapse-tags="3"
+                :render-after-expand="false"
+                @check="(_, state) => updateDepartmentSelection(state.checkedKeys)"
+                @remove-tag="removeDepartmentTag"
+              />
+              <p v-if="!departmentScopeLocked" class="field-hint">
+                勾选父部门会选中所有下级部门；保存包含全部勾选部门，可取消不适用的分支。
+              </p>
+            </el-form-item>
             <el-form-item label="生效月份" required
               ><el-date-picker
                 v-model="form.effectiveFrom"
@@ -514,7 +535,7 @@
 import { randomId } from '@/utils/random-id'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type TreeInstance } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { errorMessage } from '@/api/core/error'
@@ -545,6 +566,7 @@ import { commissionRows, commissionRowTotal } from '@/utils/payroll-commission-r
 import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
 import {
   componentVersionState,
+  componentVersionPeriod,
   visibleComponentVersions,
   componentListGroupKey,
   groupComponentListRows,
@@ -618,7 +640,13 @@ const historyLoading = ref(false),
   historyError = ref(''),
   ruleBusy = ref('')
 const operationLabel = (action: string) =>
-  ({ MODIFY: '修改', DELETE: '删除', DISABLE: '停用', ENABLE: '重新启用' })[action] || action
+  ({
+    MODIFY: '修改',
+    DELETE: '删除',
+    DISABLE: '停用',
+    ENABLE: '重新启用',
+    RETIRE: '废弃（新规则替代）',
+  })[action] || action
 async function showHistory(row: PayrollComponentVersionView) {
   history.value = rows.value.filter((v) => v.ruleId === row.ruleId)
   operationRows.value = []
@@ -873,6 +901,37 @@ const form = ref(newPayrollScheme()),
   reason = ref('')
 const replacePending = ref(false),
   editRevision = ref<number>()
+const editStopped = ref(false)
+const departmentScopeSelect = ref<{ treeRef: TreeInstance }>()
+const departmentScopeLocked = computed(
+  () => readonly.value || (!!previousId.value && !replacePending.value && !editStopped.value),
+)
+function updateDepartmentSelection(checkedKeys: number[]) {
+  if (departmentScopeLocked.value) return
+  const known = new Set(departments.value.map((department) => department.id))
+  // Keep historical IDs absent from the current catalog until explicitly removed.
+  form.value.departmentIds = [
+    ...new Set([...checkedKeys, ...form.value.departmentIds.filter((id) => !known.has(id))]),
+  ]
+}
+function removeDepartmentTag(id: number) {
+  if (departmentScopeLocked.value) return
+  const excluded = new Set([id])
+  const removeBranch = (nodes: typeof departmentOptions.value) => {
+    for (const node of nodes) {
+      if (excluded.has(node.id) || (node.parentId != null && excluded.has(node.parentId)))
+        excluded.add(node.id)
+      removeBranch(node.children)
+    }
+  }
+  removeBranch(departmentOptions.value)
+  let parent = departments.value.find((department) => department.id === id)?.parentId
+  while (parent != null && !excluded.has(parent)) {
+    excluded.add(parent)
+    parent = departments.value.find((department) => department.id === parent)?.parentId
+  }
+  form.value.departmentIds = form.value.departmentIds.filter((value) => !excluded.has(value))
+}
 const salaryComparison = computed(() => {
   const previous = rows.value.find((row) => row.id === previousId.value)
   const oldAmounts = previous ? salaryAmounts(previous) : []
@@ -959,7 +1018,7 @@ function changeRole() {
     form.value.baseSalary.mode = 'TIERS'
   }
 }
-function open(row?: PayrollComponentVersionView, next = false, replace = false) {
+function open(row?: PayrollComponentVersionView, next = false, replace = false, stopped = false) {
   form.value = newPayrollScheme()
   if (kind.value === 'PERFORMANCE' && roleFilter.value) {
     form.value.role = roleFilter.value
@@ -967,11 +1026,12 @@ function open(row?: PayrollComponentVersionView, next = false, replace = false) 
   }
   grades.value = form.value.baseSalary.tiers.map(({ amount: _amount, ...band }) => band)
   replacePending.value = replace
-  editRevision.value = replace ? (row?.revision ?? 1) : undefined
-  previousId.value = (next || replace) && row ? row.id : null
-  readonly.value = (!!row && !next && !replace) || !can(writePermission.value)
+  editStopped.value = stopped
+  editRevision.value = replace || stopped ? (row?.revision ?? 1) : undefined
+  previousId.value = (next || replace || stopped) && row ? row.id : null
+  readonly.value = (!!row && !next && !replace && !stopped) || !can(writePermission.value)
   requestId.value = randomId()
-  reason.value = row && !next && !replace ? row.reason : ''
+  reason.value = row && !next && !replace && !stopped ? row.reason : ''
   editorError.value = ''
   if (row) {
     const d = structuredClone(toRaw(row.definition))
@@ -1032,6 +1092,11 @@ async function load() {
 }
 async function save() {
   if (saving.value) return
+  const changeReason = reason.value.trim()
+  if (!changeReason || changeReason.length > 1000) {
+    editorError.value = '请填写1至1000字变更说明'
+    return
+  }
   if (kind.value === 'COMMISSION') {
     const validationMessage = commissionEditor.value?.validate()
     if (validationMessage) {
@@ -1043,12 +1108,14 @@ async function save() {
   editorError.value = ''
   try {
     const f = form.value
+    if (kind.value !== 'SALARY' && !departmentScopeLocked.value && departmentScopeSelect.value)
+      updateDepartmentSelection(departmentScopeSelect.value.treeRef.getCheckedKeys() as number[])
     await savePayrollComponent({
       requestId: requestId.value,
       previousId: previousId.value,
       replacePending: replacePending.value,
       revision: editRevision.value,
-      reason: reason.value,
+      reason: changeReason,
       definition: {
         name: f.name,
         kind: kind.value,

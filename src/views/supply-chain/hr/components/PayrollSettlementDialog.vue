@@ -27,6 +27,12 @@
         review-hint
       />
       <el-alert :title="hints[action]" type="info" :closable="false" />
+      <el-alert
+        v-if="['confirm', 'paid'].includes(action) && row.paymentBlockReason"
+        :title="row.paymentBlockReason"
+        type="warning"
+        :closable="false"
+      />
       <el-alert v-if="error" :title="error" type="error" :closable="false" />
       <el-form label-width="125px" :disabled="saving">
         <template v-if="action === 'paid'">
@@ -73,9 +79,13 @@
     </template>
     <template #footer
       ><el-button :disabled="saving" @click="visible = false">取消</el-button
-      ><el-button type="primary" :loading="saving" @click="save">{{
-        titles[action]
-      }}</el-button></template
+      ><el-button
+        type="primary"
+        :loading="saving"
+        :disabled="['confirm', 'paid'].includes(action) && !!row?.paymentBlockReason"
+        @click="save"
+        >{{ titles[action] }}</el-button
+      ></template
     >
   </el-dialog>
 </template>
@@ -147,6 +157,10 @@ async function open(value: PayrollRecord, kind: Action) {
 async function save() {
   if (!row.value || saving.value) return
   error.value = ''
+  if (['confirm', 'paid'].includes(action.value) && row.value.paymentBlockReason) {
+    error.value = row.value.paymentBlockReason
+    return
+  }
   if (action.value !== 'confirm' && !reason.value.trim()) {
     error.value = '请填写操作原因或发放说明'
     return

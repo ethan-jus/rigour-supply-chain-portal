@@ -86,6 +86,14 @@ describe('HR employee analytics', () => {
     expect(wrapper.text().replace(/\s/g, '')).toContain('员工档案3人')
     expect(wrapper.text()).toContain('期间有订单 1 人')
     expect(wrapper.text()).toContain('1 人缺入职日期')
+    expect(wrapper.text()).toContain('1 人未填写在职状态')
+    expect(wrapper.text()).not.toMatch(/停用|待确认|其他状态/)
+    expect(
+      wrapper
+        .findAllComponents({ name: 'EchartsChart' })[0]!
+        .props('option')
+        .series.map((s: { name: string }) => s.name),
+    ).toEqual(['在职', '离职'])
     wrapper.unmount()
   })
 })

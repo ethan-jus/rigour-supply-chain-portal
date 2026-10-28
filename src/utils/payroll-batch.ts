@@ -8,6 +8,7 @@ export function payrollBatchSkipReason(
   currentMonth: string,
 ) {
   if (action === 'confirm') {
+    if (row.paymentBlockReason) return row.paymentBlockReason
     if (row.month >= currentMonth) return '月份尚未结束，仅可预核算'
     if (row.statusCode !== 'READY')
       return row.statusCode === 'REVIEW' ? '有待处理事项，请处理后重算' : '已确认或已发放'

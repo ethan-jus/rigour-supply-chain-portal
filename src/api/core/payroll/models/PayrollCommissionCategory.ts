@@ -1,5 +1,6 @@
 import type { PayrollCommissionProduct } from './PayrollCommissionProduct'
 export interface PayrollCommissionCategory {
+  collectionAmount: number | null
   key: string
   name: string
   orderCount: number

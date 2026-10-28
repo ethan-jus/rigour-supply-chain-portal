@@ -27,10 +27,19 @@
     </div>
     <p class="field-hint">
       分类标准与具体型号均从 ERP
-      选择；型号标准优先于分类标准。比例按订单商品回款基数计算，数量提成必须与订单单位一致。商品价格在
+      选择；选择分类会默认选中其全部型号，可再取消部分型号。同一型号可按不同订单单位分别设置数量提成，按型号和订单单位匹配标准。比例按订单商品回款基数计算。商品价格在
       ERP 维护。
     </p>
-    <el-table :data="rows" row-key="code" border @selection-change="selected = $event">
+    <p class="field-hint">
+      同一组型号按套、按床的金额不同时，点击“添加单位标准”分别填写；同一商品范围和单位不能重复配置。
+    </p>
+    <el-table
+      :data="displayRows"
+      row-key="code"
+      border
+      :span-method="unitSpan"
+      @selection-change="selected = $event"
+    >
       <el-table-column type="selection" width="45" />
       <el-table-column label="商品分类／型号" min-width="240"
         ><template #default="{ row }">
@@ -42,6 +51,13 @@
             :disabled="false"
             @click="scopeRow = row as PayrollCommissionRow"
             >{{ disabled ? '查看商品与排除项' : '选择商品与排除项' }}</el-button
+          >
+          <el-button
+            v-if="!disabled && canAddUnit(row as PayrollCommissionRow)"
+            link
+            type="primary"
+            @click="openUnit(row as PayrollCommissionRow)"
+            >添加单位标准</el-button
           >
         </template></el-table-column
       >
@@ -57,9 +73,11 @@
           totalLabel(row as PayrollCommissionRow)
         }}</template></el-table-column
       >
-      <el-table-column label="操作" width="70"
-        ><template #default="{ $index }"
-          ><el-button link type="danger" @click="rows.splice($index, 1)">移除</el-button></template
+      <el-table-column label="操作" width="85"
+        ><template #default="{ row }"
+          ><el-button link type="danger" @click="removeRow(row as PayrollCommissionRow)"
+            >移除</el-button
+          ></template
         ></el-table-column
       >
     </el-table>
@@ -102,7 +120,7 @@
             @remove-tag="removeCategoryTag"
         /></el-form-item>
         <p class="field-hint">
-          勾选父分类包含全部子分类；取消子分类即自动排除，无需重复设置。所选分类整体适用本行提成标准。
+          选择分类后会选中该分类及子分类的全部型号，可再取消部分型号。分类范围变化时会重新全选；取消子分类会自动加入排除范围。
         </p>
         <el-alert v-if="scopeNotice" :title="scopeNotice" type="info" :closable="false" />
         <el-form-item
@@ -115,8 +133,9 @@
             remote
             placeholder="搜索商品名称或规格"
             :remote-method="search"
-            :loading="loading"
-            @change="clearScopeRangeError"
+            :loading="loading || categoryLoading[scopeRow.code]"
+            :disabled="categoryLoading[scopeRow.code]"
+            @change="changeSelectedVariants"
             ><el-option
               v-for="p in productOptions(scopeRow.sales.variantIds)"
               :key="p.productVariantId"
@@ -141,6 +160,12 @@
               :label="productLabel(p)" /></el-select
         ></el-form-item>
         <el-alert v-if="productError" :title="productError" type="error" :closable="false" />
+        <el-alert
+          v-if="categoryErrors[scopeRow.code]"
+          :title="categoryErrors[scopeRow.code]"
+          type="error"
+          :closable="false"
+        />
         <el-alert
           v-if="hasOutsideProducts"
           title="已有商品不在当前分类范围内，仍保留历史设置，请移除或调整分类后核对。"
@@ -170,6 +195,56 @@
         ><el-button type="primary" :disabled="false" @click="finishScope">完成</el-button></template
       >
     </el-dialog>
+    <el-dialog
+      :model-value="!!unitSource"
+      title="添加单位标准"
+      width="580px"
+      append-to-body
+      @close="unitSource = null"
+    >
+      <template v-if="unitSource">
+        <p>为“{{ unitSource.name }}”添加另一单位的提成，合并在同一商品下展示。原标准保留。</p>
+        <el-form label-position="top" :disabled="disabled">
+          <el-form-item label="计提单位" required>
+            <el-select v-model="unitDraft.unitCode" filterable placeholder="请选择单位，如套、床">
+              <el-option v-for="unit in unitOptions" :key="unit.value" v-bind="unit" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="销售人员提成" :required="!unitSource.sales.excluded">
+            <span v-if="unitSource.sales.excluded">明确不计提</span>
+            <template v-else>
+              <el-input-number
+                v-model="unitDraft.sales"
+                :min="0"
+                :precision="4"
+                :controls="false"
+                aria-label="新单位销售提成"
+              />
+              <span>元／{{ payrollUnitName(unitDraft.unitCode) }}</span>
+            </template>
+          </el-form-item>
+          <el-form-item label="城市总提成" :required="!unitSource.manager.excluded">
+            <span v-if="unitSource.manager.excluded">明确不计提</span>
+            <template v-else>
+              <el-input-number
+                v-model="unitDraft.manager"
+                :min="0"
+                :precision="4"
+                :controls="false"
+                aria-label="新单位城市总提成"
+              />
+              <span>元／{{ payrollUnitName(unitDraft.unitCode) }}</span>
+            </template>
+          </el-form-item>
+        </el-form>
+        <p class="field-hint">按订单上的型号、单位匹配对应金额，不自动换算单位。</p>
+        <el-alert v-if="unitError" :title="unitError" type="error" :closable="false" />
+      </template>
+      <template #footer>
+        <el-button @click="unitSource = null">取消</el-button>
+        <el-button type="primary" :disabled="disabled" @click="addUnit">添加标准</el-button>
+      </template>
+    </el-dialog>
     <el-dialog v-model="batchVisible" title="批量设置提成标准" width="640px" append-to-body>
       <el-form label-position="top"
         ><el-form-item label="销售人员提成"
@@ -196,11 +271,14 @@ import {
   newCommissionRow,
   flattenCommissionRows,
   commissionRowTotal,
+  duplicateCommissionScope,
+  groupCommissionRows,
 } from '@/utils/payroll-commission-rows'
 import { departmentTree } from '@/utils/hr-department-tree'
 import { commissionCategoryScope } from '@/utils/payroll-commission-scope'
 import { errorMessage } from '@/api/core/error'
 import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
+import { businessDictionaryOptions } from '@/utils/business-dictionary'
 import PayrollCommissionRateEditor from './PayrollCommissionRateEditor.vue'
 const form = defineModel<PayrollSchemeDefinition>({ required: true })
 const props = defineProps<{ categories: PayrollCategory[]; disabled?: boolean }>()
@@ -213,13 +291,136 @@ const scopeErrors = ref({ name: '', range: '' })
 const rows = ref<PayrollCommissionRow[]>(commissionRows(form.value.commission.rules))
 const selected = ref<PayrollCommissionRow[]>([]),
   scopeRow = ref<PayrollCommissionRow | null>(null)
+const unitGroups = computed(() => groupCommissionRows(rows.value))
+const displayRows = computed(() => unitGroups.value.flat())
+function unitSpan({ rowIndex, columnIndex }: { rowIndex: number; columnIndex: number }) {
+  if (columnIndex !== 1) return [1, 1]
+  let start = 0
+  for (const group of unitGroups.value) {
+    if (rowIndex < start + group.length) return rowIndex === start ? [group.length, 1] : [0, 0]
+    start += group.length
+  }
+  return [1, 1]
+}
+function removeRow(row: PayrollCommissionRow) {
+  if (props.disabled) return
+  const index = rows.value.findIndex((candidate) => candidate.code === row.code)
+  if (index >= 0) rows.value.splice(index, 1)
+}
+const scopeGroupCodes = ref<string[]>([])
+watch(
+  scopeRow,
+  (row) => {
+    scopeGroupCodes.value = row
+      ? (unitGroups.value
+          .find((group) => group.some((member) => member.code === row.code))
+          ?.map((member) => member.code) ?? [row.code])
+      : []
+  },
+  { flush: 'sync' },
+)
+watch(
+  () =>
+    scopeRow.value
+      ? JSON.stringify([
+          scopeRow.value.name,
+          scopeRow.value.sales.categoryIds,
+          scopeRow.value.sales.excludedCategoryIds,
+          scopeRow.value.sales.variantIds,
+          scopeRow.value.sales.excludedVariantIds,
+        ])
+      : '',
+  () => {
+    const source = scopeRow.value
+    if (!source) return
+    for (const row of rows.value.filter(
+      (row) => row.code !== source.code && scopeGroupCodes.value.includes(row.code),
+    )) {
+      row.name = source.name
+      Object.assign(row.sales, {
+        categoryIds: [...source.sales.categoryIds],
+        excludedCategoryIds: [...source.sales.excludedCategoryIds],
+        variantIds: [...source.sales.variantIds],
+        excludedVariantIds: [...source.sales.excludedVariantIds],
+      })
+    }
+  },
+)
 const products = ref<PayrollProduct[]>([]),
   productResults = ref<PayrollProduct[]>([]),
   productError = ref(''),
   loading = ref(false),
   error = ref('')
+const categoryLoading = ref<Record<string, boolean>>({})
+const categoryErrors = ref<Record<string, string>>({})
+const categoryVersions = new Map<string, number>()
+const explicitModels = new Set<string>()
+const selectedProductsLoading = ref(true)
 const batchVisible = ref(false),
   batch = ref(newCommissionRow())
+const unitSource = ref<PayrollCommissionRow | null>(null)
+const unitDraft = ref({
+  unitCode: '',
+  sales: null as number | null,
+  manager: null as number | null,
+})
+const unitError = ref('')
+const unitOptions = computed(() => businessDictionaryOptions('', 'PRODUCT_UNIT'))
+function canAddUnit(row: PayrollCommissionRow) {
+  const active = [row.sales, row.manager].filter((rule) => !rule.excluded)
+  return (
+    active.length > 0 &&
+    [row.sales, row.manager].every((rule) => rule.method === 'QUANTITY' && !!rule.unitCode)
+  )
+}
+function openUnit(row: PayrollCommissionRow) {
+  if (props.disabled || !canAddUnit(row)) return
+  const message = validateScopeRow(row)
+  if (message) {
+    scopeRow.value = row
+    return
+  }
+  unitDraft.value = { unitCode: '', sales: null, manager: null }
+  unitError.value = ''
+  unitSource.value = row
+}
+function addUnit() {
+  const source = unitSource.value
+  if (!source || props.disabled) return
+  const draft = unitDraft.value
+  if (!unitOptions.value.some((unit) => unit.value === draft.unitCode)) {
+    unitError.value = '请选择有效的计提单位'
+    return
+  }
+  if (
+    [source.sales.excluded ? 0 : draft.sales, source.manager.excluded ? 0 : draft.manager].some(
+      (amount) => amount == null || !Number.isFinite(amount) || amount < 0,
+    )
+  ) {
+    unitError.value = '请分别填写销售和城市总的提成金额；不计提的角色沿用原设置'
+    return
+  }
+  const row = newCommissionRow(source.name)
+  for (const role of ['sales', 'manager'] as const) {
+    Object.assign(row[role], {
+      categoryIds: [...source.sales.categoryIds],
+      excludedCategoryIds: [...source.sales.excludedCategoryIds],
+      variantIds: [...source.sales.variantIds],
+      excludedVariantIds: [...source.sales.excludedVariantIds],
+      method: 'QUANTITY',
+      value: source[role].excluded ? source[role].value : draft[role],
+      excluded: source[role].excluded,
+      unitCode: draft.unitCode,
+    })
+  }
+  const message = duplicateCommissionScope([...rows.value, row])
+  if (message) {
+    unitError.value = message
+    return
+  }
+  rows.value.splice(rows.value.indexOf(source) + 1, 0, row)
+  unitSource.value = null
+}
 const productLabel = (p: PayrollProduct) =>
   [p.productName, p.specification?.trim()].filter(Boolean).join(' / ')
 function updateCategorySelection(state: { checkedKeys: number[]; halfCheckedKeys: number[] }) {
@@ -241,6 +442,67 @@ function updateCategorySelection(state: { checkedKeys: number[]; halfCheckedKeys
   scopeNotice.value = removed
     ? `分类范围已调整，已移除 ${removed} 项范围外或暂无法核对的商品选择，请核对后保存。`
     : ''
+  void selectCategoryModels(scopeRow.value)
+}
+async function selectCategoryModels(row: PayrollCommissionRow) {
+  const version = (categoryVersions.get(row.code) ?? 0) + 1
+  categoryVersions.set(row.code, version)
+  categoryErrors.value[row.code] = ''
+  const scope = row.sales
+  if (!scope.categoryIds.length) {
+    scope.variantIds = []
+    categoryLoading.value[row.code] = false
+    return
+  }
+  explicitModels.add(row.code)
+  categoryLoading.value[row.code] = true
+  try {
+    const found = new Map<string, PayrollProduct>()
+    for (const category of categoryScope.value.compact(scope.categoryIds)) {
+      const seen = new Set<string>()
+      for (let begin = 0; ; begin += 100) {
+        const batch = await getPayrollProducts('', category, null, begin)
+        if (categoryVersions.get(row.code) !== version) return
+        const fresh = batch.filter((product) => !seen.has(String(product.productVariantId)))
+        if (begin > 0 && batch.length && !fresh.length)
+          throw new Error('商品目录分页未生效，请更新 HR 和 ERP 服务后重新选择分类')
+        batch.forEach((product) => seen.add(String(product.productVariantId)))
+        batch
+          .filter((product) => categoryScope.value.includes(product, scope))
+          .forEach((product) => found.set(String(product.productVariantId), product))
+        if (batch.length < 100) break
+      }
+    }
+    if (categoryVersions.get(row.code) !== version) return
+    const merged = new Map(
+      products.value.map((product) => [String(product.productVariantId), product]),
+    )
+    found.forEach((product, id) => merged.set(id, product))
+    products.value = [...merged.values()]
+    const excluded = new Set(scope.excludedVariantIds.map(String))
+    scope.variantIds = [...found.keys()].filter((id) => !excluded.has(id))
+    if (!scope.variantIds.length)
+      categoryErrors.value[row.code] = '当前分类范围没有可计提的型号，请调整分类或排除项'
+    if (scopeRow.value?.code === row.code)
+      scopeNotice.value = `分类范围已调整，已选中 ${scope.variantIds.length} 个型号，可再取消部分型号。`
+  } catch (e) {
+    if (categoryVersions.get(row.code) === version)
+      categoryErrors.value[row.code] = errorMessage(e, '分类型号加载失败，请重新选择分类')
+  } finally {
+    if (categoryVersions.get(row.code) === version) categoryLoading.value[row.code] = false
+  }
+}
+function changeSelectedVariants() {
+  const row = scopeRow.value
+  if (!row || props.disabled) return
+  if (row.sales.variantIds.length) explicitModels.add(row.code)
+  else if (explicitModels.has(row.code)) {
+    row.sales.categoryIds = []
+    row.sales.excludedCategoryIds = []
+    categoryKeys.value = []
+    scopeNotice.value = '已取消全部型号，商品范围已清空，请重新选择。'
+  }
+  clearScopeRangeError()
 }
 function clearScopeRangeError() {
   if (scopeRow.value?.sales.categoryIds.length || scopeRow.value?.sales.variantIds.length)
@@ -248,10 +510,12 @@ function clearScopeRangeError() {
 }
 function validateScopeRow(row: PayrollCommissionRow) {
   scopeErrors.value.name = row.name.trim() ? '' : '请填写标准名称'
-  scopeErrors.value.range =
-    row.sales.categoryIds.length || row.sales.variantIds.length
-      ? ''
-      : '请至少选择适用商品分类或指定商品型号／规格'
+  scopeErrors.value.range = categoryLoading.value[row.code]
+    ? '正在加载分类对应的全部型号，请稍候'
+    : categoryErrors.value[row.code] ||
+      (row.sales.categoryIds.length || row.sales.variantIds.length
+        ? ''
+        : '请至少选择适用商品分类或指定商品型号／规格')
   return scopeErrors.value.name || scopeErrors.value.range
 }
 function finishScope() {
@@ -260,12 +524,13 @@ function finishScope() {
 }
 function validate() {
   for (const row of rows.value) {
-    if (!row.name.trim() || (!row.sales.categoryIds.length && !row.sales.variantIds.length)) {
+    const message = validateScopeRow(row)
+    if (message) {
       scopeRow.value = row
-      return validateScopeRow(row)
+      return message
     }
   }
-  return null
+  return duplicateCommissionScope(rows.value)
 }
 defineExpose({ validate })
 async function removeCategoryTag(id: number) {
@@ -329,17 +594,29 @@ function addPreset(name: string, sales: number, manager: number) {
 }
 function scopeLabel(row: PayrollCommissionRow) {
   const scope = row.sales
-  const names = [
-    ...scope.categoryIds.map(
-      (id) => props.categories.find((c) => c.id === id)?.name || `分类 ${id}`,
-    ),
-    ...scope.variantIds.map((id) => {
+  const categories = scope.categoryIds
+    .map((id) => props.categories.find((c) => c.id === id)?.name || `分类 ${id}`)
+    .join('、')
+  if (
+    selectedProductsLoading.value &&
+    scope.variantIds.some(
+      (id) => !products.value.some((product) => String(product.productVariantId) === id),
+    )
+  )
+    return `正在加载 ${scope.variantIds.length} 个型号名称${categories ? `；筛选分类：${categories}` : ''}`
+  const variants = scope.variantIds
+    .map((id) => {
       const p = products.value.find((p) => String(p.productVariantId) === id)
-      return p ? productLabel(p) : `规格 ${id}`
-    }),
-  ]
+      return p ? productLabel(p) : `商品规格暂不可用（编号 ${id}）`
+    })
+    .join('、')
+  const label = variants
+    ? `仅指定型号：${variants}${categories ? `；筛选分类：${categories}` : ''}`
+    : categories
+      ? `按分类：${categories}`
+      : '请选择 ERP 分类或规格'
   const excluded = scope.excludedCategoryIds.length + scope.excludedVariantIds.length
-  return (names.join('、') || '请选择 ERP 分类或规格') + (excluded ? `；排除 ${excluded} 项` : '')
+  return label + (excluded ? `；排除 ${excluded} 项` : '')
 }
 function excludedRows(row: PayrollCommissionRow) {
   return [
@@ -426,6 +703,7 @@ onMounted(async () => {
   for (const result of results)
     if (result.status === 'fulfilled') products.value.push(...result.value)
     else error.value = '部分已选商品暂不可用，请核对商品目录'
+  selectedProductsLoading.value = false
 })
 onMounted(() => {
   void loadPayrollProductUnits()

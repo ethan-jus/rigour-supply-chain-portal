@@ -111,7 +111,10 @@
       >增加补贴</el-button
     >
     <el-divider content-position="left">入离职及出勤折算</el-divider>
-    <div class="scheme-grid">
+    <p v-if="form.role === 'SALES'" class="field-hint">
+      销售底薪及补贴按“（底薪＋补贴）÷应出勤×实际出勤”折算；绩效按绩效规则及入离职口径核算，不随出勤比例折减。
+    </p>
+    <div v-if="form.role !== 'SALES'" class="scheme-grid">
       <el-form-item v-for="item in prorationFields" :key="item.key" :label="item.label"
         ><el-select v-model="form.proration[item.key]"
           ><el-option

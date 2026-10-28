@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { ElMessage, type TreeInstance } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
@@ -12,6 +12,7 @@ import {
   getAttendanceRule,
   getAttendanceRules,
   saveAttendanceRule,
+  saveAttendanceRules,
   type AttendanceDepartment,
   type AttendanceRule,
   type AttendanceRuleFilters,
@@ -123,6 +124,10 @@ const dialogOpen = ref(false),
   mode = ref<'create' | 'edit' | 'view'>('create')
 const editMonth = ref(attendanceMonth()),
   editDepartment = ref<number | undefined>()
+const editDepartments = ref<number[]>([])
+const departmentSelection = ref<{ treeRef: TreeInstance }>()
+const editorRows = ref<{ id: number; rule: AttendanceRule; days: number | undefined }[]>([])
+let editorMonth = ''
 const rule = ref<AttendanceRule | null>(null),
   monthOptions = ref<AttendanceRuleList | null>(null)
 const days = ref<number | undefined>(),
@@ -143,9 +148,20 @@ const readOnly = computed(
     rule.value?.canWrite === false ||
     !can('hr:attendance-rule:write'),
 )
-const duplicate = computed(() => mode.value === 'create' && rule.value?.expectedDays != null)
+const duplicate = computed(
+  () => mode.value === 'create' && editorRows.value.some((row) => row.rule.expectedDays != null),
+)
+const batchBlocked = computed(() =>
+  editorRows.value.some((row) => row.rule.locked || row.rule.canWrite === false),
+)
 const daysDisabled = computed(
-  () => editorLoading.value || saving.value || !rule.value || readOnly.value || duplicate.value,
+  () =>
+    editorLoading.value ||
+    saving.value ||
+    !rule.value ||
+    readOnly.value ||
+    duplicate.value ||
+    batchBlocked.value,
 )
 const maxDays = computed(() => {
   const [year, month] = editMonth.value.split('-').map(Number)
@@ -166,11 +182,79 @@ const editorOptions = computed(() => [
   { id: 0, children: [], ...optionState(0, '公司默认') },
   ...editorDepartments.value,
 ])
-const selectedName = computed(() =>
-  editDepartment.value === 0
-    ? '公司默认'
-    : departments.value.find((d) => d.id === editDepartment.value)?.departmentName || '所选部门',
+function selectDepartments(id: number, checked: number[]) {
+  if (mode.value !== 'create' || saving.value) return
+  if (id === 0) {
+    editDepartments.value = checked.includes(0) ? [0] : []
+    return
+  }
+  const branch = new Set([id])
+  const visit = (nodes: typeof editorDepartments.value) => {
+    for (const node of nodes) {
+      if (node.parentId != null && branch.has(node.parentId)) branch.add(node.id)
+      visit(node.children)
+    }
+  }
+  visit(editorDepartments.value)
+  const included = new Set(checked.filter((value) => value !== 0))
+  for (const value of branch) {
+    if (checked.includes(id) && !optionState(value, '').disabled) included.add(value)
+    else included.delete(value)
+  }
+  if (!checked.includes(id)) {
+    let parent = departments.value.find((department) => department.id === id)?.parentId
+    while (parent != null && !branch.has(parent)) {
+      branch.add(parent)
+      included.delete(parent)
+      parent = departments.value.find((department) => department.id === parent)?.parentId
+    }
+  }
+  editDepartments.value = [...included]
+}
+watch(
+  () => editDepartments.value.join(','),
+  async () => {
+    await nextTick()
+    const selected = new Set(editDepartments.value)
+    const visit = (nodes: typeof editorDepartments.value): boolean => {
+      let any = false
+      for (const department of nodes) {
+        const childSelected = visit(department.children)
+        const node = departmentSelection.value?.treeRef.getNode(department.id)
+        if (node) node.indeterminate = !selected.has(department.id) && childSelected
+        any ||= selected.has(department.id) || childSelected
+      }
+      return any
+    }
+    visit(editorDepartments.value)
+  },
 )
+function removeDepartmentTag(id: number) {
+  const removed = new Set([id])
+  const removeBranch = (nodes: typeof editorDepartments.value) => {
+    for (const node of nodes) {
+      if (node.parentId != null && removed.has(node.parentId)) removed.add(node.id)
+      removeBranch(node.children)
+    }
+  }
+  removeBranch(editorDepartments.value)
+  let parent = departments.value.find((department) => department.id === id)?.parentId
+  while (parent != null && !removed.has(parent)) {
+    removed.add(parent)
+    parent = departments.value.find((department) => department.id === parent)?.parentId
+  }
+  editDepartments.value = editDepartments.value.filter((value) => !removed.has(value))
+}
+const activeDepartment = computed(() =>
+  mode.value === 'create' ? editDepartments.value[0] : editDepartment.value,
+)
+const selectedName = computed(() =>
+  activeDepartment.value === 0
+    ? '公司默认'
+    : departments.value.find((d) => d.id === activeDepartment.value)?.departmentName || '所选部门',
+)
+const departmentName = (id: number) =>
+  id === 0 ? '公司默认' : departments.value.find((d) => d.id === id)?.departmentName || `部门 ${id}`
 const lockReason = computed(() =>
   editDepartment.value === 0
     ? '当月已有使用公司默认规则的员工确认考勤，公司默认规则已锁定。'
@@ -182,25 +266,49 @@ async function loadEditor(preserveInput = false) {
   const id = ++editorRequest
   const month = editMonth.value,
     department = editDepartment.value
+  const selected =
+    mode.value === 'create' ? [...editDepartments.value] : department == null ? [] : [department]
+  const previous =
+    editorMonth === month
+      ? new Map(editorRows.value.map((row) => [row.id, row.days]))
+      : new Map<number, number | undefined>()
+  if (editorMonth === month && editorRows.value.length === 1)
+    previous.set(editorRows.value[0]!.id, days.value)
   editorLoading.value = true
   if (!preserveInput) {
     rule.value = null
     days.value = undefined
+    editorRows.value = []
     editorError.value = ''
   }
-  monthOptions.value = null
+  if (editorMonth !== month) monthOptions.value = null
   try {
-    const [options, current] = await Promise.all([
+    const [options, currentRows] = await Promise.all([
       getAttendanceRules({ month, status: '', begin: 0, step: 1 }),
-      department == null ? Promise.resolve(null) : getAttendanceRule(month, department || null),
+      Promise.all(selected.map((value) => getAttendanceRule(month, value || null))),
     ])
     if (id !== editorRequest || !dialogOpen.value) return
     monthOptions.value = options
+    const current = currentRows[0] ?? null
     rule.value = current
-    if (!preserveInput || current?.locked) days.value = current?.expectedDays ?? undefined
+    editorRows.value = currentRows.map((current, index) => ({
+      id: selected[index]!,
+      rule: current,
+      days:
+        !current.locked && previous.has(selected[index]!)
+          ? previous.get(selected[index]!)
+          : (current.expectedDays ?? current.calendarExpectedDays ?? undefined),
+    }))
+    editorMonth = month
+    if (!preserveInput || current?.locked)
+      days.value =
+        mode.value === 'create'
+          ? editorRows.value[0]?.days
+          : (current?.expectedDays ?? current?.calendarExpectedDays ?? undefined)
   } catch (e) {
     if (id === editorRequest) {
       rule.value = null
+      editorRows.value = []
       editorError.value = errorMessage(e, '规则加载失败，请重试')
     }
   } finally {
@@ -212,12 +320,36 @@ function create() {
   mode.value = 'create'
   editMonth.value = applied.value.month
   const id = applied.value.departmentId
-  editDepartment.value =
+  const selected =
     id != null &&
     !data.value?.configuredDepartmentIds.includes(id) &&
     !data.value?.lockedDepartmentIds.includes(id)
       ? id
       : undefined
+  const included = new Set<number>(selected == null ? [] : [selected])
+  if (selected != null && selected !== 0) {
+    let added = true
+    while (added) {
+      added = false
+      for (const department of departments.value)
+        if (
+          department.parentId != null &&
+          included.has(department.parentId) &&
+          !included.has(department.id)
+        ) {
+          included.add(department.id)
+          added = true
+        }
+    }
+  }
+  editDepartments.value = [...included].filter(
+    (value) =>
+      !data.value?.configuredDepartmentIds.includes(value) &&
+      !data.value?.lockedDepartmentIds.includes(value),
+  )
+  editorRows.value = []
+  editorMonth = ''
+  editDepartment.value = undefined
   dialogOpen.value = true
 }
 function openRow(row: AttendanceRuleListRow) {
@@ -264,17 +396,62 @@ async function persist(expectedDays: number | null) {
   }
 }
 function save() {
+  if (mode.value === 'create') {
+    void persistBatch()
+    return
+  }
   if (days.value == null) {
     editorError.value = '请填写应出勤天数'
     return
   }
   void persist(days.value)
 }
-watch([dialogOpen, editMonth, editDepartment], () => {
+async function persistBatch() {
+  if (daysDisabled.value || !editorRows.value.length) return
+  const commands = editorRows.value.map((row) => ({
+    month: editMonth.value,
+    departmentId: row.id || null,
+    expectedDays: editorRows.value.length === 1 ? days.value : row.days,
+    revision: row.rule.revision,
+  }))
+  if (
+    commands.some(
+      (command) =>
+        command.expectedDays == null ||
+        !Number.isInteger(command.expectedDays) ||
+        command.expectedDays < 0 ||
+        command.expectedDays > maxDays.value,
+    )
+  ) {
+    editorError.value = `请为每个部门填写0至${maxDays.value}之间的应出勤天数`
+    return
+  }
+  if (commands.length > 1 && commands.some((command) => command.departmentId == null)) {
+    editorError.value = '公司默认规则请单独设置'
+    return
+  }
+  saving.value = true
+  editorError.value = ''
+  try {
+    await saveAttendanceRules(
+      commands.map((command) => ({ ...command, expectedDays: command.expectedDays! })),
+    )
+    dialogOpen.value = false
+    ElMessage.success(`已保存 ${commands.length} 个部门的应出勤天数`)
+    await load()
+  } catch (e) {
+    editorError.value = errorMessage(e, '保存失败，请刷新后重试')
+    await Promise.all([load(), loadEditor(true)])
+  } finally {
+    saving.value = false
+  }
+}
+watch([dialogOpen, editMonth, editDepartment, () => editDepartments.value.join(',')], () => {
   if (dialogOpen.value) void loadEditor()
   else {
     ++editorRequest
     rule.value = null
+    editorRows.value = []
     monthOptions.value = null
     editorError.value = ''
   }
@@ -353,7 +530,7 @@ onMounted(() => {
         <el-alert v-if="error" :title="error" type="error" :closable="false" />
         <el-alert
           v-if="data && data.configuredDepartmentIds.length && data.companyExpectedDays == null"
-          title="本月尚未设置公司默认规则，未单独设置规则的部门暂无应出勤标准。"
+          title="本月尚未设置公司默认规则；未补录月度天数的部门按生效的薪资考勤规则计算，无匹配规则时需补录。"
           type="warning"
           :closable="false"
         />
@@ -433,7 +610,7 @@ onMounted(() => {
           />
         </el-card>
         <p class="rule-hint">
-          未单独设置的部门使用公司默认规则，不继承上级部门规则。选择部门仅查询该部门。
+          新增时勾选父部门会选中全部可设置的下级部门，按部门分别保存。核算优先使用生效的薪资考勤规则，无匹配规则时使用本页补录值或公司默认。
         </p>
         <el-dialog
           v-model="dialogOpen"
@@ -462,11 +639,34 @@ onMounted(() => {
             /></el-form-item>
             <el-form-item label="适用部门" required
               ><el-tree-select
+                v-if="mode === 'create'"
+                ref="departmentSelection"
+                v-model="editDepartments"
+                :data="editorOptions"
+                node-key="id"
+                :props="{ label: 'departmentName', children: 'children', disabled: 'disabled' }"
+                :disabled="saving || editorLoading || !!departmentError"
+                multiple
+                check-strictly
+                show-checkbox
+                filterable
+                collapse-tags
+                collapse-tags-tooltip
+                :max-collapse-tags="3"
+                :render-after-expand="false"
+                :default-expanded-keys="editorOptions.map((d) => d.id)"
+                placeholder="选择公司默认或部门，父部门包含下级"
+                aria-label="规则部门"
+                @check="(department, state) => selectDepartments(department.id, state.checkedKeys)"
+                @remove-tag="removeDepartmentTag"
+              />
+              <el-tree-select
+                v-else
                 v-model="editDepartment"
                 :data="editorOptions"
                 node-key="id"
                 :props="{ label: 'departmentName', children: 'children', disabled: 'disabled' }"
-                :disabled="mode !== 'create' || saving || editorLoading || !!departmentError"
+                disabled
                 :loading="editorLoading || departmentsLoading"
                 check-strictly
                 filterable
@@ -474,8 +674,38 @@ onMounted(() => {
                 :default-expanded-keys="editorOptions.map((d) => d.id)"
                 placeholder="选择公司默认或部门"
                 aria-label="规则部门"
-            /></el-form-item>
-            <el-form-item label="应出勤天数" required
+              />
+              <p v-if="mode === 'create'" class="hint">
+                已设置或已锁定的部门不可重复新增；公司默认请单独选择。
+              </p>
+            </el-form-item>
+            <el-table v-if="mode === 'create' && editorRows.length > 1" :data="editorRows" border>
+              <el-table-column label="部门" min-width="120">
+                <template #default="{ row }">{{ departmentName(row.id) }}</template>
+              </el-table-column>
+              <el-table-column label="应出勤天数" min-width="170">
+                <template #default="{ row }">
+                  <el-input-number
+                    v-model="row.days"
+                    :min="0"
+                    :max="maxDays"
+                    :precision="0"
+                    :disabled="daysDisabled"
+                    :aria-label="`${departmentName(row.id)}应出勤天数`"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="取数说明" min-width="160">
+                <template #default="{ row }">
+                  {{
+                    row.rule.calendarExpectedDays == null
+                      ? row.rule.calendarMessage || '未匹配薪资考勤规则，请补录'
+                      : `考勤规则计算：${row.rule.calendarExpectedDays} 天`
+                  }}
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-form-item v-else label="应出勤天数" required
               ><div class="days-control">
                 <el-input-number
                   :key="`${maxDays}-${daysDisabled}`"
@@ -488,21 +718,42 @@ onMounted(() => {
                 /><span>天</span>
               </div></el-form-item
             >
+            <p
+              v-if="rule?.calendarMessage && (mode !== 'create' || editorRows.length === 1)"
+              class="hint"
+            >
+              {{ rule.calendarMessage
+              }}{{ rule.calendarExpectedDays == null ? '' : `：${rule.calendarExpectedDays} 天` }}
+            </p>
           </el-form>
           <el-alert v-if="rule?.locked" :title="lockReason" type="warning" :closable="false" />
+          <el-alert
+            v-if="batchBlocked && mode === 'create' && !rule?.locked"
+            title="部分所选部门已锁定或无写入权限，请移除后再保存。"
+            type="warning"
+            :closable="false"
+          />
           <el-alert
             v-else-if="duplicate"
             title="该月份、部门已设置考勤规则，请在列表中修改，不能重复新增。"
             type="info"
             :closable="false"
           />
-          <p v-if="rule && editDepartment && rule.expectedDays == null" class="hint">
+          <p
+            v-if="
+              rule &&
+              activeDepartment &&
+              rule.expectedDays == null &&
+              (mode !== 'create' || editorRows.length === 1)
+            "
+            class="hint"
+          >
             {{ selectedName }}当前使用公司默认：{{
               rule.companyExpectedDays == null ? '尚未设置' : `${rule.companyExpectedDays} 天`
             }}
           </p>
           <p class="hint">
-            同月份、同部门仅一条规则；关联员工确认后锁定。每月单独设置，月中入离职暂不自动折算。
+            同月份、同部门仅一条补录记录；关联员工确认后锁定。天数按所选月份的生效考勤规则带出，核算优先使用考勤规则；月中入离职暂不自动折算。
           </p>
           <template #footer>
             <el-button
@@ -521,7 +772,12 @@ onMounted(() => {
               v-if="!readOnly"
               type="primary"
               :loading="saving"
-              :disabled="daysDisabled || days == null || days === rule?.expectedDays"
+              :disabled="
+                daysDisabled ||
+                (mode === 'create' && editorRows.length > 1
+                  ? editorRows.some((row) => row.days == null)
+                  : days == null || days === rule?.expectedDays)
+              "
               @click="save"
               >{{ mode === 'create' ? '保存规则' : '保存修改' }}</el-button
             >

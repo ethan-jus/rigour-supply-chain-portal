@@ -10,6 +10,7 @@ import { useNavigationStore } from './navigation'
 import { useSupplyAuthorizationStore } from './supply-authorization'
 import { devInfo, devWarn } from '@/utils/dev-log'
 import { setBusinessDictionaryTenant, clearBusinessDictionaries } from '@/utils/business-dictionary'
+import { clearPayrollIntervalCopies } from '@/utils/payroll-coefficient-clipboard'
 
 /** SCDP 登录会话；Token 只保存在内存，业务授权由供应链权限上下文提供。 */
 
@@ -35,6 +36,8 @@ export const useAuthStore = defineStore('auth', () => {
         deferSessionRecovery: options.deferSessionRecovery,
       })) as UserInfo
       setBusinessDictionaryTenant(userData.tenantId)
+      if (user.value?.id !== userData.id || user.value?.tenantId !== userData.tenantId)
+        clearPayrollIntervalCopies()
       user.value = userData
 
       devInfo('当前用户会话恢复成功', {
@@ -55,6 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearLocalSession() {
+    clearPayrollIntervalCopies()
     removeToken()
     token.value = null
     user.value = null

@@ -14,6 +14,9 @@ import { resolveBizDict } from '@/api/core/business-settings'
 import { clearBusinessDictionariesForTest } from '@/utils/business-dictionary'
 import { flattenCommissionRows, newCommissionRow } from '@/utils/payroll-commission-rows'
 import { newPayrollScheme } from '@/utils/payroll-scheme'
+import { clearPayrollIntervalCopies } from '@/utils/payroll-coefficient-clipboard'
+import { getPayrollDepartments, getPayrollProducts } from '@/api/core/payroll'
+import { getAttendanceDepartments } from '@/api/core/hr-attendance'
 import { calendarFixture } from './fixtures/statutory-calendar'
 vi.mock('@/api/core/business-calendar', () => ({
   getStatutoryCalendar: vi.fn(async (year: number) => calendarFixture(year)),
@@ -63,6 +66,7 @@ const Dialog = defineComponent({
 let wrapper: VueWrapper
 beforeEach(() => {
   vi.clearAllMocks()
+  clearPayrollIntervalCopies()
   state.leave = []
   state.update = []
   vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
@@ -92,6 +96,11 @@ beforeEach(() => {
   })
   state.route.path = '/supply-chain/hr/allowance-rules'
   vi.mocked(getPayrollComponents).mockResolvedValue([])
+  vi.mocked(getPayrollDepartments).mockResolvedValue([
+    { id: 1, name: '销售部', parentId: null, sortOrder: 0 },
+  ])
+  vi.mocked(getAttendanceDepartments).mockResolvedValue([])
+  vi.mocked(getPayrollProducts).mockResolvedValue([])
 })
 afterEach(() => {
   ElMessageBox.close()
@@ -192,6 +201,148 @@ async function mountCommissionList(rows: PayrollComponentVersionView[]) {
   await flushPromises()
 }
 describe('独立薪资规则入口', () => {
+  it.each(['COMMISSION', 'PERFORMANCE', 'ALLOWANCE', 'ATTENDANCE'] as const)(
+    '%s 选择父部门时保存父部门和全部下级，取消子部门后保留其他分支',
+    async (kind) => {
+      const departments = [
+        { id: 1, name: '销售部', parentId: null, sortOrder: 0 },
+        { id: 2, name: '北京市', parentId: 1, sortOrder: 0 },
+        { id: 3, name: '北京一组', parentId: 2, sortOrder: 0 },
+        { id: 4, name: '杭州市', parentId: 1, sortOrder: 1 },
+        { id: 5, name: '财务部', parentId: null, sortOrder: 1 },
+      ]
+      vi.mocked(getPayrollDepartments).mockResolvedValue(departments)
+      vi.mocked(getAttendanceDepartments).mockResolvedValue(
+        departments.map((department) => ({ ...department, departmentName: department.name })),
+      )
+      await open(kind)
+      const selector = field('适用部门').getComponent({ name: 'ElTreeSelect' })
+      const tree = selector.getComponent({ name: 'ElTree' })
+      const toggle = async (id: number, checked: boolean) => {
+        await tree.get(`[data-key="${id}"] > .el-tree-node__content input`).setValue(checked)
+        await flushPromises()
+      }
+      await toggle(1, true)
+      expect(tree.vm.getCheckedKeys()).toEqual([1, 2, 3, 4])
+      expect(tree.vm.getNode(5).checked).toBe(false)
+      await field('变更说明').get('textarea').setValue('统一销售部规则')
+      vi.mocked(savePayrollComponent).mockRejectedValueOnce(new Error('保留表单用于核对'))
+      await click('保存')
+      expect(vi.mocked(savePayrollComponent).mock.calls[0]![0].definition.departmentIds).toEqual([
+        1, 2, 3, 4,
+      ])
+      await toggle(2, false)
+      expect(tree.vm.getNode(1).indeterminate).toBe(true)
+      expect(tree.vm.getCheckedKeys()).toEqual([4])
+      await click('保存')
+      expect(vi.mocked(savePayrollComponent).mock.calls[1]![0].definition.departmentIds).toEqual([
+        4,
+      ])
+    },
+  )
+
+  it('同分类的三组型号完整提交双角色标准，空白说明在页面拦截，一个字说明可提交', async () => {
+    const row = commissionRule('cloth', 'cloth', 3, '9999-11-01')
+    const groups = [
+      { name: 'A300/A500', ids: ['300', '500'], sales: 15, manager: 5 },
+      { name: 'A600/A700/A800', ids: ['600', '700', '800'], sales: 25, manager: 10 },
+      { name: '斯诺克', ids: ['900', '901', '902'], sales: 35, manager: 10 },
+    ]
+    row.definition.commission!.rules = flattenCommissionRows(
+      groups.map((group) => {
+        const standard = newCommissionRow(group.name)
+        Object.assign(standard.sales, {
+          categoryIds: [1],
+          variantIds: group.ids,
+          method: 'QUANTITY',
+          unitCode: 'SET',
+          value: group.sales,
+        })
+        Object.assign(standard.manager, {
+          method: 'QUANTITY',
+          unitCode: 'SET',
+          value: group.manager,
+        })
+        return standard
+      }),
+    )
+    await mountCommissionList([row])
+    await click('修改')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('仅指定型号：')
+    await field('变更说明').get('textarea').setValue('   ')
+    await click('保存')
+    expect(savePayrollComponent).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('请填写1至1000字变更说明')
+    await field('变更说明').get('textarea').setValue(' 1 ')
+    await click('保存')
+    const request = vi.mocked(savePayrollComponent).mock.calls[0]![0]
+    expect(request.reason).toBe('1')
+    expect(
+      request.definition.commission!.rules.map((rule) => [
+        rule.recipientRole,
+        rule.categoryIds,
+        rule.variantIds,
+        rule.value,
+      ]),
+    ).toEqual(
+      groups.flatMap((group) => [
+        ['SALES', [1], group.ids, group.sales],
+        ['CITY_MANAGER', [1], group.ids, group.manager],
+      ]),
+    )
+  })
+
+  it('移除父部门标签会取消全部下级，保留其他部门；历史规则查看仍展示实际保存范围', async () => {
+    vi.mocked(getPayrollDepartments).mockResolvedValue([
+      { id: 1, name: '销售部', parentId: null, sortOrder: 0 },
+      { id: 2, name: '北京市', parentId: 1, sortOrder: 0 },
+      { id: 3, name: '杭州市', parentId: 1, sortOrder: 1 },
+      { id: 4, name: '财务部', parentId: null, sortOrder: 1 },
+    ])
+    const row = commissionRule('legacy', 'legacy', 1)
+    await mountCommissionList([row])
+    await click('查看')
+    let selector = field('适用部门').getComponent({ name: 'ElTreeSelect' })
+    expect(selector.getComponent({ name: 'ElTree' }).vm.getCheckedKeys()).toEqual([1])
+    expect(row.definition.departmentIds).toEqual([1])
+    await click('关闭')
+    await click('新增提成规则')
+    selector = field('适用部门').getComponent({ name: 'ElTreeSelect' })
+    const tree = selector.getComponent({ name: 'ElTree' })
+    await tree.get('[data-key="1"] > .el-tree-node__content input').setValue(true)
+    await flushPromises()
+    await tree.get('[data-key="4"] > .el-tree-node__content input').setValue(true)
+    await flushPromises()
+    expect(tree.vm.getCheckedKeys()).toEqual([1, 2, 3, 4])
+    await selector
+      .findAll('.el-tag')
+      .find((tag) => tag.text().includes('销售部'))!
+      .get('.el-tag__close')
+      .trigger('click')
+    await flushPromises()
+    expect(tree.vm.getCheckedKeys()).toEqual([4])
+    await field('变更说明').get('textarea').setValue('仅财务部')
+    await click('保存')
+    expect(vi.mocked(savePayrollComponent).mock.calls[0]![0].definition.departmentIds).toEqual([4])
+  })
+
+  it('修改仅保存父部门的待生效规则时，提交完整勾选范围并保留未知历史部门', async () => {
+    vi.mocked(getPayrollDepartments).mockResolvedValue([
+      { id: 1, name: '销售部', parentId: null, sortOrder: 0 },
+      { id: 2, name: '北京市', parentId: 1, sortOrder: 0 },
+    ])
+    const row = commissionRule('pending', 'pending', 1, '9999-11-01')
+    row.definition.departmentIds = [1, 99]
+    await mountCommissionList([row])
+    await click('修改')
+    await field('变更说明').get('textarea').setValue('补全下级部门')
+    await click('保存')
+    expect(vi.mocked(savePayrollComponent).mock.calls[0]![0].definition.departmentIds).toEqual([
+      1, 2, 99,
+    ])
+    expect(row.definition.departmentIds).toEqual([1, 99])
+  })
+
   it('规则操作记录与版本历史统一显示人员和北京时间到秒', async () => {
     const row = {
       ...commissionRule('audit-rule', 'audit', 1),
@@ -238,6 +389,49 @@ describe('独立薪资规则入口', () => {
     expect(definition.performance?.mode).toBe('FIXED')
     expect(JSON.stringify(definition)).not.toContain('performanceCompletionPercent')
   })
+  it('城市总复制的单项区间可在新建见习城市总规则中应用，保存前不提交，且保留目标指标信息', async () => {
+    await open('PERFORMANCE')
+    field('人员身份')
+      .getComponent({ name: 'ElSelect' })
+      .vm.$emit('update:modelValue', 'CITY_MANAGER')
+    field('人员身份').getComponent({ name: 'ElSelect' }).vm.$emit('change', 'CITY_MANAGER')
+    await flushPromises()
+    await click('增加绩效指标')
+    const source = wrapper.getComponent({ name: 'PayrollCoefficientEditor' })
+    const intervals = source.props('modelValue').map((row: { coefficient: number }) => ({ ...row }))
+    intervals[2].coefficient = 1.9
+    source.vm.$emit('update:modelValue', intervals)
+    await flushPromises()
+    await click('复制整组区间')
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce(confirmed)
+    await click('关闭')
+    await click('新增绩效规则')
+    await basics()
+    field('人员身份')
+      .getComponent({ name: 'ElSelect' })
+      .vm.$emit('update:modelValue', 'TRAINEE_MANAGER')
+    field('人员身份').getComponent({ name: 'ElSelect' }).vm.$emit('change', 'TRAINEE_MANAGER')
+    await flushPromises()
+    await click('增加绩效指标')
+    field('关联城市指标')
+      .getComponent({ name: 'ElSelect' })
+      .vm.$emit('update:modelValue', 'RECEIPT_AMOUNT')
+    field('关联城市指标').getComponent({ name: 'ElSelect' }).vm.$emit('change', 'RECEIPT_AMOUNT')
+    field('权重（%）').getComponent({ name: 'ElInputNumber' }).vm.$emit('update:modelValue', 100)
+    await flushPromises()
+    await click('粘贴整组区间')
+    expect(savePayrollComponent).not.toHaveBeenCalled()
+    expect(field('指标名称').get('input').element.value).toBe('回款额')
+    expect(field('实际值来源').getComponent({ name: 'ElSelect' }).props('modelValue')).toBe(
+      'CITY_RECEIPTS',
+    )
+    await click('保存')
+    const saved = vi.mocked(savePayrollComponent).mock.calls[0]![0].definition
+    expect(saved.role).toBe('TRAINEE_MANAGER')
+    expect(saved.performance?.manager.metrics[0]?.steps).toEqual(intervals)
+    expect(saved.performance?.manager.metrics[0]?.weight).toBe(100)
+  })
+
   it('总部人员可单独筛选，查看历史固定模式时展示个人完成率语义，新建沿用总部身份', async () => {
     const row = commissionRule('HQ', 'PCR-HQ', 1)
     const defaults = newPayrollScheme()
@@ -323,6 +517,42 @@ describe('独立薪资规则入口', () => {
       }),
     )
   })
+  it('单项指标按原值提交有限、不连续、重叠区间与非100%的权重', async () => {
+    await open('PERFORMANCE')
+    await basics()
+    field('人员身份')
+      .getComponent({ name: 'ElSelect' })
+      .vm.$emit('update:modelValue', 'CITY_MANAGER')
+    field('人员身份').getComponent({ name: 'ElSelect' }).vm.$emit('change', 'CITY_MANAGER')
+    await flushPromises()
+    await click('增加绩效指标')
+    field('关联城市指标')
+      .getComponent({ name: 'ElSelect' })
+      .vm.$emit('update:modelValue', 'RECEIPT_AMOUNT')
+    field('关联城市指标').getComponent({ name: 'ElSelect' }).vm.$emit('change', 'RECEIPT_AMOUNT')
+    field('权重（%）').getComponent({ name: 'ElInputNumber' }).vm.$emit('update:modelValue', 30)
+    const overlapping = {
+      lower: 1.5,
+      upper: 2,
+      lowerInclusive: true,
+      upperInclusive: true,
+      mode: 'FIXED',
+      coefficient: 1.9,
+    }
+    const ranges = [
+      { ...overlapping, lower: 0.8, upper: 1 },
+      overlapping,
+      { ...overlapping, coefficient: 2.4 },
+    ]
+    wrapper.getComponent({ name: 'PayrollCoefficientEditor' }).vm.$emit('update:modelValue', ranges)
+    await flushPromises()
+    await click('保存')
+    const metric =
+      vi.mocked(savePayrollComponent).mock.calls[0]![0].definition.performance?.manager.metrics[0]
+    expect(metric?.steps).toEqual(ranges)
+    expect(metric?.weight).toBe(30)
+  })
+
   it('历史城市总规则在列表与查看中明确旧算法，不使用新城市指标说明覆盖原回款来源', async () => {
     const row = commissionRule('M-OLD', 'PCR-M-OLD', 1)
     const defaults = newPayrollScheme()
@@ -465,6 +695,9 @@ describe('独立薪资规则入口', () => {
     expect(currentRow.text()).not.toContain('修改')
     expect(pendingRow.text()).toContain('修改删除')
     expect(stoppedRow.text()).toContain('重新启用')
+    expect(stoppedRow.text()).toContain('2000-01-01 至 2000-01-01')
+    expect(stoppedRow.text()).not.toContain('长期有效')
+    expect(currentRow.text()).toContain('2000-01-01 至 长期有效')
     await currentRow
       .findAll('button')
       .find((button) => button.text() === '停用')!
@@ -480,7 +713,13 @@ describe('独立薪资规则入口', () => {
       '业务调整',
       expect.any(String),
     )
-    await click('修改')
+    await wrapper
+      .findAll('tr')
+      .find((tr) => tr.text().includes('待生效规则'))!
+      .findAll('button')
+      .find((button) => button.text() === '修改')!
+      .trigger('click')
+    await flushPromises()
     await field('规则名称').get('input').setValue('新名称')
     await field('变更说明').get('textarea').setValue('修改待生效规则')
     await click('保存')
@@ -493,6 +732,46 @@ describe('独立薪资规则入口', () => {
       }),
     )
   })
+  it('停用规则修改保留原生效月份，并允许选择历史月份保存为停用新版本', async () => {
+    const row = commissionRule('stopped-edit', 'stopped-edit', 1)
+    row.revision = 3
+    row.stateChanges = [
+      {
+        revision: 1,
+        effectiveMonth: '2000-01',
+        enabled: false,
+        reason: '停用调整',
+        actor: 'HR',
+        time: '2000-01-01T00:00:00Z',
+      },
+    ]
+    await mountCommissionList([row])
+    await click('修改')
+    expect(wrapper.text()).toContain('保存为新版本，并保持停用')
+    expect(field('生效月份').getComponent({ name: 'ElDatePicker' }).props('modelValue')).toBe(
+      row.definition.effectiveFrom,
+    )
+    field('生效月份')
+      .getComponent({ name: 'ElDatePicker' })
+      .vm.$emit('update:modelValue', '1999-09-01')
+    expect(field('适用部门').getComponent({ name: 'ElTreeSelect' }).props('disabled')).toBe(false)
+    await field('规则名称').get('input').setValue('调整后的商品提成')
+    await field('变更说明').get('textarea').setValue('调整提成标准后核对启用')
+    await click('保存')
+    expect(savePayrollComponent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        previousId: row.id,
+        revision: 3,
+        replacePending: false,
+        definition: expect.objectContaining({
+          name: '调整后的商品提成',
+          effectiveFrom: '1999-09-01',
+        }),
+      }),
+    )
+    expect(row.definition.name).toBe('商品提成规则')
+  })
+
   it('日历选休息日后通过原考勤规则接口保存，不恢复星期勾选配置', async () => {
     await open('ATTENDANCE')
     await basics()
@@ -579,6 +858,18 @@ describe('独立薪资规则入口', () => {
     expect(wrapper.find('[role="dialog"]').text()).not.toContain('适用部门')
     expect(wrapper.find('[role="dialog"]').text()).not.toContain('补贴项目')
     expect(wrapper.find('[role="dialog"]').text()).toContain('绩效基数（元/月）')
+    const ratio = field('试用期底薪发放比例（%）').get('input')
+    expect((ratio.element as HTMLInputElement).value).toBe('100.00')
+    await ratio.setValue('87.5')
+    await ratio.trigger('change')
+    const postRatio = field('试用期结束后底薪发放比例（%）').get('input')
+    expect((postRatio.element as HTMLInputElement).value).toBe('100.00')
+    await postRatio.setValue('90')
+    await postRatio.trigger('change')
+    field('试用期结束后首日')
+      .getComponent({ name: 'ElDatePicker' })
+      .vm.$emit('update:modelValue', '2026-12-01')
+    await flushPromises()
     await field('变更说明').get('textarea').setValue('入职定薪')
     await click('保存')
     expect(savePayrollComponent).toHaveBeenCalledWith(
@@ -588,11 +879,31 @@ describe('独立薪资规则入口', () => {
           employeeCodes: ['E1'],
           departmentIds: [],
           allowance: null,
+          salary: expect.objectContaining({
+            personalPolicy: expect.objectContaining({
+              probationBasePercent: 87.5,
+              postProbationBasePercent: 90,
+              probationUntil: '2026-12-01',
+            }),
+          }),
         }),
       }),
     )
   })
   it('商品规则仅引用ERP目录，方便面模板同时创建销售与城市总标准', async () => {
+    vi.mocked(getPayrollProducts).mockResolvedValue([
+      {
+        productId: '1',
+        productVariantId: '1',
+        productCode: 'P1',
+        variantCode: 'V1',
+        productName: '方便面',
+        specification: '袋装',
+        unitCode: 'BOX',
+        categoryId: 1,
+        categoryName: '方便面',
+      },
+    ])
     await open('COMMISSION')
     await basics()
     await click('方便面 4%／1%')
@@ -683,3 +994,55 @@ describe('独立薪资规则入口', () => {
     expect(ElMessageBox.confirm).not.toHaveBeenCalled()
   })
 })
+
+it.each(['ATTENDANCE', 'PERFORMANCE', 'COMMISSION', 'ALLOWANCE', 'SALARY'] as const)(
+  '替代后的旧 %s 规则显示已废弃，只允许查看和操作记录',
+  async (kind) => {
+    const form = newPayrollScheme()
+    const row: PayrollComponentVersionView = {
+      id: 'old-calendar',
+      ruleId: 'calendar',
+      ruleCode: 'PCR-OLD',
+      version: 1,
+      revision: 1,
+      reason: '创建',
+      createdBy: 'HR',
+      createdTime: '2026-09-01T00:00:00Z',
+      definition: {
+        name: '已废弃旧规则',
+        kind,
+        role: kind === 'ATTENDANCE' || kind === 'COMMISSION' ? 'ALL' : 'SALES',
+        departmentIds: kind === 'SALARY' ? [] : [1],
+        employeeCodes: kind === 'SALARY' ? ['E1'] : [],
+        effectiveFrom: '2026-09-01',
+        effectiveTo: '9999-12-31',
+        salary: null,
+        performance: null,
+        commission: null,
+        calendar: form.calendar,
+        allowance: null,
+      },
+      stateChanges: [
+        {
+          revision: 1,
+          effectiveMonth: '2026-10',
+          enabled: false,
+          retired: true,
+          replacedDepartmentIds: [1],
+          actor: 'HR',
+          reason: '新规则替代',
+          time: '2026-10-27T03:00:00Z',
+        },
+      ],
+    }
+    vi.mocked(getPayrollComponents).mockResolvedValue([row])
+    wrapper = mount(Rules, {
+      props: { componentKind: kind, ...(kind === 'SALARY' ? { employeeCode: 'E1' } : {}) },
+      global: { plugins: [ElementPlus], stubs: { ElDialog: Dialog, SupplyPageTitle: true } },
+    })
+    await flushPromises()
+    const record = wrapper.findAll('tr').find((tr) => tr.text().includes('已废弃旧规则'))!
+    expect(record.text()).toContain('已废弃')
+    expect(record.findAll('button').map((button) => button.text())).toEqual(['查看', '操作记录'])
+  },
+)

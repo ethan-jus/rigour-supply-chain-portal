@@ -17,20 +17,30 @@
     <p v-if="!isManager && !isHeadquarters" class="field-hint">
       每日打卡与拜访独立考核，不能跨日抵扣。缺卡、缺拜访和回款未达标扣减已包含在绩效内，不再重复扣工资。
     </p>
+    <p v-if="row.calculation.performanceDetail?.assessmentOverride" class="field-hint">
+      人工核定：缺卡
+      {{
+        row.calculation.performanceDetail.assessmentOverride.missingCheckins ?? '沿用系统统计'
+      }}；缺拜访
+      {{ row.calculation.performanceDetail.assessmentOverride.missingVisits ?? '沿用系统统计' }}。
+      核定说明：{{
+        row.calculation.performanceDetail.assessmentOverride.reason
+      }}。下方逐日数据保留原始统计。
+    </p>
     <el-table v-if="taskRows.length" :data="taskRows" border>
       <el-table-column prop="name" label="每日任务" />
       <el-table-column prop="dailyTarget" label="每日目标" />
       <el-table-column prop="actual" label="本月有效合计" />
-      <el-table-column prop="missing" label="逐日缺口合计" />
+      <el-table-column prop="missing" label="核算缺失次数" />
       <el-table-column label="每次扣减（元）" align="right"
         ><template #default="{ row }">{{ payrollMoney(row.penalty) }}</template></el-table-column
       >
-      <el-table-column label="原始扣减（元）" align="right"
+      <el-table-column label="按次数扣减（元）" align="right"
         ><template #default="{ row }">{{ payrollMoney(row.deduction) }}</template></el-table-column
       >
     </el-table>
     <p v-if="taskRows.length" class="field-hint">
-      原始扣减合计可能超过绩效额度，实扣以打卡与有效拜访绩效额度封顶；逐日数据见下表。
+      按次数扣减合计可能超过绩效额度，实扣以过程绩效额度封顶；人工核定优先，未核定项沿用逐日统计。
     </p>
     <el-table v-if="snapshot.metrics.length" :data="snapshot.metrics" border
       ><el-table-column prop="name" label="指标" /><el-table-column label="实际"
@@ -107,17 +117,20 @@ const taskRows = computed(() => {
       name: '打卡',
       dailyTarget: policy.dailyCheckins,
       actual: sum('checkins'),
-      missing: sum('missingCheckins'),
+      missing: p.assessmentOverride?.missingCheckins ?? sum('missingCheckins'),
       penalty: policy.checkinPenalty,
-      deduction: sum('missingCheckins') * (policy.checkinPenalty ?? 0),
+      deduction:
+        (p.assessmentOverride?.missingCheckins ?? sum('missingCheckins')) *
+        (policy.checkinPenalty ?? 0),
     },
     {
       name: `有效拜访（≥${(policy.minimumSeconds ?? 0) / 60} 分钟）`,
       dailyTarget: policy.dailyVisits,
       actual: sum('effectiveVisits'),
-      missing: sum('missingVisits'),
+      missing: p.assessmentOverride?.missingVisits ?? sum('missingVisits'),
       penalty: policy.visitPenalty,
-      deduction: sum('missingVisits') * (policy.visitPenalty ?? 0),
+      deduction:
+        (p.assessmentOverride?.missingVisits ?? sum('missingVisits')) * (policy.visitPenalty ?? 0),
     },
   ]
 })
@@ -146,9 +159,9 @@ const basisRows = computed(() => {
     })
   if (personal?.probationUntil)
     rows.push({
-      name: '试用期底薪',
-      value: `${personal.probationBasePercent}%`,
-      basis: `${personal.probationUntil} 当天起恢复正常底薪，之前按上述比例计发；月内分别折算`,
+      name: '试用期／结束后底薪比例',
+      value: `${personal.probationBasePercent}% → ${personal.postProbationBasePercent ?? 100}%`,
+      basis: `${personal.probationUntil} 之前使用试用期比例，当天起使用结束后比例；月内分别折算，绩效仍按绩效规则核算`,
     })
   if (isManager.value)
     rows.push(
