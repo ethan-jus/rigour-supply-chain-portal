@@ -232,6 +232,30 @@ describe('供应链工作台', () => {
     expect(search.find('.entry-search__results').exists()).toBe(false)
     expect(search.find('input').exists()).toBe(false)
   })
+  it('窗口缩窄时折叠侧栏且卸载时移除监听', async () => {
+    const media = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => media),
+    )
+    try {
+      const nodes = [home, node('supply.order.menu', '订单管理', null, [order])]
+      const { global } = await render(nodes)
+      const sidebar = mount(ConsoleSidebar, { props: { nodes }, global })
+      const listener = media.addEventListener.mock.calls.at(-1)![1] as () => void
+      expect(sidebar.classes()).not.toContain('is-collapsed')
+      media.matches = true
+      listener()
+      await flushPromises()
+      expect(sidebar.classes()).toContain('is-collapsed')
+      await sidebar.get('button[aria-label="订单管理"]').trigger('click')
+      expect(sidebar.classes()).not.toContain('is-collapsed')
+      sidebar.unmount()
+      expect(media.removeEventListener).toHaveBeenCalledWith('change', listener)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
   it('菜单重新读取保留用户正在浏览的模块，路由变化与权限撤销仍重新定位', async () => {
     const hr = node('supply.hr.menu', '人事与绩效', null, [
       node('supply.hr.employees', '员工档案', '/supply-chain/hr/employees'),

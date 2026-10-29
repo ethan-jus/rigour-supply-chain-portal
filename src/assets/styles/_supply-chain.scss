@@ -1,12 +1,11 @@
 @use './variables' as *;
 
-// 供应链工作台的固定视口和业务页视觉基线。
+// 供应链工作台的视口布局和可复用业务页样式。
 // 所有规则都依赖 SUPPLY_CHAIN 布局根类，不影响平台管理和系统管理页面。
 .console--supply-chain {
   --supply-page-background: #f6f8fb;
   --supply-surface: #fff;
   --supply-surface-subtle: #f8fafc;
-  --supply-row-alternate: #fbfcfd;
   --supply-border: #e2e8f0;
   --supply-border-strong: #cbd5e1;
   --supply-text: #172033;
@@ -98,76 +97,9 @@
     line-height: 1.45;
   }
 
-  .page-header .el-button--primary,
-  .page-heading .el-button--primary {
-    min-width: 96px;
-    border-color: var(--supply-primary);
-    border-radius: var(--supply-control-radius);
-    background: var(--supply-primary);
-    box-shadow: none;
-  }
-
-  .query-panel,
-  .filter-card,
-  .dashboard-toolbar,
-  .plan-toolbar,
-  .review-toolbar,
-  .track-toolbar,
-  .filters {
-    border-color: var(--supply-border);
-    background: var(--supply-surface-subtle);
-  }
-
-  .query-panel,
-  .filter-card,
-  .dashboard-toolbar,
-  .plan-toolbar,
-  .review-toolbar,
-  .track-toolbar {
-    box-shadow: none;
-  }
-
-  .supply-page .el-form-item__label {
-    color: var(--supply-text-muted);
-    font-size: $font-size-xs;
-    font-weight: 600;
-  }
-
-  .supply-page .el-button {
-    min-height: 32px;
-    border-radius: var(--supply-control-radius);
-  }
-
-  .supply-page .el-button--primary {
-    --el-button-bg-color: var(--supply-primary);
-    --el-button-border-color: var(--supply-primary);
-    --el-button-hover-bg-color: var(--supply-primary-hover);
-    --el-button-hover-border-color: var(--supply-primary-hover);
-    box-shadow: none;
-  }
-
-  .supply-page .el-input__wrapper,
-  .supply-page .el-select__wrapper,
-  .supply-page .el-textarea__inner,
-  .supply-page .el-input-number {
-    border-radius: var(--supply-control-radius);
-  }
-
-  .supply-page .el-input__wrapper,
-  .supply-page .el-select__wrapper {
-    min-height: 34px;
-    background: var(--supply-surface);
-    box-shadow: 0 0 0 1px var(--supply-border-strong) inset;
-  }
-
-  .supply-page .el-input__wrapper.is-focus,
-  .supply-page .el-select__wrapper.is-focused {
-    box-shadow: 0 0 0 1px var(--supply-primary) inset;
-  }
-
   .supply-filter-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(236px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(236px, 100%), 1fr));
     align-items: end;
     gap: 10px 12px;
   }
@@ -197,7 +129,8 @@
   .supply-filter-grid .el-select,
   .supply-filter-grid .el-date-editor,
   .supply-filter-grid .el-input-number {
-    width: 100% !important;
+    width: 100%;
+    max-width: 100%;
   }
 
   .supply-filter-grid .filter-actions {
@@ -220,13 +153,6 @@
   .section-heading p,
   .summary-note {
     color: var(--supply-text-muted);
-  }
-
-  .supply-page--single-table .page-header > div:first-child > span,
-  .supply-page--dictionary .page-header > div:first-child > span,
-  .supply-page--sales > .page-header .eyebrow,
-  .supply-page--list > .page-heading .supply-page__eyebrow {
-    display: none;
   }
 
   .supply-scroll-table {
@@ -268,17 +194,6 @@
     background: var(--supply-surface);
   }
 
-  .supply-scroll-table:not(.detail-table):not(.master-table--category)
-    .el-table__row:nth-child(even):not(.current-row)
-    > td.el-table__cell {
-    // 固定列覆盖在横向滚动内容上方，行底色必须完全不透明，避免底层文字透出。
-    background: var(--supply-row-alternate);
-  }
-
-  .supply-scroll-table .el-table__row:hover > td.el-table__cell {
-    background: var(--supply-primary-soft) !important;
-  }
-
   .supply-scroll-table .el-table__body tr.current-row > td.el-table__cell {
     background: #eaf2ff;
   }
@@ -292,7 +207,7 @@
   // 禁用 Element Plus 的半透明固定列投影，只在固定区边界保留不透明分隔线。
   .supply-scroll-table .el-table-fixed-column--left.is-last-column::before,
   .supply-scroll-table .el-table-fixed-column--right.is-first-column::before {
-    box-shadow: none !important;
+    box-shadow: none;
   }
 
   .supply-scroll-table.is-scrolling-right .el-table-fixed-column--left.is-last-column,
@@ -382,17 +297,9 @@
       padding-left: 0;
     }
 
-    .page-header > div:first-child::before {
-      display: none;
-    }
-
     .page-header h1 {
       margin: 0;
       font-size: 18px;
-    }
-
-    .page-header p {
-      display: none;
     }
 
     .query-panel {
@@ -498,13 +405,6 @@
     line-height: 26px;
   }
 
-  .supply-page--single-table .page-header p,
-  .supply-page--dictionary .page-header p,
-  .supply-page--sales > .page-header p,
-  .supply-page--list > .page-heading p {
-    display: none;
-  }
-
   .supply-page--list {
     display: flex;
     min-height: 0;
@@ -513,10 +413,6 @@
     > .page-heading {
       margin-bottom: 8px;
       padding: 0 2px;
-    }
-
-    > .page-heading::before {
-      display: none;
     }
 
     > .filter-card,
@@ -658,11 +554,6 @@
       font-size: 18px;
     }
 
-    > .page-heading .supply-page__eyebrow,
-    > .page-heading p {
-      display: none;
-    }
-
     .heading-actions {
       display: flex;
       flex: 0 0 auto;
@@ -744,10 +635,6 @@
       font-size: $font-size-sm;
     }
 
-    .workflow-step small {
-      display: none;
-    }
-
     .workflow-step.is-active {
       border-color: #bfdbfe;
       background: var(--supply-primary-soft);
@@ -807,10 +694,6 @@
     > .result-heading h2 {
       margin: 0;
       font-size: $font-size-sm;
-    }
-
-    > .result-heading p {
-      display: none;
     }
 
     .result-title-line {
@@ -1367,16 +1250,10 @@
 }
 
 // 宽屏极短视口（例如 1024×600）继续压缩解释性内容，保证主业务表仍可操作。
-// 错误提示保留；仅隐藏页面说明、指标解释和底部口径说明。
+// 压缩间距；说明、指标口径和错误信息保持可访问。
 @media (min-width: 721px) and (max-height: 680px) {
   .console--supply-chain .supply-page--sales {
     gap: 8px;
-
-    > .page-header p,
-    .metric-grid .metric-card > p,
-    .evidence-callout p {
-      display: none;
-    }
 
     .dashboard {
       gap: 6px;
@@ -1417,10 +1294,6 @@
     .evidence-callout strong {
       margin-top: 2px;
       font-size: 17px;
-    }
-
-    .dashboard > .metric-definition-alert {
-      display: none;
     }
 
     .dashboard > .people-card {
@@ -1467,25 +1340,13 @@
       line-height: 26px;
     }
 
-    .result-heading p,
-    .page-status-summary,
-    .boundary-alert {
-      display: none;
-    }
-
     .supply-scroll-table {
       min-height: 120px;
     }
 
-    .supply-page--single-table {
-      height: auto;
-      min-height: 100%;
-      overflow: visible;
-    }
-
     .supply-page--single-table .table-viewport {
-      min-height: 360px;
-      flex: 0 0 360px;
+      min-height: 0;
+      flex: 1 1 auto;
     }
 
     .supply-page--sales {
@@ -1494,13 +1355,9 @@
       overflow: visible;
     }
 
-    .supply-page--sales .dashboard {
-      min-height: 980px;
-    }
-
     .supply-page--sales .dashboard > .people-card {
-      min-height: 360px;
-      flex: 0 0 360px;
+      min-height: 0;
+      flex: 1 1 auto;
     }
   }
 }

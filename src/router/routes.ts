@@ -46,6 +46,15 @@ const erpBasicDataRouteKeys = new Set([
   'supply.erp.suppliers.profiles',
 ])
 
+const crmStorePermissions: Record<string, string> = {
+  'supply.crm.stores.mine': 'crm:pool:private-read',
+  'supply.crm.stores.public': 'crm:pool:public-read',
+  'supply.crm.stores.cooperated': 'crm:store:cooperation-read',
+  'supply.crm.stores.leads': 'crm:lead:read',
+  'supply.crm.stores.library': 'crm:store:manage',
+  'supply.crm.stores.analysis': 'crm:coverage:read',
+}
+
 const crmCustomerManagementRouteKeys = new Set(['supply.crm.customers.profiles'])
 
 const crmShippingAddressRouteKeys = new Set(['supply.crm.customers.shipping-addresses'])
@@ -91,7 +100,9 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
     .map((part) => part.replace(/(^|-)([a-z])/g, (_, __, letter) => letter.toUpperCase()))
     .join('')}`,
   component:
-    page.routeKey === 'supply.hr.payroll-schemes'
+    page.routeKey in crmStorePermissions
+      ? () => import('@/views/supply-chain/crm/CrmStorePoolView.vue')
+      : page.routeKey === 'supply.hr.payroll-schemes'
       ? () => import('@/views/supply-chain/hr/PayrollSchemeView.vue')
       : page.routeKey === 'supply.hr.attendance-rules'
         ? () => import('@/views/supply-chain/hr/HrAttendanceRuleView.vue')
@@ -163,6 +174,7 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
     applicationCode: 'SUPPLY_CHAIN',
     routeKey: page.routeKey,
     permission:
+      crmStorePermissions[page.routeKey] ??
       (page.routeKey === 'supply.hr.payroll-schemes' ? 'hr:payroll-rule:read' : undefined) ??
       attendancePermissions[page.routeKey] ??
       costPermissions[page.routeKey] ??
@@ -979,6 +991,18 @@ export const constantRoutes: RouteRecordRaw[] = [
           requiresAuth: true,
           applicationCode: 'SUPPLY_CHAIN',
           permission: 'supply:parameter:read',
+        },
+      },
+      {
+        path: 'settings/store-territories',
+        name: 'SupplySettingsStoreTerritories',
+        component: () => import('@/views/supply-chain/settings/StoreTerritoryView.vue'),
+        meta: {
+          title: '客户地域权限',
+          requiresAuth: true,
+          applicationCode: 'SUPPLY_CHAIN',
+          routeKey: 'supply.settings.store-territories',
+          permission: 'supply:territory:read',
         },
       },
       {

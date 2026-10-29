@@ -415,7 +415,7 @@ onMounted(() => {
   font-size: $font-size-sm;
 }
 
-.console__content {
+.console:not(.console--supply-chain) .console__content {
   padding: 28px;
 }
 
@@ -449,7 +449,7 @@ onMounted(() => {
 .tenant-pill { display: flex; gap: 8px; align-items: center; background: transparent; }
 .console--home .console__content { padding: 24px; }
 @media (max-width: 1100px) { .tenant-pill { display: none; } }
-@media (max-width: 760px) {
+@media (max-width: 1100px) {
   .console, .console--collapsed { grid-template-columns: 64px minmax(0, 1fr); }
   .console--supply-chain .topbar { padding: 0 10px; gap: 8px; }
   .topbar__right { gap: 8px; }

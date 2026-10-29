@@ -51,4 +51,33 @@ describe('订单登记筛选卡', () => {
     expect(actionTexts(wrapper)).toContain('收起')
     wrapper.unmount()
   })
+  it('折叠行不接收焦点，展开后恢复所有条件', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get: () => 100,
+    })
+    const originalTop = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop')
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get() {
+        return this.getAttribute('aria-label') === '条件二' ? 44 : 0
+      },
+    })
+    const wrapper = mountCard()
+    try {
+      await flushPromises()
+      expect(wrapper.get('[aria-label="条件一"]').attributes('inert')).toBeUndefined()
+      expect(wrapper.get('[aria-label="条件二"]').attributes('inert')).toBeDefined()
+      await wrapper
+        .findAll('button')
+        .find((node) => node.text().includes('展开'))!
+        .trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[aria-label="条件二"]').attributes('inert')).toBeUndefined()
+    } finally {
+      wrapper.unmount()
+      if (originalTop) Object.defineProperty(HTMLElement.prototype, 'offsetTop', originalTop)
+      else Reflect.deleteProperty(HTMLElement.prototype, 'offsetTop')
+    }
+  })
 })

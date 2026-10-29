@@ -18,7 +18,7 @@ export const useConsoleWorkspace = defineStore('console-workspace', () => {
     session.value = key
     recent.value = []
     collapsed.value =
-      typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 760px)').matches
+      typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 1100px)').matches
   }
   return { collapsed, recent, visit, setSession }
 })

@@ -86,6 +86,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { apiClient } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { isAmapJsConfigured, loadAmapJsApi } from '@/utils/amap-js-api'
 
 interface Person { salesProfileId: string; salesNo: string }
 interface Dashboard { people: Person[] }
@@ -122,14 +123,13 @@ const errorB = ref('')
 const errorMessage = ref('')
 const loading = ref(false)
 const mapContainer = ref<HTMLElement | null>(null)
-const amapConfigured = Boolean(import.meta.env.VITE_AMAP_JS_KEY?.trim())
+const amapConfigured = isAmapJsConfigured()
 const auth = useAuthStore()
 const canViewTracks = computed(() =>
   auth.hasPermission('sales:dashboard:read')
   && auth.hasPermission('sales:location:sensitive:read'),
 )
 let map: MapInstance | null = null
-let amapPromise: Promise<AmapNamespace> | null = null
 
 const overlapLabel = computed(() => {
   if (!trackA.value || !trackB.value) return '--'
@@ -207,21 +207,7 @@ async function loadTracks() {
 
 async function loadAmap(): Promise<AmapNamespace> {
   if (!canViewTracks.value) throw new Error('无精确轨迹查看权限')
-  if (window.AMap) return window.AMap as AmapNamespace
-  if (amapPromise) return amapPromise
-  const key = import.meta.env.VITE_AMAP_JS_KEY?.trim()
-  if (!key) throw new Error('未配置高德地图 Key')
-  const securityCode = import.meta.env.VITE_AMAP_SECURITY_CODE?.trim()
-  if (securityCode) window._AMapSecurityConfig = { securityJsCode: securityCode }
-  amapPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(key)}`
-    script.async = true
-    script.onload = () => window.AMap ? resolve(window.AMap as AmapNamespace) : reject(new Error('高德地图初始化失败'))
-    script.onerror = () => reject(new Error('高德地图脚本加载失败'))
-    document.head.appendChild(script)
-  })
-  return amapPromise
+  return await loadAmapJsApi() as unknown as AmapNamespace
 }
 
 async function renderMap() {
