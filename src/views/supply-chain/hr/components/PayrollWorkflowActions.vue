@@ -26,14 +26,14 @@
         <el-button
           v-if="row.statusCode === 'READY' && canConfirm"
           type="primary"
-          :disabled="busy || !monthEnded || !!row.paymentBlockReason"
+          :disabled="busy"
           @click="$emit('confirm')"
           >确认薪酬</el-button
         >
         <el-button
           v-if="row.statusCode === 'CONFIRMED' && canPay"
           type="primary"
-          :disabled="busy || !!row.paymentBlockReason"
+          :disabled="busy"
           @click="$emit('paid')"
           >登记发放</el-button
         >

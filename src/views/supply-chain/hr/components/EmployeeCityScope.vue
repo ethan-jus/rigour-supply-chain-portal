@@ -25,11 +25,31 @@
       empty-text="尚未配置管辖城市"
       class="business-table"
     >
-      <el-table-column prop="data.cityName" label="管辖城市" min-width="130" />
-      <el-table-column prop="data.effectiveFrom" label="任期开始" width="120" />
+      <el-table-column
+        prop="data.cityName"
+        label="管辖城市"
+        min-width="130"
+        :formatter="displayCell"
+      />
+      <el-table-column
+        prop="data.effectiveFrom"
+        label="任期开始"
+        width="120"
+        :formatter="displayCell"
+      />
       <el-table-column label="任期结束" min-width="130"
         ><template #default="{ row }">{{
           row.data.effectiveTo === '9999-12-31' ? '未设结束日期' : row.data.effectiveTo
+        }}</template></el-table-column
+      >
+      <el-table-column label="创建人" min-width="120"
+        ><template #default="{ row }">{{
+          displayRecordActor(row.createdBy)
+        }}</template></el-table-column
+      >
+      <el-table-column label="创建时间" min-width="175"
+        ><template #default="{ row }">{{
+          displayRecordDateTime(row.createdTime)
         }}</template></el-table-column
       >
       <el-table-column label="任期状态" width="100"
@@ -40,11 +60,19 @@
           ></template
         ></el-table-column
       >
-      <el-table-column prop="data.remark" label="备注" min-width="160" show-overflow-tooltip />
+      <el-table-column
+        prop="data.remark"
+        label="备注"
+        min-width="160"
+        show-overflow-tooltip
+        :formatter="displayCell"
+      />
     </el-table>
   </section>
 </template>
 <script setup lang="ts">
+import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
+import { displayCell } from '@/utils/business-display'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { HrEmployeeRecord } from '@/api/core/hr'
 import { getPayrollRules, type PayrollRule } from '@/api/core/payroll'

@@ -59,7 +59,9 @@
     <section v-show="!workspace.collapsed" id="console-secondary-nav" class="secondary-nav">
       <div class="secondary-nav__brand">供应链数字化平台</div>
       <header class="secondary-nav__heading">
-        <strong>{{ isHome ? '工作空间' : selected?.displayName || '应用菜单' }}</strong
+        <strong>{{
+          isHome ? '工作空间' : isHr ? '人事管理' : selected?.displayName || '应用菜单'
+        }}</strong
         ><button
           type="button"
           aria-label="收起二级菜单"
@@ -113,18 +115,7 @@
             >
           </section>
         </template>
-        <template v-else-if="isHr || isCost">
-          <section
-            v-for="group in isCost ? costGroups : hrGroups"
-            :key="group.title"
-            class="hr-nav-group"
-            :class="{ 'cost-nav-group': isCost }"
-          >
-            <h2>{{ group.title }}</h2>
-            <ConsoleNavTree :nodes="group.nodes" />
-          </section>
-        </template>
-        <ConsoleNavTree v-else :nodes="secondaryNodes" />
+        <ConsoleNavTree v-else :nodes="displayNodes" />
         <p v-if="!roots.length" class="secondary-nav__empty">暂无可用菜单</p>
       </div>
     </section>
@@ -141,6 +132,7 @@ import {
   homeShortcutPaths,
   selectEntries,
 } from '@/utils/console-navigation'
+import { businessNavigationName } from '@/utils/business-page-labels'
 import { hrNavigationSections } from '@/utils/hr-navigation'
 import { costNavigationSections } from '@/utils/cost-navigation'
 import { useConsoleWorkspace } from '@/stores/console-workspace'
@@ -151,9 +143,9 @@ const route = useRoute()
 const workspace = useConsoleWorkspace()
 const selectedId = ref('')
 const roots = computed(() =>
-  props.nodes.filter(
-    (node) => node.visible && (node.routePath || consoleEntries(node.children).length),
-  ),
+  props.nodes
+    .filter((node) => node.visible && (node.routePath || consoleEntries(node.children).length))
+    .map((node) => ({ ...node, displayName: businessNavigationName(node) })),
 )
 const entries = computed(() => consoleEntries(props.nodes))
 const home = computed(() =>
@@ -168,8 +160,30 @@ const secondaryNodes = computed(() =>
 )
 const isHr = computed(() => selected.value?.routeKey.split('.')[1] === 'hr')
 const isCost = computed(() => selected.value?.routeKey.split('.')[1] === 'cost')
-const costGroups = computed(() => costNavigationSections(secondaryNodes.value))
-const hrGroups = computed(() => hrNavigationSections(secondaryNodes.value))
+const displayNodes = computed<NavigationNode[]>(() => {
+  const root = selected.value
+  if (!root || (!isHr.value && !isCost.value)) return secondaryNodes.value
+
+  const groups = isCost.value
+    ? costNavigationSections(secondaryNodes.value)
+    : hrNavigationSections(secondaryNodes.value)
+
+  // 展示分组复用 ERP 的菜单树；子页面仍只取 IAM 已授权的入口。
+  return groups.map((group, index) => ({
+    ...root,
+    id: `${root.id}:section:${group.title}`,
+    parentId: root.id,
+    code: `${root.code}.section.${index}`,
+    displayName: group.title,
+    permissionCode: null,
+    routeKey: `${root.routeKey}.section.${index}`,
+    routePath: null,
+    iconKey: 'Document',
+    sortOrder: index,
+    keepAlive: false,
+    children: group.nodes,
+  }))
+})
 const shortcuts = computed(() => selectEntries(entries.value, homeShortcutPaths))
 const analysis = computed(() => selectEntries(entries.value, homeAnalysisPaths))
 const recent = computed(() =>
@@ -208,8 +222,7 @@ watch(
   ([path], previous) => {
     // 在线授权刷新会替换菜单对象；路径没变且所选模块仍获授权时，
     // 保留用户正在浏览的模块，避免二级菜单突然跳回当前业务页。
-    if (path === previous?.[0] && roots.value.some((node) => node.id === selectedId.value))
-      return
+    if (path === previous?.[0] && roots.value.some((node) => node.id === selectedId.value)) return
     const active = roots.value.find(
       (node) =>
         node.routePath === route.path ||
@@ -228,19 +241,6 @@ watch(
 )
 </script>
 <style scoped lang="scss">
-.hr-nav-group.cost-nav-group h2 {
-  margin: 10px 12px 4px;
-  font-size: 12px;
-  line-height: 18px;
-}
-.cost-nav-group :deep(.nav-item) {
-  min-height: 36px;
-  padding-top: 7px;
-  padding-bottom: 7px;
-}
-.hr-nav-group.cost-nav-group {
-  margin-bottom: 4px;
-}
 .console-navigation {
   display: grid;
   grid-template-columns: 76px 220px;
@@ -339,15 +339,6 @@ watch(
   background: #d5e1f1;
   border-right: 1px solid #becde1;
   color: #273d5b;
-}
-.hr-nav-group {
-  margin-bottom: 14px;
-}
-.hr-nav-group h2 {
-  margin: 8px 14px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #526b8b;
 }
 .secondary-nav__brand {
   height: 70px;

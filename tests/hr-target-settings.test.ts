@@ -67,6 +67,29 @@ async function click(label: string) {
   await flushPromises()
 }
 describe('HR有效指标与简化编辑', () => {
+  it('shows history as independent fields while preserving zero and missing values', async () => {
+    vi.mocked(api.getTargetHistory).mockResolvedValue([
+      {
+        metric: 'SALES_AMOUNT',
+        value: 0,
+        revision: 1,
+        reason: '',
+        actor: '',
+        occurredAt: '2026-10-29T02:00:00Z',
+      },
+    ])
+    await open()
+    await click('记录')
+    const fields = [...document.querySelectorAll('.target-history-item dl > div')]
+    const values = Object.fromEntries(
+      fields.map((field) => [
+        field.querySelector('dt')?.textContent,
+        field.querySelector('dd')?.textContent,
+      ]),
+    )
+    expect(values).toMatchObject({ 经营指标: '销售总额', 目标值: '0', 修改原因: '-', 修改人: '-' })
+    expect(values['修改时间']).toContain('10:00:00')
+  })
   it('shows a new salesperson and uses HR values without default/custom selectors', async () => {
     const page = await open()
     expect(page.text()).toContain('新销售')

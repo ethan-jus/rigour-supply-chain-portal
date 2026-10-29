@@ -2,11 +2,10 @@
   <el-form label-position="top" :disabled="disabled">
     <el-form-item label="绩效计算方式"
       ><el-select v-model="form.performanceMode" aria-label="绩效计算方式"
-        ><el-option label="销售：打卡拜访与回款达标" value="SALES" /><el-option
-          :label="legacyManager ? '城市总：历史综合完成率考核' : '城市总：单项指标计分后加权汇总'"
-          value="MANAGER" /><el-option
-          :label="form.role === 'HEADQUARTERS' ? '按个人月度完成率' : '固定绩效'"
-          value="FIXED" /><el-option label="不计绩效" value="NONE" /></el-select
+        ><el-option
+          v-for="option in performanceModeOptions(form.role, legacyManager)"
+          :key="option.value"
+          v-bind="option" /></el-select
     ></el-form-item>
     <section
       v-if="form.role === 'HEADQUARTERS' && form.performanceMode === 'FIXED'"
@@ -45,9 +44,10 @@
         /></el-form-item>
         <el-form-item label="打卡计数口径"
           ><el-select v-model="form.sales.checkinCountMode"
-            ><el-option value="UNIQUE_CUSTOMER" label="同一客户同日最多计1个" /><el-option
-              value="RECORD"
-              label="按审核通过的打卡记录计数" /></el-select
+            ><el-option
+              v-for="option in checkinCountOptions"
+              :key="option.value"
+              v-bind="option" /></el-select
         ></el-form-item>
         <el-form-item label="每日打卡目标"
           ><el-input-number v-model="form.sales.dailyCheckins" :min="0"
@@ -129,9 +129,10 @@
         /></el-form-item>
         <el-form-item label="保护期单位"
           ><el-select v-model="form.manager.protection.unit"
-            ><el-option label="从入职日起顺延日历月" value="MONTHS" /><el-option
-              label="固定天数"
-              value="DAYS" /></el-select
+            ><el-option
+              v-for="option in managerProtectionUnitOptions"
+              :key="option.value"
+              v-bind="option" /></el-select
         ></el-form-item>
         <el-form-item v-if="legacyManager" label="历史最高倍数">
           <el-input-number v-model="form.manager.cap" :min="0" :precision="2"
@@ -183,18 +184,10 @@
           <el-form-item label="实际值来源"
             ><el-select v-model="metric.source"
               ><el-option
-                label="业务核定并填写依据"
-                value="MANUAL_CONFIRMED"
-                :disabled="!citySourceAllowed(metric, 'MANUAL_CONFIRMED')" /><el-option
-                label="管辖城市全部有效回款（实际到账）"
-                :disabled="!citySourceAllowed(metric, 'CITY_RECEIPTS')"
-                value="CITY_RECEIPTS" /><el-option
-                label="管辖城市整单付清业绩"
-                :disabled="!citySourceAllowed(metric, 'FULLY_PAID_RECEIPTS')"
-                value="FULLY_PAID_RECEIPTS" /><el-option
-                label="管辖城市订单销售额"
-                :disabled="!citySourceAllowed(metric, 'ORDER_SALES')"
-                value="ORDER_SALES" /></el-select
+                v-for="option in managerSourceOptions"
+                :key="option.value"
+                v-bind="option"
+                :disabled="!citySourceAllowed(metric, option.value)" /></el-select
           ></el-form-item>
 
           <p class="field-hint">
@@ -213,8 +206,11 @@
               @update:model-value="metric.scoringMode = $event"
               @change="scoringChanged(metric)"
             >
-              <el-option label="按实际完成率" value="ACTUAL" />
-              <el-option label="按阶梯计分" value="TIERED" />
+              <el-option
+                v-for="option in metricScoringOptions"
+                :key="option.value"
+                v-bind="option"
+              />
             </el-select>
           </el-form-item>
         </div>
@@ -233,6 +229,14 @@
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
+import {
+  performanceModeOptions,
+  checkinCountOptions,
+  managerProtectionUnitOptions,
+  managerSourceOptions,
+  metricScoringOptions,
+  payrollMinimumMinutes,
+} from '@/utils/payroll-rule-options'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import {
   newPayrollMetric,
@@ -287,7 +291,7 @@ function linkCityMetric(metric: PayrollMetricDefinition, code: string) {
         : 'MANUAL_CONFIRMED'
 }
 const minimumMinutes = computed({
-  get: () => form.value.sales.minimumSeconds / 60,
+  get: () => payrollMinimumMinutes(form.value.sales.minimumSeconds) ?? undefined,
   set: (value) => {
     form.value.sales.minimumSeconds = Math.round((value || 0) * 60)
   },

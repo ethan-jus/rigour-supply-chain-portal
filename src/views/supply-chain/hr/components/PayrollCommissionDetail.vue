@@ -30,14 +30,21 @@
                 ><div class="nested-table">
                   <PayrollCommissionOrderTable :lines="product.lines" /></div></template
             ></el-table-column>
-            <el-table-column prop="name" label="商品／规格" min-width="200" show-overflow-tooltip />
+            <el-table-column
+              prop="name"
+              label="商品／规格"
+              min-width="200"
+              show-overflow-tooltip
+              :formatter="displayCell"
+            />
             <el-table-column
               prop="variantCode"
               label="规格编码"
               min-width="150"
               show-overflow-tooltip
+              :formatter="displayCell"
             />
-            <el-table-column prop="role" label="提成角色" width="110" />
+            <el-table-column prop="role" label="提成角色" width="110" :formatter="displayCell" />
             <el-table-column label="计提数量" width="105" align="right"
               ><template #default="{ row }"
                 >{{ row.quantity }} {{ payrollUnitName(row.unit) }}</template
@@ -73,12 +80,24 @@
         </div>
       </template>
     </el-table-column>
-    <el-table-column prop="name" label="ERP 商品分类" min-width="220" />
+    <el-table-column prop="name" label="ERP 商品分类" min-width="220" :formatter="displayCell" />
     <el-table-column label="回款合计（元）" width="155" align="right">
       <template #default="{ row }">{{ payrollMoney(row.collectionAmount) }}</template>
     </el-table-column>
-    <el-table-column prop="orderCount" label="订单数（笔）" width="110" align="right" />
-    <el-table-column prop="lineCount" label="商品提成记录（条）" width="160" align="right" />
+    <el-table-column
+      prop="orderCount"
+      label="订单数（笔）"
+      width="110"
+      align="right"
+      :formatter="displayCell"
+    />
+    <el-table-column
+      prop="lineCount"
+      label="商品提成记录（条）"
+      width="160"
+      align="right"
+      :formatter="displayCell"
+    />
     <el-table-column v-if="pendingCount" label="已计算（元）" width="140" align="right"
       ><template #default="{ row }">{{ payrollMoney(row.knownAmount) }}</template></el-table-column
     >
@@ -88,6 +107,7 @@
       label="待核定记录（条）"
       width="150"
       align="right"
+      :formatter="displayCell"
     />
     <el-table-column label="分类提成合计（元）" width="170" align="right"
       ><template #default="{ row }"
@@ -98,6 +118,7 @@
   <PayrollCommissionOrderTable v-else :lines="lines" />
 </template>
 <script setup lang="ts">
+import { displayCell, displayAmount as payrollMoney } from '@/utils/business-display'
 import { onMounted, computed, ref } from 'vue'
 import type { PayrollDetail } from '@/api/core/payroll'
 import {
@@ -105,7 +126,7 @@ import {
   commissionCollections,
   commissionCountExplanation,
 } from '@/utils/payroll-commission-detail'
-import { payrollMoney } from '@/utils/payroll-workflow'
+
 import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
 import PayrollCommissionOrderTable from './PayrollCommissionOrderTable.vue'
 const props = defineProps<{ lines: PayrollDetail[]; total: number | null }>()

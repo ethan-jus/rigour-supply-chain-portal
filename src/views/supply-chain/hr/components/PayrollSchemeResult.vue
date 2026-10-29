@@ -10,9 +10,15 @@
       >
     </div>
     <el-table :data="basisRows" border>
-      <el-table-column prop="name" label="计算项目" width="190" />
-      <el-table-column prop="value" label="本月数值" width="170" align="right" />
-      <el-table-column prop="basis" label="计算说明" min-width="320" />
+      <el-table-column prop="name" label="计算项目" width="190" :formatter="displayCell" />
+      <el-table-column
+        prop="value"
+        label="本月数值"
+        width="170"
+        align="right"
+        :formatter="displayCell"
+      />
+      <el-table-column prop="basis" label="计算说明" min-width="320" :formatter="displayCell" />
     </el-table>
     <p v-if="!isManager && !isHeadquarters" class="field-hint">
       每日打卡与拜访独立考核，不能跨日抵扣。缺卡、缺拜访和回款未达标扣减已包含在绩效内，不再重复扣工资。
@@ -28,10 +34,10 @@
       }}。下方逐日数据保留原始统计。
     </p>
     <el-table v-if="taskRows.length" :data="taskRows" border>
-      <el-table-column prop="name" label="每日任务" />
-      <el-table-column prop="dailyTarget" label="每日目标" />
-      <el-table-column prop="actual" label="本月有效合计" />
-      <el-table-column prop="missing" label="核算缺失次数" />
+      <el-table-column prop="name" label="每日任务" :formatter="displayCell" />
+      <el-table-column prop="dailyTarget" label="每日目标" :formatter="displayCell" />
+      <el-table-column prop="actual" label="本月有效合计" :formatter="displayCell" />
+      <el-table-column prop="missing" label="核算缺失次数" :formatter="displayCell" />
       <el-table-column label="每次扣减（元）" align="right"
         ><template #default="{ row }">{{ payrollMoney(row.penalty) }}</template></el-table-column
       >
@@ -43,7 +49,8 @@
       按次数扣减合计可能超过绩效额度，实扣以过程绩效额度封顶；人工核定优先，未核定项沿用逐日统计。
     </p>
     <el-table v-if="snapshot.metrics.length" :data="snapshot.metrics" border
-      ><el-table-column prop="name" label="指标" /><el-table-column label="实际"
+      ><el-table-column prop="name" label="指标" :formatter="displayCell" /><el-table-column
+        label="实际"
         ><template #default="{ row: metric }">{{
           metric.actual ?? '待核定'
         }}</template></el-table-column
@@ -51,13 +58,14 @@
         ><template #default="{ row: metric }">{{
           metric.target ?? '待核定'
         }}</template></el-table-column
-      ><el-table-column prop="weight" label="权重（%）" /><el-table-column label="完成率"
+      ><el-table-column prop="weight" label="权重（%）" :formatter="displayCell" /><el-table-column
+        label="完成率"
         ><template #default="{ row }">{{ percent(row.completion) }}</template></el-table-column
       ><el-table-column label="加权贡献"
         ><template #default="{ row }">{{ percent(row.contribution) }}</template></el-table-column
       ><el-table-column v-if="tieredMetrics" label="计分系数"
-        ><template #default="{ row }">{{ row.coefficient ?? '—' }}</template></el-table-column
-      ><el-table-column prop="evidence" label="核算依据" min-width="180"
+        ><template #default="{ row }">{{ row.coefficient ?? '-' }}</template></el-table-column
+      ><el-table-column prop="evidence" label="核算依据" min-width="180" :formatter="displayCell"
     /></el-table>
     <p v-if="isManager" class="field-hint">
       {{
@@ -70,10 +78,11 @@
   </section>
 </template>
 <script setup lang="ts">
+import { displayCell, displayAmount as payrollMoney } from '@/utils/business-display'
 import { computed } from 'vue'
 import type { PayrollRecord } from '@/api/core/payroll'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
-import { payrollMoney } from '@/utils/payroll-workflow'
+
 const props = defineProps<{ row: PayrollRecord; readonly?: boolean }>(),
   emit = defineEmits<{ determine: [] }>()
 const { can } = useSupplyPermissions()
@@ -102,7 +111,7 @@ const tieredMetrics = computed(() =>
   snapshot.value?.scheme.definition.manager?.metrics.some((m) => m.scoringMode === 'TIERED'),
 )
 const percent = (v: number | null | undefined) =>
-  v == null ? '—' : `${(Number(v) * 100).toFixed(2)}%`
+  v == null ? '-' : `${(Number(v) * 100).toFixed(2)}%`
 const editable = computed(
   () => !props.readonly && !['CONFIRMED', 'PAID'].includes(props.row.statusCode),
 )

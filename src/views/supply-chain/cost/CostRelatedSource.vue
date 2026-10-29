@@ -7,19 +7,40 @@
       {{ failure }} <el-button link type="primary" @click="load">重新加载</el-button>
     </div>
     <template v-else-if="original">
-      <p>{{ original.documentNo }} · {{ original.data.title }}</p>
-      <p>
-        {{ original.data.cityName }} ·
-        {{ original.data.costMonth || original.data.costDate.slice(0, 7) }} ·
-        {{ costMoney(original.data.amount) }} 元 ·
-        {{
-          original.statusCode === 'CONFIRMED'
-            ? '已确认'
-            : original.statusCode === 'VOID'
-              ? '已作废'
-              : '待确认'
-        }}
-      </p>
+      <dl class="business-detail-fields">
+        <div>
+          <dt>费用单号</dt>
+          <dd>{{ original.documentNo }}</dd>
+        </div>
+        <div>
+          <dt>费用事项</dt>
+          <dd>{{ original.data.title || '-' }}</dd>
+        </div>
+        <div>
+          <dt>费用归属</dt>
+          <dd>{{ original.data.cityName || '-' }}</dd>
+        </div>
+        <div>
+          <dt>费用月份</dt>
+          <dd>{{ original.data.costMonth || original.data.costDate.slice(0, 7) }}</dd>
+        </div>
+        <div>
+          <dt>登记金额（元）</dt>
+          <dd>{{ costMoney(original.data.amount) }}</dd>
+        </div>
+        <div>
+          <dt>确认状态</dt>
+          <dd>
+            {{
+              original.statusCode === 'CONFIRMED'
+                ? '已确认'
+                : original.statusCode === 'VOID'
+                  ? '已作废'
+                  : '待确认'
+            }}
+          </dd>
+        </div>
+      </dl>
       <p v-if="original.revision !== data.expense?.relatedCost?.revision" class="source-warning">
         原费用已变更，请重新核对关联信息。
       </p>
@@ -30,11 +51,12 @@
   </section>
 </template>
 <script setup lang="ts">
+import { displayAmount as costMoney } from '@/utils/business-display'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { getCost, type CostCommand, type CostRecord } from '@/api/core/cost'
 import { errorMessage } from '@/api/core/error'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
-import { costMoney } from './cost-dictionaries'
+
 import { relatedCostCategory } from './cost-source'
 
 const props = defineProps<{ data: CostCommand }>()

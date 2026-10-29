@@ -1,3 +1,4 @@
+import { payrollOptionLabel, commissionMethodOptions } from './payroll-rule-options'
 import {
   commissionCategories,
   commissionRole,
@@ -148,7 +149,7 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
         d.trace?.method === 'PERCENT' ? '元' : payrollUnitName(d.unitCode),
         d.trace?.rate,
         d.trace?.method === 'PERCENT' ? '%' : `元/${payrollUnitName(d.unitCode)}`,
-        d.trace?.method === 'PERCENT' ? '按金额比例' : d.trace?.method === 'QUANTITY' ? '按商品数量' : '历史快照未记录',
+        payrollOptionLabel(d.trace?.method, commissionMethodOptions),
         d.trace?.fullyPaidDate,
         d.accrued,
         d.released,

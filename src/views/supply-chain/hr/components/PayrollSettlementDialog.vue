@@ -3,7 +3,7 @@
     v-model="visible"
     :title="titles[action]"
     width="min(650px, 95vw)"
-    class="payroll-work-dialog"
+    class="payroll-work-dialog business-detail-panel"
     :close-on-click-modal="false"
     :close-on-press-escape="!saving"
     :show-close="!saving"
@@ -90,10 +90,11 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
+import { displayAmount as costMoney } from '@/utils/business-display'
 import { randomId } from '@/utils/random-id'
 import { ref } from 'vue'
 import PayrollCommissionSummary from './PayrollCommissionSummary.vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   changePayrollStatus,
   createPayrollCorrection,
@@ -103,7 +104,7 @@ import {
 } from '@/api/core/payroll'
 import { payrollPaid, payrollRemaining } from '@/utils/payroll-workflow'
 import { errorMessage } from '@/api/core/error'
-import { costMoney } from '../../cost/cost-dictionaries'
+
 type Action = 'confirm' | 'paid' | 'reopen' | 'correct'
 const emit = defineEmits<{ changed: [] }>()
 const titles = {
@@ -134,14 +135,40 @@ const futureDate = (date: Date) => date.getTime() > Date.now()
 const disableCorrectionMonth = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` <=
   (row.value?.month ?? '')
+function blockReason(value: PayrollRecord, kind: Action): string {
+  if (kind !== 'confirm' && kind !== 'paid') return ''
+  if (kind === 'confirm' && value.statusCode !== 'READY')
+    return '工资状态已变化，请刷新列表后再确认。'
+  if (kind === 'paid' && value.statusCode !== 'CONFIRMED')
+    return '当前工资状态不支持登记发放，请刷新列表后重试。'
+  if (value.paymentBlockReason) return value.paymentBlockReason
+  const currentMonth = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+  }).format(new Date())
+  return kind === 'confirm' && value.month >= currentMonth
+    ? '该薪酬月份尚未结束，仅可预核算；请在月份结束并重新核算后确认工资。'
+    : ''
+}
 async function open(value: PayrollRecord, kind: Action) {
+  if (saving.value) return
   action.value = kind
   row.value = undefined
-  visible.value = true
+  visible.value = false
   error.value = ''
   saving.value = true
   try {
     row.value = await getPayrollDetail(value.id)
+    const blocked = blockReason(row.value, kind)
+    if (blocked) {
+      await ElMessageBox.alert(blocked, kind === 'confirm' ? '暂不能确认工资' : '暂不能登记发放', {
+        confirmButtonText: '知道了',
+        type: 'warning',
+      }).catch(() => undefined)
+      return
+    }
+    visible.value = true
     requestId.value = randomId()
     paidDate.value = new Date().toLocaleDateString('sv-SE')
     referenceNo.value = ''
@@ -149,6 +176,7 @@ async function open(value: PayrollRecord, kind: Action) {
     targetMonth.value = ''
     amount.value = kind === 'paid' ? payrollRemaining(row.value) : undefined
   } catch (e) {
+    visible.value = true
     error.value = errorMessage(e, '读取当前工资单失败')
   } finally {
     saving.value = false
@@ -157,8 +185,9 @@ async function open(value: PayrollRecord, kind: Action) {
 async function save() {
   if (!row.value || saving.value) return
   error.value = ''
-  if (['confirm', 'paid'].includes(action.value) && row.value.paymentBlockReason) {
-    error.value = row.value.paymentBlockReason
+  const blocked = blockReason(row.value, action.value)
+  if (blocked) {
+    error.value = blocked
     return
   }
   if (action.value !== 'confirm' && !reason.value.trim()) {

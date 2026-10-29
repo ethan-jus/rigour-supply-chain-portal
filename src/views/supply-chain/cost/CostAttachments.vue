@@ -50,8 +50,8 @@ import {
   type CostAttachment,
 } from '@/api/core/cost'
 import { errorMessage } from '@/api/core/error'
-import { auditActorLabel } from '@/utils/audit-actor'
-import { displayDateTime } from '@/utils/business-date'
+import { displayRecordActor as auditActorLabel } from '@/utils/business-display'
+import { displayRecordDateTime as displayDateTime } from '@/utils/business-display'
 const props = defineProps<{ category: CostCategory; row: CostRecord; editable: boolean }>()
 const emit = defineEmits<{ changed: [] }>()
 const files = ref<CostAttachment[]>([]),
@@ -73,7 +73,10 @@ onDeactivated(() => {
   loading.value = false
 })
 onActivated(() => {
-  if (inactive) { inactive = false; void load() }
+  if (inactive) {
+    inactive = false
+    void load()
+  }
 })
 async function load() {
   const v = ++version
@@ -102,7 +105,9 @@ async function upload(event: Event) {
   }
   loading.value = true
   error.value = ''
-  const request = version, category = props.category, record = props.row
+  const request = version,
+    category = props.category,
+    record = props.row
   try {
     await uploadCostAttachment(category, record, file)
     if (inactive || request !== version) return

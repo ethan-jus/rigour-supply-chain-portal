@@ -15,7 +15,11 @@ import { clearBusinessDictionariesForTest } from '@/utils/business-dictionary'
 import { flattenCommissionRows, newCommissionRow } from '@/utils/payroll-commission-rows'
 import { newPayrollScheme } from '@/utils/payroll-scheme'
 import { clearPayrollIntervalCopies } from '@/utils/payroll-coefficient-clipboard'
-import { getPayrollDepartments, getPayrollProducts } from '@/api/core/payroll'
+import {
+  getPayrollDepartments,
+  getPayrollProducts,
+  getPayrollProductCategories,
+} from '@/api/core/payroll'
 import { getAttendanceDepartments } from '@/api/core/hr-attendance'
 import { calendarFixture } from './fixtures/statutory-calendar'
 vi.mock('@/api/core/business-calendar', () => ({
@@ -101,6 +105,9 @@ beforeEach(() => {
   ])
   vi.mocked(getAttendanceDepartments).mockResolvedValue([])
   vi.mocked(getPayrollProducts).mockResolvedValue([])
+  vi.mocked(getPayrollProductCategories).mockResolvedValue([
+    { id: 1, name: '方便面', parentId: null, sortOrder: 0 },
+  ])
 })
 afterEach(() => {
   ElMessageBox.close()
@@ -112,8 +119,8 @@ afterEach(() => {
 const field = (label: string) =>
   wrapper
     .find('[role="dialog"]')
-    .findAll('.el-form-item')
-    .find((f) => f.find('label').exists() && f.find('label').text() === label)!
+    .findAll('.el-form-item, .parameter-fields > div')
+    .find((f) => f.find('label, dt').exists() && f.find('label, dt').text() === label)!
 async function click(label: string) {
   await wrapper
     .findAll('button')
@@ -302,8 +309,8 @@ describe('独立薪资规则入口', () => {
     const row = commissionRule('legacy', 'legacy', 1)
     await mountCommissionList([row])
     await click('查看')
-    let selector = field('适用部门').getComponent({ name: 'ElTreeSelect' })
-    expect(selector.getComponent({ name: 'ElTree' }).vm.getCheckedKeys()).toEqual([1])
+    expect(wrapper.getComponent({ name: 'SupplyDepartmentTree' }).props('selectedIds')).toEqual([1])
+    let selector
     expect(row.definition.departmentIds).toEqual([1])
     await click('关闭')
     await click('新增提成规则')
@@ -449,18 +456,19 @@ describe('独立薪资规则入口', () => {
     })
     await flushPromises()
     expect(wrapper.get('.rule-table-panel').text()).not.toContain('总部绩效规则')
-    await wrapper.get('.performance-role-tabs input[value="HEADQUARTERS"]').setValue(true)
+    await wrapper.get('.performance-role-tabs button[data-value="HEADQUARTERS"]').trigger('click')
     await flushPromises()
     const table = wrapper.get('.rule-table-panel')
     expect(table.text()).toContain('总部绩效规则')
     expect(table.text()).toContain('按个人月度完成率')
-    expect(table.text()).toContain('HR按员工、月份分别核定')
+    expect(table.text()).not.toContain('HR按员工、月份分别核定')
     expect(table.text()).not.toContain('固定绩效')
     await click('查看')
     expect(wrapper.get('section[aria-label="总部人员绩效计算说明"]').text()).toContain(
       '本人当月绩效完成率',
     )
-    expect(field('绩效计算方式').find('.el-select__wrapper.is-disabled').exists()).toBe(true)
+    expect(field('绩效计算方式').text()).toContain('按个人月度完成率')
+    expect(field('绩效计算方式').find('input').exists()).toBe(false)
     await click('关闭')
     await click('新增绩效规则')
     expect(field('人员身份').getComponent({ name: 'ElSelect' }).props('modelValue')).toBe(
@@ -588,12 +596,12 @@ describe('独立薪资规则入口', () => {
       global: { plugins: [ElementPlus], stubs: { ElDialog: Dialog, SupplyPageTitle: true } },
     })
     await flushPromises()
-    await wrapper.get('.performance-role-tabs input[value="CITY_MANAGER"]').setValue(true)
+    await wrapper.get('.performance-role-tabs button[data-value="CITY_MANAGER"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('.rule-table-panel').text()).toContain('历史规则：综合完成率匹配阶梯系数')
+    expect(wrapper.get('.rule-table-panel').text()).toContain('城市总：历史综合完成率考核')
     await click('查看')
     const dialog = wrapper.get('[role="dialog"]')
-    expect(dialog.text()).toContain('历史规则：目标和实际值按本版本保存的配置核算')
+    expect(dialog.text()).toContain('历史规则：目标和实际值按该规则保存的配置核算')
     expect(dialog.text()).not.toContain('目标读取所辖城市同月指标')
     expect(field('实际值来源').text()).toContain('管辖城市整单付清业绩')
     expect(field('历史最高倍数').text()).not.toContain('>')
@@ -607,18 +615,19 @@ describe('独立薪资规则入口', () => {
     ])
     const table = wrapper.get('.rule-table-panel')
     const rows = table.findAll('.el-table__body tbody tr')
-    expect(rows).toHaveLength(5)
-    expect(rows[0]!.findAll('td')[0]!.attributes('rowspan')).toBe('4')
+    expect(rows).toHaveLength(3)
+    expect(rows[0]!.findAll('td')[0]!.attributes('rowspan')).toBe('2')
     expect(rows[0]!.text()).toContain('PCR001')
-    expect(rows[4]!.text()).toContain('PCR002')
+    expect(rows[2]!.text()).toContain('PCR002')
     expect(table.text()).toContain('共 2 条规则，5 条标准')
     expect(table.findAll('button').filter((b) => b.text() === '查看')).toHaveLength(3)
     expect(table.findAll('button').filter((b) => b.text() === '修改')).toHaveLength(1)
     expect(table.findAll('button').filter((b) => b.text() === '停用')).toHaveLength(2)
-    expect(table.text()).toContain('15.00 元 / 套装')
-    expect(table.text()).toContain('20.00 元 / 套装')
-    expect(table.text()).not.toContain('SET')
-    expect(table.text()).not.toMatch(/版本|\bv[12]\b/)
+    expect(table.text()).not.toContain('20.00 元 / 套装')
+    await click('查看')
+    const detail = wrapper.get('.record-detail')
+    expect(detail.findAll('td').map((cell) => cell.text())).toContain('15')
+    expect(detail.findAll('td').map((cell) => cell.text())).toContain('套装')
     expect(resolveBizDict).toHaveBeenCalledWith('PRODUCT_UNIT')
   })
   it('按规则分页，不把同一规则的商品标准拆到不同页；筛选后重新分组', async () => {
@@ -629,18 +638,109 @@ describe('独立薪资规则入口', () => {
       ),
     ]
     await mountCommissionList(rows)
-    expect(wrapper.findAll('.rule-table-panel .el-table__body tbody tr')).toHaveLength(40)
+    expect(wrapper.findAll('.rule-table-panel .el-table__body tbody tr')).toHaveLength(20)
     expect(wrapper.get('.rule-table-panel .el-table__body tbody tr td').attributes('rowspan')).toBe(
-      '21',
+      '1',
     )
     await wrapper.get('.el-pagination .btn-next').trigger('click')
     await flushPromises()
     expect(wrapper.findAll('.rule-table-panel .el-table__body tbody tr')).toHaveLength(1)
     expect(wrapper.get('.rule-table-panel .el-table__body').text()).toContain('PCR020')
-    await wrapper.get('input[aria-label="规则编码或名称"]').setValue('PCR000')
+    await wrapper.get('input[aria-label="规则编码筛选"]').setValue('PCR000')
+    await wrapper.get('.supply-list-filters form').trigger('submit')
     await flushPromises()
-    expect(wrapper.findAll('.rule-table-panel .el-table__body tbody tr')).toHaveLength(21)
+    expect(wrapper.findAll('.rule-table-panel .el-table__body tbody tr')).toHaveLength(1)
     expect(wrapper.get('.rule-list-heading').text()).toContain('共 1 条规则，21 条标准')
+  })
+  it('提成列表计算方式与新增编辑的选项一致，零值、数量标准和不计提分别保留', async () => {
+    const row = commissionRule('method-labels', 'PCR-METHODS', 3)
+    row.definition.commission!.rules.forEach((rule, index) => {
+      Object.assign(
+        rule,
+        [
+          { method: 'PERCENT', excluded: false, value: 0 },
+          { method: 'QUANTITY', excluded: false, value: 15.25 },
+          { method: 'QUANTITY', excluded: true, value: 20 },
+        ][Math.floor(index / 2)],
+      )
+    })
+    await mountCommissionList([row])
+    expect(wrapper.findAll('.rule-table-panel .el-table__body tbody tr')).toHaveLength(1)
+    await click('查看')
+    const cells = wrapper.findAll('.record-detail .el-table__body td').map((cell) => cell.text())
+    for (const label of ['按回款比例', '按数量', '明确不计提'])
+      expect(cells.filter((value) => value === label)).toHaveLength(2)
+    expect(cells).toContain('0')
+    expect(cells).toContain('15.25')
+    expect(cells).not.toContain('金额比例')
+    expect(cells).not.toContain('固定数量')
+    expect(savePayrollComponent).not.toHaveBeenCalled()
+  })
+  it('列表一条规则一行，独立商品/规格筛选要求命中同一个商品，详情逐项配对', async () => {
+    const row = commissionRule('product-fields', 'PCR-PRODUCTS', 1)
+    row.createdByName = '负责人甲'
+    row.definition.commission!.rules.forEach((rule) =>
+      Object.assign(rule, { name: '手工维护名称 A999', variantIds: ['V1', 'V2'] }),
+    )
+    const products = [
+      {
+        productId: 'P1',
+        productVariantId: 'V1',
+        productCode: 'P-1',
+        variantCode: 'V-1',
+        productName: '商品甲',
+        specification: '红色',
+        unitCode: 'SET',
+        categoryId: 1,
+        categoryName: '台球',
+      },
+      {
+        productId: 'P2',
+        productVariantId: 'V2',
+        productCode: 'P-2',
+        variantCode: 'V-2',
+        productName: '商品乙',
+        specification: '蓝色',
+        unitCode: 'SET',
+        categoryId: 1,
+        categoryName: '台球',
+      },
+    ]
+    vi.mocked(getPayrollProducts).mockImplementation(async (_keyword, _category, id) =>
+      products.filter((product) => product.productVariantId === id),
+    )
+    await mountCommissionList([row])
+    const table = wrapper.get('.rule-table-panel')
+    expect(table.findAll('.el-table__body tbody tr')).toHaveLength(1)
+    expect(table.findAll('th').map((cell) => cell.text())).toEqual(
+      expect.arrayContaining(['提成标准数', '商品规格数', '创建人', '创建时间']),
+    )
+    expect(table.text()).toContain('负责人甲')
+    expect(table.text()).not.toContain('手工维护名称 A999')
+    await wrapper.get('input[aria-label="商品名称筛选"]').setValue('商品甲')
+    await wrapper.get('input[aria-label="商品规格筛选"]').setValue('蓝色')
+    await wrapper.get('.supply-list-filters form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.findAll('.rule-table-panel .el-table__body tbody tr')).toHaveLength(0)
+    await wrapper.get('input[aria-label="商品规格筛选"]').setValue('红色')
+    await wrapper.get('.supply-list-filters form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.findAll('.rule-table-panel .el-table__body tbody tr')).toHaveLength(1)
+    await click('查看')
+    const pairs = wrapper.findAll('.record-detail .el-table__body tbody tr').map((tr) =>
+      tr
+        .findAll('td')
+        .slice(1, 3)
+        .map((td) => td.text()),
+    )
+    expect(pairs).toEqual([
+      ['商品甲', '红色'],
+      ['商品乙', '蓝色'],
+      ['商品甲', '红色'],
+      ['商品乙', '蓝色'],
+    ])
+    expect(wrapper.find('.record-detail').text()).toContain('负责人甲')
+    expect(savePayrollComponent).not.toHaveBeenCalled()
   })
   it('按状态显示修改删除、停用和重新启用，待生效修改保留版本并提交并发版本号', async () => {
     const row = (id: string, start: string): PayrollComponentVersionView => ({
@@ -996,6 +1096,131 @@ describe('独立薪资规则入口', () => {
 })
 
 it.each(['ATTENDANCE', 'PERFORMANCE', 'COMMISSION', 'ALLOWANCE', 'SALARY'] as const)(
+  '%s 停用后仍可修改、保存停用新版本并重新启用，全部操作直接展示',
+  async (kind) => {
+    const form = newPayrollScheme()
+    const initial = commissionRule('stopped', 'PCR-STOPPED', 1)
+    initial.revision = 3
+    Object.assign(initial.definition, {
+      name: '停用待修订规则',
+      kind,
+      role: kind === 'ATTENDANCE' || kind === 'COMMISSION' ? 'ALL' : 'SALES',
+      departmentIds: kind === 'SALARY' ? [] : [1],
+      employeeCodes: kind === 'SALARY' ? ['E1'] : [],
+      calendar: kind === 'ATTENDANCE' ? form.calendar : null,
+      allowance:
+        kind === 'ALLOWANCE'
+          ? { items: [{ code: 'transport', name: '交通补贴', amount: 500 }], proration: 'NONE' }
+          : null,
+      performance:
+        kind === 'PERFORMANCE'
+          ? { mode: 'SALES', sales: form.sales, manager: form.manager, grades: [] }
+          : null,
+      salary:
+        kind === 'SALARY'
+          ? {
+              baseSalary: { ...form.baseSalary, mode: 'FIXED', fixedAmount: 3000 },
+              performanceBase: 1000,
+              proration: form.proration,
+              personalPolicy: form.personalPolicy,
+            }
+          : null,
+      commission: kind === 'COMMISSION' ? initial.definition.commission : null,
+    })
+    initial.stateChanges = [
+      {
+        revision: 1,
+        effectiveMonth: '2000-01',
+        enabled: false,
+        reason: '业务调整',
+        actor: 'HR',
+        time: '2000-01-01T00:00:00Z',
+      },
+    ]
+    let versions = [initial]
+    vi.mocked(getPayrollComponents).mockImplementation(async () => versions)
+    vi.mocked(savePayrollComponent).mockImplementationOnce(async (command) => {
+      const revised = {
+        ...initial,
+        id: 'stopped-v2',
+        version: 2,
+        revision: 1,
+        definition: command.definition,
+      }
+      versions = [initial, revised]
+      return revised
+    })
+    vi.mocked(actPayrollComponent).mockImplementationOnce(async (row) => {
+      versions = versions.map((version) => ({
+        ...version,
+        stateChanges: [
+          ...version.stateChanges!,
+          {
+            revision: 2,
+            effectiveMonth: '2000-01',
+            enabled: true,
+            reason: '核对完成',
+            actor: 'HR',
+            time: '2000-01-02T00:00:00Z',
+          },
+        ],
+      }))
+      return {
+        rule: row,
+        action: 'ENABLE',
+        reason: '核对完成',
+        attendanceReviews: 0,
+        payrollReviews: 0,
+      }
+    })
+    wrapper = mount(Rules, {
+      props: { componentKind: kind, ...(kind === 'SALARY' ? { employeeCode: 'E1' } : {}) },
+      global: { plugins: [ElementPlus], stubs: { ElDialog: Dialog, SupplyPageTitle: true } },
+    })
+    await flushPromises()
+    expect(
+      wrapper
+        .get('.rule-row-actions')
+        .findAll('button')
+        .map((button) => button.text()),
+    ).toEqual(['查看', '修改', '重新启用', '操作记录'])
+    await click('修改')
+    expect(field('规则名称').get('input').attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).toContain('保存为新版本，并保持停用')
+    await field('规则名称').get('input').setValue('修订后待启用规则')
+    await field('变更说明').get('textarea').setValue('修正配置后核对')
+    await click('保存')
+    expect(savePayrollComponent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        previousId: initial.id,
+        revision: 3,
+        replacePending: false,
+        definition: expect.objectContaining({ name: '修订后待启用规则', kind }),
+      }),
+    )
+    expect(
+      wrapper
+        .get('.rule-row-actions')
+        .findAll('button')
+        .map((button) => button.text()),
+    ).toEqual(['查看', '修改', '重新启用', '操作记录'])
+    await click('重新启用')
+    const body = new DOMWrapper(document.body)
+    await body.get('.el-message-box__input textarea').setValue('核对完成')
+    await body.get('.el-message-box__btns .el-button--primary').trigger('click')
+    await flushPromises()
+    expect(actPayrollComponent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'stopped-v2', version: 2 }),
+      'ENABLE',
+      '核对完成',
+      expect.any(String),
+    )
+    expect(wrapper.get('.rule-row-actions').text()).toContain('停用')
+    expect(wrapper.get('.rule-row-actions').text()).not.toContain('重新启用')
+  },
+)
+
+it.each(['ATTENDANCE', 'PERFORMANCE', 'COMMISSION', 'ALLOWANCE', 'SALARY'] as const)(
   '替代后的旧 %s 规则显示已废弃，只允许查看和操作记录',
   async (kind) => {
     const form = newPayrollScheme()
@@ -1043,6 +1268,77 @@ it.each(['ATTENDANCE', 'PERFORMANCE', 'COMMISSION', 'ALLOWANCE', 'SALARY'] as co
     await flushPromises()
     const record = wrapper.findAll('tr').find((tr) => tr.text().includes('已废弃旧规则'))!
     expect(record.text()).toContain('已废弃')
-    expect(record.findAll('button').map((button) => button.text())).toEqual(['查看', '操作记录'])
+    expect(
+      record
+        .findAll('td')
+        .at(-1)!
+        .findAll('button')
+        .map((button) => button.text()),
+    ).toEqual(['查看', '操作记录'])
   },
 )
+
+it('商品分类保留真实层级并支持多选，父分类含下级且排除分类不误匹配', async () => {
+  vi.mocked(getPayrollProductCategories).mockResolvedValue([
+    { id: 1, name: '快消品', parentId: null, sortOrder: 1 },
+    { id: 2, name: '方便面', parentId: 1, sortOrder: 2 },
+    { id: 3, name: '饮品', parentId: 1, sortOrder: 3 },
+    { id: 4, name: '台球周边', parentId: null, sortOrder: 4 },
+    { id: 5, name: '台呢', parentId: 4, sortOrder: 5 },
+  ])
+  const food = commissionRule('food', 'FOOD', 1)
+  food.definition.name = '食品提成'
+  food.definition.commission!.rules.forEach((rule) => {
+    rule.categoryIds = [1]
+    rule.excludedCategoryIds = [3]
+    rule.variantIds = []
+  })
+  const cloth = commissionRule('cloth', 'CLOTH', 1)
+  cloth.definition.name = '台呢提成'
+  cloth.definition.commission!.rules.forEach((rule) => {
+    rule.categoryIds = []
+    rule.variantIds = ['V9']
+  })
+  vi.mocked(getPayrollProducts).mockResolvedValue([
+    {
+      productVariantId: 'V9',
+      productId: 'P9',
+      productCode: 'P9',
+      variantCode: 'A300',
+      productName: '测试台呢',
+      specification: 'A300',
+      unitCode: 'SET',
+      categoryId: 5,
+      categoryName: '台呢',
+    },
+  ])
+  await mountCommissionList([food, cloth])
+  const picker = wrapper
+    .findAllComponents({ name: 'ElTreeSelect' })
+    .find((select) => select.props('ariaLabel') === '商品分类筛选')!
+  expect(picker.props('multiple')).toBe(true)
+  expect(picker.props('showCheckbox')).toBe(true)
+  expect(picker.props('checkStrictly')).toBe(true)
+  expect(picker.props('data')[0].children.map((node: { name: string }) => node.name)).toEqual([
+    '方便面',
+    '饮品',
+  ])
+  await picker.getComponent({ name: 'ElSelect' }).get('input').trigger('click')
+  await flushPromises()
+  await picker.getComponent({ name: 'ElTree' }).get('.el-checkbox').trigger('click')
+  await flushPromises()
+  expect(picker.props('modelValue')).toEqual([1])
+  expect(wrapper.get('.rule-table-panel').text()).toContain('食品提成')
+  expect(wrapper.get('.rule-table-panel').text()).not.toContain('台呢提成')
+  picker.vm.$emit('update:modelValue', [2, 5])
+  await flushPromises()
+  expect(wrapper.get('.rule-table-panel').text()).toContain('食品提成')
+  expect(wrapper.get('.rule-table-panel').text()).toContain('台呢提成')
+  picker.vm.$emit('update:modelValue', [3])
+  await flushPromises()
+  expect(wrapper.findAll('.rule-row-actions')).toHaveLength(0)
+  picker.vm.$emit('update:modelValue', [1])
+  await flushPromises()
+  expect(wrapper.findAll('.rule-row-actions')).toHaveLength(1)
+  expect(wrapper.get('.rule-table-panel').text()).toContain('食品提成')
+})

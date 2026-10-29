@@ -75,7 +75,7 @@ afterEach(() => {
 async function open() {
   wrapper = mount(Rules, { attachTo: document.body, global: { plugins: [ElementPlus] } })
   await flushPromises()
-  wrapper.getComponent({ name: 'ElTabs' }).vm.$emit('update:modelValue', 'expected')
+  await wrapper.get('button[data-value="expected"]').trigger('click')
   await flushPromises()
   return wrapper
 }
@@ -121,14 +121,19 @@ describe('考勤规则列表', () => {
     await wrapper.get('button[aria-label="查看公司默认考勤规则"]').trigger('click')
     await flushPromises()
     expect(dialog().text()).not.toContain('保存规则')
-    expect(wrapper.get('input[aria-label="应出勤天数"]').attributes('disabled')).toBeDefined()
+    expect(dialog().find('input[aria-label="应出勤天数"]').exists()).toBe(false)
+    expect(
+      dialog()
+        .findAll('dt')
+        .map((field) => field.text()),
+    ).toContain('应出勤天数')
     expect(api.saveAttendanceRule).not.toHaveBeenCalled()
   })
   it('shows rule records and independently filters company default, month and lock state', async () => {
     await open()
     expect(wrapper.text()).toContain('2026-10 考勤规则')
     expect(wrapper.text()).toContain('销售一部')
-    expect(wrapper.text()).toContain('2026/10/13 10:00')
+    expect(wrapper.text()).toContain('2026-10-13 10:00:00')
     wrapper.getComponent({ name: 'ElTreeSelect' }).vm.$emit('update:modelValue', 0)
     wrapper
       .findAllComponents({ name: 'ElSelect' })
@@ -266,7 +271,12 @@ describe('考勤规则列表', () => {
     await wrapper.get('button[aria-label="查看销售一部考勤规则"]').trigger('click')
     await flushPromises()
     expect(dialog().text()).toContain('本部门当月已有员工确认考勤')
-    expect(wrapper.get('input[aria-label="应出勤天数"]').attributes('disabled')).toBeDefined()
+    expect(dialog().find('input[aria-label="应出勤天数"]').exists()).toBe(false)
+    expect(
+      dialog()
+        .findAll('dt')
+        .map((field) => field.text()),
+    ).toContain('应出勤天数')
     expect(dialog().text()).not.toContain('保存修改')
     expect(api.saveAttendanceRule).not.toHaveBeenCalled()
   })
@@ -287,7 +297,12 @@ describe('考勤规则列表', () => {
     await click('保存修改')
     expect(dialog().text()).toContain('对应规则已锁定')
     expect(dialog().text()).toContain('查看考勤规则')
-    expect(wrapper.get('input[aria-label="应出勤天数"]').attributes('disabled')).toBeDefined()
+    expect(dialog().find('input[aria-label="应出勤天数"]').exists()).toBe(false)
+    expect(
+      dialog()
+        .findAll('dt')
+        .map((field) => field.text()),
+    ).toContain('应出勤天数')
   })
   it('blocks a duplicate discovered after opening the create dialog', async () => {
     await open()
@@ -496,7 +511,12 @@ describe('考勤规则列表', () => {
     await wrapper.get('button[aria-label="查看公司默认考勤规则"]').trigger('click')
     await flushPromises()
     expect(dialog().text()).not.toContain('保存规则')
-    expect(wrapper.get('input[aria-label="应出勤天数"]').attributes('disabled')).toBeDefined()
+    expect(dialog().find('input[aria-label="应出勤天数"]').exists()).toBe(false)
+    expect(
+      dialog()
+        .findAll('dt')
+        .map((field) => field.text()),
+    ).toContain('应出勤天数')
     await click('关闭')
     vi.mocked(api.getAttendanceRules).mockRejectedValueOnce(new Error('列表暂不可用'))
     await click('刷新')

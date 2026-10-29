@@ -3,7 +3,7 @@
     v-model="visible"
     :title="`生成月度薪酬 · ${month}`"
     width="min(1180px, 96vw)"
-    class="payroll-preparation-dialog"
+    class="payroll-preparation-dialog business-detail-panel"
     :close-on-click-modal="false"
     :close-on-press-escape="!busy"
     :show-close="!busy"
@@ -23,20 +23,19 @@
         aria-label="核算月份"
         @update:model-value="emit('update:month', $event)"
       />
-      <el-select
+      <el-tree-select
         v-model="selectedDepartment"
+        :data="departmentOptions"
+        :props="{ label: 'name', children: 'children', disabled: 'disabled' }"
+        node-key="id"
+        check-strictly
+        filterable
+        default-expand-all
         clearable
         :disabled="busy"
         placeholder="全部部门"
         aria-label="核算部门"
-      >
-        <el-option
-          v-for="department in departmentOptions"
-          :key="department.id"
-          :value="department.id"
-          :label="department.name"
-        />
-      </el-select>
+      />
       <el-select
         v-model="roleFilter"
         clearable
@@ -52,11 +51,20 @@
         />
       </el-select>
       <el-input
-        v-model="search"
-        placeholder="员工姓名／编号"
+        v-model="employeeNameFilter"
+        aria-label="准备员工姓名"
+        placeholder="员工姓名"
         clearable
         :disabled="busy"
         style="width: 220px"
+      />
+      <el-input
+        v-model="employeeCodeFilter"
+        aria-label="准备员工编号"
+        placeholder="员工编号"
+        clearable
+        :disabled="busy"
+        style="width: 200px"
       />
       <el-select v-model="filter" :disabled="busy" style="width: 150px" aria-label="准备状态"
         ><el-option label="全部员工" value="all" /><el-option
@@ -92,13 +100,27 @@
         width="46"
         :selectable="(row: PayrollPreparationEmployee) => !busy && !row.locked"
       />
-      <el-table-column label="员工" min-width="180"
-        ><template #default="{ row }"
-          >{{ row.employeeName }}
-          <div class="hint">{{ row.employeeCode }}</div></template
-        ></el-table-column
-      >
-      <el-table-column prop="departmentName" label="部门" min-width="130" />
+      <el-table-column
+        prop="employeeName"
+        label="员工姓名"
+        min-width="130"
+        fixed="left"
+        show-overflow-tooltip
+        :formatter="displayCell"
+      />
+      <el-table-column
+        prop="employeeCode"
+        label="员工编号"
+        min-width="170"
+        show-overflow-tooltip
+        :formatter="displayCell"
+      />
+      <el-table-column
+        prop="departmentName"
+        label="部门"
+        min-width="130"
+        :formatter="displayCell"
+      />
       <el-table-column label="薪资类别" width="120"
         ><template #default="{ row }">{{
           salaryRoleLabel(row.payrollCategory)
@@ -109,12 +131,12 @@
           row.payrollStatus ? costLabel('PAYROLL_STATUS', row.payrollStatus) : '尚未生成'
         }}</template></el-table-column
       >
-      <el-table-column label="入职 / 离职日期" width="155">
-        <template #default="{ row }">
-          <div>入职：{{ row.entryDate || '未维护' }}</div>
-          <div class="hint">离职：{{ row.leaveDate || '—' }}</div>
-        </template>
-      </el-table-column>
+      <el-table-column label="入职日期" width="125"
+        ><template #default="{ row }">{{ row.entryDate || '-' }}</template></el-table-column
+      >
+      <el-table-column label="离职日期" width="125"
+        ><template #default="{ row }">{{ row.leaveDate || '-' }}</template></el-table-column
+      >
       <el-table-column label="说明" min-width="200"
         ><template #default="{ row }">{{
           [
@@ -151,9 +173,14 @@
         人。每人工资独立保存；离开页面会停止后续处理，已生成结果保留，可从列表继续核对或重算。
       </p>
       <el-table :data="outcomes" max-height="210" border
-        ><el-table-column prop="name" label="员工" width="140" /><el-table-column
+        ><el-table-column
+          prop="name"
+          label="员工"
+          width="140"
+          :formatter="displayCell" /><el-table-column
           prop="message"
           label="生成结果"
+          :formatter="displayCell"
       /></el-table>
     </div>
     <template #footer>
@@ -181,6 +208,9 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
+import { displayBusinessLabel as costLabel } from '@/utils/business-display'
+import { displayCell } from '@/utils/business-display'
+import { departmentScopeTree } from '@/utils/hr-department-tree'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { type TableInstance } from 'element-plus'
 import { errorMessage } from '@/api/core/error'
@@ -194,7 +224,7 @@ import {
 import PayrollPreviewResults from './PayrollPreviewResults.vue'
 import { eligiblePayrollEmployees, runPayrollEmployees } from '@/utils/payroll-workflow'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
-import { costLabel } from '../../cost/cost-dictionaries'
+
 const salaryRoles: Record<string, string> = {
   SALES: '销售',
   CITY_MANAGER: '城市总',
@@ -202,7 +232,14 @@ const salaryRoles: Record<string, string> = {
   HEADQUARTERS: '总部',
 }
 const salaryRoleLabel = (role: string) => salaryRoles[role] || '档案待完善'
-const props = defineProps<{ month: string; departmentId?: number }>()
+const props = withDefaults(
+  defineProps<{
+    month: string
+    departmentId?: number
+    departments?: import('@/api/core/payroll').PayrollDepartment[]
+  }>(),
+  { departments: () => [] },
+)
 const visible = defineModel<boolean>({ default: false })
 const emit = defineEmits<{
   changed: []
@@ -217,11 +254,12 @@ const table = ref<TableInstance>(),
   error = ref(''),
   busy = ref(false),
   filter = ref('all'),
-  search = ref('')
+  employeeNameFilter = ref(''),
+  employeeCodeFilter = ref('')
 const selectedDepartment = ref(props.departmentId)
 const roleFilter = ref('')
 const onlySelected = ref(false)
-const departmentOptions = computed(() => [
+const employeeDepartments = computed(() => [
   ...new Map(
     rows.value
       .filter((e) => e.departmentId != null)
@@ -231,6 +269,20 @@ const departmentOptions = computed(() => [
       ]),
   ).values(),
 ])
+const departmentOptions = computed(() => {
+  const rows = new Map(props.departments.map((department) => [department.id, department]))
+  employeeDepartments.value.forEach((department) => {
+    if (!rows.has(department.id))
+      rows.set(department.id, { ...department, parentId: null, sortOrder: 0 })
+  })
+  const nodes = departmentScopeTree(
+    [...rows.values()],
+    employeeDepartments.value.map((department) => department.id),
+  )
+  const options = (branch: typeof nodes): ((typeof nodes)[number] & { disabled: boolean })[] =>
+    branch.map((node) => ({ ...node, disabled: !node.selected, children: options(node.children) }))
+  return options(nodes)
+})
 const scoped = computed(() =>
   rows.value.filter(
     (e) =>
@@ -243,7 +295,10 @@ const selectedEligible = computed(() => eligiblePayrollEmployees(selected.value)
 const filtered = computed(() =>
   scoped.value.filter(
     (e) =>
-      (!search.value || (e.employeeName + e.employeeCode).includes(search.value)) &&
+      (!employeeNameFilter.value.trim() ||
+        e.employeeName.includes(employeeNameFilter.value.trim())) &&
+      (!employeeCodeFilter.value.trim() ||
+        e.employeeCode.includes(employeeCodeFilter.value.trim())) &&
       (!onlySelected.value ||
         selected.value.some((person) => person.employeeCode === e.employeeCode)) &&
       (filter.value === 'all' ||

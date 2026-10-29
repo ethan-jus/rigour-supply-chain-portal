@@ -43,10 +43,13 @@ beforeEach(async () => {
     attachTo: document.body,
     global: {
       plugins: [ElementPlus],
-      stubs: { teleport: true,
+      stubs: {
+        teleport: true,
         ElSelect: { template: '<div><slot /></div>' },
         ElOption: true,
-        ElPagination: true, SupplyPageTitle: { template: '<h1><slot /></h1>' } },
+        ElPagination: true,
+        SupplyPageTitle: { template: '<h1><slot /></h1>' },
+      },
     },
   })
   await flushPromises()
@@ -96,10 +99,17 @@ it('编辑保留编码和版本，更新岗位职责', async () => {
     '1',
     expect.objectContaining({ positionCode: 'SALES', revision: 2, remark: '客户跟进与销售' }),
   )
-  expect(wrapper.text()).toContain('2026-09-16 08:00:00')
+  await button('查看').trigger('click')
+  await flushPromises()
+  const detail = wrapper.findAll('.el-dialog').find((d) => d.text().includes('岗位详情'))!
+  expect(detail.text()).toContain('2026-09-16 08:00:00')
+  expect(detail.text()).toContain('张三')
+  expect(detail.findAll('input, textarea')).toHaveLength(0)
 })
 it('确认删除携带版本，刷新列表', async () => {
-  vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+  vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue(
+    'confirm' as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+  )
   await button('删除').trigger('click')
   await flushPromises()
   expect(deleteHrPosition).toHaveBeenCalledWith('1', 2)

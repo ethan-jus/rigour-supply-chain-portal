@@ -48,14 +48,18 @@
         class="business-table"
         :empty-text="loadError ? '管辖范围加载失败，请刷新重试' : '暂无匹配的城市总'"
       >
-        <el-table-column label="城市总" min-width="160">
+        <el-table-column label="城市总" min-width="160" fixed="left">
           <template #default="{ row }"
             ><strong>{{ employeeName(row.employeeCode) }}</strong></template
           >
         </el-table-column>
         <el-table-column label="当前管辖城市" min-width="300">
           <template #default="{ row }">
-            <span v-if="row.cities.length" class="city-names">{{ cityNames(row.cities) }}</span>
+            <SupplyScopeSummary
+              v-if="row.cities.length"
+              :items="cityNames(row.cities)"
+              label="城市"
+            />
             <span v-else class="muted">暂无在管城市</span>
           </template>
         </el-table-column>
@@ -84,6 +88,7 @@
 </template>
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import SupplyScopeSummary from '@/components/supply/SupplyScopeSummary.vue'
 import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
 import { getPayrollRules, type PayrollRule, type PayrollEmployee } from '@/api/core/payroll'
 import { errorMessage } from '@/api/core/error'
@@ -149,7 +154,7 @@ const visibleGroups = computed(() =>
   groups.value.slice((currentPage.value - 1) * 10, currentPage.value * 10),
 )
 function cityNames(cities: { name: string }[]) {
-  return cities.map((city) => city.name).join('，')
+  return cities.map((city) => city.name)
 }
 function search() {
   appliedManager.value = managerFilter.value

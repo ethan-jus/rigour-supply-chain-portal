@@ -1,5 +1,6 @@
 <template>
   <el-dialog
+    class="business-detail-panel"
     v-model="visible"
     :title="title"
     width="min(900px, 95vw)"
@@ -35,12 +36,20 @@
       }}
     </p>
     <el-table :data="items" row-key="record.id" border max-height="420">
-      <el-table-column label="员工" width="140"
-        ><template #default="{ row }"
-          >{{ row.record.employeeName }}
-          <div class="field-hint">{{ row.record.month }}</div></template
-        ></el-table-column
-      >
+      <el-table-column
+        prop="record.employeeName"
+        label="员工姓名"
+        width="130"
+        fixed="left"
+        :formatter="displayCell"
+      />
+      <el-table-column
+        prop="record.employeeCode"
+        label="员工编号"
+        min-width="165"
+        :formatter="displayCell"
+      />
+      <el-table-column prop="record.month" label="薪酬月份" width="115" :formatter="displayCell" />
       <el-table-column label="本月核算金额" width="140" align="right"
         ><template #default="{ row }">{{
           payrollMoney(row.record.calculation.netPay)
@@ -56,7 +65,7 @@
           ></template
         ></el-table-column
       >
-      <el-table-column prop="message" label="处理说明" min-width="260" />
+      <el-table-column prop="message" label="处理说明" min-width="260" :formatter="displayCell" />
     </el-table>
     <template #footer>
       <el-button v-if="running" :disabled="stopping" @click="stopping = true">{{
@@ -70,13 +79,14 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
+import { displayCell, displayAmount as payrollMoney } from '@/utils/business-display'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { PayrollRecord } from '@/api/core/payroll'
 import type { PayrollBatchItem } from '@/api/core/payroll/models/PayrollBatchItem'
 import { payrollBatchSkipReason, runPayrollBatch } from '@/utils/payroll-batch'
-import { payrollMoney } from '@/utils/payroll-workflow'
+
 const emit = defineEmits<{ changed: []; busy: [value: boolean] }>()
 const visible = ref(false),
   running = ref(false),

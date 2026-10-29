@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { displayCell } from '@/utils/business-display'
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PayrollRuleReviewPanel from './components/PayrollRuleReviewPanel.vue'
@@ -303,9 +304,11 @@ function changePage(value: number) {
   page.value = value
   void load()
 }
+const confirmationTab = ref('attendance')
 function edit(row: AttendanceRow) {
   if (row.attendanceStatus !== 'PENDING') return
   selected.value = row
+  confirmationTab.value = 'attendance'
   editMonth.value = data.value!.month
   reason.value = row.reason
   missingCheckinsOverride.value = row.assessmentOverride?.missingCheckins ?? undefined
@@ -327,6 +330,7 @@ function showDays(row: AttendanceRow) {
 async function save() {
   if (!selected.value || selected.value.attendanceStatus !== 'PENDING' || saving.value) return
   editorError.value = ''
+  confirmationTab.value = 'attendance'
   if (
     [actualOverride.value, absentOverride.value].some(
       (value) =>
@@ -353,6 +357,7 @@ async function save() {
     return
   }
   if (!leaveOptions.value.some((option) => option.value === leaveType.value)) {
+    confirmationTab.value = 'exceptions'
     editorError.value = '请选择当前启用的请假类型'
     return
   }
@@ -529,14 +534,26 @@ onMounted(() => {
         <el-table-column label="员工" min-width="170" fixed="left"
           ><template #default="{ row }"
             ><div>{{ row.employeeName }}</div>
-            <span class="hint">{{ row.employeeCode }}</span></template
-          ></el-table-column
+          </template></el-table-column
         >
-        <el-table-column prop="departmentName" label="部门" min-width="150" show-overflow-tooltip />
+        <el-table-column
+          prop="employeeCode"
+          label="员工编号"
+          min-width="150"
+          show-overflow-tooltip
+          :formatter="displayCell"
+        />
+        <el-table-column
+          prop="departmentName"
+          label="部门"
+          min-width="150"
+          show-overflow-tooltip
+          :formatter="displayCell"
+        />
         <el-table-column label="应出勤天数" width="120" align="right"
           ><template #default="{ row }">
             <div>
-              {{ row.ruleSource === 'DISABLED' ? '规则已停用' : (row.expectedDays ?? '未设置') }}
+              {{ row.ruleSource === 'DISABLED' ? '规则已停用' : (row.expectedDays ?? '-') }}
             </div>
             <span v-if="row.expectedDays != null" class="hint">{{
               row.ruleSource === 'DEPARTMENT' ? '本部门规则' : '公司默认'
@@ -560,7 +577,7 @@ onMounted(() => {
         >
         <el-table-column label="缺勤天数" width="120" align="right"
           ><template #default="{ row }">
-            <div>{{ row.absentDays ?? '—' }}</div>
+            <div>{{ row.absentDays ?? '-' }}</div>
             <div v-if="row.absentDaysOverride != null" class="manual-hint">人工调整</div>
           </template></el-table-column
         >
@@ -590,8 +607,13 @@ onMounted(() => {
             >
           </template>
         </el-table-column>
-        <el-table-column prop="reason" label="考勤核定说明" min-width="240" show-overflow-tooltip
-          ><template #default="{ row }">{{ row.reason || '—' }}</template></el-table-column
+        <el-table-column
+          prop="reason"
+          label="考勤核定说明"
+          min-width="240"
+          show-overflow-tooltip
+          :formatter="displayCell"
+          ><template #default="{ row }">{{ row.reason || '-' }}</template></el-table-column
         >
         <el-table-column v-if="can('hr:attendance:read')" label="操作" width="190" fixed="right"
           ><template #default="{ row }"
@@ -640,222 +662,250 @@ onMounted(() => {
       v-model="editing"
       title="考勤确认"
       class="attendance-confirm-dialog"
-      width="min(780px, 94vw)"
-      top="5vh"
+      width="min(1060px, 96vw)"
+      top="3vh"
       :close-on-click-modal="!saving"
       :close-on-press-escape="!saving"
       :show-close="!saving"
     >
-      <p>{{ editMonth }} · {{ selected?.employeeName }}（{{ selected?.employeeCode }}）</p>
+      <header class="attendance-person-header">
+        <div>
+          <h2>{{ selected?.employeeName }}</h2>
+          <span>{{ selected?.employeeCode }} · {{ selected?.departmentName || '-' }}</span>
+        </div>
+        <el-tag>{{ editMonth }}</el-tag>
+      </header>
       <el-alert v-if="editorError" :title="editorError" type="error" :closable="false" />
-      <div class="attendance-reference">
-        <span
-          >应出勤：<strong>{{ selected?.expectedDays ?? '未设置' }}</strong
-          >{{ selected?.expectedDays != null ? ' 天' : '' }}</span
-        >
-        <span
-          >打卡统计：<strong>{{
-            selected?.punchDays ?? sourceLabels[selected?.sourceStatus ?? '']
-          }}</strong
-          >{{ selected?.punchDays != null ? ' 天' : '' }}</span
-        >
+      <div class="attendance-metrics" aria-label="系统考勤统计">
+        <div>
+          <span>应出勤天数</span
+          ><strong>{{ selected?.expectedDays ?? '-' }}<small>天</small></strong>
+        </div>
+        <div>
+          <span>打卡天数</span><strong>{{ selected?.punchDays ?? '-' }}<small>天</small></strong>
+        </div>
+        <div>
+          <span>系统缺卡</span
+          ><strong>{{ assessment?.missingCheckins ?? '-' }}<small>次</small></strong>
+        </div>
+        <div>
+          <span>系统缺拜访</span
+          ><strong>{{ assessment?.missingVisits ?? '-' }}<small>次</small></strong>
+        </div>
       </div>
-      <AttendanceEmploymentPeriod
-        :month="editMonth"
-        :entry-date="selected?.entryDate"
-        :leave-date="selected?.leaveDate"
-      />
-      <AttendanceAssessmentPanel
-        :assessment="assessment"
-        :loading="assessmentLoading"
-        :error="assessmentError"
-      />
-      <p class="hint">
-        销售底薪及补助按“（底薪＋补助）÷应出勤×实际出勤”折算；绩效不按出勤比例折减，请假须登记具体时段才免除该时段考核。
-      </p>
       <el-form label-position="top" class="attendance-editor" @submit.prevent="save">
-        <el-divider content-position="left">缺卡与缺拜访核定</el-divider>
-        <p class="field-hint">
-          上方为系统统计；下方可填写核定后的缺失次数（填0表示无缺失）。留空沿用系统统计，确认后用于绩效核算。
-        </p>
-        <div class="attendance-editor-days">
-          <el-form-item label="核定缺卡次数">
-            <el-input-number
-              v-model="missingCheckinsOverride"
-              :min="0"
-              :max="100000"
-              :precision="0"
-              :disabled="saving"
-              placeholder="使用系统统计"
-              aria-label="核定缺卡次数"
-            />
-            <el-button
-              link
-              type="primary"
-              :disabled="saving || missingCheckinsOverride == null"
-              @click="missingCheckinsOverride = undefined"
-              >恢复缺卡统计</el-button
-            >
-          </el-form-item>
-          <el-form-item label="核定缺拜访次数">
-            <el-input-number
-              v-model="missingVisitsOverride"
-              :min="0"
-              :max="100000"
-              :precision="0"
-              :disabled="saving"
-              placeholder="使用系统统计"
-              aria-label="核定缺拜访次数"
-            />
-            <el-button
-              link
-              type="primary"
-              :disabled="saving || missingVisitsOverride == null"
-              @click="missingVisitsOverride = undefined"
-              >恢复缺拜访统计</el-button
-            >
-          </el-form-item>
-        </div>
-        <el-form-item v-if="hasAssessmentOverride" label="次数核定说明" required>
-          <el-input
-            v-model="assessmentReason"
-            type="textarea"
-            :rows="2"
-            maxlength="500"
-            show-word-limit
-            :disabled="saving"
-            aria-label="次数核定说明"
-            placeholder="填写调整次数及核对依据"
-          />
-        </el-form-item>
-        <el-divider content-position="left">出勤天数核定</el-divider>
-        <div class="attendance-editor-days">
-          <el-form-item label="实际出勤天数">
-            <div class="day-input">
-              <el-input-number
-                :key="`actual-${saving}`"
-                v-model="actualOverride"
-                :min="0"
-                :max="maxDays"
-                :step="0.5"
-                :precision="1"
+        <el-tabs v-model="confirmationTab" class="attendance-content-tabs">
+          <el-tab-pane label="考勤核定" name="attendance">
+            <section class="attendance-form-section">
+              <h3>出勤天数</h3>
+              <p class="attendance-section-hint">留空沿用系统统计；天数支持 0.5 天。</p>
+              <div class="attendance-editor-days">
+                <el-form-item label="实际出勤天数">
+                  <div class="day-input">
+                    <el-input-number
+                      :key="`actual-${saving}`"
+                      v-model="actualOverride"
+                      :min="0"
+                      :max="maxDays"
+                      :step="0.5"
+                      :precision="1"
+                      :disabled="saving"
+                      controls-position="right"
+                      placeholder="使用打卡统计"
+                      aria-label="实际出勤天数"
+                    />
+                    <span>天</span>
+                  </div>
+                  <el-button
+                    link
+                    type="primary"
+                    :disabled="saving || actualOverride == null"
+                    @click="actualOverride = undefined"
+                    >恢复打卡统计</el-button
+                  >
+                </el-form-item>
+                <el-form-item label="缺勤天数">
+                  <div class="day-input">
+                    <el-input-number
+                      :key="`absent-${saving}`"
+                      v-model="absentOverride"
+                      :min="0"
+                      :max="maxDays"
+                      :step="0.5"
+                      :precision="1"
+                      :disabled="saving"
+                      controls-position="right"
+                      placeholder="使用系统计算"
+                      aria-label="缺勤天数"
+                    />
+                    <span>天</span>
+                  </div>
+                  <div class="absence-reference">
+                    <span class="hint"
+                      >系统计算：{{ autoAbsent == null ? '暂未计算' : `${autoAbsent} 天` }}</span
+                    >
+                    <el-button
+                      link
+                      type="primary"
+                      :disabled="saving || absentOverride == null"
+                      @click="absentOverride = undefined"
+                      >恢复计算</el-button
+                    >
+                  </div>
+                </el-form-item>
+              </div>
+            </section>
+            <section class="attendance-form-section">
+              <h3>缺卡与缺拜访</h3>
+              <p class="attendance-section-hint">留空沿用系统统计；填 0 表示无缺失。</p>
+              <div class="attendance-editor-days">
+                <el-form-item label="核定缺卡次数">
+                  <el-input-number
+                    v-model="missingCheckinsOverride"
+                    :min="0"
+                    :max="100000"
+                    :precision="0"
+                    :disabled="saving"
+                    placeholder="使用系统统计"
+                    aria-label="核定缺卡次数"
+                    controls-position="right"
+                  />
+                  <el-button
+                    link
+                    type="primary"
+                    :disabled="saving || missingCheckinsOverride == null"
+                    @click="missingCheckinsOverride = undefined"
+                    >恢复缺卡统计</el-button
+                  >
+                </el-form-item>
+                <el-form-item label="核定缺拜访次数">
+                  <el-input-number
+                    v-model="missingVisitsOverride"
+                    :min="0"
+                    :max="100000"
+                    :precision="0"
+                    :disabled="saving"
+                    placeholder="使用系统统计"
+                    aria-label="核定缺拜访次数"
+                    controls-position="right"
+                  />
+                  <el-button
+                    link
+                    type="primary"
+                    :disabled="saving || missingVisitsOverride == null"
+                    @click="missingVisitsOverride = undefined"
+                    >恢复缺拜访统计</el-button
+                  >
+                </el-form-item>
+              </div>
+              <el-form-item v-if="hasAssessmentOverride" label="次数核定说明" required>
+                <el-input
+                  v-model="assessmentReason"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  show-word-limit
+                  :disabled="saving"
+                  aria-label="次数核定说明"
+                  placeholder="填写调整次数及核对依据"
+                />
+              </el-form-item>
+            </section>
+            <section class="attendance-form-section">
+              <h3>核定依据</h3>
+              <el-form-item label="考勤核定说明" :required="reasonRequired">
+                <el-input
+                  v-model="reason"
+                  type="textarea"
+                  :rows="3"
+                  maxlength="500"
+                  show-word-limit
+                  :disabled="saving"
+                  aria-label="考勤核定说明"
+                  :aria-required="reasonRequired"
+                  :placeholder="
+                    reasonRequired
+                      ? '请填写本月请假或出勤核定依据'
+                      : '选填：已填写时段说明时，无需重复填写'
+                  "
+                />
+              </el-form-item>
+            </section>
+          </el-tab-pane>
+          <el-tab-pane label="请假与异常时段" name="exceptions"
+            ><section class="attendance-form-section">
+              <el-form-item label="请假类型" required>
+                <el-select
+                  v-model="leaveType"
+                  :loading="dictionaryLoading"
+                  :disabled="saving || dictionaryLoading"
+                  aria-label="请假类型"
+                  placeholder="请选择请假类型"
+                >
+                  <el-option
+                    v-if="!leaveOptions.some((option) => option.value === leaveType)"
+                    :value="leaveType"
+                    :label="leaveLabel(leaveType)"
+                    disabled
+                  />
+                  <el-option
+                    v-for="option in leaveOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
+                </el-select>
+                <div
+                  v-if="!dictionaryLoading && !leaveOptions.length"
+                  class="department-error"
+                  role="alert"
+                >
+                  <span>请假类型字典暂不可用或没有启用项</span>
+                  <el-button link type="primary" @click="loadLeaveTypes(true)">重载字典</el-button>
+                </div>
+                <p class="field-hint">
+                  仅作本月请假分类；免考核范围由下方登记的具体请假、调休时段决定，不自动改变出勤天数。
+                </p>
+              </el-form-item>
+              <p v-if="!showExceptionEditor" class="field-hint">
+                未登记考勤异常。
+                <el-button link type="primary" :disabled="saving" @click="exceptionExpanded = true">
+                  登记缺卡或活动报备
+                </el-button>
+              </p>
+              <AttendanceExceptionEditor
+                v-show="showExceptionEditor"
+                :key="`${selected?.employeeCode}-${editMonth}`"
+                v-model="exceptions"
+                :month="editMonth"
                 :disabled="saving"
-                controls-position="right"
-                placeholder="使用打卡统计"
-                aria-label="实际出勤天数"
-              />
-              <span>天</span>
-            </div>
-            <el-button
-              link
-              type="primary"
-              :disabled="saving || actualOverride == null"
-              @click="actualOverride = undefined"
-              >恢复打卡统计</el-button
+              /></section
+          ></el-tab-pane>
+          <el-tab-pane label="统计依据" name="evidence">
+            <AttendanceEmploymentPeriod
+              :month="editMonth"
+              :entry-date="selected?.entryDate"
+              :leave-date="selected?.leaveDate"
+            />
+            <AttendanceAssessmentPanel
+              :assessment="assessment"
+              :loading="assessmentLoading"
+              :error="assessmentError"
+              :show-totals="false"
+            />
+            <el-collapse
+              ><el-collapse-item title="核定与薪酬口径说明" name="policy"
+                ><p class="hint">
+                  销售底薪及补助按“（底薪＋补助）÷应出勤×实际出勤”折算；绩效不按出勤比例折减，请假须登记具体时段才免除该时段考核。
+                </p>
+                <p class="hint">
+                  人工填写的缺勤独立生效；请假类型不自动折算天数。确认后保存本次结果。有员工考勤权限的人员可填写原因撤销确认，重新核定并再次确认。
+                </p></el-collapse-item
+              ></el-collapse
             >
-          </el-form-item>
-          <el-form-item label="缺勤天数">
-            <div class="day-input">
-              <el-input-number
-                :key="`absent-${saving}`"
-                v-model="absentOverride"
-                :min="0"
-                :max="maxDays"
-                :step="0.5"
-                :precision="1"
-                :disabled="saving"
-                controls-position="right"
-                placeholder="使用系统计算"
-                aria-label="缺勤天数"
-              />
-              <span>天</span>
-            </div>
-            <div class="absence-reference">
-              <span class="hint"
-                >系统计算：{{ autoAbsent == null ? '暂未计算' : `${autoAbsent} 天` }}</span
-              >
-              <el-button
-                link
-                type="primary"
-                :disabled="saving || absentOverride == null"
-                @click="absentOverride = undefined"
-                >恢复计算</el-button
-              >
-            </div>
-          </el-form-item>
-        </div>
-        <el-form-item label="请假类型" required>
-          <el-select
-            v-model="leaveType"
-            :loading="dictionaryLoading"
-            :disabled="saving || dictionaryLoading"
-            aria-label="请假类型"
-            placeholder="请选择请假类型"
-          >
-            <el-option
-              v-if="!leaveOptions.some((option) => option.value === leaveType)"
-              :value="leaveType"
-              :label="leaveLabel(leaveType)"
-              disabled
-            />
-            <el-option
-              v-for="option in leaveOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-          <div
-            v-if="!dictionaryLoading && !leaveOptions.length"
-            class="department-error"
-            role="alert"
-          >
-            <span>请假类型字典暂不可用或没有启用项</span>
-            <el-button link type="primary" @click="loadLeaveTypes(true)">重载字典</el-button>
-          </div>
-          <p class="field-hint">
-            仅作本月请假分类；免考核范围由下方登记的具体请假、调休时段决定，不自动改变出勤天数。
-          </p>
-        </el-form-item>
-        <p v-if="!showExceptionEditor" class="field-hint">
-          未登记考勤异常。
-          <el-button link type="primary" :disabled="saving" @click="exceptionExpanded = true">
-            登记缺卡或活动报备
-          </el-button>
-        </p>
-        <AttendanceExceptionEditor
-          v-show="showExceptionEditor"
-          :key="`${selected?.employeeCode}-${editMonth}`"
-          v-model="exceptions"
-          :month="editMonth"
-          :disabled="saving"
-        />
-        <el-form-item label="考勤核定说明" :required="reasonRequired">
-          <el-input
-            v-model="reason"
-            type="textarea"
-            :rows="3"
-            maxlength="500"
-            show-word-limit
-            :disabled="saving"
-            aria-label="考勤核定说明"
-            :aria-required="reasonRequired"
-            :placeholder="
-              reasonRequired
-                ? '请填写本月请假或出勤核定依据'
-                : '选填：已填写时段说明时，无需重复填写'
-            "
-          />
-        </el-form-item>
+          </el-tab-pane>
+        </el-tabs>
       </el-form>
-      <el-alert
-        title="确认后保存本次结果。有员工考勤权限的人员可填写原因撤销确认，重新核定并再次确认。"
-        type="warning"
-        :closable="false"
-      />
-      <p class="hint">
-        天数支持 0.5 天，留空使用系统计算。人工填写的缺勤独立生效；请假类型不自动折算天数。
-      </p>
       <template #footer>
         <el-button :disabled="saving" @click="editing = false">取消</el-button>
         <el-button
@@ -871,7 +921,7 @@ onMounted(() => {
       v-model="detailOpen"
       title="考勤详情"
       width="min(1000px, 94vw)"
-      class="attendance-detail-dialog"
+      class="attendance-detail-dialog business-detail-panel"
     >
       <AttendanceDetail
         v-if="detailRow"
@@ -892,10 +942,15 @@ onMounted(() => {
         :adjustment="daysRow?.assessmentOverride"
       />
       <el-table v-if="daysRow?.exceptions?.length" :data="daysRow.exceptions" border>
-        <el-table-column prop="start" label="异常开始时间" /><el-table-column
+        <el-table-column
+          prop="start"
+          label="异常开始时间"
+          :formatter="displayCell"
+        /><el-table-column
           prop="end"
           label="结束时间（不含）"
-        /><el-table-column prop="reason" label="核定说明" />
+          :formatter="displayCell"
+        /><el-table-column prop="reason" label="核定说明" :formatter="displayCell" />
       </el-table>
       <el-empty v-if="!daysRow?.dates.length" description="本月暂无已提交的打卡记录" />
     </el-dialog>
@@ -1010,5 +1065,128 @@ onMounted(() => {
 }
 .el-dialog .hint {
   margin-top: 10px;
+}
+
+.attendance-person-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 0 14px;
+}
+.attendance-person-header h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  color: #172033;
+}
+.attendance-person-header span {
+  color: #64748b;
+  font-size: 13px;
+}
+.attendance-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.attendance-metrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+.attendance-metrics span {
+  color: #64748b;
+  font-size: 12px;
+}
+.attendance-metrics strong {
+  font-size: 23px;
+  line-height: 28px;
+  font-weight: 600;
+  color: #172033;
+}
+.attendance-metrics small {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #64748b;
+}
+.attendance-form-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 16px 20px;
+  margin-bottom: 14px;
+  background: #fff;
+}
+.attendance-form-section h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.attendance-section-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 14px;
+}
+.attendance-content-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
+}
+.attendance-editor-days :deep(.el-input-number) {
+  width: 100%;
+}
+.attendance-editor-days :deep(.el-form-item__content) {
+  display: block;
+}
+.attendance-editor-days .day-input {
+  display: flex;
+  gap: 8px;
+}
+.attendance-editor-days .day-input :deep(.el-input-number) {
+  flex: 1;
+  min-width: 0;
+}
+.attendance-editor-days .el-button {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+:global(.attendance-confirm-dialog .el-dialog__header),
+:global(.attendance-confirm-dialog .el-dialog__footer) {
+  flex-shrink: 0;
+}
+:global(.attendance-confirm-dialog .el-dialog__body) {
+  min-height: 0;
+}
+@media (max-width: 700px) {
+  .attendance-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .attendance-form-section {
+    padding: 14px;
+  }
+}
+.attendance-content-tabs .attendance-form-section {
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+.attendance-content-tabs .attendance-form-section h3 {
+  margin-bottom: 6px;
+}
+.attendance-content-tabs .attendance-section-hint {
+  margin-bottom: 10px;
+}
+.attendance-content-tabs .attendance-editor-days {
+  gap: 16px;
+}
+.attendance-content-tabs :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+.attendance-content-tabs .day-input {
+  margin-bottom: 2px;
+}
+.attendance-content-tabs .attendance-editor-days .el-button {
+  margin-top: 2px;
 }
 </style>

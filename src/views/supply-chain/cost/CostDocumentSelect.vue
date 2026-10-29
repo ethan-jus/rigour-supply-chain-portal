@@ -28,7 +28,13 @@
       {{ failure }} <el-button link type="primary" @click="load(0)">重新加载</el-button>
     </div>
     <el-button link type="primary" @click="openMore">更多查询</el-button>
-    <el-dialog v-model="visible" title="选择来源单据" width="min(1000px, 95vw)" append-to-body>
+    <el-dialog
+      v-model="visible"
+      title="选择来源单据"
+      class="business-detail-panel"
+      width="min(1000px, 95vw)"
+      append-to-body
+    >
       <el-input
         v-model="keyword"
         placeholder="单号、供应商、客户或仓库"
@@ -47,7 +53,12 @@
               @change="toggle(row as CostSource)"
             /> </template
         ></el-table-column>
-        <el-table-column prop="documentNo" label="单据号" min-width="170" />
+        <el-table-column
+          prop="documentNo"
+          label="单据号"
+          min-width="170"
+          :formatter="displayCell"
+        />
         <el-table-column label="来源" width="110"
           ><template #default="{ row }">{{
             externalSourceName(row.sourceSystem)
@@ -58,14 +69,24 @@
             row.documentDate || '日期待核对'
           }}</template></el-table-column
         >
-        <el-table-column prop="senderName" label="发货方" min-width="150" />
-        <el-table-column prop="receiverName" label="收货方" min-width="150" />
+        <el-table-column
+          prop="senderName"
+          label="发货方"
+          min-width="150"
+          :formatter="displayCell"
+        />
+        <el-table-column
+          prop="receiverName"
+          label="收货方"
+          min-width="150"
+          :formatter="displayCell"
+        />
         <el-table-column label="费用归属" width="130"
           ><template #default="{ row }">{{
             cityName(row as CostSource)
           }}</template></el-table-column
         >
-        <el-table-column prop="statusCode" label="单据状态" width="120" />
+        <el-table-column prop="statusCode" label="单据状态" width="120" :formatter="displayCell" />
       </el-table>
       <div class="pager">
         <el-button :disabled="loading || offset === 0" @click="load(Math.max(0, offset - 50))"
@@ -83,6 +104,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { displayCell } from '@/utils/business-display'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { CostSource } from '@/api/core/cost'
 import { errorMessage } from '@/api/core/error'

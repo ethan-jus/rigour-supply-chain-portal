@@ -1,9 +1,36 @@
 import { randomId } from '@/utils/random-id'
 import type { PayrollCommissionRow } from '@/api/core/payroll-scheme/models/PayrollCommissionRow'
+import type { PayrollProduct } from '@/api/core/payroll'
 import type { PayrollSchemeCommissionRule } from '@/api/core/payroll-scheme/models/PayrollSchemeCommissionRule'
 import { newSchemeCommission } from './payroll-scheme'
 
-const nameOf = (rule: PayrollSchemeCommissionRule) =>
+export function commissionProductRows(
+  rule: Pick<PayrollSchemeCommissionRule, 'name' | 'variantIds'>,
+  products: PayrollProduct[],
+) {
+  if (!rule.variantIds.length)
+    return [
+      {
+        variantId: '',
+        productName: nameOf(rule),
+        specification: null as string | null,
+        categoryId: null as number | null,
+        categoryName: null as string | null,
+      },
+    ]
+  return [...new Set(rule.variantIds.map(String))].map((variantId) => {
+    const product = products.find((item) => String(item.productVariantId) === variantId)
+    return {
+      variantId,
+      productName: product?.productName ?? '',
+      specification: product?.specification ?? null,
+      categoryId: product?.categoryId ?? null,
+      categoryName: product?.categoryName ?? null,
+    }
+  })
+}
+
+const nameOf = (rule: Pick<PayrollSchemeCommissionRule, 'name'>) =>
   rule.name.replace(/\s*(城市总|销售)(提成)?$/, '').trim()
 const scopeKey = (rule: PayrollSchemeCommissionRule) =>
   JSON.stringify([

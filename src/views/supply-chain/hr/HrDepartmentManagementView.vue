@@ -3,24 +3,30 @@
     <header class="page-heading">
       <div>
         <SupplyPageTitle>部门管理</SupplyPageTitle>
-        <p>维护部门和上下级关系，新增员工时可选择所属部门。</p>
       </div>
       <el-button v-if="can('hr:department:create')" type="primary" @click="edit()"
         >新增部门</el-button
       >
     </header>
     <div class="department-toolbar">
-      <el-input
-        v-model="keyword"
-        clearable
-        placeholder="搜索部门名称或编码"
-        aria-label="搜索部门"
-        class="department-search"
-      />
+      <label class="department-filter-field"
+        >部门名称<el-input
+          v-model="keyword"
+          clearable
+          placeholder="请输入部门名称"
+          aria-label="部门名称筛选"
+      /></label>
+      <label class="department-filter-field"
+        >部门编码<el-input
+          v-model="departmentCodeFilter"
+          clearable
+          placeholder="请输入部门编码"
+          aria-label="部门编码筛选"
+      /></label>
       <el-button :disabled="!rows.length" @click="expandAll">展开全部</el-button>
       <el-button :disabled="!rows.length" @click="collapseAll">收起全部</el-button>
       <el-button :loading="loading" @click="load()">刷新</el-button>
-      <span class="department-count">共 {{ rows.length }} 个部门</span>
+      <span class="department-count">部门总数 {{ rows.length }}</span>
     </div>
     <el-alert
       v-if="loadError"
@@ -55,21 +61,19 @@
             <span class="department-name"
               ><el-icon><OfficeBuilding /></el-icon>{{ row.departmentName }}</span
             >
-            <span v-if="row.children.length" class="department-children"
-              >{{ row.children.length }} 个直属下级</span
-            >
           </template>
         </el-table-column>
-        <el-table-column prop="departmentCode" label="部门编码" min-width="210" />
-        <el-table-column prop="sortOrder" label="显示顺序" width="100" />
+        <el-table-column label="直属下级数" width="120" align="right"
+          ><template #default="{ row }">{{ row.children.length }}</template></el-table-column
+        >
+        <el-table-column
+          prop="departmentCode"
+          label="部门编码"
+          min-width="210"
+          :formatter="displayCell"
+        />
         <el-table-column label="负责人" min-width="110" show-overflow-tooltip
-          ><template #default="{ row }">{{ row.leaderName || '—' }}</template></el-table-column
-        >
-        <el-table-column label="联系电话" min-width="150" show-overflow-tooltip
-          ><template #default="{ row }">{{ row.contactPhone || '—' }}</template></el-table-column
-        >
-        <el-table-column label="设立日期" width="120"
-          ><template #default="{ row }">{{ row.establishedDate || '—' }}</template></el-table-column
+          ><template #default="{ row }">{{ row.leaderName || '-' }}</template></el-table-column
         >
         <el-table-column label="状态" width="90">
           <template #default="{ row }"
@@ -78,29 +82,12 @@
             }}</el-tag></template
           >
         </el-table-column>
-        <el-table-column label="创建时间" min-width="180"
-          ><template #default="{ row }">{{
-            formatTime(row.createdTime)
-          }}</template></el-table-column
-        >
-        <el-table-column label="创建人" min-width="140" show-overflow-tooltip
-          ><template #default="{ row }"
-            ><span>{{ actorLabel(row.createdByName, row.createdBy) }}</span></template
-          ></el-table-column
-        >
-        <el-table-column label="修改时间" min-width="180"
-          ><template #default="{ row }">{{
-            formatTime(row.updatedTime)
-          }}</template></el-table-column
-        >
-        <el-table-column label="修改人" min-width="140" show-overflow-tooltip
-          ><template #default="{ row }"
-            ><span>{{ actorLabel(row.updatedByName, row.updatedBy) }}</span></template
-          ></el-table-column
-        >
         <!-- @vue-generic {DepartmentNode} -->
         <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" @click="detailRecord = row as HrDepartment"
+              >查看</el-button
+            >
             <el-button
               v-if="can('hr:department:create')"
               link
@@ -119,9 +106,66 @@
         </el-table-column>
       </el-table>
     </div>
-    <p class="department-help">
-      排序值越小越靠前。同级部门通过“编辑”调整排序；更换上级部门可调整层级。
-    </p>
+    <el-dialog
+      :model-value="!!detailRecord"
+      title="部门详情"
+      width="min(900px, 94vw)"
+      class="business-detail-panel"
+      @close="detailRecord = null"
+    >
+      <dl v-if="detailRecord" class="business-detail-fields">
+        <div>
+          <dt>部门名称</dt>
+          <dd>{{ detailRecord.departmentName }}</dd>
+        </div>
+        <div>
+          <dt>部门编码</dt>
+          <dd>{{ detailRecord.departmentCode }}</dd>
+        </div>
+        <div>
+          <dt>上级部门</dt>
+          <dd>
+            {{ rows.find((row) => row.id === detailRecord?.parentId)?.departmentName || '-' }}
+          </dd>
+        </div>
+        <div>
+          <dt>部门负责人</dt>
+          <dd>{{ detailRecord.leaderName || '-' }}</dd>
+        </div>
+        <div>
+          <dt>联系电话</dt>
+          <dd>{{ detailRecord.contactPhone || '-' }}</dd>
+        </div>
+        <div>
+          <dt>设立日期</dt>
+          <dd>{{ detailRecord.establishedDate || '-' }}</dd>
+        </div>
+        <div>
+          <dt>显示顺序</dt>
+          <dd>{{ detailRecord.sortOrder }}</dd>
+        </div>
+        <div>
+          <dt>部门状态</dt>
+          <dd>{{ detailRecord.statusCode === 'ACTIVE' ? '正常' : '停用' }}</dd>
+        </div>
+        <div>
+          <dt>创建人</dt>
+          <dd>{{ actorLabel(detailRecord.createdByName, detailRecord.createdBy) }}</dd>
+        </div>
+        <div>
+          <dt>创建时间</dt>
+          <dd>{{ formatTime(detailRecord.createdTime) }}</dd>
+        </div>
+        <div>
+          <dt>修改人</dt>
+          <dd>{{ actorLabel(detailRecord.updatedByName, detailRecord.updatedBy) }}</dd>
+        </div>
+        <div>
+          <dt>修改时间</dt>
+          <dd>{{ formatTime(detailRecord.updatedTime) }}</dd>
+        </div>
+      </dl>
+    </el-dialog>
     <el-dialog
       v-model="visible"
       :title="editing !== null ? '编辑部门' : form.parentId !== null ? '新增子部门' : '新增部门'"
@@ -250,8 +294,9 @@
   </section>
 </template>
 <script setup lang="ts">
-import { displayDateTime } from '@/utils/business-date'
-import { auditActorLabel } from '@/utils/audit-actor'
+import { displayCell } from '@/utils/business-display'
+import { displayRecordDateTime as displayDateTime } from '@/utils/business-display'
+import { displayRecordActor as auditActorLabel } from '@/utils/business-display'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
@@ -265,7 +310,7 @@ import {
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import {
   departmentTree,
-  filterDepartmentTree,
+  filterDepartmentTreeFields,
   departmentParentTree,
   type DepartmentNode,
 } from '@/utils/hr-department-tree'
@@ -296,7 +341,9 @@ const rows = ref<HrDepartment[]>([]),
   visible = ref(false)
 const editing = ref<number | null>(null),
   editingRecord = ref<HrDepartment | null>(null),
-  keyword = ref('')
+  keyword = ref(''),
+  departmentCodeFilter = ref('')
+const detailRecord = ref<HrDepartment | null>(null)
 const loadError = ref(''),
   saveError = ref(''),
   expandedKeys = ref<string[]>([])
@@ -312,10 +359,14 @@ const form = reactive<HrDepartmentCommand>({
   establishedDate: null,
 })
 const allTree = computed(() => departmentTree(rows.value))
-const tree = computed(() => filterDepartmentTree(allTree.value, keyword.value))
+const tree = computed(() =>
+  filterDepartmentTreeFields(allTree.value, keyword.value, departmentCodeFilter.value),
+)
 const parents = computed(() => departmentParentTree(allTree.value, editing.value))
 const effectiveExpandedKeys = computed(() =>
-  keyword.value.trim() ? rows.value.map((row) => String(row.id)) : expandedKeys.value,
+  keyword.value.trim() || departmentCodeFilter.value.trim()
+    ? rows.value.map((row) => String(row.id))
+    : expandedKeys.value,
 )
 
 const formatTime = displayDateTime
@@ -335,6 +386,7 @@ function expandAll() {
 }
 function collapseAll() {
   keyword.value = ''
+  departmentCodeFilter.value = ''
   expandedKeys.value = []
 }
 function expansionChanged(row: HrDepartment, expanded: boolean | HrDepartment[]) {
@@ -421,6 +473,7 @@ async function save() {
     })
     visible.value = false
     keyword.value = ''
+    departmentCodeFilter.value = ''
     // 保存接口返回真实记录后保留它；刷新失败也不能误导用户再次新增。
     rows.value = [...rows.value.filter((row) => row.id !== saved.id), saved]
     const loaded = await load()
@@ -523,6 +576,12 @@ onMounted(() => load(true))
 }
 .department-toolbar .el-button + .el-button {
   margin-left: 0;
+}
+.department-filter-field {
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
 }
 .department-search {
   width: 300px;

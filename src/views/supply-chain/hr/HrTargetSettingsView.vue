@@ -3,6 +3,10 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Refresh, Edit } from '@element-plus/icons-vue'
 import { errorMessage } from '@/api/core/error'
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import SupplyFilterTabs from '@/components/supply/SupplyFilterTabs.vue'
+import { displayRecordDateTime } from '@/utils/business-display'
+import { displayValue } from '@/utils/business-display'
 import {
   getTargetSettings,
   saveTargetSettings,
@@ -27,7 +31,8 @@ const data = ref<TargetSettings | null>(null)
 const busy = ref(false),
   saving = ref(false),
   error = ref('')
-const search = ref(''),
+const nameFilter = ref(''),
+  codeFilter = ref(''),
   selectedCity = ref(''),
   employment = ref('ALL'),
   page = ref(1)
@@ -87,7 +92,8 @@ const rows = computed(() =>
       (dimension.value === 'CITY' ||
         employment.value === 'ALL' ||
         s.employmentStatus === employment.value) &&
-      `${s.name} ${s.code} ${s.departmentName ?? ''}`.includes(search.value.trim()),
+      s.name.includes(nameFilter.value.trim()) &&
+      s.code.includes(codeFilter.value.trim()),
   ),
 )
 const visibleRows = computed(() => rows.value.slice((page.value - 1) * 20, page.value * 20))
@@ -101,7 +107,7 @@ const allSelected = computed(
       .filter((s) => s.writable)
       .every((s) => selection.value.includes(targetKey(s))),
 )
-watch([dimension, search, selectedCity, employment], () => {
+watch([dimension, nameFilter, codeFilter, selectedCity, employment], () => {
   page.value = 1
   selection.value = []
 })
@@ -237,7 +243,7 @@ function metricName(metric: string) {
   <section class="hr-target-settings">
     <header class="target-header">
       <div class="target-heading">
-        <h1>指标设置</h1>
+        <SupplyPageTitle>月度经营目标</SupplyPageTitle>
         <p>按月维护 · 保存后同步至看板</p>
       </div>
       <el-date-picker
@@ -251,33 +257,35 @@ function metricName(metric: string) {
       />
     </header>
     <div class="target-controls">
-      <nav class="target-tabs" aria-label="指标类型">
-        <button
-          :class="{ active: dimension === 'CITY' }"
-          :aria-pressed="dimension === 'CITY'"
-          :disabled="locked"
-          @click="dimension = 'CITY'"
-        >
-          城市指标 <span v-if="data">{{ cities.length }}</span>
-        </button>
-        <button
-          :class="{ active: dimension === 'SALES_OWNER' }"
-          :aria-pressed="dimension === 'SALES_OWNER'"
-          :disabled="locked"
-          @click="dimension = 'SALES_OWNER'"
-        >
-          销售指标 <span v-if="data">{{ sales.length }}</span>
-        </button>
-      </nav>
+      <SupplyFilterTabs
+        :model-value="dimension"
+        label="经营目标类型"
+        :items="[
+          { value: 'CITY', label: '城市指标', count: cities.length },
+          { value: 'SALES_OWNER', label: '销售指标', count: sales.length },
+        ]"
+        @update:model-value="(value) => (dimension = value as TargetDimension)"
+      />
       <div class="target-filters">
-        <el-input
-          v-model="search"
-          :prefix-icon="Search"
-          clearable
-          :disabled="locked || busy || !data"
-          :placeholder="dimension === 'CITY' ? '搜索城市' : '搜索姓名 / 工号'"
-          aria-label="搜索指标对象"
-        />
+        <label class="target-filter-field"
+          >{{ dimension === 'CITY' ? '城市名称' : '员工姓名'
+          }}<el-input
+            v-model="nameFilter"
+            :prefix-icon="Search"
+            clearable
+            :disabled="locked || busy || !data"
+            :placeholder="dimension === 'CITY' ? '城市名称' : '员工姓名'"
+            aria-label="目标对象名称"
+        /></label>
+        <label class="target-filter-field"
+          >{{ dimension === 'CITY' ? '城市编码' : '员工编号'
+          }}<el-input
+            v-model="codeFilter"
+            clearable
+            :disabled="locked || busy || !data"
+            :placeholder="dimension === 'CITY' ? '城市编码' : '员工编号'"
+            aria-label="目标对象编号"
+        /></label>
         <el-select
           v-if="dimension === 'SALES_OWNER'"
           v-model="employment"
@@ -297,10 +305,10 @@ function metricName(metric: string) {
       class="target-workspace"
       :class="{ 'with-cities': dimension === 'SALES_OWNER' }"
     >
-      <aside v-if="dimension === 'SALES_OWNER'" class="target-city-nav" aria-label="销售所属部门">
-        <h2>所属部门</h2>
+      <aside v-if="dimension === 'SALES_OWNER'" class="target-city-nav" aria-label="销售所属城市">
+        <h2>所属城市</h2>
         <button :class="{ active: !selectedCity }" :disabled="locked" @click="selectedCity = ''">
-          全部部门 <span>{{ sales.length }}</span>
+          全部城市 <span>{{ sales.length }}</span>
         </button>
         <button
           v-for="[code, name] in cityOptions"
@@ -335,7 +343,9 @@ function metricName(metric: string) {
                     @change="toggleAll"
                   />
                 </th>
-                <th>{{ dimension === 'CITY' ? '城市' : '销售人员' }}</th>
+                <th class="target-subject">{{ dimension === 'CITY' ? '城市' : '销售人员' }}</th>
+                <th>{{ dimension === 'CITY' ? '城市编码' : '员工编号' }}</th>
+                <th v-if="dimension === 'SALES_OWNER'">部门</th>
                 <th
                   v-for="metric in targetMetrics"
                   :key="metric.code"
@@ -360,12 +370,9 @@ function metricName(metric: string) {
                 </td>
                 <td class="target-name">
                   <strong :title="subject.code">{{ subject.name }}</strong>
-                  <small
-                    v-if="dimension === 'SALES_OWNER'"
-                    :title="`${subject.code} · ${subject.departmentName || ''}`"
-                    >{{ subject.code }} · {{ subject.departmentName }}</small
-                  >
                 </td>
+                <td>{{ subject.code }}</td>
+                <td v-if="dimension === 'SALES_OWNER'">{{ subject.departmentName || '-' }}</td>
                 <td v-for="metric in targetMetrics" :key="metric.code" class="target-number">
                   {{ format(cell(subject, metric.code).value) }}
                 </td>
@@ -383,9 +390,12 @@ function metricName(metric: string) {
                 </td>
               </tr>
               <tr v-if="!visibleRows.length">
-                <td :colspan="targetMetrics.length + 3" class="target-empty">
+                <td
+                  :colspan="targetMetrics.length + (dimension === 'CITY' ? 4 : 5)"
+                  class="target-empty"
+                >
                   {{
-                    search
+                    nameFilter || codeFilter
                       ? '没有匹配的记录'
                       : '销售部下暂无可见的' + (dimension === 'CITY' ? '子部门' : '销售人员')
                   }}
@@ -503,7 +513,12 @@ function metricName(metric: string) {
         ><el-button type="primary" :loading="saving" @click="save">确认保存</el-button></template
       >
     </el-dialog>
-    <el-drawer v-model="historyOpen" :title="`${historyTitle} · 修改记录`" size="460px">
+    <el-drawer
+      class="business-detail-panel"
+      v-model="historyOpen"
+      :title="`${historyTitle} · 修改记录`"
+      size="460px"
+    >
       <el-skeleton v-if="historyBusy" :rows="5" animated />
       <el-alert v-else-if="historyError" :title="historyError" type="error" :closable="false" />
       <el-empty v-else-if="!history.length" description="本月暂无修改记录" />
@@ -512,12 +527,30 @@ function metricName(metric: string) {
         :key="`${item.metric}:${item.revision}`"
         class="target-history-item"
       >
-        <strong>{{ metricName(item.metric) }} → {{ format(item.value) }}</strong>
-        <p>{{ item.reason }}</p>
-        <small
-          >{{ new Date(item.occurredAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) }} ·
-          {{ item.actor }}</small
-        >
+        <dl class="business-detail-fields">
+          <div>
+            <dt>经营指标</dt>
+            <dd>{{ metricName(item.metric) }}</dd>
+          </div>
+          <div>
+            <dt>目标值</dt>
+            <dd>{{ format(item.value) }}</dd>
+          </div>
+          <div class="business-detail-field-wide">
+            <dt>修改原因</dt>
+            <dd>{{ displayValue(item.reason) }}</dd>
+          </div>
+          <div>
+            <dt>修改时间</dt>
+            <dd>
+              {{ displayRecordDateTime(item.occurredAt) }}
+            </dd>
+          </div>
+          <div>
+            <dt>修改人</dt>
+            <dd>{{ displayValue(item.actor) }}</dd>
+          </div>
+        </dl>
       </div>
     </el-drawer>
   </section>

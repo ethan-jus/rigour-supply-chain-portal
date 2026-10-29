@@ -7,6 +7,7 @@ const props = defineProps<{
   entryDate?: string | null
   leaveDate?: string | null
   confirmed?: boolean
+  compact?: boolean
 }>()
 const rangeText = (from: string, to: string) => (from === to ? from : `${from} 至 ${to}`)
 function adjacentDate(value: string, offset: number) {
@@ -53,7 +54,7 @@ const period = computed(() => {
           : '入职日期缺失，请先核对员工档案，不能将缺失信息视为整月在职。'
       }}
     </p>
-    <p class="scope-hint">
+    <p v-if="!compact" class="scope-hint">
       入职前、离职后的日期不计缺卡和缺拜访。在职期间仍按工作日历、保护期及已登记的免考核时段计算；底薪及补助按薪资规则折算。
     </p>
   </section>

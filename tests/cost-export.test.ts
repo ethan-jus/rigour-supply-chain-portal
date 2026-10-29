@@ -42,6 +42,24 @@ describe('cost Excel export', () => {
       expect.arrayContaining(['记录ID', '版本', '出差事项编号', '录入人', '修改人']),
     )
   })
+  it('exports the actual marketing owner once and never substitutes the recorder', async () => {
+    const row = {
+      categoryCode: 'MARKETING',
+      createdBy: 'recording-operator',
+      ownerEmployeeName: '实际费用负责人',
+      data: { title: '门店活动物料', ownerName: '旧名称', amount: 100 },
+    } as unknown as CostRecord
+    const headers = costExportHeaders('marketing')
+    expect(headers.filter((header) => header === '费用负责人')).toHaveLength(1)
+    expect(headers).not.toContain('经办人')
+    const fields = costExportFields(row)
+    const book = await buildCostWorkbook('营销推广费用', headers, [
+      headers.map((header) => fields.find((field) => field.label === header)?.value ?? ''),
+    ])
+    const sheet = book.worksheets[0]!
+    expect(sheet.getCell(2, headers.indexOf('费用负责人') + 1).value).toBe('实际费用负责人')
+    expect(JSON.stringify(sheet.getRow(2).values)).not.toContain('recording-operator')
+  })
   it('快递导出和查看保留可读业务要素及前导零运单', async () => {
     const row = {
       data: {

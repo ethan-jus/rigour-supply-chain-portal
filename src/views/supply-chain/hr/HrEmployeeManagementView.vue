@@ -42,81 +42,87 @@
             >
           </div>
         </header>
-        <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="reset">
-          <template #primary>
-            <el-input
-              v-model="keyword"
+        <SupplyListFilters
+          compact
+          class="employee-filters"
+          :loading="loading"
+          @search="search"
+          @reset="reset"
+        >
+          <el-form-item label="员工姓名"
+            ><el-input
+              v-model="employeeNameFilter"
               clearable
-              aria-label="关键词"
-              placeholder="姓名 / 手机号 / 编号 / 订货宝账号"
-              class="employee-keyword"
-              :prefix-icon="Search"
-            />
-            <el-select
+              placeholder="请输入员工姓名"
+              aria-label="员工姓名筛选"
+          /></el-form-item>
+          <el-form-item label="员工编号"
+            ><el-input
+              v-model="employeeCodeFilter"
+              clearable
+              placeholder="请输入员工编号"
+              aria-label="员工编号筛选"
+          /></el-form-item>
+          <el-form-item label="手机号"
+            ><el-input
+              v-model="mobileFilter"
+              clearable
+              placeholder="请输入手机号"
+              aria-label="员工手机号筛选"
+          /></el-form-item>
+          <el-form-item label="订货宝账号"
+            ><el-input
+              v-model="dhbAccountFilter"
+              clearable
+              placeholder="请输入订货宝账号"
+              aria-label="订货宝账号筛选"
+          /></el-form-item>
+          <el-form-item label="岗位"
+            ><el-select
               v-model="positionCode"
               filterable
               clearable
-              aria-label="岗位"
               placeholder="全部岗位"
-              style="width: 125px"
-            >
-              <el-option
+              aria-label="岗位"
+              ><el-option
                 v-for="p in positions"
                 :key="p.positionCode"
                 :label="p.positionName"
-                :value="p.positionCode"
-              />
-            </el-select>
-            <el-select
-              v-model="status"
-              clearable
-              aria-label="在职状态"
-              placeholder="在职状态"
-              style="width: 125px"
-            >
-              <el-option label="在职" value="ACTIVE" /><el-option label="离职" value="LEFT" />
-            </el-select>
-            <el-select
-              v-model="regularized"
-              clearable
-              aria-label="是否转正"
-              placeholder="是否转正"
-              style="width: 125px"
-            >
-              <el-option :value="true" label="已转正" /><el-option :value="false" label="未转正" />
-            </el-select>
-            <el-select
+                :value="p.positionCode" /></el-select
+          ></el-form-item>
+          <el-form-item label="在职状态"
+            ><el-select v-model="status" clearable placeholder="全部状态" aria-label="在职状态"
+              ><el-option label="在职" value="ACTIVE" /><el-option
+                label="离职"
+                value="LEFT" /></el-select
+          ></el-form-item>
+          <el-form-item label="是否转正"
+            ><el-select v-model="regularized" clearable placeholder="全部" aria-label="是否转正"
+              ><el-option :value="true" label="已转正" /><el-option
+                :value="false"
+                label="未转正" /></el-select
+          ></el-form-item>
+          <el-form-item label="薪酬类别"
+            ><el-select
               v-model="payrollCategory"
               clearable
+              placeholder="全部类别"
               aria-label="薪酬类别"
-              placeholder="薪酬类别"
-              style="width: 125px"
-            >
-              <el-option
-                v-for="option in payrollCategories"
-                :key="option.value"
-                :value="option.value"
-                :label="option.label"
-              />
-            </el-select>
-            <el-select
-              v-model="payrollMissing"
-              aria-label="薪酬档案完整度"
-              style="width: 135px"
-              @change="search"
-              ><el-option :value="false" label="全部薪酬档案" /><el-option
+              ><el-option
+                v-for="role in payrollCategories"
+                :key="role.value"
+                v-bind="role" /></el-select
+          ></el-form-item>
+          <el-form-item label="职级"
+            ><el-input v-model="jobGrade" clearable placeholder="请输入职级" aria-label="职级"
+          /></el-form-item>
+          <el-form-item label="薪酬档案"
+            ><el-select v-model="payrollMissing" aria-label="薪酬档案完整性"
+              ><el-option :value="false" label="全部档案" /><el-option
                 :value="true"
-                label="薪酬待完善"
-            /></el-select>
-            <el-input
-              v-model="jobGrade"
-              clearable
-              aria-label="职级"
-              placeholder="职级"
-              style="width: 110px"
-            />
-          </template>
-        </OrderRegisterFilterCard>
+                label="待完善" /></el-select
+          ></el-form-item>
+        </SupplyListFilters>
         <el-alert v-if="riskError" :title="riskError" type="error" :closable="false" />
         <div v-if="risks.length" class="binding-risk-banner" role="status">
           <el-icon><WarningFilled /></el-icon><strong>{{ risks.length }} 条关联待确认</strong>
@@ -147,6 +153,7 @@
               min-width="170"
               fixed="left"
               show-overflow-tooltip
+              :formatter="displayCell"
             >
               <template #default="{ row }">
                 <span
@@ -163,7 +170,12 @@
                 >
               </template>
             </el-table-column>
-            <el-table-column prop="employmentStatus" label="在职状态" width="92">
+            <el-table-column
+              prop="employmentStatus"
+              label="在职状态"
+              width="92"
+              :formatter="displayCell"
+            >
               <template #default="{ row }">
                 <span :class="['employment-status', statusClass(row.employmentStatus)]"
                   ><i aria-hidden="true" />{{ statusLabel(row.employmentStatus) }}</span
@@ -175,66 +187,46 @@
               label="部门"
               min-width="110"
               show-overflow-tooltip
+              :formatter="displayCell"
             >
-              <template #default="{ row }">{{ row.departmentName || '未分配部门' }}</template>
+              <template #default="{ row }">{{ row.departmentName || '-' }}</template>
             </el-table-column>
             <el-table-column
               prop="positionName"
               label="岗位"
               min-width="100"
               show-overflow-tooltip
+              :formatter="displayCell"
             />
-            <el-table-column prop="entryDate" label="入职时间" sortable="custom" width="120">
-              <template #default="{ row }">{{ dateOnly(row.entryDate) || '—' }}</template>
+            <el-table-column
+              prop="entryDate"
+              label="入职时间"
+              sortable="custom"
+              width="120"
+              :formatter="displayCell"
+            >
+              <template #default="{ row }">{{ dateOnly(row.entryDate) || '-' }}</template>
             </el-table-column>
-            <el-table-column prop="mobile" label="手机号" width="125" show-overflow-tooltip />
-            <!-- @vue-generic {HrEmployeeRecord} -->
-            <el-table-column label="订货宝账号" min-width="150" show-overflow-tooltip>
-              <template #default="{ row }">
-                <span class="dhb-account-cell"
-                  ><span class="dhb-account" :title="row.dhbAccountNames?.join('、')">{{
-                    row.dhbAccountNames?.join('、') || '—'
-                  }}</span>
-                  <el-button
-                    v-if="row.dhbAccountNames?.length"
-                    link
-                    aria-label="复制订货宝账号"
-                    @click.stop="copyAccount(row)"
-                    ><el-icon><CopyDocument /></el-icon
-                  ></el-button>
-                </span>
-              </template>
-            </el-table-column>
+            <el-table-column
+              prop="mobile"
+              label="手机号"
+              width="125"
+              show-overflow-tooltip
+              :formatter="displayCell"
+            />
             <el-table-column
               prop="employeeCode"
               sortable="custom"
               label="员工编号"
               width="165"
               show-overflow-tooltip
+              :formatter="displayCell"
             />
-            <el-table-column label="是否转正" width="100">
-              <template #default="{ row }"
-                ><el-tag
-                  :type="row.regularized == null ? 'info' : row.regularized ? 'success' : 'warning'"
-                  >{{ regularizationLabel(row.regularized) }}</el-tag
-                ></template
-              >
-            </el-table-column>
             <el-table-column label="薪酬类别" width="100">
               <template #default="{ row }">{{
                 payrollCategoryLabel(row.payrollCategory)
               }}</template>
             </el-table-column>
-            <el-table-column
-              prop="createdTime"
-              label="创建时间"
-              sortable="custom"
-              width="183"
-              show-overflow-tooltip
-              ><template #default="{ row }">{{
-                auditTime(row.createdTime)
-              }}</template></el-table-column
-            >
             <el-table-column label="关联状态" width="128"
               ><template #default="{ row }">
                 <el-tag v-if="row.dhbReviewCount" type="warning">已关联·待确认</el-tag>
@@ -293,7 +285,7 @@
     <el-dialog
       v-model="detailVisible"
       title="员工详情"
-      class="employee-detail"
+      class="employee-detail business-detail-panel"
       width="min(1200px,calc(100vw - 32px))"
       align-center
       destroy-on-close
@@ -301,121 +293,226 @@
       <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" />
       <el-skeleton v-else-if="!detail" :rows="8" animated />
       <template v-else>
+        <header class="business-detail-hero">
+          <div>
+            <span class="business-detail-kicker">员工档案</span>
+            <h2>{{ detail.employeeName }}</h2>
+          </div>
+          <el-tag>{{ statusLabel(detail.employmentStatus) }}</el-tag>
+        </header>
         <el-tabs v-model="detailTab">
           <el-tab-pane label="基本信息" name="basic">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="员工编号">{{ detail.employeeCode }}</el-descriptions-item
-              ><el-descriptions-item label="姓名">{{ detail.employeeName }}</el-descriptions-item>
-              <el-descriptions-item label="部门">{{
-                detail.departmentName || '—'
-              }}</el-descriptions-item
-              ><el-descriptions-item label="岗位">{{
-                detail.positionName || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="是否转正">{{
-                regularizationLabel(detail.regularized)
-              }}</el-descriptions-item>
-              <el-descriptions-item label="转正日期">{{
-                detail.regularizationDate || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="薪酬类别">{{
-                payrollCategoryLabel(detail.payrollCategory)
-              }}</el-descriptions-item>
-              <el-descriptions-item label="薪资生效日期">{{
-                detail.salaryEffectiveFrom || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="职级">{{ detail.jobGrade || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="手机号">{{ detail.mobile || '—' }}</el-descriptions-item
-              ><el-descriptions-item label="部门负责人">{{
-                detail.departmentLeaderName || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="身份证号">{{
-                detail.profile?.idNumber || '—'
-              }}</el-descriptions-item
-              ><el-descriptions-item label="出生日期">{{
-                identity.birthDate || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="年龄">{{ identity.age || '—' }}</el-descriptions-item
-              ><el-descriptions-item label="性别">{{
-                identity.gender || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="入职日期">{{
-                dateOnly(detail.entryDate) || '—'
-              }}</el-descriptions-item
-              ><el-descriptions-item label="在职状态">{{
-                statusLabel(detail.employmentStatus)
-              }}</el-descriptions-item>
-              <el-descriptions-item label="离职日期">{{
-                dateOnly(detail.leaveDate) || '—'
-              }}</el-descriptions-item
-              ><el-descriptions-item label="工龄">{{
-                serviceLength(
-                  detail.entryDate,
-                  detail.employmentStatus === 'LEFT' ? detail.leaveDate : null,
-                )
-              }}</el-descriptions-item>
-              <el-descriptions-item label="合同截止日期">{{
-                detail.profile?.contractEndDate || '—'
-              }}</el-descriptions-item
-              ><el-descriptions-item label="学历">{{
-                detail.profile?.education || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="毕业院校">{{
-                detail.profile?.graduationSchool || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="专业">{{
-                detail.profile?.major || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="试用期" :span="2">{{
-                probationPeriodLabel(detail.profile?.probationPeriod)
-              }}</el-descriptions-item>
-              <el-descriptions-item label="户籍地址">{{
-                detail.profile?.registeredAddress || '—'
-              }}</el-descriptions-item
-              ><el-descriptions-item label="户口性质">{{
-                detail.profile?.householdType || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="现居住地" :span="2">{{
-                detail.profile?.residentialAddress || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="银行卡号">{{
-                detail.profile?.bankAccount || '—'
-              }}</el-descriptions-item
-              ><el-descriptions-item label="开户行">{{
-                detail.profile?.bankName || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="参保状态">{{
-                detail.profile?.socialInsurance || '—'
-              }}</el-descriptions-item
-              ><el-descriptions-item label="邮箱">{{ detail.email || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="紧急联系人">{{
-                detail.profile?.emergencyContact || '—'
-              }}</el-descriptions-item
-              ><el-descriptions-item label="紧急联系方式">{{
-                detail.profile?.emergencyPhone || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="备注" :span="2">{{
-                detail.remark || '—'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="创建人">{{
-                auditActor(detail.createdByName, detail.createdBy)
-              }}</el-descriptions-item
-              ><el-descriptions-item label="创建时间">{{
-                auditTime(detail.createdTime)
-              }}</el-descriptions-item>
-              <el-descriptions-item label="修改人">{{
-                auditActor(detail.updatedByName, detail.updatedBy)
-              }}</el-descriptions-item
-              ><el-descriptions-item label="修改时间">{{
-                auditTime(detail.updatedTime)
-              }}</el-descriptions-item>
-            </el-descriptions>
+            <div class="employee-detail-sections">
+              <section class="employee-detail-section">
+                <h3>基本资料</h3>
+                <dl class="business-detail-fields">
+                  <div>
+                    <dt>员工编号</dt>
+                    <dd>{{ detail.employeeCode }}</dd>
+                  </div>
+                  <div>
+                    <dt>姓名</dt>
+                    <dd>{{ detail.employeeName }}</dd>
+                  </div>
+                  <div>
+                    <dt>手机号</dt>
+                    <dd>{{ detail.mobile || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>邮箱</dt>
+                    <dd>{{ detail.email || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>身份证号</dt>
+                    <dd>{{ detail.profile?.idNumber || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>出生日期</dt>
+                    <dd>{{ identity.birthDate || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>年龄</dt>
+                    <dd>{{ identity.age || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>性别</dt>
+                    <dd>{{ identity.gender || '-' }}</dd>
+                  </div>
+                </dl>
+              </section>
+              <section class="employee-detail-section">
+                <h3>任职与薪酬</h3>
+                <dl class="business-detail-fields">
+                  <div>
+                    <dt>部门</dt>
+                    <dd>{{ detail.departmentName || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>岗位</dt>
+                    <dd>{{ detail.positionName || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>职级</dt>
+                    <dd>{{ detail.jobGrade || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>部门负责人</dt>
+                    <dd>{{ detail.departmentLeaderName || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>入职日期</dt>
+                    <dd>{{ dateOnly(detail.entryDate) || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>在职状态</dt>
+                    <dd>{{ statusLabel(detail.employmentStatus) }}</dd>
+                  </div>
+                  <div>
+                    <dt>离职日期</dt>
+                    <dd>{{ dateOnly(detail.leaveDate) || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>工龄</dt>
+                    <dd>
+                      {{
+                        displayValue(
+                          serviceLength(
+                            detail.entryDate,
+                            detail.employmentStatus === 'LEFT' ? detail.leaveDate : null,
+                          ),
+                        )
+                      }}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>是否转正</dt>
+                    <dd>{{ regularizationLabel(detail.regularized) }}</dd>
+                  </div>
+                  <div>
+                    <dt>转正日期</dt>
+                    <dd>{{ detail.regularizationDate || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>薪酬类别</dt>
+                    <dd>{{ payrollCategoryLabel(detail.payrollCategory) }}</dd>
+                  </div>
+                  <div>
+                    <dt>薪资生效日期</dt>
+                    <dd>{{ detail.salaryEffectiveFrom || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>试用期</dt>
+                    <dd>
+                      {{ displayValue(probationPeriodLabel(detail.profile?.probationPeriod)) }}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+              <section class="employee-detail-section">
+                <h3>教育与联系</h3>
+                <dl class="business-detail-fields">
+                  <div>
+                    <dt>学历</dt>
+                    <dd>{{ detail.profile?.education || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>毕业院校</dt>
+                    <dd>{{ detail.profile?.graduationSchool || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>专业</dt>
+                    <dd>{{ detail.profile?.major || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>户籍地址</dt>
+                    <dd>{{ detail.profile?.registeredAddress || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>户口性质</dt>
+                    <dd>{{ detail.profile?.householdType || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>现居住地</dt>
+                    <dd>{{ detail.profile?.residentialAddress || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>紧急联系人</dt>
+                    <dd>{{ detail.profile?.emergencyContact || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>紧急联系方式</dt>
+                    <dd>{{ detail.profile?.emergencyPhone || '-' }}</dd>
+                  </div>
+                </dl>
+              </section>
+              <section class="employee-detail-section">
+                <h3>合同与收款</h3>
+                <dl class="business-detail-fields">
+                  <div>
+                    <dt>合同截止日期</dt>
+                    <dd>{{ detail.profile?.contractEndDate || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>参保状态</dt>
+                    <dd>{{ detail.profile?.socialInsurance || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>银行卡号</dt>
+                    <dd>{{ detail.profile?.bankAccount || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>开户行</dt>
+                    <dd>{{ detail.profile?.bankName || '-' }}</dd>
+                  </div>
+                </dl>
+              </section>
+              <section class="employee-detail-section">
+                <h3>系统记录</h3>
+                <dl class="business-detail-fields">
+                  <div>
+                    <dt>备注</dt>
+                    <dd>{{ detail.remark || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>创建人</dt>
+                    <dd>{{ auditActor(detail.createdByName, detail.createdBy) }}</dd>
+                  </div>
+                  <div>
+                    <dt>创建时间</dt>
+                    <dd>{{ auditTime(detail.createdTime) }}</dd>
+                  </div>
+                  <div>
+                    <dt>修改人</dt>
+                    <dd>{{ auditActor(detail.updatedByName, detail.updatedBy) }}</dd>
+                  </div>
+                  <div>
+                    <dt>修改时间</dt>
+                    <dd>{{ auditTime(detail.updatedTime) }}</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="订货宝关联" name="dhb" lazy>
+            <el-table
+              :data="(detail.dhbAccountNames ?? []).map((account) => ({ account }))"
+              empty-text="暂无关联账号"
+              ><el-table-column prop="account" label="订货宝账号" :formatter="displayCell"
+            /></el-table>
+            <el-button v-if="detail.dhbAccountNames?.length" @click="copyAccount(detail)"
+              >复制全部账号</el-button
+            >
           </el-tab-pane>
           <el-tab-pane label="任职记录" name="assignments" lazy>
             <el-table :data="assignments"
-              ><el-table-column prop="departmentName" label="部门" /><el-table-column
+              ><el-table-column
+                prop="departmentName"
+                label="部门"
+                :formatter="displayCell"
+              /><el-table-column
                 prop="positionName"
                 label="岗位"
+                :formatter="displayCell"
               /><el-table-column label="开始时间"
                 ><template #default="{ row }">{{
                   auditTime(row.effectiveFrom)
@@ -465,19 +562,13 @@
   </div>
 </template>
 <script setup lang="ts">
+import { displayCell, displayValue } from '@/utils/business-display'
 import DhbSalespersonSyncButton from '@/components/supply/DhbSalespersonSyncButton.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
+import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
 import DhbBindingReviewDrawer from './DhbBindingReviewDrawer.vue'
-import {
-  CopyDocument,
-  WarningFilled,
-  OfficeBuilding,
-  Plus,
-  Refresh,
-  Search,
-} from '@element-plus/icons-vue'
+import { WarningFilled, OfficeBuilding, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, type TableInstance } from 'element-plus'
 import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
 import HrEmployeeEditor from './HrEmployeeEditor.vue'
@@ -503,11 +594,11 @@ import {
   payrollCategoryLabel,
   regularizationLabel,
 } from '@/utils/hr-payroll-profile'
+import { displayRecordDateTime as auditTime } from '@/utils/business-display'
+import { displayRecordActor } from '@/utils/business-display'
 import {
   probationPeriodLabel,
   employeeEmploymentStatusLabel,
-  auditActor,
-  auditTime,
   dateOnly,
   identityDetails,
   serviceLength,
@@ -557,7 +648,10 @@ const positionCode = ref(''),
   jobGrade = ref('')
 const regularized = ref<boolean | undefined>(),
   payrollCategory = ref('')
-const keyword = ref(''),
+const employeeNameFilter = ref(''),
+  employeeCodeFilter = ref(''),
+  mobileFilter = ref(''),
+  dhbAccountFilter = ref(''),
   status = ref(''),
   page = ref(1),
   size = ref(20),
@@ -584,7 +678,10 @@ async function load() {
     const result = await getHrEmployees({
       begin: (page.value - 1) * size.value,
       step: size.value,
-      keyword: keyword.value || undefined,
+      employeeName: employeeNameFilter.value.trim() || undefined,
+      employeeCode: employeeCodeFilter.value.trim() || undefined,
+      mobile: mobileFilter.value.trim() || undefined,
+      dhbAccount: dhbAccountFilter.value.trim() || undefined,
       employmentStatus: status.value || undefined,
       regularized: typeof regularized.value === 'boolean' ? regularized.value : undefined,
       payrollCategory: payrollCategory.value || undefined,
@@ -616,7 +713,10 @@ function selectDepartment(id: number | null) {
   search()
 }
 function clearFilters() {
-  keyword.value = ''
+  employeeNameFilter.value = ''
+  employeeCodeFilter.value = ''
+  mobileFilter.value = ''
+  dhbAccountFilter.value = ''
   status.value = ''
   regularized.value = undefined
   payrollCategory.value = ''
@@ -734,7 +834,10 @@ function statusClass(value: string) {
   )
 }
 function statusLabel(value: string) {
-  return employeeEmploymentStatusLabel(value)
+  return displayValue(employeeEmploymentStatusLabel(value))
+}
+function auditActor(name?: string | null, id?: string | null) {
+  return name?.trim() || displayRecordActor(id)
 }
 let linkRequest = 0
 async function applyPayrollLink() {
@@ -880,8 +983,25 @@ onMounted(async () => {
 .employee-page :deep(.order-register-filter .el-card__body) {
   padding: 0 18px 14px;
 }
-.employee-keyword {
-  width: clamp(225px, 25vw, 300px);
+.employee-filters {
+  padding: 0 18px;
+}
+.employee-filters :deep(.supply-list-filters__form) {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+.employee-detail-sections {
+  display: grid;
+  gap: 16px;
+}
+.employee-detail-section {
+  padding: 18px 20px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: white;
+}
+.employee-detail-section h3 {
+  margin: 0 0 18px;
+  font-size: 15px;
 }
 .employee-list-caption {
   display: flex;

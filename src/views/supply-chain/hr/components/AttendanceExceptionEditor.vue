@@ -110,7 +110,13 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="reason" label="说明" min-width="140" show-overflow-tooltip />
+      <el-table-column
+        prop="reason"
+        label="说明"
+        min-width="140"
+        show-overflow-tooltip
+        :formatter="displayCell"
+      />
       <el-table-column width="70"
         ><template #default="{ $index }"
           ><el-button link type="danger" :disabled="disabled" @click="removeRecord($index)"
@@ -122,6 +128,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { displayCell } from '@/utils/business-display'
 import { ref, watch } from 'vue'
 import type { AttendanceExceptionPeriod } from '@/api/core/hr-attendance'
 const props = defineProps<{ month: string; disabled?: boolean }>()

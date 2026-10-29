@@ -7,6 +7,7 @@ export interface PayrollComponentVersionView {
   version: number
   definition: PayrollComponentDefinition
   reason: string
+  createdByName?: string | null
   createdBy: string
   createdTime: string
   revision?: number

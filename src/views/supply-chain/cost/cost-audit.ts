@@ -1,9 +1,10 @@
 import { logisticsRoute } from './cost-logistics'
 import { costSourceLabel, externalDocuments, externalSourceName } from './cost-source'
 import type { CostRecord } from '@/api/core/cost'
-import { costLabel, costMoney } from './cost-dictionaries'
-import { auditActorLabel } from '@/utils/audit-actor'
-import { displayDateTime } from '@/utils/business-date'
+import { costLabel } from './cost-dictionaries'
+import { displayAmount as costMoney } from '@/utils/business-display'
+import { displayRecordActor as auditActorLabel } from '@/utils/business-display'
+import { displayRecordDateTime as displayDateTime } from '@/utils/business-display'
 import type { CostCategory } from '@/api/core/cost'
 
 /** 业务导出采用固定字段清单，操作记录、技术来源及内部标识仅用于系统内追溯。 */
@@ -14,7 +15,7 @@ export function costExportHeaders(category: CostCategory): string[] {
     logistics: ['物流类型', '发货方', '收货方', '承运方', '运单号', '费用承担方'],
     'warehouse-rentals': ['费用月份', '场地名称', '面积（㎡）', '出租方', '合同编号'],
     'office-rentals': ['费用月份', '场地名称', '面积（㎡）', '出租方', '合同编号'],
-    marketing: ['事项', '费用类型', '投放渠道', '收款方', '经办人', '活动服务期间'],
+    marketing: ['事项', '费用类型', '投放渠道', '收款方', '活动服务期间'],
     expenses: [
       '费用月份',
       '报销员工',
@@ -34,7 +35,15 @@ export function costExportHeaders(category: CostCategory): string[] {
       '运单号',
     ],
   }
-  return ['费用单号', '费用日期', '费用归属', ...business[category], '金额', '确认状态']
+  return [
+    '费用单号',
+    '费用日期',
+    '费用归属',
+    ...business[category],
+    ...(category === 'expenses' ? [] : ['费用负责人']),
+    '金额',
+    '确认状态',
+  ]
 }
 
 /** 复用已展示的业务值，同时将不同运输环节归并为统一的发货方、收货方列。 */
@@ -49,6 +58,13 @@ export function costExportFields(row: CostRecord): { label: string; value: strin
     { label: '费用用途／出差事由', value: row.data.expense?.purpose || '' },
     { label: '发货方', value: route?.senderName || '' },
     { label: '收货方', value: route?.receiverName || '' },
+    {
+      label: '活动服务期间',
+      value:
+        row.data.marketing?.serviceFrom || row.data.marketing?.serviceTo
+          ? `${row.data.marketing?.serviceFrom || '—'} 至 ${row.data.marketing?.serviceTo || '—'}`
+          : '',
+    },
   ]
 }
 const names: Record<string, string> = {
@@ -124,16 +140,20 @@ export function costSnapshotFields(
   if (row.categoryCode === 'EXPENSE')
     add('费用类型', costLabel('REIMBURSEMENT_EXPENSE_TYPE', data.typeCode as string))
   add('费用归属', data.cityName)
-  add('经办人', row.ownerEmployeeName ?? row.employeeName ?? data.ownerName)
+  add(
+    row.categoryCode === 'EXPENSE' ? '报销人' : '费用负责人',
+    row.ownerEmployeeName || row.employeeName || data.ownerName || '-',
+  )
   add('费用日期', data.costDate)
   add('费用月份', data.costMonth)
   add('收款方', data.payeeName)
   add('单据来源', costSourceLabel(snapshot as CostRecord))
   for (const [index, doc] of externalDocuments(snapshot as CostRecord).entries()) {
-    add(
-      `外部单据 ${index + 1}`,
-      `${externalSourceName(doc.sourceSystem)} · ${doc.documentNo} · ${doc.documentDate} · ${doc.senderName} → ${doc.receiverName}`,
-    )
+    add(`外部单据 ${index + 1} 来源系统`, externalSourceName(doc.sourceSystem))
+    add(`外部单据 ${index + 1} 单号`, doc.documentNo)
+    add(`外部单据 ${index + 1} 日期`, doc.documentDate)
+    add(`外部单据 ${index + 1} 发货方`, doc.senderName)
+    add(`外部单据 ${index + 1} 收货方`, doc.receiverName)
     add(`外部单据 ${index + 1} 备注`, doc.remark)
     add(`外部单据 ${index + 1} 关联状态`, doc.linkedId ? '已关联本系统' : '手工补录')
     add(`外部单据 ${index + 1} 收货地址`, doc.destinationAddress)
@@ -148,15 +168,13 @@ export function costSnapshotFields(
         receiverName: string
       }[]
     | undefined
-  add(
-    '关联系统单据',
-    sources
-      ?.map(
-        (s) =>
-          `${externalSourceName(s.sourceSystem ?? 'UNKNOWN')} · ${s.originalNo || s.documentNo} · 本系统单号 ${s.documentNo} · ${s.senderName} → ${s.receiverName}`,
-      )
-      .join('；'),
-  )
+  for (const [index, source] of (sources ?? []).entries()) {
+    add(`关联系统单据 ${index + 1} 来源系统`, externalSourceName(source.sourceSystem ?? 'UNKNOWN'))
+    add(`关联系统单据 ${index + 1} 原始单号`, source.originalNo || source.documentNo)
+    add(`关联系统单据 ${index + 1} 本系统单号`, source.documentNo)
+    add(`关联系统单据 ${index + 1} 发货方`, source.senderName)
+    add(`关联系统单据 ${index + 1} 收货方`, source.receiverName)
+  }
   add('金额', costMoney(data.amount as number | null))
   add('确认状态', costLabel('COST_STATUS', row.statusCode as string))
   add('付款状态', costLabel('COST_PAYMENT_STATUS', data.paymentStatusCode as string))
@@ -196,13 +214,18 @@ export function costSnapshotFields(
     const route = logisticsRoute(
       (snapshot as CostRecord).data.logistics,
       (snapshot as CostRecord).sources,
+      '-',
     )
     add(route.sender, route.senderName)
     add(route.receiver, route.receiverName)
     add('起点', transport.originAddress)
     add('终点', transport.destinationAddress)
-    for (const stop of (snapshot as CostRecord).data.logistics?.deliveryStops || [])
-      add(`${stop.customerName}收货地址`, stop.address)
+    for (const [index, stop] of (
+      (snapshot as CostRecord).data.logistics?.deliveryStops || []
+    ).entries()) {
+      add(`配送站点 ${index + 1} 客户`, stop.customerName)
+      add(`配送站点 ${index + 1} 收货地址`, stop.address)
+    }
     add('无单原因', transport.noSourceReason)
     add('手填对象说明', transport.manualPartyReason)
     add('承运方', transport.carrierName)
@@ -223,8 +246,8 @@ export function costSnapshotFields(
     if (rental.warehouseId) add('仓库', row.warehouseName)
     add('合同编号', rental.contractNo)
     add('面积（㎡）', rental.area)
-    if (rental.leaseFrom || rental.leaseTo)
-      add('租期', `${rental.leaseFrom || '—'} 至 ${rental.leaseTo || '—'}`)
+    add('租赁开始日期', rental.leaseFrom)
+    add('租赁结束日期', rental.leaseTo)
     if (rental.deposit != null) add('押金', costMoney(rental.deposit as number))
   }
   const goods = data.goods as Record<string, unknown> | undefined
@@ -249,8 +272,8 @@ export function costSnapshotFields(
   const marketing = data.marketing as Record<string, unknown> | undefined
   if (marketing) {
     add('投放渠道', marketing.channelName)
-    if (marketing.serviceFrom || marketing.serviceTo)
-      add('活动服务期间', `${marketing.serviceFrom || '—'} 至 ${marketing.serviceTo || '—'}`)
+    add('活动服务开始日期', marketing.serviceFrom)
+    add('活动服务结束日期', marketing.serviceTo)
   }
   return fields
 }

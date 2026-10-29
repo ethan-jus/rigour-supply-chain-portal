@@ -6,9 +6,32 @@ import {
   commissionRowTotal,
   duplicateCommissionScope,
   groupCommissionRows,
+  commissionProductRows,
 } from '@/utils/payroll-commission-rows'
 
 describe('同一商品的双角色提成标准', () => {
+  it('未指定型号时规格留空；指定型号失去商品资料时不把维护名称当作真实商品字段', () => {
+    const row = newCommissionRow('方便面 销售提成')
+    expect(commissionProductRows(row.sales, [])).toEqual([
+      {
+        variantId: '',
+        productName: '方便面',
+        specification: null,
+        categoryId: null,
+        categoryName: null,
+      },
+    ])
+    row.sales.variantIds = ['missing']
+    expect(commissionProductRows(row.sales, [])).toEqual([
+      {
+        variantId: 'missing',
+        productName: '',
+        specification: null,
+        categoryId: null,
+        categoryName: null,
+      },
+    ])
+  })
   it('数字规格ID回显为选择器使用的字符串，并正确配对双角色', () => {
     const row = newCommissionRow('A300')
     row.sales.variantIds = [15 as unknown as string]

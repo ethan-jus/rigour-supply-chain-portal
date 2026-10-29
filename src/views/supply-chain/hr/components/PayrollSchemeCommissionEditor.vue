@@ -8,15 +8,17 @@
     <div class="scheme-grid">
       <el-form-item label="城市总归属时点"
         ><el-select v-model="form.commission.managerAttribution"
-          ><el-option label="订单日期" value="ORDER_DATE" /><el-option
-            label="整单付清日期"
-            value="FULLY_PAID_DATE" /></el-select
+          ><el-option
+            v-for="option in commissionDateOptions"
+            :key="option.value"
+            v-bind="option" /></el-select
       ></el-form-item>
       <el-form-item label="提成标准取值时点"
         ><el-select v-model="form.commission.standardDate"
-          ><el-option label="订单日期" value="ORDER_DATE" /><el-option
-            label="整单付清日期"
-            value="FULLY_PAID_DATE" /></el-select
+          ><el-option
+            v-for="option in commissionDateOptions"
+            :key="option.value"
+            v-bind="option" /></el-select
       ></el-form-item>
     </div>
     <div class="commission-toolbar">
@@ -178,8 +180,12 @@
           border
           class="scope-exclusions"
         >
-          <el-table-column prop="kind" label="排除范围" width="120" />
-          <el-table-column prop="name" label="本行不参与计提的分类／商品" />
+          <el-table-column prop="kind" label="排除范围" width="120" :formatter="displayCell" />
+          <el-table-column
+            prop="name"
+            label="本行不参与计提的分类／商品"
+            :formatter="displayCell"
+          />
         </el-table>
         <el-alert
           v-if="scopeErrors.name || scopeErrors.range"
@@ -261,6 +267,7 @@
   </el-form>
 </template>
 <script setup lang="ts">
+import { displayCell } from '@/utils/business-display'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { TreeInstance } from 'element-plus'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
@@ -280,6 +287,7 @@ import { errorMessage } from '@/api/core/error'
 import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
 import { businessDictionaryOptions } from '@/utils/business-dictionary'
 import PayrollCommissionRateEditor from './PayrollCommissionRateEditor.vue'
+import { commissionDateOptions } from '@/utils/payroll-rule-options'
 const form = defineModel<PayrollSchemeDefinition>({ required: true })
 const props = defineProps<{ categories: PayrollCategory[]; disabled?: boolean }>()
 const tree = computed(() => departmentTree(props.categories))
