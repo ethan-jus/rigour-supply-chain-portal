@@ -464,7 +464,7 @@ describe('数据库导航注册表', () => {
       SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '客户管理').map(
         (item) => item.title,
       ),
-    ).toEqual(['客户档案', '客户地址', '门店档案', '客户类型', '归属地区'])
+    ).toEqual(['我的客户', '公海', '合作客户', '门店提报', '商家库管理', '客户经营分析', '客户档案', '客户地址', '门店档案', '客户类型', '归属地区'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
       'supply.crm.customers.customer-360',
     )

@@ -185,6 +185,14 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
   ]),
   ...groupPages('crm', 'CRM', 'merchant-crm-service', [
     {
+      key: 'stores', title: '客户管理',
+      pages: [
+        { key: 'mine', title: '我的客户' }, { key: 'public', title: '公海' },
+        { key: 'cooperated', title: '合作客户' }, { key: 'leads', title: '门店提报' },
+        { key: 'library', title: '商家库管理' }, { key: 'analysis', title: '客户经营分析' },
+      ],
+    },
+    {
       key: 'customers',
       title: '客户管理',
       pages: [

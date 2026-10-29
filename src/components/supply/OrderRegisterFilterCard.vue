@@ -80,6 +80,10 @@ function measure() {
   const overflow = el.scrollHeight > rowHeight.value + 2
   hasOverflow.value = overflow
   if (!overflow && expanded.value) expanded.value = false
+  // 折叠的条件仍参与查询，但不进入键盘焦点和读屏顺序。
+  children.forEach((child) => {
+    child.toggleAttribute('inert', overflow && !expanded.value && child.offsetTop > firstTop)
+  })
 }
 
 function toggle() {

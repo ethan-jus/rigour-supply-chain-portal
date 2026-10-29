@@ -445,7 +445,7 @@ onMounted(() => {
   font-size: $font-size-sm;
 }
 
-.console__content {
+.console:not(.console--supply-chain) .console__content {
   padding: 28px;
 }
 
@@ -503,7 +503,7 @@ onMounted(() => {
     display: none;
   }
 }
-@media (max-width: 760px) {
+@media (max-width: 1100px) {
   .console,
   .console--collapsed {
     grid-template-columns: 64px minmax(0, 1fr);

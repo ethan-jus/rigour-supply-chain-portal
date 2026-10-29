@@ -14,7 +14,7 @@ PC 运营后台，使用 Vue 3 + TypeScript + Vite + Element Plus。
 3. **路由权限**：路由守卫在 `src/router/permissionGuard.ts`，授权上下文在 `src/stores/supply-authorization.ts`，数据库菜单在 `src/stores/navigation.ts`。
 4. **认证**：使用 IAM OIDC Authorization Code + PKCE；Access/ID Token 只保存在页面内存，禁止写入 Web Storage。
 5. **数据环境**：按任务选择本地测试、隔离数据或指定 DEV 联调。Mock 可用于开发和测试，但不能混入正式业务结果或作为真实同步成功的证据。开发模式及 `--mode desktop` 构建允许 HTTP 局域网部署；正式构建仍要求 HTTPS，并保留 PKCE、签名与权限校验。
-6. **设计 Token**：定义在 `src/assets/styles/_variables.scss`，由各使用方显式引入。
+6. **界面设计**：按当前用户需求、适用 UI 技能和组件规范实现。`src/assets/styles/_variables.scss` 提供可复用的语义 Token，不锁定页面布局、字号、间距、列数或高度；历史截图和 QA 记录只描述当时版本，不作为后续设计的硬性前提。通用样式负责主题与必要布局，页面根据内容和视口决定密度，不通过跨页面选择器强制隐藏业务文案或覆盖控件尺寸。
 
 ## 工作方式与验证
 

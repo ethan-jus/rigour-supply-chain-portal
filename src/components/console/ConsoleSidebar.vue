@@ -122,7 +122,7 @@
   </aside>
 </template>
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Fold, Expand } from '@element-plus/icons-vue'
 import type { NavigationNode } from '@/types/management'
@@ -235,10 +235,16 @@ watch(
 watch(
   () => route.path,
   () => {
-    if (window.matchMedia?.('(max-width: 760px)').matches) workspace.collapsed = true
+    if (window.matchMedia?.('(max-width: 1100px)').matches) workspace.collapsed = true
   },
   { immediate: true },
 )
+const compactViewport = window.matchMedia?.('(max-width: 1100px)')
+function collapseForViewport() {
+  if (compactViewport?.matches) workspace.collapsed = true
+}
+onMounted(() => compactViewport?.addEventListener('change', collapseForViewport))
+onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseForViewport))
 </script>
 <style scoped lang="scss">
 .console-navigation {
@@ -478,7 +484,7 @@ a:focus-visible {
     padding-top: 12px;
   }
 }
-@media (max-width: 760px) {
+@media (max-width: 1100px) {
   .secondary-nav {
     position: fixed;
     top: 0;
