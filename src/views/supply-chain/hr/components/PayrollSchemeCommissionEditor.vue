@@ -55,7 +55,7 @@
             >{{ disabled ? '查看商品与排除项' : '选择商品与排除项' }}</el-button
           >
           <el-button
-            v-if="!disabled && canAddUnit(row as PayrollCommissionRow)"
+            v-if="!disabled"
             link
             type="primary"
             @click="openUnit(row as PayrollCommissionRow)"
@@ -209,7 +209,20 @@
       @close="unitSource = null"
     >
       <template v-if="unitSource">
-        <p>为“{{ unitSource.name }}”添加另一单位的提成，合并在同一商品下展示。原标准保留。</p>
+        <p>
+          为“{{
+            unitSource.name || '当前商品'
+          }}”添加另一单位的提成，合并在同一商品下展示。原标准保留。
+        </p>
+        <el-alert
+          v-if="
+            !unitSource.name.trim() ||
+            (!unitSource.sales.categoryIds.length && !unitSource.sales.variantIds.length)
+          "
+          title="商品范围尚未填写，可以先添加单位标准，保存规则前请在主表补齐商品。"
+          type="info"
+          :closable="false"
+        />
         <el-form label-position="top" :disabled="disabled">
           <el-form-item label="计提单位" required>
             <el-select v-model="unitDraft.unitCode" filterable placeholder="请选择单位，如套、床">
@@ -269,7 +282,7 @@
 <script setup lang="ts">
 import { displayCell } from '@/utils/business-display'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import type { TreeInstance } from 'element-plus'
+import { ElMessageBox, type TreeInstance } from 'element-plus'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import type { PayrollCommissionRow } from '@/api/core/payroll-scheme/models/PayrollCommissionRow'
 import { getPayrollProducts, type PayrollCategory, type PayrollProduct } from '@/api/core/payroll'
@@ -299,7 +312,8 @@ const scopeErrors = ref({ name: '', range: '' })
 const rows = ref<PayrollCommissionRow[]>(commissionRows(form.value.commission.rules))
 const selected = ref<PayrollCommissionRow[]>([]),
   scopeRow = ref<PayrollCommissionRow | null>(null)
-const unitGroups = computed(() => groupCommissionRows(rows.value))
+const draftUnitGroups = ref<Record<string, string>>({})
+const unitGroups = computed(() => groupCommissionRows(rows.value, draftUnitGroups.value))
 const displayRows = computed(() => unitGroups.value.flat())
 function unitSpan({ rowIndex, columnIndex }: { rowIndex: number; columnIndex: number }) {
   if (columnIndex !== 1) return [1, 1]
@@ -374,18 +388,31 @@ const unitDraft = ref({
 })
 const unitError = ref('')
 const unitOptions = computed(() => businessDictionaryOptions('', 'PRODUCT_UNIT'))
+function unitPrerequisite(row: PayrollCommissionRow) {
+  if ([row.sales, row.manager].every((rule) => rule.excluded))
+    return '销售人员和城市总均已设为明确不计提，无需添加单位标准。'
+  const roles = [
+    { name: '销售人员', rule: row.sales },
+    { name: '城市总', rule: row.manager },
+  ]
+  const nonQuantity = roles.filter(({ rule }) => rule.method !== 'QUANTITY')
+  if (nonQuantity.length)
+    return `${nonQuantity.map(({ name }) => name).join('、')}当前不是按数量计提。不同单位的金额需使用按数量方式，请先核对原标准。`
+  const missing = roles.filter(({ rule }) => !rule.unitCode)
+  return missing.length
+    ? `请先填写${missing.map(({ name }) => name).join('、')}的计提单位，再添加其他单位标准。`
+    : ''
+}
 function canAddUnit(row: PayrollCommissionRow) {
-  const active = [row.sales, row.manager].filter((rule) => !rule.excluded)
-  return (
-    active.length > 0 &&
-    [row.sales, row.manager].every((rule) => rule.method === 'QUANTITY' && !!rule.unitCode)
-  )
+  return !unitPrerequisite(row)
 }
 function openUnit(row: PayrollCommissionRow) {
-  if (props.disabled || !canAddUnit(row)) return
-  const message = validateScopeRow(row)
-  if (message) {
-    scopeRow.value = row
+  if (props.disabled) return
+  if (!canAddUnit(row)) {
+    void ElMessageBox.alert(unitPrerequisite(row), '添加单位标准', {
+      confirmButtonText: '知道了',
+      type: 'warning',
+    }).catch(() => undefined)
     return
   }
   unitDraft.value = { unitCode: '', sales: null, manager: null }
@@ -395,6 +422,10 @@ function openUnit(row: PayrollCommissionRow) {
 function addUnit() {
   const source = unitSource.value
   if (!source || props.disabled) return
+  if (!canAddUnit(source)) {
+    unitError.value = unitPrerequisite(source)
+    return
+  }
   const draft = unitDraft.value
   if (!unitOptions.value.some((unit) => unit.value === draft.unitCode)) {
     unitError.value = '请选择有效的计提单位'
@@ -421,11 +452,17 @@ function addUnit() {
       unitCode: draft.unitCode,
     })
   }
-  const message = duplicateCommissionScope([...rows.value, row])
+  const hasScope = (item: PayrollCommissionRow) =>
+    item.sales.categoryIds.length || item.sales.variantIds.length
+  const current = hasScope(source)
+    ? rows.value.filter(hasScope)
+    : unitGroups.value.find((group) => group.some((item) => item.code === source.code)) || [source]
+  const message = duplicateCommissionScope([...current, row])
   if (message) {
     unitError.value = message
     return
   }
+  draftUnitGroups.value[row.code] = draftUnitGroups.value[source.code] || source.code
   rows.value.splice(rows.value.indexOf(source) + 1, 0, row)
   unitSource.value = null
 }

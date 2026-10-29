@@ -464,3 +464,14 @@ HR `PayrollQuery` 增加独立 `employeeName`、`employeeCode`，保留旧构造
 地图异步加载与坐标转换依据：[高德JS API加载说明](https://lbs.amap.com/api/javascript-api-v2/guide/abc/load)、[地图状态](https://lbs.amap.com/api/javascript-api-v2/guide/map/state)、[坐标转换](https://lbs.amap.com/api/javascript-api-v2/guide/transform/convertfrom)。
 
 上一份考勤月历验收原文已保留在 [历史报告](docs/qa/attendance-calendar/design-qa-20261019.md)。
+
+
+## 商品提成详情与多单位配置复核 · 2026-10-29 20:48
+
+- 修正详情把单个商品展开成整组型号清单的问题：展开仅对应当前商品名称、规格和 ERP 实际分类；配置分类不冒充商品实际分类。按分类规则仍可在当前行展开核对适用分类，缺失商品资料显示提示并支持重试。
+- 按最终反馈移除重复的“提成适用范围”整块内容，不另设完整商品清单。同一商品规格按 SKU 分组，组内单位相邻、销售与城市总相邻，合并名称、规格和单位公共单元格；A300、A500 独立分组，保存金额和计算方式不变。展开时解除该组行合并，避免新增展开行与 HTML rowspan 交叉错位。
+- “添加单位标准”入口保持可见；不符合按数量或缺原单位时，点击明确提示缺项。商品尚未选择时直接打开单位及金额弹窗，不再跳到商品范围。添加后沿用同一商品范围，各单位金额独立；后续选择商品、修改名称或排除项同步该组单位。独立的空商品行不相互覆盖，规则最终保存仍要求标准名称及商品范围。
+- 补齐空名称草稿的重复单位拦截：不再以名称是否非空判断已有重复项。相同商品、角色和单位即使金额不同仍不允许重复；不同单位正常保留。
+- 本地认证实页只读检查：使用中规则包含 38 个商品规格、96 条商品角色单位行，A300/A500 各有套、床销售与城市总的 4 行分组，食品展开仅显示当前商品且实际分类为方便面。验收独立草稿通过键盘输入并添加单位，确认套 15/5 元、床 8/2 元分别保留；空名称同单位重复会提示，最终放弃草稿，没有提交或改动真实业务规则。
+- 191 文件、1,520 项前端测试通过（日志 `/tmp/rigour-commission-final-suite.log`），覆盖独立筛选、规则停用后修改/重新启用、商品规格配对、单位金额、重复校验及保存必填项。类型检查、改动文件 ESLint、生产构建通过；构建仍有既有大包提示。无后端、数据库或 Flyway 变更，无需重启服务；本轮不把浏览器未保存草稿当作真实规则保存、工资计算验收。
+- 证据位于项目外 `/Users/guorongrong/.codex/visualizations/2026/10/29/01a1855e-926c-7021-9d2e-ada41313ed72/business-audit/followup/summary-review/owner-attendance-refine/`：`commission-sku-units-final.jpg`、`commission-current-product-corrected.jpg`、`commission-unit-draft-two-values.jpg`；含业务资料，不加入 Git。早先的 `commission-shared-scope-final.jpg` 对应已取消的中间方案，不作为最终验收依据。

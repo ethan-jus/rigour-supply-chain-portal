@@ -10,7 +10,7 @@ import { getPayrollComponents } from '@/api/core/payroll-scheme/components'
 import type { PayrollComponentVersionView } from '@/api/core/payroll-scheme/models/PayrollComponentVersionView'
 import { prorationOptions } from '@/utils/payroll-scheme'
 import { commissionProductRows } from '@/utils/payroll-commission-rows'
-import { displayAmount, displayCell } from '@/utils/business-display'
+import { displayAmount, displayCell, displayValue } from '@/utils/business-display'
 import {
   commissionMethodLabel,
   commissionDateOptions,
@@ -65,11 +65,84 @@ const prorationName = (code: string | undefined) =>
   prorationOptions.find((option) => option.value === code)?.label || '-'
 const products = ref<PayrollProduct[]>([])
 const loadingProducts = ref(false)
-const commissionDetailRows = computed(() =>
-  (commission.value?.rules ?? []).flatMap((rule) =>
-    commissionProductRows(rule, products.value).map((product) => ({ ...rule, product })),
-  ),
-)
+const scopeKey = (rule: PayrollSchemeCommissionRule) =>
+  JSON.stringify(
+    [rule.categoryIds, rule.variantIds, rule.excludedCategoryIds, rule.excludedVariantIds].map(
+      (ids) => [...new Set(ids.map(String))].sort(),
+    ),
+  )
+const commissionDetailRows = computed(() => {
+  const groups = new Map<
+    string,
+    {
+      groupKey: string
+      rows: Array<
+        PayrollSchemeCommissionRule & { product: ReturnType<typeof commissionProductRows>[number] }
+      >
+    }
+  >()
+  for (const rule of commission.value?.rules ?? []) {
+    for (const product of commissionProductRows(rule, products.value)) {
+      const key = product.variantId ? `sku:${product.variantId}` : `category:${scopeKey(rule)}`
+      if (!groups.has(key)) groups.set(key, { groupKey: key, rows: [] })
+      groups.get(key)!.rows.push({
+        ...rule,
+        product: { ...product, productName: product.variantId ? product.productName : '' },
+      })
+    }
+  }
+  return [...groups.values()].flatMap((group, groupIndex) => {
+    const unitKey = (row: PayrollSchemeCommissionRule) =>
+      row.method === 'QUANTITY' ? `unit:${row.unitCode}` : row.method
+    const units = [...new Set(group.rows.map(unitKey))]
+    const ordered = [...group.rows].sort(
+      (a, b) =>
+        units.indexOf(unitKey(a)) - units.indexOf(unitKey(b)) ||
+        (a.recipientRole === 'SALES' ? 0 : 1) - (b.recipientRole === 'SALES' ? 0 : 1),
+    )
+    const unitLabel = (row: PayrollSchemeCommissionRule) =>
+      !row.excluded && row.method === 'QUANTITY' ? row.unitCode : '-'
+    return ordered.map((row, index) => {
+      const sameUnit = (other: PayrollSchemeCommissionRule) =>
+        unitKey(other) === unitKey(row) && unitLabel(other) === unitLabel(row)
+      const nextUnit = ordered.slice(index).findIndex((other) => !sameUnit(other))
+      return {
+        ...row,
+        groupKey: group.groupKey,
+        groupIndex,
+        groupFirst: index === 0,
+        groupSize: ordered.length,
+        unitSpan:
+          index && sameUnit(ordered[index - 1]!)
+            ? 0
+            : nextUnit === -1
+              ? ordered.length - index
+              : nextUnit,
+      }
+    })
+  })
+})
+type CommissionDetailRow = (typeof commissionDetailRows.value)[number]
+const expandedCommissionGroups = ref(new Set<string>())
+function commissionExpanded(row: CommissionDetailRow, expanded: CommissionDetailRow[] | boolean) {
+  if (Array.isArray(expanded)) {
+    expandedCommissionGroups.value = new Set(expanded.map((item) => item.groupKey))
+    return
+  }
+  const groups = new Set(expandedCommissionGroups.value)
+  if (expanded) groups.add(row.groupKey)
+  else groups.delete(row.groupKey)
+  expandedCommissionGroups.value = groups
+}
+function commissionSpan({ row, columnIndex }: { row: CommissionDetailRow; columnIndex: number }) {
+  // An expanded HTML row must not fall inside a rowspan; keep that product's cells separate while open.
+  if (expandedCommissionGroups.value.has(row.groupKey)) return [1, 1]
+  if (columnIndex <= 3) return row.groupFirst ? [row.groupSize, 1] : [0, 0]
+  if (columnIndex === 4) return row.unitSpan ? [row.unitSpan, 1] : [0, 0]
+  return [1, 1]
+}
+const commissionRowClass = ({ row }: { row: CommissionDetailRow }) =>
+  `commission-product-group-${row.groupIndex % 2}${row.groupFirst ? ' commission-product-group-start' : ''}`
 const value = (input: unknown) =>
   input == null ? '-' : typeof input === 'boolean' ? (input ? '是' : '否') : String(input)
 const percent = (input: number | null | undefined) => (input == null ? '-' : `${input}%`)
@@ -114,37 +187,27 @@ const stepRows = (steps: PayrollMetricStep[]) =>
   }))
 const categoryName = (id: number) =>
   props.categories.find((item) => item.id === id)?.name || `历史分类暂不可用（${id}）`
-const productName = (id: string) => {
-  const product = products.value.find((item) => String(item.productVariantId) === String(id))
-  return product
-    ? [product.productName, product.specification].filter(Boolean).join(' · ')
-    : loadingProducts.value
-      ? '型号名称加载中'
-      : `历史商品规格暂不可用（${id}）`
-}
 let request = 0
-watch(
-  () => commission.value?.rules,
-  async (rules) => {
-    const current = ++request
-    products.value = []
-    const ids = [
-      ...new Set(
-        (rules ?? [])
-          .flatMap((rule) => [...rule.variantIds, ...rule.excludedVariantIds])
-          .map(String),
-      ),
-    ]
-    loadingProducts.value = ids.length > 0
-    const results = await Promise.allSettled(ids.map((id) => getPayrollProducts('', null, id)))
-    if (current !== request) return
-    products.value = results.flatMap((result) =>
-      result.status === 'fulfilled' ? result.value : [],
-    )
-    loadingProducts.value = false
-  },
-  { immediate: true },
-)
+async function loadCommissionProducts() {
+  const current = ++request
+  products.value = []
+  const ids = [
+    ...new Set((commission.value?.rules ?? []).flatMap((rule) => rule.variantIds).map(String)),
+  ]
+  loadingProducts.value = ids.length > 0
+  const results = await Promise.allSettled(ids.map((id) => getPayrollProducts('', null, id)))
+  if (current !== request) return
+  products.value = results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+  loadingProducts.value = false
+}
+const unavailableProducts = computed(() => {
+  const requested = new Set(
+    (commission.value?.rules ?? []).flatMap((rule) => rule.variantIds).map(String),
+  )
+  products.value.forEach((product) => requested.delete(String(product.productVariantId)))
+  return requested.size
+})
+watch(() => commission.value?.rules, loadCommissionProducts, { immediate: true })
 </script>
 
 <template>
@@ -449,56 +512,58 @@ watch(
           </dd>
         </div>
       </dl>
-      <p class="parameter-hint">整单付清后计提。展开商品标准可查看适用范围及排除项。</p>
+      <el-alert
+        v-if="!loadingProducts && unavailableProducts"
+        type="warning"
+        :closable="false"
+        title="部分商品资料暂不可用，已保留原配置范围。"
+      >
+        <el-button link type="primary" @click="loadCommissionProducts">重试加载</el-button>
+      </el-alert>
       <el-table
+        class="commission-detail-table"
         :data="commissionDetailRows"
+        max-height="520"
+        :span-method="commissionSpan"
+        :row-class-name="commissionRowClass"
+        @expand-change="commissionExpanded"
         empty-text="全部商品不计提"
         v-loading="loadingProducts"
       >
-        <el-table-column type="expand"
+        <el-table-column type="expand" width="42"
           ><template #default="{ row }"
-            ><dl class="parameter-fields parameter-scope">
-              <div>
-                <dt>商品分类</dt>
-                <dd>
-                  <ul v-if="row.categoryIds.length">
-                    <li v-for="id in row.categoryIds" :key="id">{{ categoryName(id) }}</li>
-                  </ul>
-                  <span v-else>-</span>
-                </dd>
-              </div>
-              <div>
-                <dt>指定规格</dt>
-                <dd>
-                  <ul v-if="row.variantIds.length">
-                    <li v-for="id in row.variantIds" :key="id">{{ productName(id) }}</li>
-                  </ul>
-                  <span v-else>-</span>
-                </dd>
-              </div>
-              <div>
-                <dt>排除分类</dt>
-                <dd>
-                  <ul v-if="row.excludedCategoryIds.length">
-                    <li v-for="id in row.excludedCategoryIds" :key="id">{{ categoryName(id) }}</li>
-                  </ul>
-                  <span v-else>-</span>
-                </dd>
-              </div>
-              <div>
-                <dt>排除规格</dt>
-                <dd>
-                  <ul v-if="row.excludedVariantIds.length">
-                    <li v-for="id in row.excludedVariantIds" :key="id">{{ productName(id) }}</li>
-                  </ul>
-                  <span v-else>-</span>
-                </dd>
-              </div>
-            </dl></template
+            ><div class="commission-product-detail">
+              <dl class="parameter-fields" aria-label="当前商品信息">
+                <div>
+                  <dt>商品名称</dt>
+                  <dd>{{ displayValue(row.product.productName) }}</dd>
+                </div>
+                <div>
+                  <dt>规格</dt>
+                  <dd>{{ displayValue(row.product.specification) }}</dd>
+                </div>
+                <div>
+                  <dt>商品分类</dt>
+                  <dd>
+                    {{
+                      displayValue(
+                        (!row.product.variantId
+                          ? row.categoryIds.map(categoryName).join('、')
+                          : row.product.categoryName) ||
+                          (row.product.categoryId == null
+                            ? null
+                            : categoryName(row.product.categoryId)),
+                      )
+                    }}
+                  </dd>
+                </div>
+              </dl>
+            </div></template
           ></el-table-column
         >
         <el-table-column
           prop="product.productName"
+          class-name="commission-product-name"
           label="商品名称"
           min-width="200"
           show-overflow-tooltip
@@ -506,12 +571,23 @@ watch(
         />
         <el-table-column
           prop="product.specification"
+          class-name="commission-product-specification"
           label="规格"
-          min-width="150"
+          min-width="90"
           show-overflow-tooltip
           :formatter="displayCell"
         />
-        <el-table-column label="提成人员" min-width="110"
+        <el-table-column label="适用方式" min-width="100">
+          <template #default="{ row }">{{
+            row.variantIds.length ? '指定商品' : '按商品分类'
+          }}</template>
+        </el-table-column>
+        <el-table-column label="计提单位" class-name="commission-unit" min-width="85"
+          ><template #default="{ row }">{{
+            !row.excluded && row.method === 'QUANTITY' ? payrollUnitName(row.unitCode) : '-'
+          }}</template></el-table-column
+        >
+        <el-table-column label="提成人员" class-name="commission-recipient" min-width="90"
           ><template #default="{ row }">{{
             payrollOptionLabel(row.recipientRole, [
               { value: 'SALES', label: '销售' },
@@ -519,24 +595,23 @@ watch(
             ])
           }}</template></el-table-column
         >
-        <el-table-column label="计提方式" min-width="130"
+        <el-table-column label="计提方式" min-width="110"
           ><template #default="{ row }">{{
             commissionMethodLabel(row as PayrollSchemeCommissionRule)
           }}</template></el-table-column
         >
-        <el-table-column label="提成比例（%）" min-width="140" align="right"
+        <el-table-column label="提成比例（%）" min-width="115" align="right"
           ><template #default="{ row }">{{
             !row.excluded && row.method === 'PERCENT' ? value(row.value) : '-'
           }}</template></el-table-column
         >
-        <el-table-column label="单位提成（元）" min-width="150" align="right"
+        <el-table-column
+          label="单位提成（元）"
+          class-name="commission-unit-amount"
+          min-width="125"
+          align="right"
           ><template #default="{ row }">{{
             !row.excluded && row.method === 'QUANTITY' ? value(row.value) : '-'
-          }}</template></el-table-column
-        >
-        <el-table-column label="计提单位" min-width="100"
-          ><template #default="{ row }">{{
-            !row.excluded && row.method === 'QUANTITY' ? payrollUnitName(row.unitCode) : '-'
           }}</template></el-table-column
         >
       </el-table>
@@ -582,10 +657,21 @@ watch(
 .parameter-metric .el-table {
   margin-top: 18px;
 }
-.parameter-scope {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 20px 28px;
+.commission-product-detail {
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px;
   background: var(--el-fill-color-lighter);
+}
+.commission-detail-table :deep(.commission-product-group-1 > td) {
+  background: #f6f9ff;
+}
+.commission-detail-table :deep(.commission-product-group-start > td) {
+  border-top: 2px solid var(--el-border-color-light);
+}
+.commission-detail-table :deep(.commission-product-name .cell),
+.commission-detail-table :deep(.commission-product-specification .cell) {
+  font-weight: 600;
 }
 .rule-parameters h4 {
   margin: 0;

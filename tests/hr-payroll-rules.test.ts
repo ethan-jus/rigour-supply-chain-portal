@@ -727,18 +727,19 @@ describe('独立薪资规则入口', () => {
     await flushPromises()
     expect(wrapper.findAll('.rule-table-panel .el-table__body tbody tr')).toHaveLength(1)
     await click('查看')
-    const pairs = wrapper.findAll('.record-detail .el-table__body tbody tr').map((tr) =>
-      tr
-        .findAll('td')
-        .slice(1, 3)
-        .map((td) => td.text()),
-    )
+    const detailRows = wrapper.findAll('.record-detail .commission-detail-table .el-table__row')
+    expect(detailRows).toHaveLength(4)
+    const pairs = detailRows
+      .filter((tr) => tr.find('.commission-product-name').exists())
+      .map((tr) => [
+        tr.get('.commission-product-name').text(),
+        tr.get('.commission-product-specification').text(),
+      ])
     expect(pairs).toEqual([
       ['商品甲', '红色'],
       ['商品乙', '蓝色'],
-      ['商品甲', '红色'],
-      ['商品乙', '蓝色'],
     ])
+    expect(detailRows[0]!.get('.commission-product-name').attributes('rowspan')).toBe('2')
     expect(wrapper.find('.record-detail').text()).toContain('负责人甲')
     expect(savePayrollComponent).not.toHaveBeenCalled()
   })

@@ -112,18 +112,24 @@ export function flattenCommissionRows(rows: PayrollCommissionRow[]): PayrollSche
 }
 
 /** Group units of the same named product scope without changing their saved identities or amounts. */
-export function groupCommissionRows(rows: PayrollCommissionRow[]): PayrollCommissionRow[][] {
+export function groupCommissionRows(
+  rows: PayrollCommissionRow[],
+  draftGroups: Readonly<Record<string, string>> = {},
+): PayrollCommissionRow[][] {
   const groups = new Map<string, PayrollCommissionRow[]>()
   for (const row of rows) {
     const scope = row.sales
     const ordered = (ids: (string | number)[]) => [...new Set(ids.map(String))].sort()
-    const key = JSON.stringify([
-      row.name.trim(),
-      ordered(scope.categoryIds),
-      ordered(scope.excludedCategoryIds),
-      ordered(scope.variantIds),
-      ordered(scope.excludedVariantIds),
-    ])
+    const incomplete = !row.name.trim() || (!scope.categoryIds.length && !scope.variantIds.length)
+    const key = incomplete
+      ? `draft:${draftGroups[row.code] || row.code}`
+      : JSON.stringify([
+          row.name.trim(),
+          ordered(scope.categoryIds),
+          ordered(scope.excludedCategoryIds),
+          ordered(scope.variantIds),
+          ordered(scope.excludedVariantIds),
+        ])
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push(row)
   }
@@ -146,8 +152,8 @@ export function duplicateCommissionScope(rows: PayrollCommissionRow[]): string |
         rule.method === 'QUANTITY' ? rule.unitCode : '*',
       ])
       const previous = seen.get(key)
-      if (previous)
-        return `「${previous}」与「${row.name}」的${rule.recipientRole === 'SALES' ? '销售' : '城市总'}商品范围和计提单位重复，请合并为一条标准；金额不同也不能重复配置`
+      if (seen.has(key))
+        return `「${previous || '未命名商品标准'}」与「${row.name || '未命名商品标准'}」的${rule.recipientRole === 'SALES' ? '销售' : '城市总'}商品范围和计提单位重复，请合并为一条标准；金额不同也不能重复配置`
       seen.set(key, row.name)
     }
   }

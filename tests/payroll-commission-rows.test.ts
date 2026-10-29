@@ -76,6 +76,17 @@ describe('同一商品的双角色提成标准', () => {
     row.manager.categoryIds = [2]
     expect(commissionRows([row.sales, row.manager])).toHaveLength(2)
   })
+  it('未完成的商品标准各自独立，仅显式添加的单位行跟随原草稿组', () => {
+    const source = newCommissionRow('')
+    const other = newCommissionRow('')
+    const bed = newCommissionRow('')
+    expect(groupCommissionRows([source, other, bed])).toHaveLength(3)
+    expect(
+      groupCommissionRows([source, other, bed], { [bed.code]: source.code }).map((group) =>
+        group.map((row) => row.code),
+      ),
+    ).toEqual([[source.code, bed.code], [other.code]])
+  })
   it('同型号按套与床分别保留；相同单位重复或改名改金额仍拦截，规格顺序不影响检查', () => {
     const set = newCommissionRow('A300/A500')
     set.sales.variantIds = ['15', '16']
