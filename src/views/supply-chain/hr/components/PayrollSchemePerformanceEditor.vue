@@ -323,7 +323,7 @@ const minimumMinutes = computed({
 .personal-performance-example,
 .personal-performance-details,
 .personal-performance-note {
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.7;
   color: var(--el-text-color-regular);
 }

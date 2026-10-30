@@ -1,9 +1,9 @@
 <template>
   <div class="supply-page payroll-page payroll-v03-page">
     <div class="page-heading">
-      <div>
+      <div class="list-heading-title">
         <SupplyPageTitle>月度薪酬</SupplyPageTitle>
-        <p>选择月份和人员，按当月生效的档案与规则计算工资。</p>
+        <SupplyPageHelp>选择月份和人员，按当月生效的档案与规则计算工资。</SupplyPageHelp>
       </div>
       <el-button
         v-if="can('hr:payroll:calculate')"
@@ -779,6 +779,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { InfoFilled } from '@element-plus/icons-vue'
@@ -1328,7 +1329,7 @@ onMounted(async () => {
   gap: 12px 24px;
   padding: 8px 0;
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .payslip-heading {
   margin-bottom: 12px;
@@ -1363,7 +1364,7 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .summary-card {
   min-width: 0;
@@ -1421,7 +1422,7 @@ onMounted(async () => {
   background: transparent;
   color: var(--el-text-color-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   cursor: help;
 }
 .summary-help:hover,
@@ -1469,7 +1470,7 @@ onMounted(async () => {
 }
 .employee-meta {
   color: var(--el-text-color-regular);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1525,7 +1526,7 @@ onMounted(async () => {
 .page-heading p,
 .field-hint {
   color: var(--el-text-color-regular);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .field-hint {
   flex-basis: 100%;
@@ -1583,7 +1584,7 @@ onMounted(async () => {
   display: block;
   margin: 8px 0 0;
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .payroll-v03-page .filter-card {
   flex-shrink: 0;
@@ -1633,7 +1634,7 @@ onMounted(async () => {
 .payroll-list-heading span,
 .employee-meta {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   line-height: 1.7;
 }
 .payroll-v03-page .result-heading {

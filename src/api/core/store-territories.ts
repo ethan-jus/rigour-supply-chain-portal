@@ -1,5 +1,5 @@
 import { apiClient } from '@/api'
-import type { AdminArea } from './crm-store'
+import type { AdminDivisionCatalog } from './admin-divisions'
 
 export interface TerritoryArea {
   version: string
@@ -15,7 +15,7 @@ export interface TerritoryDepartment {
 export interface TerritoryContext {
   applicationVersion: number
   canWrite: boolean
-  catalog: { version: string; sourceName: string; sourceRef: string; nodes: AdminArea[] }
+  catalog: AdminDivisionCatalog
   departments: TerritoryDepartment[]
 }
 export interface TerritoryUpdate {

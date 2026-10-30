@@ -230,7 +230,7 @@
             <p v-else class="meeting-empty">暂无城市订单记录</p>
           </article>
           <article class="city-scorecard">
-            <table>
+            <table class="supply-report-table">
               <caption class="sr-only">
                 城市经营比较
               </caption>
@@ -445,7 +445,7 @@
         </header>
         <p>{{ detail.note }}</p>
         <div class="meeting-detail-scroll">
-          <table>
+          <table class="supply-report-table">
             <thead>
               <tr>
                 <th v-for="column in detail.columns" :key="column">{{ column }}</th>

@@ -352,6 +352,6 @@ onMounted(() => {
 .visit-plans { display: grid; gap: $spacing-lg; }
 .plan-toolbar { display: flex; flex-wrap: wrap; gap: $spacing-sm; align-items: center; padding: $spacing-md; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-lg; }
 .store-cell { display: flex; flex-direction: column; gap: 4px; }
-.store-cell span { color: $color-text-secondary; font-size: $font-size-xs; }
-.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: $spacing-md; color: $color-text-secondary; font-size: $font-size-sm; }
+.store-cell span { color: $color-text-secondary; font-size: var(--app-font-size-base); }
+.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: $spacing-md; color: $color-text-secondary; font-size: var(--app-font-size-base); }
 </style>

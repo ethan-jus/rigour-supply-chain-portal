@@ -1,5 +1,5 @@
 <template>
-  <component :is="tag"
+  <component :is="tag" class="supply-page-title" :style="{ fontSize: 'var(--app-font-size-heading)' }"
     ><template v-if="configuredName">{{ configuredName }}</template
     ><slot v-else
   /></component>
@@ -18,3 +18,7 @@ const configuredName = computed(() =>
     : undefined,
 )
 </script>
+
+<style scoped>
+.supply-page-title { font-size: var(--app-font-size-heading); color: var(--app-text-primary); font-weight: 600; line-height: 1.5; }
+</style>

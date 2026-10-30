@@ -403,7 +403,7 @@ defineExpose({ refresh })
 
 .hint {
   color: var(--el-text-color-regular);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.6;
 }
 .el-alert {

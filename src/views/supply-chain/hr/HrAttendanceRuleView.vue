@@ -798,7 +798,7 @@ onMounted(() => {
 .rule-hint {
   margin: 0;
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.6;
 }
 .department-error {

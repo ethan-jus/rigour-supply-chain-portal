@@ -798,7 +798,7 @@ defineExpose({
   max-width: 900px;
   margin: 0;
   color: var(--supply-text-muted);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   line-height: 1.55;
 }
 
@@ -845,7 +845,7 @@ defineExpose({
 
 .sync-scope__heading span {
   color: var(--supply-primary);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
 }
 
@@ -858,7 +858,7 @@ defineExpose({
 .sync-scope__heading p {
   margin: 4px 0 0;
   color: var(--supply-text-muted);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   line-height: 1.55;
 }
 
@@ -917,7 +917,7 @@ defineExpose({
 .sync-scope-option strong {
   overflow: hidden;
   color: var(--supply-text);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -926,7 +926,7 @@ defineExpose({
 .sync-scope-option span {
   overflow: hidden;
   color: var(--supply-text-muted);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -946,7 +946,7 @@ defineExpose({
 
 .issue-workbench__heading span {
   color: var(--supply-primary);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
 }
 
@@ -960,7 +960,7 @@ defineExpose({
 .issue-workbench__heading p {
   margin: 0;
   color: var(--supply-text-muted);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   line-height: 1.55;
 }
 
@@ -982,7 +982,7 @@ defineExpose({
 .issue-group small {
   display: block;
   color: var(--supply-text-muted);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 
 .issue-metrics strong,
@@ -1021,7 +1021,7 @@ defineExpose({
 .issue-group span {
   overflow: hidden;
   color: var(--supply-text);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1041,7 +1041,7 @@ defineExpose({
 .issue-action-hint,
 .muted-text {
   color: var(--supply-text-muted);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 
 .resolution-dialog {
@@ -1067,7 +1067,7 @@ defineExpose({
 .resolution-summary dt,
 .resolution-label {
   color: var(--supply-text);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
 }
 
@@ -1075,7 +1075,7 @@ defineExpose({
   margin: 5px 0 0;
   overflow: hidden;
   color: var(--supply-text);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1103,7 +1103,7 @@ defineExpose({
   min-width: 0;
   overflow: hidden;
   color: var(--supply-text-muted);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1119,7 +1119,7 @@ defineExpose({
 .operation-copy span,
 .result-summary span {
   color: var(--supply-primary);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
 }
 
@@ -1133,7 +1133,7 @@ defineExpose({
 .operation-copy p {
   margin: 0;
   color: var(--supply-text-muted);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   line-height: 1.55;
 }
 
@@ -1170,7 +1170,7 @@ defineExpose({
   margin-top: 5px;
   overflow: hidden;
   color: var(--supply-text);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1215,7 +1215,7 @@ defineExpose({
 
 .section-summary span {
   color: var(--supply-primary);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
 }
 
@@ -1232,7 +1232,7 @@ defineExpose({
 .sync-boundary dd {
   margin: 0;
   color: var(--supply-text-muted);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   line-height: 1.55;
 }
 
@@ -1253,7 +1253,7 @@ defineExpose({
   display: block;
   margin-bottom: 5px;
   color: var(--supply-text);
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
 }
 
 .sync-boundary {
@@ -1279,7 +1279,7 @@ defineExpose({
 .sync-boundary dt {
   margin-bottom: 5px;
   color: var(--supply-text);
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
 }
 

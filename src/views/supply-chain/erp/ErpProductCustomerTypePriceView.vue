@@ -1,10 +1,9 @@
 <template>
   <div class="erp-product-price-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">ERP · 商品中心</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>商品价格</SupplyPageTitle>
-        <p>按客户类型维护商品等级价；切换客户类型或单位口径查看对应价格，支持导入订货宝导出的等级价表格。</p>
+        <SupplyPageHelp>按客户类型维护商品等级价；切换客户类型或单位口径查看对应价格，支持导入订货宝导出的等级价表格。</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <el-button v-if="canWrite" type="primary" @click="importVisible = true">导入价格</el-button>
@@ -165,6 +164,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import ErpProductPriceImportDialog from './ErpProductPriceImportDialog.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -571,12 +571,12 @@ function errorMessage(reason: unknown, fallback: string): string {
 
 .editor-hint {
   color: $color-text-placeholder;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 
 .editor-tip {
   margin: 8px 0 0;
   color: $color-text-secondary;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 </style>

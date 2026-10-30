@@ -733,9 +733,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.allocation-note { margin: 0 0 10px; color: #64748b; font-size: 12px; }
+.allocation-note { margin: 0 0 10px; color: #64748b; font-size: var(--app-font-size-base); }
 .allocation-detail { padding: 16px 28px; background: #f8fafc; }
-.allocation-detail > p { color: #64748b; margin: 0 0 12px; font-size: 12px; }
+.allocation-detail > p { color: #64748b; margin: 0 0 12px; font-size: var(--app-font-size-base); }
 .allocation-value { color: #047857; }
 .order-register-page {
   display: flex;
@@ -763,7 +763,7 @@ onMounted(() => {
 /* 表头加粗放大，长列表滚动时更容易定位列。 */
 .order-register-table :deep(.el-table__header-wrapper tr th.el-table__cell) {
   color: var(--supply-text);
-  font-size: 13px;
+  font-size: var(--app-table-header-size);
   font-weight: 700;
 }
 .order-no-cell {
@@ -776,14 +776,14 @@ onMounted(() => {
   min-width: 76px;
   padding: 0 12px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   font-weight: 500;
   transition: background-color 0.15s, border-color 0.15s;
 }
 
 .order-action .el-icon {
   margin-right: 5px;
-  font-size: 14px;
+  font-size: var(--app-font-size-base);
 }
 
 .order-action--check {
@@ -811,7 +811,7 @@ onMounted(() => {
   min-width: 76px;
   height: 28px;
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .payment-check-state--done {

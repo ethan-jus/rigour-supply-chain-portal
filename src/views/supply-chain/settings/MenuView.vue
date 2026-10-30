@@ -873,7 +873,7 @@ onMounted(load)
 
 .menu-list-head__count {
   color: var(--supply-text-muted);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   font-weight: 400;
   white-space: nowrap;
 }
@@ -916,15 +916,15 @@ onMounted(load)
 /* 全局 .supply-scroll-table 表头规则同为 3 类 1 元素，这里必须多一层选择器才能生效。 */
 .menu-table :deep(.el-table__header-wrapper th.el-table__cell),
 .menu-table :deep(.el-table__fixed-header-wrapper th.el-table__cell) {
-  height: 44px;
-  color: #334155;
-  font-size: 14px;
+  height: var(--app-table-row-height);
+  color: var(--app-table-header-color);
+  font-size: var(--app-table-header-size);
   font-weight: 600;
   letter-spacing: 0.01em;
 }
 
 .menu-table :deep(.el-table__row > td.el-table__cell) {
-  padding: 9px 0;
+  padding: 6px 0;
 }
 
 .menu-table :deep(.el-table__expand-icon) {
@@ -956,7 +956,7 @@ onMounted(load)
   background: var(--supply-surface-subtle);
   color: #4a5568;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   text-overflow: ellipsis;
   vertical-align: bottom;
   white-space: nowrap;
@@ -971,14 +971,14 @@ onMounted(load)
   padding: 0 8px;
   border: 1px solid transparent;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
 
 .type-pill .el-icon {
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 
 .type-pill.is-menu {
@@ -1008,7 +1008,7 @@ onMounted(load)
   border-radius: 4px;
   background: #f1f5f9;
   color: #64748b;
-  font-size: 11px;
+  font-size: var(--app-font-size-base);
   line-height: 1;
   white-space: nowrap;
   vertical-align: middle;
@@ -1017,7 +1017,7 @@ onMounted(load)
 .route-path {
   color: #475569;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .display-cell {
@@ -1028,7 +1028,7 @@ onMounted(load)
   border-radius: 4px;
   background: #f1f5f9;
   color: #475569;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   line-height: 1;
 }
 
@@ -1062,7 +1062,7 @@ onMounted(load)
   align-items: center;
   gap: 6px;
   color: #1d7b4d;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 
 .status-cell__dot {
@@ -1090,13 +1090,13 @@ onMounted(load)
 
 .menu-empty__title {
   color: var(--supply-text);
-  font-size: 14px;
+  font-size: var(--app-font-size-base);
   font-weight: 600;
 }
 
 .menu-empty__hint {
   color: var(--supply-text-muted);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .menu-form-scroll {
@@ -1126,7 +1126,7 @@ onMounted(load)
 .feature-empty {
   width: 100%;
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   line-height: 1.6;
 }
 .field-hint,
@@ -1146,7 +1146,7 @@ onMounted(load)
   border-radius: var(--el-border-radius-base);
   background: var(--el-fill-color-blank);
   color: var(--el-text-color-regular);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1178,7 +1178,7 @@ onMounted(load)
 .icon-field__clear {
   margin-left: auto;
   color: var(--el-text-color-placeholder);
-  font-size: 14px;
+  font-size: var(--app-font-size-base);
 }
 
 .icon-field__clear:hover {
@@ -1187,7 +1187,7 @@ onMounted(load)
 
 .icon-field__arrow {
   color: var(--el-text-color-placeholder);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   transition: transform 0.2s ease;
 }
 
@@ -1209,7 +1209,7 @@ onMounted(load)
   background: var(--supply-surface-subtle);
   color: #4a5568;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   text-overflow: ellipsis;
   vertical-align: middle;
   white-space: nowrap;
@@ -1283,7 +1283,7 @@ onMounted(load)
   border-radius: 6px;
   background: transparent;
   color: #475569;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   text-align: left;
   cursor: pointer;
   transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
@@ -1314,7 +1314,7 @@ onMounted(load)
 .menu-icon-popover .icon-picker__empty {
   padding: 18px 0;
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   text-align: center;
 }
 </style>

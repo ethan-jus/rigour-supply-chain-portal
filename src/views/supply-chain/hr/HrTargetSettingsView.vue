@@ -323,7 +323,7 @@ function metricName(metric: string) {
           ><el-button link :disabled="locked" @click="selection = []">取消选择</el-button>
         </div>
         <div class="target-table-scroll">
-          <table class="target-table">
+          <table class="supply-data-table target-table">
             <thead>
               <tr>
                 <th class="check">
@@ -466,7 +466,7 @@ function metricName(metric: string) {
     >
       <p>{{ month }} · 共 {{ pending.length }} 项变更</p>
       <div class="target-preview">
-        <table class="target-table">
+        <table class="supply-data-table target-table">
           <thead>
             <tr>
               <th>对象</th>

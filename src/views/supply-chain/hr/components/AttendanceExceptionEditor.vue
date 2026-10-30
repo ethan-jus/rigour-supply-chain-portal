@@ -307,7 +307,7 @@ function add() {
 .field-hint {
   margin: 0;
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.6;
 }
 .entry-mode {
@@ -334,7 +334,7 @@ function add() {
 .date-index {
   flex-shrink: 0;
   color: var(--el-text-color-regular);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .date-row :deep(.row-date.el-date-editor),
 .row-time,
@@ -346,7 +346,7 @@ function add() {
   display: block;
   padding-left: 12px;
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .date-row :deep(.el-checkbox) {
   margin-right: 0;
@@ -366,7 +366,7 @@ function add() {
 .period-times {
   display: flex;
   flex-direction: column;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .time-range {
   display: flex;
@@ -375,7 +375,7 @@ function add() {
 }
 .entry-error {
   color: var(--el-color-danger);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .exception-records {
   margin-top: 16px;

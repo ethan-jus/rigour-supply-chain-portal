@@ -1,10 +1,9 @@
 <template>
   <div class="erp-product-specification-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">ERP · 商品中心</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>商品规格</SupplyPageTitle>
-        <p>维护商品多规格和子规格值，用于商品建档、SKU组合和订单选规格。</p>
+        <SupplyPageHelp>维护商品多规格和子规格值，用于商品建档、SKU组合和订单选规格。</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton scope="SPECIFICATION" label="商品规格" @completed="loadRows" />
@@ -193,6 +192,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'

@@ -1271,7 +1271,7 @@ function ensureEmployeeOption(employeeCode: string, employeeName: string) {
 }
 .query-expand .el-icon {
   margin-left: 4px;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   transition: transform 0.15s ease;
 }
 .query-expand .is-expanded {
@@ -1288,11 +1288,11 @@ function ensureEmployeeOption(employeeCode: string, employeeName: string) {
 }
 .customer-management-page :deep(.el-table th.el-table__cell) {
   font-weight: 600;
-  color: #303742;
-  height: 44px;
+  color: var(--app-table-header-color);
+  height: var(--app-table-row-height);
 }
 .customer-management-page :deep(.el-table th .cell) {
-  font-size: 15px;
+  font-size: var(--app-table-header-size);
   font-weight: 600;
 }
 .customer-name-cell {
@@ -1338,8 +1338,8 @@ function ensureEmployeeOption(employeeCode: string, employeeName: string) {
   gap: 12px;
 
   span {
-    color: #94a3b8;
-    font-size: 12px;
+    color: var(--app-text-secondary);
+    font-size: var(--app-font-size-base);
   }
 }
 </style>

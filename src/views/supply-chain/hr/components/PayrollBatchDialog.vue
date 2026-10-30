@@ -156,7 +156,7 @@ defineExpose({ open })
 <style scoped>
 .field-hint {
   color: var(--el-text-color-regular);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .el-input,
 .el-progress {

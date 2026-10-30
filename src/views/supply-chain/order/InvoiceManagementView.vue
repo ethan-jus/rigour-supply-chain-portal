@@ -1,10 +1,9 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">订单管理 · 发票管理</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>发票管理</SupplyPageTitle>
-        <p>集中处理订单开票：申请、上传发票附件并完成开票；发票只按内部订单登记，不参与订货宝同步。</p>
+        <SupplyPageHelp>集中处理订单开票：申请、上传发票附件并完成开票；发票只按内部订单登记，不参与订货宝同步。</SupplyPageHelp>
       </div>
     </div>
 
@@ -144,6 +143,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'

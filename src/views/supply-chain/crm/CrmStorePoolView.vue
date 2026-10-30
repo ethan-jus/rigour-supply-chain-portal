@@ -42,9 +42,21 @@
             ></template
           >
           <el-checkbox-group v-model="columns" class="column-options"
-            ><el-checkbox v-for="column in optionalColumns" :key="column.key" :value="column.key">{{
-              column.label
-            }}</el-checkbox></el-checkbox-group
+            ><el-checkbox
+              v-for="column in optionalColumns.filter(
+                (column) => column.key !== 'claimStatus' || view === 'PUBLIC',
+              )"
+              :key="column.key"
+              :value="column.key"
+              >{{ column.label }}</el-checkbox
+            ></el-checkbox-group
+          >
+          <el-button
+            class="reset-columns"
+            link
+            type="primary"
+            @click="columns = [...defaultColumns]"
+            >恢复默认列</el-button
           >
         </el-popover>
       </div>
@@ -83,6 +95,16 @@
           clearable
           :prefix-icon="Search"
           class="keyword-input"
+        />
+        <el-cascader
+          v-model="filters.storeType"
+          aria-label="门店类型"
+          placeholder="全部门店类型"
+          :options="typeFilterOptions"
+          :props="{ emitPath: false, checkStrictly: true }"
+          :show-all-levels="false"
+          filterable
+          clearable
         />
         <el-select
           v-model="filters.cooperation"
@@ -164,61 +186,88 @@
           :data="rows"
           row-key="id"
           class="store-table"
+          scrollbar-always-on
           empty-text="当前授权范围和筛选条件下暂无门店"
           height="100%"
         >
-          <el-table-column
-            label="门店信息"
-            min-width="330"
-            :fixed="compactViewport ? false : 'left'"
-          >
+          <el-table-column label="门店名称" width="280" :fixed="compactViewport ? false : 'left'">
             <template #default="{ row }">
-              <div class="store-identity">
-                <button class="store-name" :title="row.name" @click="openDetail(row as StoreRow)">
-                  {{ row.name }}</button
-                ><el-tag
-                  size="small"
-                  :type="row.cooperationStatus === 'COOPERATED' ? 'success' : 'info'"
-                  effect="light"
-                  >{{ row.cooperationStatus === 'COOPERATED' ? '历史合作' : '未合作' }}</el-tag
-                ><el-tooltip :content="tierDescription(row as StoreRow)"
-                  ><el-tag
-                    size="small"
-                    :type="['C', 'UNRATED'].includes(row.customerTier) ? 'info' : 'primary'"
-                    effect="light"
-                    >{{
-                      row.customerTier === 'UNRATED' ? '未评级' : `价值 ${row.customerTier}`
-                    }}</el-tag
-                  ></el-tooltip
-                >
-              </div>
+              <button class="store-name" :title="row.name" @click="openDetail(row as StoreRow)">
+                {{ row.name }}
+              </button>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="shown('poi')" label="POI" width="150">
+            <template #default="{ row }">
+              <button
+                v-if="row.primaryPoi"
+                class="poi-code"
+                :aria-label="`复制 POI ${row.primaryPoi}`"
+                :title="`复制 ${row.primaryPoi}`"
+                @click="copy(row.primaryPoi)"
+              >
+                {{ row.primaryPoi }}
+              </button>
+              <span v-else class="cell-missing">未关联</span>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="shown('type')" label="门店类型" width="110" show-overflow-tooltip>
+            <template #default="{ row }"
+              ><span :title="typePath(row.storeTypeCode)">{{
+                typeName(row.storeTypeCode)
+              }}</span></template
+            >
+          </el-table-column>
+          <el-table-column v-if="shown('province')" label="省份" width="132" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.provinceName || '—' }}</template>
+          </el-table-column>
+          <el-table-column v-if="shown('city')" label="市" width="116" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.cityName || '—' }}</template>
+          </el-table-column>
+          <el-table-column v-if="shown('county')" label="区县" width="116" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.countyName || '—' }}</template>
+          </el-table-column>
+          <el-table-column v-if="shown('address')" label="地址" min-width="300">
+            <template #default="{ row }">
               <button
                 v-if="storeMapUrl(row as StoreRow)"
                 type="button"
                 @click="locateStore(row as StoreRow)"
                 class="store-address"
                 :aria-label="`在地图查看${row.name}`"
+                :title="row.address || '在地图查看位置'"
               >
-                <el-icon><LocationFilled /></el-icon><span>{{ row.address }}</span>
+                <el-icon aria-hidden="true"><LocationFilled /></el-icon
+                ><span>{{ row.address || '查看位置' }}</span>
               </button>
-              <span v-else class="store-address"
-                ><el-icon><Location /></el-icon><span>{{ row.address }} · 位置待完善</span></span
-              >
+              <span v-else class="store-address is-unlocated" :title="row.address">
+                <el-icon aria-hidden="true"><Location /></el-icon
+                ><span>{{ row.address || '地址待完善' }}<small>位置待完善</small></span>
+              </span>
             </template>
           </el-table-column>
-          <el-table-column v-if="shown('type')" label="门店类型" min-width="110"
-            ><template #default="{ row }">{{
-              typeName(row.storeTypeCode)
-            }}</template></el-table-column
-          >
-          <el-table-column v-if="shown('area')" label="所属地区" min-width="145"
-            ><template #default="{ row }"
-              ><span class="area-line">{{ row.provinceName ?? '—' }}</span
-              ><span class="area-line">{{
-                [row.cityName, row.countyName].filter(Boolean).join(' / ') || '—'
-              }}</span></template
-            ></el-table-column
-          >
+          <el-table-column v-if="shown('tags')" label="门店标签" width="174">
+            <template #default="{ row }">
+              <div class="store-tags">
+                <el-tag
+                  size="small"
+                  :type="row.cooperationStatus === 'COOPERATED' ? 'success' : 'info'"
+                  effect="light"
+                  >{{ row.cooperationStatus === 'COOPERATED' ? '历史合作' : '未合作' }}</el-tag
+                >
+                <el-tooltip :content="tierDescription(row as StoreRow)">
+                  <el-tag
+                    size="small"
+                    :type="['C', 'UNRATED'].includes(row.customerTier) ? 'info' : 'primary'"
+                    effect="light"
+                    >{{
+                      row.customerTier === 'UNRATED' ? '未评级' : `价值 ${row.customerTier}`
+                    }}</el-tag
+                  >
+                </el-tooltip>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column v-if="view !== 'PUBLIC'" label="当前归属" min-width="110"
             ><template #default="{ row }"
               ><span>{{ row.poolType === 'PUBLIC' ? '公海' : '私海' }}</span
@@ -252,14 +301,6 @@
               row.publicPhone || '未维护'
             }}</template></el-table-column
           >
-          <el-table-column v-if="shown('poi')" label="高德 POI" min-width="155"
-            ><template #default="{ row }"
-              ><el-button v-if="row.primaryPoi" link @click="copy(row.primaryPoi)">{{
-                row.primaryPoi
-              }}</el-button
-              ><span v-else>未关联</span></template
-            ></el-table-column
-          >
           <el-table-column v-if="shown('created')" label="创建时间 / 创建人" min-width="220"
             ><template #default="{ row }"
               >{{ dateTime(row.createdAt)
@@ -272,7 +313,10 @@
               }}<span class="secondary-line actor">{{ actor(row.updatedBy) }}</span></template
             ></el-table-column
           >
-          <el-table-column v-if="view === 'PUBLIC'" label="认领状态" min-width="130"
+          <el-table-column
+            v-if="view === 'PUBLIC' && shown('claimStatus')"
+            label="认领状态"
+            width="210"
             ><template #default="{ row }"
               ><span>{{ row.claimBlockedReason || '可认领' }}</span
               ><span
@@ -289,30 +333,42 @@
             :fixed="compactViewport ? false : 'right'"
             ><template #default="{ row }"
               ><div class="row-actions">
-                <el-button
+                <el-tooltip
                   v-if="row.poolType === 'PUBLIC' && can('crm:pool:claim')"
-                  size="small"
-                  type="primary"
-                  :disabled="!!row.claimBlockedReason || pendingId === row.id"
-                  :loading="pendingId === row.id"
-                  @click="claim(row as StoreRow)"
-                  >认领</el-button
+                  :content="row.claimBlockedReason || '认领门店'"
+                  :disabled="!row.claimBlockedReason"
                 >
+                  <span
+                    class="claim-action"
+                    :tabindex="row.claimBlockedReason ? 0 : undefined"
+                    :aria-label="
+                      row.claimBlockedReason ? `暂不可认领：${row.claimBlockedReason}` : undefined
+                    "
+                    :title="row.claimBlockedReason || undefined"
+                  >
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!!row.claimBlockedReason || pendingId === row.id"
+                      :loading="pendingId === row.id"
+                      @click="claim(row as StoreRow)"
+                      >认领</el-button
+                    >
+                  </span>
+                </el-tooltip>
               </div></template
             ></el-table-column
           >
         </el-table>
       </div>
       <CrmStoreMap
-        v-else
-        :rows="rows"
-        :total="total"
-        :loading="loading"
-        :focus-id="mapFocusId"
-        @select="mapFocusId = $event"
+        v-else-if="mapQuery && context"
+        :query="mapQuery"
+        :focus-row="mapFocusRow"
         @detail="openDetail"
       />
-      <footer class="table-footer">
+      <footer v-if="displayMode === 'list'" class="table-footer">
         <el-pagination
           :current-page="pageIndex + 1"
           v-model:page-size="pageSize"
@@ -422,7 +478,7 @@
           <el-tab-pane label="基本资料" name="profile">
             <el-descriptions :column="1" border
               ><el-descriptions-item label="门店类型">{{
-                typeName(selected.storeTypeCode)
+                typePath(selected.storeTypeCode)
               }}</el-descriptions-item
               ><el-descriptions-item label="所属地区">{{
                 [selected.provinceName, selected.cityName, selected.countyName]
@@ -590,13 +646,13 @@
       <el-form label-position="top" class="store-form" @submit.prevent="submitLead"
         ><el-form-item label="门店名称" required
           ><el-input v-model="form.name" maxlength="200" /></el-form-item
-        ><el-form-item label="区县 / 合法城市叶节点" required
-          ><el-select v-model="form.areaCode" filterable placeholder="选择负责范围内的区县"
-            ><el-option
-              v-for="a in formAreas"
-              :key="a.code"
-              :value="a.code"
-              :label="areaPath(a.code)" /></el-select></el-form-item
+        ><el-form-item label="所属区县" required
+          ><el-select-v2
+            v-model="form.areaCode"
+            :options="formAreas"
+            filterable
+            aria-label="门店所属区县"
+            placeholder="搜索省、市或区县" /></el-form-item
         ><el-form-item label="详细地址" required
           ><el-input v-model="form.address" maxlength="500"
         /></el-form-item>
@@ -634,12 +690,14 @@
         ><el-form-item label="详细地址" required
           ><el-input v-model="editing.address" maxlength="500" /></el-form-item
         ><el-form-item label="门店类型"
-          ><el-select v-model="editing.storeTypeCode" clearable placeholder="未分类"
-            ><el-option
-              v-for="t in storeTypes"
-              :key="t.dictionaryItemCode"
-              :label="t.dictionaryItemName"
-              :value="t.dictionaryItemCode" /></el-select></el-form-item
+          ><el-cascader
+            v-model="editing.storeTypeCode"
+            :options="classificationCatalog.options"
+            :props="{ emitPath: false, checkStrictly: true }"
+            filterable
+            clearable
+            placeholder="选择门店行业分类"
+            style="width: 100%" /></el-form-item
         ><el-form-item label="公开电话"
           ><el-input v-model="editing.publicPhone" maxlength="50" /></el-form-item
         ><el-form-item label="修改原因" required
@@ -682,8 +740,15 @@ import {
   type StoreView,
   type StoreVisit,
 } from '@/api/core/crm-store'
-import { getEffectiveBizDict, type DictItemView } from '@/api/core/business-settings'
-import { GEO_REGIONS, remainingTime, storeAreaOptions, storeMapUrl } from '@/utils/crm-store'
+import { resolveBizDict, type DictItemView } from '@/api/core/business-settings'
+import { storeClassificationCatalog } from '@/utils/crm-store-classification'
+import {
+  GEO_REGIONS,
+  remainingTime,
+  storeAreaOptions,
+  storeLeadAreaOptions,
+  storeMapUrl,
+} from '@/utils/crm-store'
 
 const route = useRoute()
 const view = computed<StoreView>(
@@ -718,11 +783,12 @@ function updateViewport() {
 }
 onMounted(() => compactMedia?.addEventListener('change', updateViewport))
 onBeforeUnmount(() => compactMedia?.removeEventListener('change', updateViewport))
-const mapFocusId = ref<string | null>(null)
+const mapFocusRow = ref<StoreRow | null>(null)
+const mapQuery = ref<StoreQuery | null>(null)
 function locateStore(row: StoreRow) {
   if (!storeMapUrl(row)) return
   detailOpen.value = false
-  mapFocusId.value = row.id
+  mapFocusRow.value = row
   displayMode.value = 'map'
 }
 const context = ref<StoreContext | null>(null),
@@ -740,6 +806,7 @@ const filters = reactive({
   tier: '',
   activity: '',
   potential: '',
+  storeType: '',
 })
 const team = ref(false),
   reviewMode = ref(false),
@@ -752,7 +819,12 @@ const areas = computed(() =>
 )
 const optionalColumns = [
   { key: 'type', label: '门店类型' },
-  { key: 'area', label: '所属地区' },
+  { key: 'province', label: '省份' },
+  { key: 'city', label: '市' },
+  { key: 'county', label: '区县' },
+  { key: 'address', label: '地址' },
+  { key: 'tags', label: '门店标签' },
+  { key: 'claimStatus', label: '认领状态' },
   { key: 'lastVisit', label: '最近拜访' },
   { key: 'lastOrder', label: '最近成交' },
   { key: 'activity', label: '交易活跃度' },
@@ -761,7 +833,8 @@ const optionalColumns = [
   { key: 'created', label: '创建时间 / 创建人' },
   { key: 'updated', label: '修改时间 / 修改人' },
 ]
-const columns = ref(['type', 'area', 'lastVisit', 'lastOrder']),
+const defaultColumns = ['poi', 'type', 'province', 'city', 'county', 'address', 'tags']
+const columns = ref([...defaultColumns]),
   shown = (key: string) => columns.value.includes(key)
 const now = ref(Date.now()),
   timer = setInterval(() => {
@@ -802,6 +875,9 @@ const leadLabels: Record<string, string> = {
   WITHDRAWN: '已撤回',
 }
 const eventLabels: Record<string, string> = {
+  FILE_IMPORTED: '门店资料导入',
+  SOURCE_CLASSIFICATION_APPLIED: '按来源补齐行业分类',
+  SOURCE_CLASSIFICATION_REVIEW_REQUIRED: '来源分类待核验',
   PROFILE_UPDATED: '门店资料修改',
   CLAIMED: '认领到私海',
   RELEASED: '退回公海',
@@ -862,10 +938,18 @@ const endReasonLabels: Record<string, string> = {
   COOPERATION_TIMEOUT: '60天未拜访或复购',
 }
 const storeTypes = ref<DictItemView[]>([])
+const classificationCatalog = computed(() => storeClassificationCatalog(storeTypes.value))
+const typeFilterOptions = computed(() => [
+  { value: '__UNCLASSIFIED__', label: '未分类' },
+  ...storeClassificationCatalog(storeTypes.value, true).options,
+])
 function typeName(code: string | null) {
   return code
-    ? (storeTypes.value.find((t) => t.dictionaryItemCode === code)?.dictionaryItemName ?? code)
+    ? (classificationCatalog.value.byCode.get(code)?.dictionaryItemName ?? code)
     : '未分类'
+}
+function typePath(code: string | null) {
+  return code ? (classificationCatalog.value.paths.get(code) ?? typeName(code)) : '未分类'
 }
 const dateTime = (value: string | null) =>
   value
@@ -907,6 +991,7 @@ function query(): StoreQuery {
   return {
     view: effectiveView.value,
     ...filters,
+    storeType: filters.storeType || undefined,
     cursor: cursors.value[pageIndex.value],
     size: pageSize.value,
   }
@@ -929,6 +1014,12 @@ function resetFilters() {
 function search() {
   pageIndex.value = 0
   cursors.value = [undefined]
+  mapFocusRow.value = null
+  mapQuery.value = { ...query(), cursor: undefined, size: 20 }
+  if (displayMode.value === 'map' && isList.value) {
+    loading.value = false
+    return Promise.resolve()
+  }
   return loadRows()
 }
 async function changeTeam() {
@@ -939,13 +1030,16 @@ async function loadRows() {
   loading.value = true
   error.value = ''
   rows.value = []
-  mapFocusId.value = null
   try {
     if (view.value === 'COVERAGE') {
       const result = await crmStoreApi.coverage(query())
       if (generation === loadGeneration) coverage.value = result
     } else {
-      const result = await crmStoreApi.list(query())
+      const result = await crmStoreApi.list({
+        ...mapQuery.value!,
+        cursor: cursors.value[pageIndex.value],
+        size: pageSize.value,
+      })
       if (generation === loadGeneration) {
         rows.value = result.items
         total.value = result.total
@@ -980,10 +1074,9 @@ async function reload() {
     if (view.value === 'LEADS') await loadLeads()
     else await search()
     const dictionaryGeneration = loadGeneration
-    void getEffectiveBizDict('CRM_STORE_TYPE')
+    void resolveBizDict('CRM_STORE_TYPE')
       .then((result) => {
-        if (dictionaryGeneration === loadGeneration)
-          storeTypes.value = result.items.filter((i) => i.enabled !== false)
+        if (dictionaryGeneration === loadGeneration) storeTypes.value = result.items
       })
       .catch(() => {
         if (dictionaryGeneration === loadGeneration) storeTypes.value = []
@@ -1161,28 +1254,7 @@ const createOpen = ref(false),
     latitude: undefined as number | undefined,
     publicPhone: '',
   })
-const formAreas = computed(() =>
-  (context.value?.areas ?? []).filter(
-    (a) =>
-      a.level === 'COUNTY' ||
-      (a.level === 'PREFECTURE' &&
-        !(context.value?.areas ?? []).some((n) => n.parentCode === a.code)),
-  ),
-)
-function areaPath(code: string) {
-  const nodes = context.value?.areas ?? []
-  const names: string[] = []
-  const seen = new Set<string>()
-  for (
-    let a = nodes.find((n) => n.code === code);
-    a && !seen.has(a.code);
-    a = nodes.find((n) => n.code === a?.parentCode)
-  ) {
-    seen.add(a.code)
-    names.unshift(a.name)
-  }
-  return names.join(' / ')
-}
+const formAreas = computed(() => storeLeadAreaOptions(context.value?.areas ?? []))
 function openCreate() {
   Object.assign(form, {
     requestId: crypto.randomUUID(),
@@ -1262,6 +1334,9 @@ async function initializePolicy() {
   }
 }
 let activatedOnce = false
+watch(displayMode, (mode) => {
+  if (mode === 'list' && context.value && isList.value) void loadRows()
+})
 onActivated(() => {
   // 认领、退回及权限维护可能发生在其他页签，重新打开时刷新并保留当前筛选。
   if (activatedOnce) void reload()
@@ -1321,7 +1396,7 @@ watch(
   gap: 6px;
 }
 .store-heading h1 {
-  font-size: 20px;
+  font-size: var(--app-font-size-heading);
   line-height: 32px;
   margin: 0;
   font-weight: 600;
@@ -1331,7 +1406,7 @@ watch(
   align-items: center;
   gap: 4px;
   color: $color-text-secondary;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .scope-label .el-icon {
   color: $color-primary;
@@ -1362,7 +1437,8 @@ watch(
 .store-filters :deep(.order-register-filter__actions .el-button + .el-button) {
   margin-left: 0;
 }
-.store-filters .el-select {
+.store-filters .el-select,
+.store-filters .el-cascader {
   flex: 0 1 150px;
   width: 150px;
   min-width: 0;
@@ -1402,38 +1478,41 @@ watch(
   --el-table-header-bg-color: #f3f6fb;
   --el-table-border-color: #e8edf5;
   --el-table-row-hover-bg-color: #f4f8ff;
-  font-size: 14px;
+  font-size: var(--app-font-size-base);
 }
 .store-table :deep(th.el-table__cell) {
-  height: 40px;
-  color: #243550;
+  height: var(--app-table-row-height);
+  color: var(--app-table-header-color);
   font-weight: 600;
 }
 .store-table :deep(td.el-table__cell) {
-  padding: 10px 0;
+  padding: 8px 0;
+  height: var(--app-table-row-height);
 }
 .store-table :deep(.cell) {
   padding-left: 14px;
   padding-right: 14px;
 }
-.store-identity {
+.store-tags {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
   min-width: 0;
 }
 .store-name {
+  width: 100%;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
   padding: 0;
   border: 0;
   background: none;
-  color: #0f172a;
+  color: var(--app-text-primary);
   cursor: pointer;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--app-font-size-base);
   font-weight: 600;
   text-align: left;
 }
@@ -1445,11 +1524,11 @@ watch(
   outline: 2px solid #2563eb;
   outline-offset: 3px;
 }
-.store-identity .el-tag--success {
+.store-tags .el-tag--success {
   --el-tag-bg-color: #ddf7e9;
   --el-tag-text-color: #168052;
 }
-.store-identity .el-tag {
+.store-tags .el-tag {
   flex: none;
   white-space: nowrap;
   border: 0;
@@ -1459,9 +1538,9 @@ watch(
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  margin-top: 4px;
-  color: $color-text-secondary;
-  font-size: 13px;
+  margin-top: 0;
+  color: var(--app-text-regular);
+  font-size: var(--app-font-size-base);
   text-decoration: none;
   line-height: 20px;
   padding: 0;
@@ -1474,19 +1553,62 @@ button.store-address {
 }
 .store-address .el-icon {
   flex: none;
-  margin-top: 3px;
+  margin-top: 2px;
+  font-size: 18px;
+  color: var(--el-color-primary);
 }
+.store-address span {
+  overflow-wrap: anywhere;
+}
+.store-address.is-unlocated .el-icon {
+  color: var(--app-text-secondary);
+}
+.store-address small {
+  display: block;
+  font: inherit;
+  color: var(--app-text-secondary);
+}
+.poi-code {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--app-text-regular);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.poi-code:hover {
+  color: var(--el-color-primary);
+}
+.poi-code:focus-visible,
+.claim-action:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+.cell-missing {
+  color: var(--app-text-secondary);
+}
+.reset-columns {
+  margin-top: 8px;
+}
+.column-options {
+  max-height: min(58vh, 480px);
+  overflow-y: auto;
+}
+.store-tags :deep(.el-tag--info) {
+  --el-tag-text-color: var(--app-text-secondary);
+}
+
 button.store-address:hover {
   color: #2563eb;
 }
-.area-line,
 .secondary-line {
   display: block;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 22px;
 }
 .secondary-line {
-  color: #8490a3;
+  color: var(--app-text-secondary);
 }
 .actor {
   word-break: break-all;
@@ -1520,11 +1642,11 @@ button.store-address:hover {
   min-width: 44px;
   text-align: center;
   color: $color-text-regular;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .muted {
   color: #64748b;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .lead-toolbar {
   display: flex;
@@ -1556,7 +1678,7 @@ button.store-address:hover {
 .store-detail pre {
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   background: #f8fafc;
   padding: 12px;
 }

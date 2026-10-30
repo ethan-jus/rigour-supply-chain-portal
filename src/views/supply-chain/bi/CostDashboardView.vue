@@ -336,7 +336,7 @@
               </div>
             </div>
             <div class="table-scroll">
-              <table class="cost-table matrix">
+              <table class="supply-report-table cost-table matrix">
                 <thead>
                   <tr>
                     <th>费用归属</th>
@@ -437,7 +437,7 @@
           <section class="cost-panel">
             <h2>费用构成明细</h2>
             <div class="table-scroll">
-              <table class="cost-table">
+              <table class="supply-report-table cost-table">
                 <thead>
                   <tr>
                     <th>费用项</th>
@@ -525,7 +525,7 @@
               <span class="muted">占比基数为专题全量金额</span>
             </div>
             <div class="table-scroll">
-              <table class="cost-table">
+              <table class="supply-report-table cost-table">
                 <thead>
                   <tr>
                     <th>{{ dimensionNames[filters.dimension || ''] || '对象' }}</th>

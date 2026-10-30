@@ -1,10 +1,9 @@
 <template>
   <div class="erp-product-management-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">ERP · 商品中心</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>商品管理</SupplyPageTitle>
-        <p>维护商品档案、规格价格、图片和上架状态。</p>
+        <SupplyPageHelp>维护商品档案、规格价格、图片和上架状态。</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton scope="PRODUCT_SPU" label="商品" @completed="loadRows" />
@@ -1089,6 +1088,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
@@ -2417,7 +2417,7 @@ function errorMessage(reason: unknown, fallback: string) {
   align-items: center;
   justify-content: center;
   color: $color-text-placeholder;
-  font-size: 10px;
+  font-size: var(--app-font-size-base);
 }
 
 /* ---- 商品列表：就地展开规格 ---- */
@@ -2459,7 +2459,7 @@ function errorMessage(reason: unknown, fallback: string) {
   display: block;
   overflow: hidden;
   color: $color-text-placeholder;
-  font-size: 11px;
+  font-size: var(--app-font-size-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2497,7 +2497,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
 .audit-cell__time {
   color: $color-text-secondary;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 :deep(.product-variant-row) {
@@ -2553,7 +2553,7 @@ function errorMessage(reason: unknown, fallback: string) {
   border-radius: $border-radius-base;
   background: rgb(15 23 42 / 72%);
   color: #fff;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2598,7 +2598,7 @@ function errorMessage(reason: unknown, fallback: string) {
   border-radius: 999px;
   background: rgb(15 23 42 / 72%);
   color: #fff;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
   line-height: 18px;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -2607,7 +2607,7 @@ function errorMessage(reason: unknown, fallback: string) {
 .product-image-tile__empty {
   width: 100%;
   height: 100%;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 
 .product-identity-content {
@@ -2731,7 +2731,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
   span {
     color: $color-text-secondary;
-    font-size: $font-size-xs;
+    font-size: var(--app-font-size-base);
   }
 
   strong {
@@ -2795,7 +2795,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
   span {
     color: $color-text-secondary;
-    font-size: $font-size-xs;
+    font-size: var(--app-font-size-base);
   }
 
   strong {
@@ -2848,7 +2848,7 @@ function errorMessage(reason: unknown, fallback: string) {
   p {
     margin-top: 4px;
     color: $color-text-secondary;
-    font-size: $font-size-xs;
+    font-size: var(--app-font-size-base);
   }
 }
 
@@ -2860,7 +2860,7 @@ function errorMessage(reason: unknown, fallback: string) {
 .variant-price-row span {
   min-width: 140px;
   color: $color-text-secondary;
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
 
   strong {
     margin-left: 4px;
@@ -2871,7 +2871,7 @@ function errorMessage(reason: unknown, fallback: string) {
 .variant-meta-row {
   margin-top: 10px;
   color: $color-text-secondary;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 
 .related-product-grid {
@@ -2913,19 +2913,19 @@ function errorMessage(reason: unknown, fallback: string) {
   h4 {
     margin: 10px 0 4px;
     color: $color-text-primary;
-    font-size: $font-size-sm;
+    font-size: var(--app-font-size-base);
   }
 
   p {
     margin: 0;
     color: $color-text-secondary;
-    font-size: $font-size-xs;
+    font-size: var(--app-font-size-base);
   }
 
   strong {
     margin-top: 8px;
     color: #ff5a3d;
-    font-size: $font-size-sm;
+    font-size: var(--app-font-size-base);
   }
 }
 
@@ -2933,7 +2933,7 @@ function errorMessage(reason: unknown, fallback: string) {
   display: inline-flex;
   margin-top: 6px;
   color: $color-primary;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 
 .related-product-card__image {
@@ -2947,7 +2947,7 @@ function errorMessage(reason: unknown, fallback: string) {
   border-radius: $border-radius-base;
   background: $color-bg-muted;
   color: $color-text-placeholder;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 
 .related-product-tags {
@@ -2989,7 +2989,7 @@ function errorMessage(reason: unknown, fallback: string) {
   p {
     margin: 4px 0 0;
     color: $color-text-secondary;
-    font-size: $font-size-sm;
+    font-size: var(--app-font-size-base);
   }
 }
 
@@ -3019,7 +3019,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
 .variant-editor__form :deep(.el-form-item__label) {
   padding-bottom: 2px;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   color: var(--el-text-color-secondary);
   line-height: 18px;
 }
@@ -3058,14 +3058,14 @@ function errorMessage(reason: unknown, fallback: string) {
 .unit-rate__prefix {
   flex: none;
   color: var(--el-text-color-primary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   white-space: nowrap;
 }
 
 .unit-rate__hint {
   flex: none;
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   white-space: nowrap;
 }
 
@@ -3083,7 +3083,7 @@ function errorMessage(reason: unknown, fallback: string) {
   border-radius: $border-radius-base;
   background: #fef2f2;
   color: #b91c1c;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 
 /* 保存状态固定在弹窗页脚，保证失败原因一定可见（不被弹窗遮挡）。 */
@@ -3103,18 +3103,18 @@ function errorMessage(reason: unknown, fallback: string) {
 
 .editor-footer__error {
   color: #b91c1c;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   text-align: left;
 }
 
 .editor-footer__saving {
   color: var(--el-color-primary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 
 .editor-footer__hint {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .unit-scope {
@@ -3131,7 +3131,7 @@ function errorMessage(reason: unknown, fallback: string) {
 .form-hint {
   margin-top: 4px;
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   line-height: 1.4;
 }
 </style>

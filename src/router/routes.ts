@@ -994,6 +994,18 @@ export const constantRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'settings/admin-divisions',
+        name: 'SupplySettingsAdminDivisions',
+        component: () => import('@/views/supply-chain/settings/AdminDivisionView.vue'),
+        meta: {
+          title: '行政区划',
+          requiresAuth: true,
+          applicationCode: 'SUPPLY_CHAIN',
+          routeKey: 'supply.settings.admin-divisions',
+          permission: 'supply:admin-division:read',
+        },
+      },
+      {
         path: 'settings/store-territories',
         name: 'SupplySettingsStoreTerritories',
         component: () => import('@/views/supply-chain/settings/StoreTerritoryView.vue'),

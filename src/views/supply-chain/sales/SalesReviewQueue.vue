@@ -706,7 +706,7 @@ watch(reviewDialog, (visible) => {
 .review-toolbar p {
   margin: 5px 0 0;
   color: $color-text-secondary;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 .primary-cell,
 .time-cell,
@@ -719,7 +719,7 @@ watch(reviewDialog, (visible) => {
 .time-cell,
 .result-cell {
   color: $color-text-secondary;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 .evidence-cell {
   display: flex;
@@ -728,7 +728,7 @@ watch(reviewDialog, (visible) => {
 }
 .evidence-cell small {
   color: $color-text-secondary;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 .anomaly-list {
   display: flex;
@@ -746,7 +746,7 @@ watch(reviewDialog, (visible) => {
   gap: $spacing-md;
   margin-top: $spacing-md;
   color: $color-text-secondary;
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
 }
 .review-context {
   display: flex;
@@ -759,12 +759,12 @@ watch(reviewDialog, (visible) => {
 }
 .review-context span {
   color: $color-text-secondary;
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
 }
 .review-context p {
   margin: 0;
   color: $color-text-secondary;
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   line-height: 1.6;
 }
 .recording-review,
@@ -787,11 +787,11 @@ watch(reviewDialog, (visible) => {
 .recording-review > small,
 .evidence-review > small {
   color: $color-text-secondary;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 .recording-review__state {
   color: $color-text-secondary;
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
 }
 .photo-list {
   display: grid;
@@ -818,7 +818,7 @@ watch(reviewDialog, (visible) => {
 }
 .photo-item span {
   color: $color-text-secondary;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 .recording-list {
   display: grid;
@@ -840,7 +840,7 @@ watch(reviewDialog, (visible) => {
 }
 .recording-item span {
   color: $color-text-secondary;
-  font-size: $font-size-xs;
+  font-size: var(--app-font-size-base);
 }
 .recording-item audio {
   width: 100%;

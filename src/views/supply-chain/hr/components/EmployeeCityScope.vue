@@ -115,7 +115,7 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-regular);
   margin: 0;
   line-height: 1.7;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .scope-actions {
   flex-shrink: 0;

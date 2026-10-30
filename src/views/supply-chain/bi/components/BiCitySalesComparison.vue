@@ -12,7 +12,7 @@
       </div>
     </div>
     <div class="overview-table-scroll">
-      <table :class="{ 'with-cohort': !receipt }">
+      <table class="supply-report-table" :class="{ 'with-cohort': !receipt }">
         <thead>
           <tr>
             <th>排名</th>

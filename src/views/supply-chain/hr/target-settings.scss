@@ -21,7 +21,7 @@
   p {
     color: $color-text-secondary;
     margin: 0;
-    font-size: 12px;
+    font-size: var(--app-font-size-base);
   }
   :deep(.el-date-editor) {
     width: 160px;
@@ -58,7 +58,7 @@
     border-radius: $border-radius-sm;
     padding: 6px 12px;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--app-font-size-base);
     color: $color-text-secondary;
     cursor: pointer;
     &.active {
@@ -68,7 +68,7 @@
       font-weight: 600;
     }
     span {
-      font-size: 11px;
+      font-size: var(--app-font-size-base);
       padding: 1px 5px;
       background: $color-border-base;
       border-radius: 4px;
@@ -89,7 +89,7 @@
   border: 1px solid #e5eaf2;
   border-radius: $border-radius-base;
   h2 {
-    font-size: 13px;
+    font-size: var(--app-font-size-base);
     margin: 0 10px 16px;
     color: #77859a;
   }
@@ -104,7 +104,7 @@
     border: 0;
     border-radius: 6px;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--app-font-size-base);
     cursor: pointer;
     &.active {
       color: #315bfa;
@@ -113,7 +113,7 @@
     }
     span {
       color: #8692a5;
-      font-size: 12px;
+      font-size: var(--app-font-size-base);
     }
   }
 }
@@ -140,24 +140,27 @@
 .target-table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   white-space: nowrap;
   th {
+    font-size: var(--app-table-header-size);
+    height: var(--app-table-row-height);
     background: #f8fafc;
     text-align: left;
-    color: #738197;
-    font-weight: 500;
-    padding: 12px;
+    color: var(--app-table-header-color);
+    font-weight: 600;
+    padding: 6px 12px;
     small {
       display: inline;
       margin-left: 4px;
-      font-size: 11px;
-      color: #a0abbb;
+      font-size: var(--app-font-size-base);
+      color: var(--app-text-secondary);
     }
   }
   td {
     border-bottom: 1px solid #edf0f5;
-    padding: 12px;
+    padding: 6px 12px;
+    height: var(--app-table-row-height);
   }
   .check {
     width: 24px;
@@ -183,9 +186,9 @@
     max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 11px;
+    font-size: var(--app-font-size-base);
     margin-top: 4px;
-    color: #929eb0;
+    color: var(--app-text-secondary);
   }
 }
 .target-table .target-number {
@@ -204,7 +207,7 @@
   background: #eff4ff;
   padding: 12px 20px;
   color: #315bfa;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .target-footer {
   display: flex;
@@ -213,7 +216,7 @@
   gap: 20px;
   padding: 12px;
   color: $color-text-secondary;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .target-empty {
   text-align: center;
@@ -224,7 +227,7 @@
   padding: 24px;
 }
 .target-dialog-month {
-  color: #738197;
+  color: var(--app-table-header-color);
   margin-top: 0;
 }
 .target-edit-form {

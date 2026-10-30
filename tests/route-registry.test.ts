@@ -112,6 +112,16 @@ describe('数据库导航注册表', () => {
     ).toThrow('未注册或路径不一致')
   })
 
+  it('公共资料目录保留独立行政区划权限和固定路径', () => {
+    const group = { ...menuNode('supply.settings.public-reference'), children: [
+      node('supply.settings.admin-divisions', '/supply-chain/settings/admin-divisions'),
+    ] }
+    expect(validateNavigation([group])[0].children).toHaveLength(1)
+    const root = constantRoutes.find(route => route.path === '/supply-chain')
+    expect(root?.children?.find(route => route.path === 'settings/admin-divisions')?.meta?.permission).toBe('supply:admin-division:read')
+    expect(() => validateNavigation([{ ...group.children[0], routePath: '/supply-chain/settings/store-territories' }])).toThrow()
+  })
+
   it('租户自定义分组不能携带可执行路径', () => {
     expect(() =>
       validateNavigation([

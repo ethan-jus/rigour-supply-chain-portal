@@ -36,6 +36,7 @@
         </div>
         <div class="topbar__right">
           <ConsoleEntrySearch :entries="entries" />
+          <ConsoleDisplaySettings />
           <span class="tenant-pill"><OfficeBuilding />{{ tenantLabel }}</span>
           <ConsoleAccountMenu />
         </div>
@@ -62,6 +63,7 @@
 </template>
 
 <script setup lang="ts">
+import ConsoleDisplaySettings from '@/components/console/ConsoleDisplaySettings.vue'
 import { isPageRenderFailure } from '@/utils/page-error'
 import { publishRequestFailure } from '@/utils/request-feedback'
 /**
@@ -377,7 +379,7 @@ onMounted(() => {
   overflow: hidden;
   min-width: 0;
   flex: 1 1 auto;
-  font-size: $font-size-sm;
+  font-size: var(--app-menu-font-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -412,7 +414,7 @@ onMounted(() => {
   color: $color-text-regular;
   background: $color-bg-muted;
   border-radius: 999px;
-  font-size: $font-size-sm;
+  font-size: var(--app-menu-font-size);
 }
 
 .console:not(.console--supply-chain) .console__content {

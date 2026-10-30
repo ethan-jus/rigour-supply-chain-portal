@@ -1,10 +1,12 @@
 <template>
   <div class="erp-document-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">{{ pageConfig.eyebrow }}</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>{{ pageConfig.title }}</SupplyPageTitle>
-        <p>{{ pageConfig.description }}</p>
+        <SupplyPageHelp>
+          <p>{{ pageConfig.description }}</p>
+          <ol class="workflow-help"><li v-for="step in workflowSteps" :key="step.title"><strong>{{ step.title }}</strong>：{{ step.description }}</li></ol>
+        </SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton
@@ -19,19 +21,6 @@
         >
           新增{{ pageConfig.shortTitle }}
         </el-button>
-      </div>
-    </div>
-
-    <div class="workflow-strip" :aria-label="`${pageConfig.title}业务流程`">
-      <div
-        v-for="step in workflowSteps"
-        :key="step.title"
-        class="workflow-step"
-        :class="{ 'is-active': step.active }"
-      >
-        <span>{{ step.index }}</span>
-        <strong>{{ step.title }}</strong>
-        <small>{{ step.description }}</small>
       </div>
     </div>
 
@@ -854,6 +843,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
@@ -1932,4 +1922,8 @@ function errorMessage(reason: unknown, fallback: string) {
   display: flex;
   align-items: center;
 }
+</style>
+
+<style scoped>
+.workflow-help { padding-left: 20px; margin: 8px 0 0; }
 </style>

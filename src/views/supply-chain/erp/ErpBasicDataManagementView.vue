@@ -1,10 +1,9 @@
 <template>
   <div class="erp-basic-data-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">ERP · 基础资料</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>{{ pageConfig.title }}</SupplyPageTitle>
-        <p>{{ pageConfig.description }}</p>
+        <SupplyPageHelp>{{ pageConfig.description }}</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton
@@ -618,6 +617,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
@@ -1558,7 +1558,7 @@ function errorMessage(reason: unknown, fallback: string) {
     display: block;
     margin-top: 4px;
     color: var(--el-text-color-secondary);
-    font-size: 13px;
+    font-size: var(--app-font-size-base);
   }
 }
 
@@ -1637,7 +1637,7 @@ function errorMessage(reason: unknown, fallback: string) {
   border-radius: 999px;
   background: var(--el-fill-color);
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   line-height: 18px;
   text-align: center;
 }
@@ -1657,7 +1657,7 @@ function errorMessage(reason: unknown, fallback: string) {
   }
 
   span {
-    font-size: 13px;
+    font-size: var(--app-font-size-base);
   }
 
   h2 {
@@ -1670,7 +1670,7 @@ function errorMessage(reason: unknown, fallback: string) {
   p {
     margin: 0;
     overflow-wrap: anywhere;
-    font-size: 14px;
+    font-size: var(--app-font-size-base);
   }
 }
 
@@ -1704,7 +1704,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
   span {
     color: var(--el-text-color-secondary);
-    font-size: 13px;
+    font-size: var(--app-font-size-base);
   }
 
   strong {
@@ -1770,7 +1770,7 @@ function errorMessage(reason: unknown, fallback: string) {
 .category-overview {
   > span {
     color: var(--el-text-color-secondary);
-    font-size: 13px;
+    font-size: var(--app-font-size-base);
   }
 
   h2 {

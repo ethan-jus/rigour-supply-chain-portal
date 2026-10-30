@@ -11,10 +11,9 @@
 html,
 body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
-  font-size: $font-size-base;
-  color: $color-text-primary;
+  font-family: var(--app-font-family);
+  font-size: var(--app-font-size-base);
+  color: var(--app-text-primary);
   background-color: $color-bg-page;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

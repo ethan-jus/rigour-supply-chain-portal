@@ -1,15 +1,28 @@
 import type { AdminArea, StoreRow } from '@/api/core/crm-store'
 
-export const GEO_REGIONS: Record<string, string> = {
-  NORTH: '华北',
-  NORTHEAST: '东北',
-  EAST: '华东',
-  CENTRAL: '华中',
-  SOUTH: '华南',
-  SOUTHWEST: '西南',
-  NORTHWEST: '西北',
-}
+export { GEO_REGIONS } from './admin-divisions'
 const municipalities = new Set(['110000', '120000', '310000', '500000'])
+
+/** Precompute labels once; the nationwide catalog must not be traversed during option rendering. */
+export function storeLeadAreaOptions(areas: AdminArea[]) {
+  const index = new Map(areas.map((area) => [area.code, area]))
+  const parents = new Set(areas.map((area) => area.parentCode))
+  return areas
+    .filter(
+      (area) => area.level === 'COUNTY' || (area.level === 'PREFECTURE' && !parents.has(area.code)),
+    )
+    .map((area) => {
+      const names: string[] = []
+      const seen = new Set<string>()
+      let node: AdminArea | undefined = area
+      while (node && !seen.has(node.code)) {
+        seen.add(node.code)
+        names.unshift(node.name)
+        node = index.get(node.parentCode ?? '')
+      }
+      return { value: area.code, label: names.join(' / ') }
+    })
+}
 
 /** Only the authority-filtered catalog may enter these selectors. Parent labels do not grant scope. */
 export function storeAreaOptions(

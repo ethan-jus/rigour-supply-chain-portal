@@ -1,10 +1,9 @@
 <template>
   <div class="sales-order-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">订单管理 · 销售订单</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>销售订单</SupplyPageTitle>
-        <p>维护销售订单、商品明细、提交状态和销售出库。</p>
+        <SupplyPageHelp>新增订单时选择客户与商品；提交后进入可出库状态；从订单已确认仓库确认出库后生成出库单，由 ERP 扣减库存。</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <HistoryOrderReview />
@@ -15,28 +14,6 @@
       </div>
     </div>
 
-    <div class="workflow-strip" aria-label="销售订单业务流程">
-      <div class="workflow-step is-active">
-        <span>1</span>
-        <strong>新增销售订单</strong>
-        <small>选择客户和商品</small>
-      </div>
-      <div class="workflow-step">
-        <span>2</span>
-        <strong>提交订单</strong>
-        <small>进入可出库状态</small>
-      </div>
-      <div class="workflow-step">
-        <span>3</span>
-        <strong>确认销售出库</strong>
-        <small>从订单已确认仓库出库</small>
-      </div>
-      <div class="workflow-step">
-        <span>4</span>
-        <strong>生成出库单</strong>
-        <small>ERP扣减库存</small>
-      </div>
-    </div>
 
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="loadOrders">
@@ -1129,6 +1106,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import HistoryOrderReview from '@/components/supply/HistoryOrderReview.vue'
@@ -2430,7 +2408,7 @@ function errorMessage(reason: unknown, fallback: string) {
   span {
     display: block;
     color: var(--el-text-color-secondary);
-    font-size: 12px;
+    font-size: var(--app-font-size-base);
   }
 
   strong {
@@ -2476,7 +2454,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
   span {
     color: var(--el-text-color-secondary);
-    font-size: 12px;
+    font-size: var(--app-font-size-base);
   }
 }
 
@@ -2539,13 +2517,13 @@ function errorMessage(reason: unknown, fallback: string) {
 
   span {
     color: var(--el-text-color-secondary);
-    font-size: 12px;
+    font-size: var(--app-font-size-base);
   }
 
   strong {
     margin-top: 6px;
     color: var(--el-text-color-primary);
-    font-size: 14px;
+    font-size: var(--app-font-size-base);
     font-weight: 600;
     line-height: 1.45;
     overflow-wrap: anywhere;
@@ -2579,7 +2557,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
   span {
     color: var(--el-text-color-secondary);
-    font-size: 13px;
+    font-size: var(--app-font-size-base);
   }
 }
 
@@ -2598,7 +2576,7 @@ function errorMessage(reason: unknown, fallback: string) {
   span {
     display: block;
     color: var(--el-text-color-secondary);
-    font-size: 12px;
+    font-size: var(--app-font-size-base);
   }
 
   strong {
@@ -2620,7 +2598,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
   > span {
     color: var(--el-text-color-secondary);
-    font-size: 12px;
+    font-size: var(--app-font-size-base);
   }
 }
 

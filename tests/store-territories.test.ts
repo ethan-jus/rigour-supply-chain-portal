@@ -58,7 +58,7 @@ describe('客户地域权限页面', () => {
         .attributes('disabled'),
     ).toBeDefined()
     await view.get('input[aria-label="搜索部门名称"]').setValue('杭州')
-    expect(view.findAll('[role="tabpanel"]')[0]!.findAll('tbody tr')).toHaveLength(1)
+    expect(view.findAll('tbody tr')).toHaveLength(1)
   })
   it('只读用户没有设置入口', async () => {
     vi.mocked(storeTerritoryApi.context).mockResolvedValue({
@@ -116,22 +116,6 @@ describe('客户地域权限页面', () => {
       '2',
       expect.objectContaining({ areaCodes: [] }),
     )
-  })
-  it('行政目录按县编码搜索时保留省市路径和所属大区', async () => {
-    const view = await page()
-    await view
-      .findAll('[role="tab"]')
-      .find((t) => t.text() === '行政区划目录')!
-      .trigger('click')
-    await flushPromises()
-    await view.get('input[aria-label="搜索行政区划"]').setValue('330105')
-    await flushPromises()
-    const pane = view.findAll('[role="tabpanel"]').find((p) => p.text().includes('隔离演示目录'))!
-    expect(pane.text()).toContain('浙江省')
-    expect(pane.text()).toContain('杭州市')
-    expect(pane.text()).toContain('拱墅区')
-    expect(pane.text()).toContain('华东')
-    expect(pane.text()).not.toContain('甘肃省')
   })
   it('加载失败时不残留可编辑的旧权限', async () => {
     const view = await page()

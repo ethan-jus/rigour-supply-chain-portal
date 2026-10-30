@@ -1,9 +1,9 @@
 <template>
   <div class="supply-page supply-page--list supply-page--filtered-list cost-page">
     <div class="page-heading">
-      <div>
+      <div class="list-heading-title">
         <SupplyPageTitle>{{ title }}</SupplyPageTitle>
-        <p>{{ description }}</p>
+        <SupplyPageHelp>{{ description }}</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <el-button
@@ -1126,6 +1126,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { randomId } from '@/utils/random-id'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
@@ -2217,7 +2218,7 @@ watch(
 .ledger-subline {
   margin-top: 5px;
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -2237,7 +2238,7 @@ watch(
 }
 .reference-error {
   color: var(--el-color-danger);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .heading-actions {
   display: flex;
@@ -2249,7 +2250,7 @@ watch(
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.6;
   color: var(--el-text-color-regular);
 }
@@ -2290,12 +2291,12 @@ watch(
 }
 .cost-result-caption small {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .page-heading p,
 .field-hint {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .cost-editor :deep(.el-select),
 .full-width {
@@ -2348,7 +2349,7 @@ watch(
 pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 @media (max-width: 768px) {
   .page-heading {
@@ -2415,7 +2416,7 @@ pre {
   .field-hint {
     margin: 6px 0 0;
     color: var(--el-text-color-secondary);
-    font-size: 12px;
+    font-size: var(--app-font-size-base);
     line-height: 1.5;
   }
   .el-collapse {
@@ -2444,7 +2445,7 @@ pre {
   span {
     display: block;
     color: var(--el-text-color-secondary);
-    font-size: 13px;
+    font-size: var(--app-font-size-base);
     margin-bottom: 8px;
   }
   strong {

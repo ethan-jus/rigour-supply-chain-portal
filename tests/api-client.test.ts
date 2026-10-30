@@ -73,6 +73,22 @@ describe('API响应解包', () => {
     expect(requestFailureNotices.value).toHaveLength(1)
     requestFailureNotices.value.forEach(notice => dismissRequestFailure(notice.id))
   })
+  it('inline业务401不重复通知，令牌失效仍执行认证恢复', async () => {
+    requestFailureNotices.value.forEach(notice => dismissRequestFailure(notice.id))
+    const recovery = vi.fn()
+    unregisterUnauthorizedHandler = registerUnauthorizedSessionHandler(recovery)
+    await expect(apiClient.get('/business', {
+      adapter: unauthorizedAdapter({ bodyCode: 'TRUSTED_CONTEXT_INVALID' }),
+      stayOnUnauthorized: true, errorFeedback: 'inline',
+    })).rejects.toMatchObject({ code: 'TRUSTED_CONTEXT_INVALID', silent: true })
+    expect(recovery).not.toHaveBeenCalled()
+    await expect(apiClient.get('/business', {
+      adapter: unauthorizedAdapter({ bodyCode: 'IAM_TOKEN_INVALID' }),
+      errorFeedback: 'inline',
+    })).rejects.toMatchObject({ code: 'IAM_TOKEN_INVALID', silent: true })
+    expect(recovery).toHaveBeenCalledOnce()
+    expect(requestFailureNotices.value).toHaveLength(0)
+  })
   const invoice = { id: '9007199254740993', amount: '123.40' }
   const envelope = (data: unknown) => ({
     code: 'OK', message: 'success', data,

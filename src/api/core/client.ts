@@ -129,7 +129,7 @@ function unauthorizedFailure(
     requestId: body?.requestId || String(error.response?.headers?.['x-request-id'] || requestId || ''),
     timestamp: body?.timestamp || new Date().toISOString(),
     details: body?.details,
-  }, error.response?.status, undefined, undefined, error.config?.skipSessionRecovery)
+  }, error.response?.status, undefined, undefined, error.config?.skipSessionRecovery || error.config?.errorFeedback === 'inline')
 }
 
 function isSessionInvalidFailure(error: unknown): boolean {

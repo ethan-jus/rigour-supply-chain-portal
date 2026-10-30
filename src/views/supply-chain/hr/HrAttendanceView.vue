@@ -959,7 +959,7 @@ onMounted(() => {
 }
 .manual-hint {
   color: var(--el-color-warning-dark-2);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 @media (max-width: 540px) {
   .attendance-editor-days {
@@ -974,7 +974,7 @@ onMounted(() => {
   gap: 8px;
   margin-top: 10px;
   color: var(--el-color-danger);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .attendance-period {
   display: flex;
@@ -997,7 +997,7 @@ onMounted(() => {
 .hint {
   margin: 0;
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.7;
 }
 .dates {

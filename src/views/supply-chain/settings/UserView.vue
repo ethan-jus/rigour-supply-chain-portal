@@ -1,9 +1,9 @@
 <template>
   <div class="supply-page">
     <header class="heading">
-      <div>
+      <div class="list-heading-title">
         <SupplyPageTitle>用户管理</SupplyPageTitle>
-        <p>关联 HR 员工并分配角色，菜单、按钮及数据范围随角色生效。</p>
+        <SupplyPageHelp>关联 HR 员工并分配角色，菜单、按钮及数据范围随角色生效。</SupplyPageHelp>
       </div>
       <div>
         <el-button
@@ -370,6 +370,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { errorMessage } from '@/api/core/error'
 import { MEMBER_PASSWORD_HINT, memberPasswordError } from '@/utils/member-password'
 import { displayDateTime } from '@/utils/business-date'
@@ -748,7 +749,7 @@ onMounted(async () => {
   color: #64748b;
 }
 .reason {
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   margin-top: 6px;
 }
 :deep(.el-form-item__content) {

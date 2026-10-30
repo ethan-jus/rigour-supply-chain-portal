@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { apiClient } from './client'
 
 export interface SupplyDashboardQuery {
@@ -472,10 +473,10 @@ export interface SupplyDashboardOperatingAnalysis {
   }[]
 }
 
-export const getSupplyDashboardOperatingAnalysis = (params: SupplyDashboardQuery) =>
+export const getSupplyDashboardOperatingAnalysis = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback'> = {}) =>
   apiClient.get<SupplyDashboardOperatingAnalysis>(
     '/analytics/supply/dashboard/operating-analysis',
-    { params, ...options },
+    { params, ...options, ...feedback },
   )
 const SUPPLY_DASHBOARD_REFRESH_PATH = '/analytics/supply/dashboard/refresh-runs'
 const SUPPLY_DASHBOARD_TRUST_PATH = '/analytics/supply/dashboard/trust'
@@ -485,8 +486,8 @@ const SUPPLY_DASHBOARD_CITY_COST_IMPORT_PATH = '/analytics/supply/city-cost-reco
 const SUPPLY_DASHBOARD_FEISHU_ARCHIVES_PATH = '/analytics/supply/legacy/feishu-archives'
 const options = { stayOnUnauthorized: true }
 
-export const getSupplyDashboardOverview = (params: SupplyDashboardQuery) =>
-  apiClient.get<SupplyDashboardOverview>(SUPPLY_DASHBOARD_PATH, { params, ...options })
+export const getSupplyDashboardOverview = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback'> = {}) =>
+  apiClient.get<SupplyDashboardOverview>(SUPPLY_DASHBOARD_PATH, { params, ...options, ...feedback })
 
 export const createSupplyDashboardRefreshRun = (command: SupplyDashboardRefreshCommand = {}) =>
   apiClient.post<SupplyDashboardRefreshRun>(SUPPLY_DASHBOARD_REFRESH_PATH, command, options)

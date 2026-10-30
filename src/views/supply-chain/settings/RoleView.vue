@@ -1,9 +1,9 @@
 <template>
   <div class="supply-page">
     <header class="heading">
-      <div>
+      <div class="list-heading-title">
         <SupplyPageTitle>角色管理</SupplyPageTitle>
-        <p>先配置能使用的菜单和按钮，再统一设置能查看、操作的数据。</p>
+        <SupplyPageHelp>先配置能使用的菜单和按钮，再统一设置能查看、操作的数据。</SupplyPageHelp>
       </div>
       <el-button v-if="access.can('supply:role:create')" type="primary" @click="edit()"
         >新增角色</el-button
@@ -227,6 +227,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, ElTree } from 'element-plus'
@@ -533,7 +534,7 @@ onMounted(load)
 }
 .field-help {
   color: #64748b;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.7;
 }
 .menu-toolbar {
@@ -550,7 +551,7 @@ onMounted(load)
 .scope-intro p,
 .scope-summary p {
   color: #64748b;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.8;
 }
 .scope-options {
@@ -574,7 +575,7 @@ onMounted(load)
 }
 .scope-option-description {
   display: block;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   color: #64748b;
   line-height: 1.5;
 }

@@ -1,10 +1,10 @@
 <template>
   <section class="supply-page payroll-rules-page">
     <div class="page-heading">
-      <div>
+      <div class="list-heading-title">
         <h3 v-if="componentKind">{{ title }}</h3>
         <SupplyPageTitle v-else>{{ title }}</SupplyPageTitle>
-        <p>{{ description }}。调整时设置生效月份，历史工资的计算依据保留。</p>
+        <SupplyPageHelp>{{ description }}。调整时设置生效月份，历史工资的计算依据保留。</SupplyPageHelp>
       </div>
       <el-button v-if="!historyOnly && can(writePermission)" type="primary" @click="open()"
         >新增{{ ruleName }}</el-button
@@ -532,6 +532,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { randomId } from '@/utils/random-id'
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
@@ -1229,7 +1230,7 @@ onMounted(async () => {
 }
 :deep(.field-hint) {
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 :deep(.el-table),
 :deep(.el-alert) {
@@ -1249,7 +1250,7 @@ onMounted(async () => {
   display: block;
   color: var(--el-text-color-secondary);
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .payroll-rules-page .rule-filters {
   padding: 20px;
@@ -1288,7 +1289,7 @@ onMounted(async () => {
 }
 .rule-list-heading span {
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .performance-role-tabs {
   flex-shrink: 0;
