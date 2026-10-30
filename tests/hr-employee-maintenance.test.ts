@@ -342,7 +342,7 @@ describe('员工部门筛选', () => {
         sortDirection: 'desc',
       }),
     )
-    await wrapper.get('input[aria-label="关键词"]').setValue('旧部门关键词')
+    await wrapper.get('input[aria-label="员工姓名筛选"]').setValue('旧部门关键词')
     wrapper.findAllComponents({ name: 'ElSelect' })[1]!.vm.$emit('update:modelValue', 'LEFT')
     wrapper.getComponent({ name: 'ElPagination' }).vm.$emit('update:current-page', 3)
     wrapper.getComponent(Sidebar).vm.$emit('update:modelValue', 2)
@@ -351,7 +351,10 @@ describe('员工部门筛选', () => {
       expect.objectContaining({
         departmentId: 2,
         begin: 0,
-        keyword: undefined,
+        employeeName: undefined,
+        employeeCode: undefined,
+        mobile: undefined,
+        dhbAccount: undefined,
         employmentStatus: undefined,
       }),
     )
@@ -383,11 +386,8 @@ describe('员工部门筛选', () => {
       '岗位',
       '入职时间',
       '手机号',
-      '订货宝账号',
       '员工编号',
-      '是否转正',
       '薪酬类别',
-      '创建时间',
       '关联状态',
       '操作',
     ])
@@ -400,13 +400,13 @@ describe('员工部门筛选', () => {
     )
     expect(headings).not.toContain('身份证号')
     expect(headings).not.toContain('银行卡号')
-    expect(wrapper.text()).toContain('sales.login')
+    expect(wrapper.text()).not.toContain('sales.login')
     expect(wrapper.text()).not.toContain('source-009')
-    await wrapper.get('input[aria-label="关键词"]').setValue('sales.login')
+    await wrapper.get('input[aria-label="订货宝账号筛选"]').setValue('sales.login')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(getHrEmployees).toHaveBeenLastCalledWith(
-      expect.objectContaining({ keyword: 'sales.login' }),
+      expect.objectContaining({ dhbAccount: 'sales.login' }),
     )
   })
 })
@@ -442,8 +442,8 @@ it('按负责人编号高亮姓名，只提供在职与离职，旧来源未核�
   expect(names.slice(1).every((n) => !n.classes().includes('employee-name--leader'))).toBe(true)
   expect(wrapper.findAll('.employment-status').map((n) => n.text())).toEqual([
     '在职',
-    '—',
-    '—',
+    '-',
+    '-',
     '离职',
   ])
   expect(

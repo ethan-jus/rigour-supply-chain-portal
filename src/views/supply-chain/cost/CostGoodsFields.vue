@@ -189,10 +189,12 @@
   ></el-collapse>
 </template>
 <script setup lang="ts">
+import { displayBusinessLabel as costLabel } from '@/utils/business-display'
+import { displayAmount as costMoney } from '@/utils/business-display'
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { suggestedPurchaseAmount } from './cost-amount'
-import { costLabel, costMoney, costOptions } from './cost-dictionaries'
+import { costOptions } from './cost-dictionaries'
 import {
   getCostReferences,
   getCostPurchaseOrders,

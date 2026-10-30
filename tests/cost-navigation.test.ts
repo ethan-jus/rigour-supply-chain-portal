@@ -30,10 +30,10 @@ describe('成本管理仅显示所属六项台账', () => {
       node('cost/custom'),
     ])
     expect(result.map((group) => group.title)).toEqual([
-      '货 · 进货与损耗',
-      '运费 · 三段运输',
-      '场 · 仓储与办公',
-      '营销 · 推广与合作',
+      '商品成本',
+      '物流运输',
+      '场地租赁',
+      '营销推广',
     ])
     expect(paths(result)).toEqual(costs.map((item) => item.routePath))
   })

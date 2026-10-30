@@ -1,7 +1,15 @@
 <template>
   <div
     class="console"
-    :class="{ 'console--supply-chain': applicationCode === 'SUPPLY_CHAIN', 'console--collapsed': workspace.collapsed, 'console--home': route.path === '/supply-chain', 'console--dashboard': ['overview', 'city-operating', 'sales'].includes(String(route.meta.dashboardSection)) }"
+    :class="{
+      'console--supply-chain': applicationCode === 'SUPPLY_CHAIN',
+      'console--business-records': /^\/supply-chain\/(hr|cost)(\/|$)/.test(route.path),
+      'console--collapsed': workspace.collapsed,
+      'console--home': route.path === '/supply-chain',
+      'console--dashboard': ['overview', 'city-operating', 'sales'].includes(
+        String(route.meta.dashboardSection),
+      ),
+    }"
   >
     <ConsoleSidebar :nodes="navigation" />
 
@@ -51,11 +59,7 @@
             <strong>页面加载失败</strong>
             <span>{{ workspaceTabErrors[tab.id] }}</span>
           </section>
-          <ConsoleTabPane
-            v-else
-            :active="activeTabId === tab.id"
-            :route="tab.route"
-          />
+          <ConsoleTabPane v-else :active="activeTabId === tab.id" :route="tab.route" />
         </template>
       </main>
     </section>
@@ -73,7 +77,17 @@ import { publishRequestFailure } from '@/utils/request-feedback'
  * 菜单数据由 navigationStore 按应用编码从 IAM 实时加载，
  * 菜单树由递归导航组件渲染，支持业务分组、二级菜单和三级页面。
  */
-import { computed, nextTick, onErrorCaptured, onMounted, reactive, shallowReactive, shallowRef, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onErrorCaptured,
+  onMounted,
+  reactive,
+  shallowReactive,
+  shallowRef,
+  ref,
+  watch,
+} from 'vue'
 import {
   onBeforeRouteUpdate,
   useRoute,
@@ -107,7 +121,11 @@ const authStore = useAuthStore()
 const navigationStore = useNavigationStore()
 const workspace = useConsoleWorkspace()
 const entries = computed(() => consoleEntries(navigation.value))
-watch(() => `${authStore.user?.tenantId || ''}:${authStore.user?.id || ''}`, key => workspace.setSession(key), { immediate: true })
+watch(
+  () => `${authStore.user?.tenantId || ''}:${authStore.user?.id || ''}`,
+  (key) => workspace.setSession(key),
+  { immediate: true },
+)
 const workspaceTabs = shallowRef<WorkspaceTab[]>([])
 const workspaceTabErrors = reactive<Record<string, string>>({})
 const tabStrip = ref<HTMLElement | null>(null)
@@ -119,9 +137,13 @@ const navigation = computed(() => navigationStore.getNavigation(applicationCode.
 const tenantLabel = computed(() => authStore.user?.tenantName || '企业空间')
 
 const currentPageName = computed(() => {
-  return (applicationCode.value === 'SUPPLY_CHAIN'
-    ? supplyPageName(navigation.value, route.path)
-    : findCurrentPageName(navigation.value)) || (route.meta.title as string) || '工作台'
+  return (
+    (applicationCode.value === 'SUPPLY_CHAIN'
+      ? supplyPageName(navigation.value, route.path)
+      : findCurrentPageName(navigation.value)) ||
+    (route.meta.title as string) ||
+    '工作台'
+  )
 })
 
 function findCurrentPageName(nodes: NavigationNode[]): string | undefined {
@@ -176,19 +198,22 @@ function upsertWorkspaceTab(currentRoute: RouteLocationNormalizedLoaded, pageTit
   delete workspaceTabErrors[id]
   if (existing) {
     Object.assign(existing.route, cloneRoute(currentRoute))
-    workspaceTabs.value = workspaceTabs.value.map((tab) => tab.id === id
-      ? { ...tab, fullPath: currentRoute.fullPath, title: pageTitle }
-      : tab)
+    workspaceTabs.value = workspaceTabs.value.map((tab) =>
+      tab.id === id ? { ...tab, fullPath: currentRoute.fullPath, title: pageTitle } : tab,
+    )
   } else {
-    workspaceTabs.value = [...workspaceTabs.value, {
-      id,
-      applicationCode: appCode,
-      path: currentRoute.path,
-      fullPath: currentRoute.fullPath,
-      title: pageTitle,
-      route: shallowReactive(cloneRoute(currentRoute)) as RouteLocationNormalizedLoaded,
-      scrollTop: 0,
-    }]
+    workspaceTabs.value = [
+      ...workspaceTabs.value,
+      {
+        id,
+        applicationCode: appCode,
+        path: currentRoute.path,
+        fullPath: currentRoute.fullPath,
+        title: pageTitle,
+        route: shallowReactive(cloneRoute(currentRoute)) as RouteLocationNormalizedLoaded,
+        scrollTop: 0,
+      },
+    ]
   }
   void nextTick(() => {
     scrollActiveTabIntoView()
@@ -220,8 +245,7 @@ async function closeWorkspaceTab(tab: WorkspaceTab) {
 }
 
 function canCloseWorkspaceTab(tab: WorkspaceTab) {
-  return workspaceTabs.value.length > 1
-    || applicationHomePath(tab.applicationCode) !== tab.path
+  return workspaceTabs.value.length > 1 || applicationHomePath(tab.applicationCode) !== tab.path
 }
 
 function scrollActiveTabIntoView() {
@@ -232,9 +256,9 @@ function scrollActiveTabIntoView() {
 function savePageScroll(path: string, appCode: string) {
   const id = workspaceTabId(appCode, path)
   const scrollTop = contentViewport.value?.scrollTop ?? 0
-  workspaceTabs.value = workspaceTabs.value.map((tab) => tab.id === id
-    ? { ...tab, scrollTop }
-    : tab)
+  workspaceTabs.value = workspaceTabs.value.map((tab) =>
+    tab.id === id ? { ...tab, scrollTop } : tab,
+  )
 }
 
 function restoreActivePageScroll() {
@@ -243,7 +267,8 @@ function restoreActivePageScroll() {
 }
 
 onErrorCaptured((error, _instance, info) => {
-  if (isPageRenderFailure(info)) workspaceTabErrors[activeTabId.value] = '页面暂时无法显示，请关闭后重新打开该菜单。'
+  if (isPageRenderFailure(info))
+    workspaceTabErrors[activeTabId.value] = '页面暂时无法显示，请关闭后重新打开该菜单。'
   else publishRequestFailure(error)
   return false
 })
@@ -252,18 +277,23 @@ watch(
   () => [route.fullPath, currentPageName.value] as const,
   ([, pageTitle]) => {
     upsertWorkspaceTab(route, pageTitle)
-    if (entries.value.some(entry => entry.path === route.path)) workspace.visit(route.path)
+    if (entries.value.some((entry) => entry.path === route.path)) workspace.visit(route.path)
     if (applicationCode.value === 'SUPPLY_CHAIN') document.title = `${pageTitle} - 供应链数字化平台`
   },
   { immediate: true },
 )
 
-watch(navigation, (nodes) => {
-  if (applicationCode.value !== 'SUPPLY_CHAIN') return
-  workspaceTabs.value = workspaceTabs.value.map(tab => ({
-    ...tab, title: supplyPageName(nodes, tab.path) || String(tab.route.meta.title || '工作台'),
-  }))
-}, { deep: true })
+watch(
+  navigation,
+  (nodes) => {
+    if (applicationCode.value !== 'SUPPLY_CHAIN') return
+    workspaceTabs.value = workspaceTabs.value.map((tab) => ({
+      ...tab,
+      title: supplyPageName(nodes, tab.path) || String(tab.route.meta.title || '工作台'),
+    }))
+  },
+  { deep: true },
+)
 
 onBeforeRouteUpdate((_to, from) => {
   savePageScroll(from.path, String(from.meta.applicationCode || ''))
@@ -443,22 +473,70 @@ onMounted(() => {
   overflow-wrap: anywhere;
 }
 
-.console--collapsed { grid-template-columns: 76px minmax(0, 1fr); }
-.console--supply-chain .topbar { height: 70px; flex-basis: 70px; padding: 0 28px; }
-.console--home .topbar { justify-content: space-between; }
-.console--home { background: #f3f8ff; }
-.topbar__right svg { width: 18px; height: 18px; }
-.tenant-pill { display: flex; gap: 8px; align-items: center; background: transparent; }
-.console--home .console__content { padding: 24px; }
-@media (max-width: 1100px) { .tenant-pill { display: none; } }
-@media (max-width: 1100px) {
-  .console, .console--collapsed { grid-template-columns: 64px minmax(0, 1fr); }
-  .console--supply-chain .topbar { padding: 0 10px; gap: 8px; }
-  .topbar__right { gap: 8px; }
-  .console--home .console__content { padding: 18px 14px; }
+.console--collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
 }
-.console--dashboard { height: 100dvh; overflow: hidden; }
-.console--dashboard .console__main { display: flex; flex-direction: column; min-height: 0; }
-.console--dashboard .topbar { flex-shrink: 0; }
-.console--dashboard .console__content { flex: 1; min-height: 0; padding: 0; overflow: hidden; }
+.console--supply-chain .topbar {
+  height: 70px;
+  flex-basis: 70px;
+  padding: 0 28px;
+}
+.console--home .topbar {
+  justify-content: space-between;
+}
+.console--home {
+  background: #f3f8ff;
+}
+.topbar__right svg {
+  width: 18px;
+  height: 18px;
+}
+.tenant-pill {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: transparent;
+}
+.console--home .console__content {
+  padding: 24px;
+}
+@media (max-width: 1100px) {
+  .tenant-pill {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  .console,
+  .console--collapsed {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+  .console--supply-chain .topbar {
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .topbar__right {
+    gap: 8px;
+  }
+  .console--home .console__content {
+    padding: 18px 14px;
+  }
+}
+.console--dashboard {
+  height: 100dvh;
+  overflow: hidden;
+}
+.console--dashboard .console__main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.console--dashboard .topbar {
+  flex-shrink: 0;
+}
+.console--dashboard .console__content {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
 </style>

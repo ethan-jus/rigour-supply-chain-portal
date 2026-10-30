@@ -16,7 +16,8 @@
         每个档位分别维护底薪和绩效基数，回款区间在绩效规则设置。系统按当月档位同时取两个金额，再计算绩效。
       </p>
       <el-table :data="form.baseSalary.tiers" border
-        ><el-table-column prop="name" label="档位" /><el-table-column label="底薪（元/月）"
+        ><el-table-column prop="name" label="档位" :formatter="displayCell" /><el-table-column
+          label="底薪（元/月）"
           ><template #default="{ row }"
             ><el-input-number
               v-model="row.amount"
@@ -69,6 +70,7 @@
   </el-form>
 </template>
 <script setup lang="ts">
+import { displayCell } from '@/utils/business-display'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import PayrollPersonalPolicyEditor from './PayrollPersonalPolicyEditor.vue'
 import { prorationOptions } from '@/utils/payroll-scheme'

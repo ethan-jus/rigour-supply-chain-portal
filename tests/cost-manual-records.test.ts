@@ -24,6 +24,7 @@ import {
   saveCost,
   exportCosts,
   getCostHistory,
+  getCostEmployees,
   getCostAttachments,
   type CostRecord,
   type CostCommand,
@@ -76,6 +77,7 @@ beforeEach(() => {
   })
   state.route = reactive({ path: '/supply-chain/cost/logistics' })
   vi.mocked(getCosts).mockResolvedValue(empty)
+  vi.mocked(getCostEmployees).mockResolvedValue([])
 })
 function record(data: CostCommand): CostRecord {
   return {
@@ -109,13 +111,13 @@ async function mountView() {
 }
 describe('manual source documents', () => {
   it.each([
-    ['cost/purchases', '进货记录'],
-    ['cost/losses', '损耗记录'],
-    ['cost/logistics', '运费'],
-    ['cost/warehouse-rentals', '仓储费用'],
-    ['cost/office-rentals', '办公室费用'],
-    ['cost/marketing', '营销费用'],
-    ['hr/expenses', '报销费用'],
+    ['cost/purchases', '商品进货记录'],
+    ['cost/losses', '商品损耗记录'],
+    ['cost/logistics', '物流运费记录'],
+    ['cost/warehouse-rentals', '仓库租赁费用'],
+    ['cost/office-rentals', '办公室租赁费用'],
+    ['cost/marketing', '营销推广费用'],
+    ['hr/expenses', '员工报销台账'],
   ])('%s 的自动初始化不触发离开警告，实际输入后才保护未保存内容', async (path, title) => {
     state.route.path = `/supply-chain/${path}`
     const w = await mountView()
@@ -155,7 +157,7 @@ describe('manual source documents', () => {
       expect(buttons[0]!.attributes('title')).toBe('补齐金额后可确认')
       expect(buttons[1]!.attributes('disabled')).toBeUndefined()
       expect(w.text()).toContain('已登记金额（已知部分）')
-      expect(w.text()).toContain('另有 1 条金额待补，未计入小计')
+      expect(w.text()).toContain('待补金额记录1 条')
     } finally {
       w.unmount()
     }
@@ -163,10 +165,7 @@ describe('manual source documents', () => {
   it('业务经办按待补、待确认和作废处理记录，并保留运输环节筛选', async () => {
     const w = await mountView()
     try {
-      await w
-        .findAll('button')
-        .find((b) => b.text() === '中心仓 → 城市仓')!
-        .trigger('click')
+      await w.get('[aria-label="按运输环节查看运费"] [data-value="TRANSFER"]').trigger('click')
       await flushPromises()
       for (const [label, query] of [
         ['待补金额', { missingAmount: true }],
@@ -184,8 +183,12 @@ describe('manual source documents', () => {
         const last = vi.mocked(getCosts).mock.calls.at(-1)![1]
         expect(last).toEqual({ begin: 0, step: 20, typeCode: 'TRANSFER', ...query })
       }
-      expect(w.text()).toContain('按当前筛选汇总，金额不含作废记录')
-      expect(w.text()).toContain('待补金额不按 0 元计算')
+      expect(w.get('.cost-summary').text()).toContain('已确认金额')
+      expect(
+        w
+          .findAllComponents({ name: 'ElTooltip' })
+          .some((tooltip) => String(tooltip.props('content')).includes('待补金额不按 0 元计算')),
+      ).toBe(true)
     } finally {
       w.unmount()
     }
@@ -220,7 +223,7 @@ describe('manual source documents', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增营销费用')!
+        .find((b) => b.text() === '新增营销推广费用')!
         .trigger('click')
       await flushPromises()
       expect(w.get('.cost-editor').text()).toContain('投放与合作信息')
@@ -245,7 +248,7 @@ describe('manual source documents', () => {
       try {
         await w
           .findAll('button')
-          .find((button) => button.text() === '新增运费')!
+          .find((button) => button.text() === '新增物流运费记录')!
           .trigger('click')
         await flushPromises()
         const vm = w.vm as unknown as { form: CostCommand }
@@ -325,7 +328,7 @@ describe('manual source documents', () => {
       const vm = w.vm as unknown as { form: CostCommand }
       vm.form = {
         ...vm.form,
-        title: '进货记录',
+        title: '商品进货记录',
         cityCode: 'C1',
         cityName: '武汉',
         costDate: '2026-10-19',
@@ -453,7 +456,7 @@ describe('manual source documents', () => {
     ['losses', ['损耗对象', '损耗情况', '来源与补充', '损耗照片与凭证']],
     ['warehouse-rentals', ['仓库信息', '本次租金']],
     ['office-rentals', ['办公室信息', '本次租金']],
-    ['marketing', ['营销事项', '金额与经办', '投放与合作信息']],
+    ['marketing', ['营销事项', '金额与负责人', '投放与合作信息']],
   ])('orders the %s editor around its own business object', async (category, headings) => {
     state.route.path = '/supply-chain/cost/' + category
     const w = await mountView()
@@ -472,7 +475,7 @@ describe('manual source documents', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增运费')!
+        .find((b) => b.text() === '新增物流运费记录')!
         .trigger('click')
       await flushPromises()
       const mode = w.findAllComponents({ name: 'ElRadioGroup' })[0]!
@@ -538,7 +541,7 @@ describe('manual source documents', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增运费')!
+        .find((b) => b.text() === '新增物流运费记录')!
         .trigger('click')
       await flushPromises()
       const mode = w.findAllComponents({ name: 'ElRadioGroup' })[0]!
@@ -585,7 +588,7 @@ describe('manual source documents', () => {
     expect(costSourceLabel(record({} as CostCommand))).toBe('手工登记 · 无来源单据')
   })
   it('exports all filtered pages using the separately authorized export API', async () => {
-    const r = record({ title: '运费', cityName: '武汉', amount: null } as CostCommand)
+    const r = record({ title: '物流运费记录', cityName: '武汉', amount: null } as CostCommand)
     Object.assign(r, {
       createdBy: creator,
       updatedBy: modifier,
@@ -600,7 +603,7 @@ describe('manual source documents', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '导出筛选结果')!
+        .find((b) => b.text() === '导出')!
         .trigger('click')
       await flushPromises()
       expect(exportCosts).toHaveBeenNthCalledWith(
@@ -631,7 +634,7 @@ describe('explicit logistics business roles', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增运费')!
+        .find((b) => b.text() === '新增物流运费记录')!
         .trigger('click')
       w.findAllComponents(DictSelect)
         .find((c) => c.props('code') === 'COST_LOGISTICS_LEG')!
@@ -645,7 +648,7 @@ describe('explicit logistics business roles', () => {
       selector.vm.$emit('change')
       await flushPromises()
       expect(w.text()).toContain('本次发货城市仓')
-      expect(w.getComponent(RouteSummary).text()).toContain('城市仓待补录')
+      expect(w.getComponent(RouteSummary).findAll('.route-end strong')[0]!.text()).toBe('-')
       expect(w.text()).toContain('客户甲收货地址')
       expect((w.vm as unknown as { form: CostCommand }).form.logistics?.deliveryStops).toEqual([
         { sourceId: 'S1', customerName: '客户甲', address: '' },
@@ -686,9 +689,11 @@ describe('explicit logistics business roles', () => {
       vi.mocked(getCosts).mockResolvedValue({ ...empty, total: 1, items: [r] })
       const w = await mountView()
       try {
-        const summary = w.getComponent(RouteSummary)
-        expect(summary.text()).toContain(sender + from)
-        expect(summary.text()).toContain(receiver + to)
+        const headers = w.findAll('th').map((cell) => cell.text())
+        expect(headers).toContain('发货方')
+        expect(headers).toContain('收货方')
+        expect(w.text()).toContain(from!)
+        expect(w.text()).toContain(to!)
         await w
           .findAll('button')
           .find((b) => b.text() === 'CST1')!
@@ -720,7 +725,7 @@ describe('explicit logistics business roles', () => {
       try {
         await w
           .findAll('button')
-          .find((b) => b.text() === '新增运费')!
+          .find((b) => b.text() === '新增物流运费记录')!
           .trigger('click')
         await flushPromises()
         const type = w
@@ -778,7 +783,7 @@ describe('explicit logistics business roles', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增运费')!
+        .find((b) => b.text() === '新增物流运费记录')!
         .trigger('click')
       await flushPromises()
       const mode = w.findAllComponents({ name: 'ElRadioGroup' })[0]!
@@ -866,11 +871,7 @@ describe('explicit logistics business roles', () => {
   it('filters by leg and initializes the new record to that leg', async () => {
     const w = await mountView()
     try {
-      await w
-        .get('.logistics-segments')
-        .findAll('button')
-        .find((b) => b.text() === '中心仓 → 城市仓')!
-        .trigger('click')
+      await w.get('[aria-label="按运输环节查看运费"] [data-value="TRANSFER"]').trigger('click')
       await flushPromises()
       expect(getCosts).toHaveBeenLastCalledWith(
         'logistics',
@@ -878,7 +879,7 @@ describe('explicit logistics business roles', () => {
       )
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增运费')!
+        .find((b) => b.text() === '新增物流运费记录')!
         .trigger('click')
       await flushPromises()
       expect((w.vm as unknown as { form: CostCommand }).form.logistics).toMatchObject({
@@ -886,6 +887,62 @@ describe('explicit logistics business roles', () => {
         entryMode: 'MANUAL',
         externalDocuments: [expect.objectContaining({ documentType: 'TRANSFER' })],
       })
+    } finally {
+      w.unmount()
+    }
+  })
+
+  it('运输分段与状态及承运方相交，翻页后切段回首页，汇总及导出沿用同一查询', async () => {
+    const row = record({ title: '调拨运费', amount: 180 } as CostCommand)
+    vi.mocked(getCosts).mockResolvedValue({
+      ...empty,
+      total: 45,
+      items: [row],
+      registeredAmount: 180,
+    })
+    vi.mocked(exportCosts).mockResolvedValue({ ...empty, total: 1, items: [row] })
+    const w = await mountView()
+    try {
+      expect(w.find('[aria-label="运输环节筛选"]').exists()).toBe(false)
+      await w.get('input[aria-label="承运方筛选"]').setValue('同城物流')
+      await w.get('[aria-label="按处理阶段查看费用"] [data-value="CONFIRMED"]').trigger('click')
+      await flushPromises()
+      await w.get('.el-pagination .btn-next').trigger('click')
+      await flushPromises()
+      vi.mocked(getCosts).mockClear()
+      await w.get('[aria-label="按运输环节查看运费"] [data-value="TRANSFER"]').trigger('click')
+      await flushPromises()
+      const selected = { typeCode: 'TRANSFER', statusCode: 'CONFIRMED', carrierName: '同城物流' }
+      expect(getCosts).toHaveBeenCalledTimes(1)
+      expect(getCosts).toHaveBeenLastCalledWith('logistics', { ...selected, begin: 0, step: 20 })
+      expect(w.get('.summary-registered strong').text()).toBe('¥180.00')
+      await w
+        .findAll('button')
+        .find((b) => b.text() === '导出')!
+        .trigger('click')
+      await flushPromises()
+      expect(exportCosts).toHaveBeenLastCalledWith('logistics', {
+        ...selected,
+        begin: 0,
+        step: 200,
+      })
+      await w.get('[aria-label="按运输环节查看运费"] [data-value=""]').trigger('click')
+      await flushPromises()
+      expect(getCosts).toHaveBeenLastCalledWith('logistics', {
+        statusCode: 'CONFIRMED',
+        carrierName: '同城物流',
+        begin: 0,
+        step: 20,
+      })
+      await w
+        .findAll('button')
+        .find((b) => b.text() === '重置')!
+        .trigger('click')
+      await flushPromises()
+      expect(getCosts).toHaveBeenLastCalledWith('logistics', { begin: 0, step: 20 })
+      expect(
+        w.get('[aria-label="按运输环节查看运费"] [data-value=""]').attributes('aria-selected'),
+      ).toBe('true')
     } finally {
       w.unmount()
     }
@@ -904,7 +961,10 @@ describe('explicit logistics business roles', () => {
 
   it('loads only cost presentation dictionaries for the dashboard', async () => {
     await loadCostDictionaries()
-    const codes = vi.mocked(loadBusinessDictionaries).mock.calls.at(-1)![0].map((d) => d.code)
+    const codes = vi
+      .mocked(loadBusinessDictionaries)
+      .mock.calls.at(-1)![0]
+      .map((d) => d.code)
     expect(codes).toContain('REIMBURSEMENT_EXPENSE_TYPE')
     expect(codes).toContain('COST_LOGISTICS_LEG')
     expect(codes.some((code) => code.startsWith('PAYROLL_'))).toBe(false)
@@ -914,11 +974,11 @@ describe('explicit logistics business roles', () => {
 
 describe('cost category business columns', () => {
   it.each([
-    ['purchases', ['单据 / 归属', '商品 / 规格', '数量 × 单价', '供应商']],
-    ['losses', ['商品 / 规格', '损耗数量', '损耗原因', '仓库／发生地点']],
-    ['warehouse-rentals', ['仓库名称', '面积（㎡）', '单据 / 归属']],
-    ['marketing', ['类型', '收款方／合作方', '经办人', '单据 / 归属']],
-    ['office-rentals', ['办公室名称', '面积（㎡）', '单据 / 归属']],
+    ['purchases', ['费用单号', '费用归属', '商品名称', '规格', '进货金额（元）']],
+    ['losses', ['商品名称', '规格', '损耗金额（元）']],
+    ['warehouse-rentals', ['仓库名称', '费用月份', '费用单号']],
+    ['marketing', ['费用类型', '费用负责人', '费用单号']],
+    ['office-rentals', ['办公室名称', '费用月份', '费用单号']],
   ] as const)('shows business-specific columns for %s', async (category, columns) => {
     state.route.path = `/supply-chain/cost/${category}`
     const w = await mountView()
@@ -926,27 +986,21 @@ describe('cost category business columns', () => {
       const headers = w.findAll('th').map((th) => th.text())
       for (const label of columns) expect(headers).toContain(label)
       if (category !== 'marketing') expect(headers).not.toContain('费用事项')
-      expect(headers).not.toContain('付款状态')
-      w.getComponent({ name: 'ElSwitch' }).vm.$emit('update:modelValue', true)
-      await flushPromises()
-      expect(w.findAll('th').map((th) => th.text())).toContain('付款状态')
+      expect(headers).toContain('付款状态')
+      expect(w.find('[aria-label="显示补充列"]').exists()).toBe(false)
     } finally {
       w.unmount()
     }
   })
 
-  it('keeps the freight list focused while allowing additional filters to be expanded', async () => {
+  it('物流保留运单和运输双方条件，不再使用泛化事项或来源技术条件', async () => {
     const w = await mountView()
     try {
-      expect(w.find('input[aria-label="费用事项"]').exists()).toBe(false)
-      expect(w.find('input[aria-label="来源单号"]').exists()).toBe(false)
-      await w
-        .findAll('button')
-        .find((b) => b.text() === '更多筛选')!
-        .trigger('click')
-      expect(w.find('input[aria-label="费用事项"]').exists()).toBe(true)
-      expect(w.find('input[aria-label="运单号"]').exists()).toBe(true)
-      expect(w.find('input[aria-label="来源单号"]').exists()).toBe(true)
+      for (const label of ['费用事项', '来源单号', '备注'])
+        expect(w.find(`input[aria-label="${label}"]`).exists()).toBe(false)
+      for (const label of ['运单号', '发货方筛选', '收货方筛选', '承运方筛选'])
+        expect(w.find(`input[aria-label="${label}"]`).exists()).toBe(true)
+      expect(w.findAll('button').some((button) => button.text() === '更多筛选')).toBe(false)
     } finally {
       w.unmount()
     }
@@ -1062,5 +1116,75 @@ describe('historical cost detail snapshots', () => {
     })
     expect(fields).toContainEqual({ label: '场地类型', value: '类型待核对' })
     expect(fields.find((field) => field.label === '仓库')).toBeUndefined()
+  })
+})
+
+describe('费用业务负责人与录入人分离', () => {
+  it.each(['purchases', 'losses', 'warehouse-rentals', 'office-rentals', 'logistics'] as const)(
+    '%s 选择实际负责人，部门随员工保存，审计人员不参与赋值',
+    async (category) => {
+      state.route.path = `/supply-chain/cost/${category}`
+      vi.mocked(getCostEmployees).mockResolvedValue([
+        {
+          employeeCode: 'E-BJ',
+          employeeName: '北京负责人',
+          departmentId: 9,
+          departmentName: '北京市',
+        },
+      ])
+      const w = await mountView()
+      try {
+        expect(getCostEmployees).toHaveBeenCalledWith(category)
+        const picker = w
+          .findAllComponents({ name: 'ElSelect' })
+          .find((select) => select.props('ariaLabel') === '费用负责人')!
+        expect(picker.exists()).toBe(true)
+        picker.vm.$emit('update:modelValue', 'E-BJ')
+        picker.vm.$emit('change', 'E-BJ')
+        await flushPromises()
+        const vm = w.vm as unknown as { form: CostCommand }
+        expect(vm.form).toMatchObject({
+          ownerEmployeeCode: 'E-BJ',
+          departmentId: 9,
+          ownerName: '北京负责人',
+        })
+        expect(vm.form.ownerName).not.toBe('测试录入员工')
+        const filter = w
+          .findAllComponents({ name: 'ElSelect' })
+          .find((select) => select.props('ariaLabel') === '费用负责人筛选')!
+        filter.vm.$emit('update:modelValue', 'E-BJ')
+        await w.get('.supply-list-filters form').trigger('submit')
+        await flushPromises()
+        expect(getCosts).toHaveBeenLastCalledWith(
+          category,
+          expect.objectContaining({ ownerEmployeeCode: 'E-BJ' }),
+        )
+      } finally {
+        w.unmount()
+      }
+    },
+  )
+  it('报销人在业务详情显示，录入人在系统留痕显示；缺负责人不以录入人补齐', async () => {
+    const row = {
+      ...record({
+        ownerEmployeeCode: 'E-BJ',
+        ownerName: null,
+        cityName: '北京市',
+      } as unknown as CostCommand),
+      categoryCode: 'EXPENSE',
+      ownerEmployeeName: '北京负责人',
+      createdBy: creator,
+    }
+    costSnapshotFields(row)
+    await flushPromises()
+    const fields = costSnapshotFields(row)
+    expect(fields).toContainEqual({ label: '报销人', value: '北京负责人' })
+    expect(fields).toContainEqual({ label: '录入人', value: '测试录入员工' })
+    const missing = costSnapshotFields({
+      ...row,
+      categoryCode: 'PURCHASE',
+      ownerEmployeeName: null,
+    })
+    expect(missing).toContainEqual({ label: '费用负责人', value: '-' })
   })
 })

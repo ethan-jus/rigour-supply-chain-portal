@@ -20,7 +20,7 @@ describe('人事导航授权边界', () => {
       'employees',
       'commission-rules',
     ])
-    expect(result.find((s) => s.title === '独立规则配置')?.nodes[0]?.displayName).toBe('提成设置')
+    expect(result.find((s) => s.title === '薪酬与绩效')?.nodes[0]?.displayName).toBe('商品提成规则')
   })
   it('隐藏父菜单的子节点不会泄露，保留其他授权入口', () => {
     const result = hrNavigationSections([node('hidden', [node('payroll')], false), node('custom')])

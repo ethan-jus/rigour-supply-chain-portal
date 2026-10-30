@@ -167,8 +167,8 @@ describe('一期考勤', () => {
     expect(rows.find((row) => row.text().includes('测试员工乙'))!.text()).toContain('待核对')
     await wrapper!.get('button[aria-label="确认测试员工甲考勤"]').trigger('click')
     await flushPromises()
-    expect(document.body.textContent).toContain('缺卡：4 次')
-    expect(document.body.textContent).toContain('缺拜访：2 次')
+    expect(wrapper!.get('.attendance-metrics').text().replace(/\s/g, '')).toContain('系统缺卡4次')
+    expect(wrapper!.get('.attendance-metrics').text().replace(/\s/g, '')).toContain('系统缺拜访2次')
     expect(document.body.textContent).toContain('查看每日缺卡、缺拜访明细')
   })
 
@@ -367,6 +367,10 @@ describe('一期考勤', () => {
     const page = await open()
     await page.get('button[aria-label="确认测试员工甲考勤"]').trigger('click')
     await flushPromises()
+    await page
+      .findAll('[role="tab"]')
+      .find((tab) => tab.text() === '请假与异常时段')!
+      .trigger('click')
     await click('登记缺卡或活动报备')
     const editor = page.getComponent({ name: 'AttendanceExceptionEditor' })
     editor.getComponent({ name: 'ElDatePicker' }).vm.$emit('update:modelValue', '2026-09-08')
@@ -404,6 +408,10 @@ describe('一期考勤', () => {
     await flushPromises()
     const editor = page.getComponent({ name: 'AttendanceExceptionEditor' })
     expect(editor.isVisible()).toBe(false)
+    await page
+      .findAll('[role="tab"]')
+      .find((tab) => tab.text() === '请假与异常时段')!
+      .trigger('click')
     await click('登记缺卡或活动报备')
     expect(editor.isVisible()).toBe(true)
     await click('确认考勤')
@@ -736,6 +744,8 @@ describe('一期考勤', () => {
     await page.get('button[aria-label="查看测试员工甲考勤详情"]').trigger('click')
     await flushPromises()
     const details = new DOMWrapper(document.body.querySelector('[aria-label="考勤详情内容"]')!)
+    expect(details.get('[role="tab"][aria-selected="true"]').text()).toBe('核定结果')
+    expect(details.get('[role="tabpanel"][aria-labelledby$="-result"]').isVisible()).toBe(true)
     for (const text of [
       '本次确认时保存的结果',
       '2026-09-02 至 2026-09-29',
@@ -756,6 +766,19 @@ describe('一期考勤', () => {
       '2026-09-01',
     ])
       expect(details.text()).toContain(text)
+    for (const [label, expected] of [
+      ['打卡与拜访依据', '系统缺卡：4'],
+      ['异常时段与说明', '已审批年假'],
+      ['原始打卡日期', '2026-09-01'],
+    ]) {
+      await details
+        .findAll('[role="tab"]')
+        .find((tab) => tab.text() === label)!
+        .trigger('click')
+      await flushPromises()
+      const active = details.findAll('[role="tabpanel"]').find((pane) => pane.isVisible())!
+      expect(active.text()).toContain(expected)
+    }
     expect(details.find('input,textarea,select').exists()).toBe(false)
     expect(api.confirmAttendanceRecord).not.toHaveBeenCalled()
     expect(api.previewAttendanceRecord).not.toHaveBeenCalled()

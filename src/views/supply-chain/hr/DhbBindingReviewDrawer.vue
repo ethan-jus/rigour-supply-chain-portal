@@ -2,6 +2,7 @@
   <el-drawer
     :model-value="modelValue"
     title="关联风险核对"
+    class="business-detail-panel"
     size="min(520px, 100vw)"
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -24,22 +25,25 @@
         <el-alert :title="selected.reason" type="warning" :closable="false" />
         <el-descriptions :column="1" border class="risk-comparison">
           <el-descriptions-item label="订货宝账号">{{
-            selected.accountName || '—'
+            selected.accountName || '-'
           }}</el-descriptions-item>
           <el-descriptions-item label="订货宝姓名">{{
-            selected.sourceEmployeeName || '—'
+            selected.sourceEmployeeName || '-'
           }}</el-descriptions-item>
           <el-descriptions-item label="订货宝手机号">{{
-            selected.sourceMobile || '—'
+            selected.sourceMobile || '-'
           }}</el-descriptions-item>
-          <el-descriptions-item label="系统员工"
-            >{{ selected.employeeName }} · {{ selected.employeeCode }}</el-descriptions-item
-          >
+          <el-descriptions-item label="系统员工姓名">{{
+            selected.employeeName
+          }}</el-descriptions-item>
+          <el-descriptions-item label="系统员工编号">{{
+            selected.employeeCode
+          }}</el-descriptions-item>
           <el-descriptions-item label="系统手机号">{{
-            selected.mobile || '—'
+            selected.mobile || '-'
           }}</el-descriptions-item>
           <el-descriptions-item label="系统部门">{{
-            selected.departmentName || '—'
+            selected.departmentName || '-'
           }}</el-descriptions-item>
         </el-descriptions>
         <p class="risk-hint">

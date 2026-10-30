@@ -6,8 +6,8 @@
       clearable
       :loading="loading"
       :disabled="disabled || loading || !cityCode"
-      :placeholder="cityCode ? '选择报销员工' : '请先选择费用归属'"
-      aria-label="关联员工"
+      :placeholder="cityCode ? '选择实际报销人' : '请先选择费用归属'"
+      aria-label="报销人"
       @change="pick"
     >
       <el-option
@@ -119,7 +119,7 @@ async function load() {
     if (employee.value && !result.some((row) => row.employeeCode === employee.value)) {
       employee.value = null
       emit('picked', null)
-      ElMessage.info('城市或费用日期已变更，请重新选择报销员工')
+      ElMessage.info('城市或费用日期已变更，请重新选择实际报销人')
     }
   } catch (reason) {
     if (request === serial) error.value = errorMessage(reason, '员工加载失败，请重试')

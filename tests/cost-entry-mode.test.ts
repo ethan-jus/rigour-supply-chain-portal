@@ -122,12 +122,12 @@ describe('marketing employee entry', () => {
     await entry.get('.employee-error button').trigger('click')
     expect(wrapper.emitted('reloadEmployees')).toHaveLength(1)
     expect(entry.props('modelValue')).toBe('LINKED')
-    expect(document.body.textContent).not.toContain('手动填写经办人')
+    expect(document.body.textContent).not.toContain('手动填写费用负责人')
     await wrapper.setProps({ employeeError: '', employeeLoading: false })
     await entry.getComponent({ name: 'ElSelect' }).get('input').trigger('click')
     await flushPromises()
     const shortcut = [...document.body.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('手动填写经办人'),
+      button.textContent?.includes('手动填写费用负责人'),
     )!
     expect(shortcut).toBeDefined()
     shortcut.click()

@@ -65,7 +65,7 @@
       <div class="secondary-nav__brand">供应链数字化平台</div>
       <header class="secondary-nav__heading">
         <strong>{{
-          isHome ? '工作空间' : selected ? moduleName(selected, true) : '应用菜单'
+          isHome ? '工作空间' : isHr ? '人事管理' : selected ? moduleName(selected, true) : '应用菜单'
         }}</strong
         ><button
           type="button"
@@ -132,18 +132,7 @@
             <ConsoleNavTree :nodes="group.nodes" />
           </section>
         </nav>
-        <template v-else-if="isHr || isCost">
-          <section
-            v-for="group in isCost ? costGroups : hrGroups"
-            :key="group.title"
-            class="hr-nav-group"
-            :class="{ 'cost-nav-group': isCost }"
-          >
-            <h2>{{ group.title }}</h2>
-            <ConsoleNavTree :nodes="group.nodes" />
-          </section>
-        </template>
-        <ConsoleNavTree v-else :nodes="secondaryNodes" />
+        <ConsoleNavTree v-else :nodes="displayNodes" />
         <p v-if="!roots.length" class="secondary-nav__empty">暂无可用菜单</p>
       </div>
     </section>
@@ -160,6 +149,7 @@ import {
   homeShortcutPaths,
   selectEntries,
 } from '@/utils/console-navigation'
+import { businessNavigationName } from '@/utils/business-page-labels'
 import { hrNavigationSections } from '@/utils/hr-navigation'
 import { costNavigationSections } from '@/utils/cost-navigation'
 import { crmNavigationSections } from '@/utils/crm-navigation'
@@ -172,9 +162,9 @@ const route = useRoute()
 const workspace = useConsoleWorkspace()
 const selectedId = ref('')
 const roots = computed(() =>
-  props.nodes.filter(
-    (node) => node.visible && (node.routePath || consoleEntries(node.children).length),
-  ),
+  props.nodes
+    .filter((node) => node.visible && (node.routePath || consoleEntries(node.children).length))
+    .map((node) => ({ ...node, displayName: businessNavigationName(node) })),
 )
 const entries = computed(() => consoleEntries(props.nodes))
 const home = computed(() =>
@@ -195,8 +185,30 @@ const isSettings = computed(() =>
 )
 const settingsGroups = computed(() => settingsNavigationSections(secondaryNodes.value))
 const crmGroups = computed(() => crmNavigationSections(secondaryNodes.value))
-const costGroups = computed(() => costNavigationSections(secondaryNodes.value))
-const hrGroups = computed(() => hrNavigationSections(secondaryNodes.value))
+const displayNodes = computed<NavigationNode[]>(() => {
+  const root = selected.value
+  if (!root || (!isHr.value && !isCost.value)) return secondaryNodes.value
+
+  const groups = isCost.value
+    ? costNavigationSections(secondaryNodes.value)
+    : hrNavigationSections(secondaryNodes.value)
+
+  // 展示分组复用 ERP 的菜单树；子页面仍只取 IAM 已授权的入口。
+  return groups.map((group, index) => ({
+    ...root,
+    id: `${root.id}:section:${group.title}`,
+    parentId: root.id,
+    code: `${root.code}.section.${index}`,
+    displayName: group.title,
+    permissionCode: null,
+    routeKey: `${root.routeKey}.section.${index}`,
+    routePath: null,
+    iconKey: 'Document',
+    sortOrder: index,
+    keepAlive: false,
+    children: group.nodes,
+  }))
+})
 const shortcuts = computed(() => selectEntries(entries.value, homeShortcutPaths))
 const analysis = computed(() => selectEntries(entries.value, homeAnalysisPaths))
 const recent = computed(() =>
@@ -293,19 +305,6 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   font-size: $font-size-md;
   font-weight: 600;
   line-height: 24px;
-}
-.hr-nav-group.cost-nav-group h2 {
-  margin: 10px 12px 4px;
-  font-size: 12px;
-  line-height: 18px;
-}
-.cost-nav-group :deep(.nav-item) {
-  min-height: 36px;
-  padding-top: 7px;
-  padding-bottom: 7px;
-}
-.hr-nav-group.cost-nav-group {
-  margin-bottom: 4px;
 }
 .console-navigation {
   display: grid;
@@ -405,15 +404,6 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   background: $color-bg-white;
   border-right: 1px solid $color-border-base;
   color: $color-text-regular;
-}
-.hr-nav-group {
-  margin-bottom: 14px;
-}
-.hr-nav-group h2 {
-  margin: 8px 14px;
-  font-size: 12px;
-  font-weight: 500;
-  color: $color-text-secondary;
 }
 .secondary-nav__brand {
   height: 70px;

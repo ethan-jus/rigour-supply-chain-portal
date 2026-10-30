@@ -77,8 +77,174 @@ function scope(excluded = false) {
 }
 
 describe('提成商品范围的父子分类联动', () => {
-  it('在当前表中添加床单位标准，保留按套金额；相同单位即使金额不同也不重复添加', async () => {
+  it('城市总未填单位时入口仍可见，点击提示具体缺项且不改写配置，补齐后可添加', async () => {
     await open([2])
+    await page
+      .findAll('button')
+      .find((button) => button.text() === '完成')!
+      .trigger('click')
+    const editors = page.findAllComponents({ name: 'PayrollCommissionRateEditor' })
+    editors[0]!.vm.$emit('update:modelValue', {
+      ...editors[0]!.props('modelValue'),
+      method: 'QUANTITY',
+      unitCode: 'SET',
+      value: 15,
+    })
+    editors[1]!.vm.$emit('update:modelValue', {
+      ...editors[1]!.props('modelValue'),
+      method: 'QUANTITY',
+      unitCode: '',
+      value: 5,
+    })
+    await flushPromises()
+    const original = structuredClone(form.commission.rules)
+    const add = page.findAll('button').find((button) => button.text() === '添加单位标准')!
+    expect(add.exists()).toBe(true)
+    expect(add.attributes('disabled')).toBeUndefined()
+    await add.trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('请先填写城市总的计提单位')
+    expect(form.commission.rules).toEqual(original)
+    const confirm = [...document.body.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === '知道了',
+    )!
+    confirm.click()
+    await flushPromises()
+    editors[1]!.vm.$emit('update:modelValue', {
+      ...editors[1]!.props('modelValue'),
+      unitCode: 'SET',
+    })
+    await flushPromises()
+    await add.trigger('click')
+    await flushPromises()
+    expect(
+      page.findAll('[role="dialog"]').some((dialog) => dialog.text().includes('添加另一单位')),
+    ).toBe(true)
+    expect(form.commission.rules).toHaveLength(2)
+  })
+  it('商品尚未选择时直接打开单位金额配置，补选商品后所有单位共享范围，最终保存仍校验必填项', async () => {
+    form = newPayrollScheme()
+    const row = newCommissionRow('')
+    Object.assign(row.sales, { method: 'QUANTITY', unitCode: 'SET', value: 15 })
+    Object.assign(row.manager, { method: 'QUANTITY', unitCode: 'SET', value: 5 })
+    form.commission.rules = flattenCommissionRows([row])
+    page = mount(Editor, {
+      attachTo: document.body,
+      props: { modelValue: form, categories },
+      global: { plugins: [ElementPlus], stubs: { ElDialog: Dialog } },
+    })
+    await flushPromises()
+    await page
+      .findAll('button')
+      .find((button) => button.text() === '添加单位标准')!
+      .trigger('click')
+    await flushPromises()
+    const dialog = page.get('[role="dialog"]')
+    expect(dialog.text()).toContain('添加另一单位')
+    expect(dialog.find('input[aria-label="新单位销售提成"]').exists()).toBe(true)
+    expect(dialog.text()).not.toContain('适用商品分类')
+    const unit = page
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.props('placeholder') === '请选择单位，如套、床')!
+    unit.vm.$emit('update:modelValue', 'SET')
+    await dialog.get('input[aria-label="新单位销售提成"]').setValue('8')
+    await dialog.get('input[aria-label="新单位城市总提成"]').setValue('2')
+    await dialog
+      .findAll('button')
+      .find((button) => button.text() === '添加标准')!
+      .trigger('click')
+    await flushPromises()
+    expect(dialog.text()).toContain('商品范围和计提单位重复')
+    expect(form.commission.rules).toHaveLength(2)
+    unit.vm.$emit('update:modelValue', 'BED')
+    await dialog
+      .findAll('button')
+      .find((button) => button.text() === '添加标准')!
+      .trigger('click')
+    await flushPromises()
+    expect(page.find('[role="dialog"]').exists()).toBe(false)
+    expect(form.commission.rules.map((rule) => [rule.unitCode, rule.value])).toEqual([
+      ['SET', 15],
+      ['SET', 5],
+      ['BED', 8],
+      ['BED', 2],
+    ])
+    expect(page.vm.validate()).toBe('请填写标准名称')
+    await flushPromises()
+    const nameField = page
+      .findAll('.el-form-item')
+      .find((item) => item.find('label').text() === '标准名称')!
+    await nameField.get('input').setValue('A300 多单位')
+    await flushPromises()
+    expect(page.vm.validate()).toContain('请至少选择')
+    const models = page
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.props('placeholder') === '搜索商品名称或规格')!
+    models.vm.$emit('update:modelValue', ['V1'])
+    models.vm.$emit('change', ['V1'])
+    await flushPromises()
+    await page
+      .findAll('button')
+      .find((button) => button.text() === '完成')!
+      .trigger('click')
+    await flushPromises()
+    expect(page.vm.validate()).toBeNull()
+    expect(form.commission.rules.map((rule) => [rule.name, rule.variantIds])).toEqual(
+      Array(4).fill(['A300 多单位', ['V1']]),
+    )
+    expect(form.commission.rules.map((rule) => [rule.unitCode, rule.value])).toEqual([
+      ['SET', 15],
+      ['SET', 5],
+      ['BED', 8],
+      ['BED', 2],
+    ])
+  })
+  it('比例计提也保留入口，点击说明按数量的前提，不自动修改已有方式', async () => {
+    await open([2])
+    await page
+      .findAll('button')
+      .find((button) => button.text() === '完成')!
+      .trigger('click')
+    const editor = page.findAllComponents({ name: 'PayrollCommissionRateEditor' })[0]!
+    editor.vm.$emit('update:modelValue', {
+      ...editor.props('modelValue'),
+      method: 'PERCENT',
+      value: 4,
+    })
+    await flushPromises()
+    const original = structuredClone(form.commission.rules)
+    await page
+      .findAll('button')
+      .find((button) => button.text() === '添加单位标准')!
+      .trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('销售人员、城市总当前不是按数量计提')
+    expect(form.commission.rules).toEqual(original)
+    ;[...document.body.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === '知道了')!
+      .click()
+    await flushPromises()
+  })
+  it('在当前表中添加床单位标准，保留按套金额；相同单位即使金额不同也不重复添加', async () => {
+    vi.mocked(getPayrollProducts).mockResolvedValue([
+      {
+        productVariantId: 'V1',
+        productId: 'P1',
+        productCode: 'P1',
+        variantCode: 'A300',
+        productName: '同一商品',
+        specification: 'A300',
+        categoryId: 2,
+        categoryName: '台呢',
+        unitCode: 'SET',
+      },
+    ])
+    await open([2])
+    page
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.props('placeholder') === '搜索商品名称或规格')!
+      .vm.$emit('update:modelValue', ['V1'])
+    await flushPromises()
     await page
       .findAll('button')
       .find((button) => button.text() === '完成')!
@@ -122,6 +288,12 @@ describe('提成商品范围的父子分类联动', () => {
       .trigger('click')
     await flushPromises()
     expect(form.commission.rules).toHaveLength(4)
+    expect(form.commission.rules.map((rule) => rule.variantIds)).toEqual([
+      ['V1'],
+      ['V1'],
+      ['V1'],
+      ['V1'],
+    ])
     expect(
       form.commission.rules.map((rule) => [
         rule.recipientRole,

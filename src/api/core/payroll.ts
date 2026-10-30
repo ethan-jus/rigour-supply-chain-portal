@@ -70,7 +70,9 @@ export interface PerformancePolicy {
   laterMonthTarget: number
 }
 export interface PerformanceResult {
-  assessmentOverride?: import('./hr-attendance/models/AttendanceAssessmentOverride').AttendanceAssessmentOverride | null
+  assessmentOverride?:
+    | import('./hr-attendance/models/AttendanceAssessmentOverride').AttendanceAssessmentOverride
+    | null
   processBudget: number | null
   processDeduction: number | null
   processPay: number | null
@@ -92,6 +94,8 @@ export interface PerformanceResult {
   issues: string[]
 }
 export interface PayrollRule {
+  createdBy?: string | null
+  createdTime?: string | null
   id: string
   revision: number
   data: PayrollRuleCommand
@@ -150,6 +154,9 @@ export interface PayrollCalculation {
   sourceFingerprint: string
 }
 export interface PayrollRecord {
+  createdBy?: string | null
+  createdByName?: string | null
+  createdTime?: string | null
   paymentBlockReason?: string | null
   id: string
   month: string
@@ -187,6 +194,8 @@ export interface PayrollQuery {
   step: number
   month?: string
   keyword?: string
+  employeeName?: string
+  employeeCode?: string
   departmentId?: number
   statusCode?: string
   payrollCategory?: string

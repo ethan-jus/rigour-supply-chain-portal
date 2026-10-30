@@ -26,6 +26,8 @@ export class TokenRefreshError extends Error {
   constructor(
     public readonly code: 'IAM_TOKEN_INVALID' | 'IAM_UNAVAILABLE' | 'REQUEST_CANCELLED',
     message: string,
+    public readonly reason?: 'TIMEOUT' | 'NETWORK' | 'HTTP_ERROR' | 'INVALID_RESPONSE',
+    public readonly status?: number,
   ) {
     super(message)
     this.name = 'TokenRefreshError'
@@ -311,30 +313,84 @@ export async function ensureAccessToken(rejectedToken?: string): Promise<string 
   const pending = (async () => {
     try {
       const response = await fetch(browserAuthUrl('/oauth2/token'), {
-        method: 'POST', credentials: 'omit', cache: 'no-store', signal: controller.signal,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        method: 'POST',
+        credentials: 'omit',
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
         body: new URLSearchParams({
-          grant_type: 'refresh_token', client_id: config().clientId, refresh_token: previousRefreshToken,
+          grant_type: 'refresh_token',
+          client_id: config().clientId,
+          refresh_token: previousRefreshToken,
         }),
       })
-      const tokens = await response.json()
-      if (generation !== tokenGeneration) throw new TokenRefreshError('REQUEST_CANCELLED', '会话已变更')
+      // 代理/服务错误可能返回 HTML 或空正文，不能把解析失败误报成网络故障。
+      let tokens: (Partial<OidcTokenResponse> & { error?: string }) | null = null
+      try {
+        tokens = await response.json()
+      } catch {
+        if (controller.signal.aborted) throw new DOMException('Refresh timed out', 'AbortError')
+        if (response.ok)
+          throw new TokenRefreshError(
+            'IAM_UNAVAILABLE',
+            '登录服务返回的续期结果无法识别，请重试；如持续出现，请联系管理员。',
+            'INVALID_RESPONSE',
+            response.status,
+          )
+      }
+      if (generation !== tokenGeneration)
+        throw new TokenRefreshError('REQUEST_CANCELLED', '会话已变更')
       if (!response.ok) {
         if (response.status === 400 && tokens?.error === 'invalid_grant') {
           clearOidcTokens()
           throw new TokenRefreshError('IAM_TOKEN_INVALID', '登录状态已过期，请重新登录。')
         }
-        throw new TokenRefreshError('IAM_UNAVAILABLE', '登录续期暂时不可用，请稍后重试。')
+        throw new TokenRefreshError(
+          'IAM_UNAVAILABLE',
+          `登录服务暂时不可用（HTTP ${response.status}），请稍后重试。`,
+          'HTTP_ERROR',
+          response.status,
+        )
       }
       if (!tokens || !validTokens(tokens) || tokens.refresh_token === previousRefreshToken) {
-        throw new TokenRefreshError('IAM_UNAVAILABLE', '登录续期响应无效，请联系管理员。')
+        throw new TokenRefreshError(
+          'IAM_UNAVAILABLE',
+          '登录续期响应无效，请联系管理员。',
+          'INVALID_RESPONSE',
+          response.status,
+        )
       }
       saveTokens(tokens, requestedAt)
+      devInfo('OIDC登录续期成功', { status: response.status, elapsedMs: Date.now() - requestedAt })
       return tokens.access_token
     } catch (error) {
-      if (error instanceof TokenRefreshError) throw error
-      if (generation !== tokenGeneration) throw new TokenRefreshError('REQUEST_CANCELLED', '会话已变更')
-      throw new TokenRefreshError('IAM_UNAVAILABLE', '登录续期暂时不可用，请检查网络后重试。')
+      if (!(error instanceof TokenRefreshError) && generation !== tokenGeneration)
+        throw new TokenRefreshError('REQUEST_CANCELLED', '会话已变更')
+      const failure =
+        error instanceof TokenRefreshError
+          ? error
+          : controller.signal.aborted
+            ? new TokenRefreshError(
+                'IAM_UNAVAILABLE',
+                '登录续期请求超时，请重试；如持续出现，请检查登录服务状态。',
+                'TIMEOUT',
+              )
+            : new TokenRefreshError(
+                'IAM_UNAVAILABLE',
+                '无法连接登录服务，请检查网络连接后重试。',
+                'NETWORK',
+              )
+      // 只记录状态、原因和耗时，禁止记录令牌、请求/响应正文。
+      devWarn('OIDC登录续期失败', {
+        code: failure.code,
+        reason: failure.reason,
+        status: failure.status,
+        elapsedMs: Date.now() - requestedAt,
+      })
+      throw failure
     }
   })().finally(() => {
     clearTimeout(timeout)

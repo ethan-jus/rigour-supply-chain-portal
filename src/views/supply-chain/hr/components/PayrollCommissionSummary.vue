@@ -28,9 +28,10 @@
   </section>
 </template>
 <script setup lang="ts">
+import { displayAmount as costMoney } from '@/utils/business-display'
 import { computed } from 'vue'
 import type { PayrollCalculation } from '@/api/core/payroll'
-import { costMoney } from '../../cost/cost-dictionaries'
+
 const props = defineProps<{ calculation: PayrollCalculation; reviewHint?: boolean }>()
 const isCityManager = computed(
   () =>

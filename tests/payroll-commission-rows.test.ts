@@ -6,9 +6,32 @@ import {
   commissionRowTotal,
   duplicateCommissionScope,
   groupCommissionRows,
+  commissionProductRows,
 } from '@/utils/payroll-commission-rows'
 
 describe('同一商品的双角色提成标准', () => {
+  it('未指定型号时规格留空；指定型号失去商品资料时不把维护名称当作真实商品字段', () => {
+    const row = newCommissionRow('方便面 销售提成')
+    expect(commissionProductRows(row.sales, [])).toEqual([
+      {
+        variantId: '',
+        productName: '方便面',
+        specification: null,
+        categoryId: null,
+        categoryName: null,
+      },
+    ])
+    row.sales.variantIds = ['missing']
+    expect(commissionProductRows(row.sales, [])).toEqual([
+      {
+        variantId: 'missing',
+        productName: '',
+        specification: null,
+        categoryId: null,
+        categoryName: null,
+      },
+    ])
+  })
   it('数字规格ID回显为选择器使用的字符串，并正确配对双角色', () => {
     const row = newCommissionRow('A300')
     row.sales.variantIds = [15 as unknown as string]
@@ -52,6 +75,17 @@ describe('同一商品的双角色提成标准', () => {
     row.sales.categoryIds = [1]
     row.manager.categoryIds = [2]
     expect(commissionRows([row.sales, row.manager])).toHaveLength(2)
+  })
+  it('未完成的商品标准各自独立，仅显式添加的单位行跟随原草稿组', () => {
+    const source = newCommissionRow('')
+    const other = newCommissionRow('')
+    const bed = newCommissionRow('')
+    expect(groupCommissionRows([source, other, bed])).toHaveLength(3)
+    expect(
+      groupCommissionRows([source, other, bed], { [bed.code]: source.code }).map((group) =>
+        group.map((row) => row.code),
+      ),
+    ).toEqual([[source.code, bed.code], [other.code]])
   })
   it('同型号按套与床分别保留；相同单位重复或改名改金额仍拦截，规格顺序不影响检查', () => {
     const set = newCommissionRow('A300/A500')

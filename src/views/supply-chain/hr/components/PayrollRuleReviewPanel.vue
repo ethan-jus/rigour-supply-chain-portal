@@ -1,12 +1,25 @@
 <template>
-  <el-alert v-if="reviews.length" type="warning" :closable="false" show-icon>
+  <el-alert
+    v-if="reviews.length"
+    type="warning"
+    :closable="false"
+    show-icon
+    :class="{ 'review-alert--compact': compact }"
+  >
     <template #title>
       规则变更待复核 {{ reviews.length }} 项
       <el-button link type="primary" @click="visible = true">查看待复核记录</el-button>
+      <span v-if="compact" class="review-alert-note">已确认结果保留原值，请先核对调整影响。</span>
     </template>
-    已确认结果保留原值，请核对规则调整的影响后处理。
+    <template v-if="!compact">已确认结果保留原值，请核对规则调整的影响后处理。</template>
   </el-alert>
-  <el-drawer v-model="visible" title="规则变更待复核" size="min(1000px, 95vw)" append-to-body>
+  <el-drawer
+    v-model="visible"
+    title="规则变更待复核"
+    class="business-detail-panel"
+    size="min(1000px, 95vw)"
+    append-to-body
+  >
     <el-alert
       :title="
         subject === 'ATTENDANCE'
@@ -18,18 +31,26 @@
     />
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <el-table :data="reviews" row-key="id" border>
-      <el-table-column label="员工" min-width="110"
-        ><template #default="{ row }">{{
-          row.employeeName || row.employeeCode
-        }}</template></el-table-column
-      >
-      <el-table-column prop="ruleName" label="变更规则" min-width="160" />
+      <el-table-column
+        prop="employeeName"
+        label="员工姓名"
+        min-width="120"
+        fixed="left"
+        :formatter="displayCell"
+      />
+      <el-table-column
+        prop="employeeCode"
+        label="员工编号"
+        min-width="170"
+        :formatter="displayCell"
+      />
+      <el-table-column prop="ruleName" label="变更规则" min-width="160" :formatter="displayCell" />
       <el-table-column label="变更操作" width="100"
         ><template #default="{ row }">{{
           row.action === 'DISABLE' ? '停用' : '重新启用'
         }}</template></el-table-column
       >
-      <el-table-column prop="reason" label="变更原因" min-width="180" />
+      <el-table-column prop="reason" label="变更原因" min-width="180" :formatter="displayCell" />
       <el-table-column label="操作" width="180"
         ><template #default="{ row }">
           <el-button link type="primary" @click="locate(row as PayrollRuleReview)"
@@ -50,6 +71,7 @@
 </template>
 
 <script setup lang="ts">
+import { displayCell } from '@/utils/business-display'
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -62,6 +84,7 @@ defineProps<{
   reviews: PayrollRuleReview[]
   subject: PayrollRuleReview['subject']
   canProcess: boolean
+  compact?: boolean
 }>()
 const emit = defineEmits<{ locate: [review: PayrollRuleReview]; resolved: [] }>()
 const visible = ref(false),

@@ -19,10 +19,10 @@
           </span>
         </template>
         <el-table :data="comparison(result)" border>
-          <el-table-column prop="name" label="工资项目" min-width="100" />
+          <el-table-column prop="name" label="工资项目" min-width="100" :formatter="displayCell" />
           <el-table-column label="原保存金额（元）" align="right"
             ><template #default="{ row }">{{
-              row.previous == null ? '—' : payrollMoney(row.previous)
+              row.previous == null ? '-' : payrollMoney(row.previous)
             }}</template></el-table-column
           >
           <el-table-column label="本次试算（元）" align="right"
@@ -33,7 +33,7 @@
           <el-table-column label="差额（元）" align="right"
             ><template #default="{ row }">{{
               row.previous == null || row.current == null
-                ? '—'
+                ? '-'
                 : payrollMoney(row.current - row.previous)
             }}</template></el-table-column
           >
@@ -47,8 +47,9 @@
   </section>
 </template>
 <script setup lang="ts">
+import { displayCell, displayAmount as payrollMoney } from '@/utils/business-display'
 import type { PayrollPreview, PayrollRecord, PayrollCalculation } from '@/api/core/payroll'
-import { payrollMoney } from '@/utils/payroll-workflow'
+
 import PayrollSchemeResult from './PayrollSchemeResult.vue'
 const props = defineProps<{ results: PayrollPreview[]; month: string }>()
 const fields: [keyof PayrollCalculation, string][] = [

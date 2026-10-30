@@ -25,6 +25,11 @@ export interface CostQuery {
   payeeName?: string
   landlordName?: string
   objectName?: string
+  productName?: string
+  specification?: string
+  senderName?: string
+  receiverName?: string
+  carrierName?: string
   departmentId?: number
   contractNo?: string
   typeCode?: string
@@ -345,7 +350,7 @@ export const getCostSources = (legCode: string, keyword: string, cityCode?: stri
     ...options,
   })
 export const getCostEmployees = (
-  category: 'marketing' | 'expenses',
+  category: CostCategory,
   query?: { cityCode: string; cityName: string; costDate?: string },
 ) =>
   apiClient.get<CostEmployee[]>(

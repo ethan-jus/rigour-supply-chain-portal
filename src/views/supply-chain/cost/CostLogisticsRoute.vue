@@ -20,7 +20,7 @@ const props = defineProps<{
   sources?: CostSource[]
   compact?: boolean
 }>()
-const route = computed(() => logisticsRoute(props.logistics, props.sources))
+const route = computed(() => logisticsRoute(props.logistics, props.sources, '-'))
 </script>
 <style scoped>
 .logistics-route {

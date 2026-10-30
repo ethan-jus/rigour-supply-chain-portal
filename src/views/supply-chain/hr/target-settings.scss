@@ -135,7 +135,33 @@
   }
 }
 .target-table-scroll {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 560px;
+  .target-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .target-table .check {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 36px;
+    box-sizing: border-box;
+    background: white;
+  }
+  .target-table .target-name,
+  .target-table .target-subject {
+    position: sticky;
+    left: 36px;
+    z-index: 1;
+    background: white;
+  }
+  .target-table th.check,
+  .target-table th.target-subject {
+    z-index: 3;
+    background: #f5f7fb;
+  }
 }
 .target-table {
   border-collapse: collapse;
@@ -314,4 +340,13 @@ button:disabled {
   .target-edit-row :deep(.el-input) {
     width: 180px;
   }
+}
+
+.target-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 160px;
+  color: #64748b;
+  font-size: 12px;
 }

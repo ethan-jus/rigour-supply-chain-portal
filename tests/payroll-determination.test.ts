@@ -255,12 +255,15 @@ describe('工资列表汇总', () => {
     await openList()
     const summary = wrapper.get('.payroll-summary').text().replace(/\s+/g, ' ')
     expect(summary).toContain('44')
-    expect(summary).toContain('完整核算 41 人 / 待核定 3 人')
+    expect(wrapper.get('.summary-complete .summary-value').text().replace(/\s/g, '')).toBe('41人')
+    expect(wrapper.get('.summary-pending-card .summary-value').text().replace(/\s/g, '')).toBe(
+      '3人',
+    )
     expect(summary).toContain('123,456.78')
     expect(summary).toContain('120,000.12')
-    expect(wrapper.text()).toContain('待处理（3）')
-    expect(wrapper.text()).toContain('待确认（40）')
-    expect(wrapper.text()).toContain('待发放（1）')
+    expect(wrapper.find('[role="tab"][aria-label="待处理（3）"]').exists()).toBe(true)
+    expect(wrapper.find('[role="tab"][aria-label="待确认（40）"]').exists()).toBe(true)
+    expect(wrapper.find('[role="tab"][aria-label="待发放（1）"]').exists()).toBe(true)
     expect(
       wrapper.find('button[aria-label="查看汇总口径：合计仅含当前筛选下的完整结果"]').exists(),
     ).toBe(true)
@@ -271,14 +274,91 @@ describe('工资列表汇总', () => {
   it('没有完整工资时合计显示空缺，并仅加载薪酬相关字典', async () => {
     await openList()
     const summary = wrapper.get('.payroll-summary').text().replace(/\s+/g, ' ')
-    expect(summary).toContain('完整核算 0 人 / 待核定 1 人')
-    expect(summary.match(/—/g)).toHaveLength(2)
+    expect(wrapper.get('.summary-complete .summary-value').text().replace(/\s/g, '')).toBe('0人')
+    expect(wrapper.get('.summary-pending-card .summary-value').text().replace(/\s/g, '')).toBe(
+      '1人',
+    )
+    expect(summary.match(/-/g)).toHaveLength(2)
     expect(summary).not.toContain('0.00')
     expect(JSON.stringify(vi.mocked(loadBusinessDictionaries).mock.calls)).not.toContain(
       'COST_PREMISES_TYPE',
     )
     expect(loadBusinessDictionaries).toHaveBeenCalled()
   })
+  it('主列表直接展示核算金额和状态，取消补充列开关，追溯字段放在只读详情', async () => {
+    row.paymentBlockReason = '当月考勤尚未确认'
+    await openList()
+    expect(wrapper.find('.payroll-list-header .el-switch').exists()).toBe(false)
+    expect(wrapper.findAll('.summary-card')).toHaveLength(5)
+    const table = wrapper.get('.table-viewport')
+    expect(table.find('[label="应付工资"]').exists()).toBe(true)
+    expect(table.find('[label="状态"]').exists()).toBe(true)
+    expect(table.find('[label="员工编号"]').exists()).toBe(false)
+    await button('明细').trigger('click')
+    await flushPromises()
+    const checks = wrapper.findAll('.business-detail-fields > div')
+    expect(
+      checks
+        .find((field) => field.find('dt').text() === '确认发放限制')
+        ?.find('dd')
+        .text(),
+    ).toBe('当月考勤尚未确认')
+    expect(checks.some((field) => field.find('dt').text() === '实际发放（元）')).toBe(true)
+  })
+  it('姓名和编号是独立条件，列表、总计、导出保持一致，重置清空两个字段', async () => {
+    vi.mocked(api.exportPayroll).mockResolvedValue([])
+    await openList()
+    await wrapper.get('input[aria-label="员工姓名"]').setValue(' 测试 ')
+    await wrapper.get('input[aria-label="员工编号"]').setValue(' EMP-1 ')
+    await button('查询').trigger('click')
+    await flushPromises()
+    for (const request of [api.getPayroll, api.getPayrollSummary]) {
+      expect(request).toHaveBeenLastCalledWith(
+        expect.objectContaining({ employeeName: '测试', employeeCode: 'EMP-1' }),
+      )
+      expect(vi.mocked(request).mock.calls.at(-1)?.[0]).not.toHaveProperty('keyword')
+    }
+    await button('导出').trigger('click')
+    await flushPromises()
+    expect(api.exportPayroll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ employeeName: '测试', employeeCode: 'EMP-1' }),
+    )
+    await button('重置').trigger('click')
+    await flushPromises()
+    expect(api.getPayroll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ employeeName: undefined, employeeCode: undefined }),
+    )
+  })
+  it('状态标签保留键盘切换、选中态及相同的状态查询条件', async () => {
+    await openList()
+    await wrapper.get('.payroll-stage-tab').trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(api.getPayroll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ statusCode: 'REVIEW' }),
+    )
+    expect(wrapper.get('[aria-label="待处理（1）"]').attributes('aria-selected')).toBe('true')
+    await wrapper.get('[aria-label="待处理（1）"]').trigger('keydown', { key: 'Home' })
+    await flushPromises()
+    expect(api.getPayroll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ statusCode: undefined }),
+    )
+  })
+  it.each([null, '当月考勤尚未确认'] as const)(
+    '列表直接展示确认工资，限制由点击后的弹窗解释 %s',
+    async (reason) => {
+      row.statusCode = 'READY'
+      row.month = '2026-08'
+      row.paymentBlockReason = reason
+      await openList()
+      expect(
+        wrapper
+          .get('.row-actions')
+          .findAll('button')
+          .some((entry) => entry.text() === '确认工资'),
+      ).toBe(true)
+      expect(button('确认工资').attributes('disabled')).toBeUndefined()
+    },
+  )
 })
 describe('当月核定完整交互', () => {
   it('要求一次说明，提交部门和零绩效后自动重算，并展示确认入口与核定依据', async () => {
@@ -512,11 +592,17 @@ describe('薪酬核定的人员隔离与未保存保护', () => {
     )
     vi.mocked(api.calculatePayroll).mockResolvedValue([{ ...second, statusCode: 'READY' }])
     await openList()
-    await wrapper.findAll('button').filter((b) => b.text() === '核定薪酬')[0]!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .filter((b) => b.text() === '核定薪酬')[0]!
+      .trigger('click')
     await flushPromises()
     await button('取消').trigger('click')
     await flushPromises()
-    await wrapper.findAll('button').filter((b) => b.text() === '核定薪酬')[1]!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .filter((b) => b.text() === '核定薪酬')[1]!
+      .trigger('click')
     await flushPromises()
     expect(wrapper.get('input[aria-label="核定绩效"]').element).toHaveProperty('value', '2200.00')
     firstInput.resolve({ ...currentInput, performanceOverride: 800, reason: 'A迟到的核定' })
@@ -540,7 +626,11 @@ describe('薪酬核定的人员隔离与未保存保护', () => {
       '2026-08',
       'TEST-B',
       expect.objectContaining({
-        input: expect.objectContaining({ revision: 2, performanceOverride: 2200, reason: 'B本人的核定' }),
+        input: expect.objectContaining({
+          revision: 2,
+          performanceOverride: 2200,
+          reason: 'B本人的核定',
+        }),
         facts: expect.objectContaining({ performanceCompletionPercent: 110 }),
       }),
     )

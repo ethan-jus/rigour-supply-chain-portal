@@ -112,6 +112,7 @@ export interface HrEmployeeQuery {
   begin: number
   step: number
   keyword?: string
+  dhbAccount?: string
   employeeCode?: string
   employeeName?: string
   mobile?: string

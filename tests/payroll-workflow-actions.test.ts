@@ -28,14 +28,18 @@ function render(row = record('REVIEW'), permissions = true) {
 const button = (name: string) => wrapper.findAll('button').find((b) => b.text() === name)
 afterEach(() => wrapper?.unmount())
 describe('薪酬下一步操作', () => {
-  it('考勤未确认或待复核时，确认和发薪入口均拦截并显示后端原因', async () => {
+  it('考勤未确认或待复核时保留点击入口，由结算弹窗校验，并显示后端原因', async () => {
     render({ ...record('READY'), paymentBlockReason: '该员工当月考勤尚未确认' })
-    expect(button('确认薪酬')!.attributes('disabled')).toBeDefined()
+    expect(button('确认薪酬')!.attributes('disabled')).toBeUndefined()
+    await button('确认薪酬')!.trigger('click')
+    expect(wrapper.emitted('confirm')).toHaveLength(1)
     expect(wrapper.text()).toContain('考勤尚未确认')
     await wrapper.setProps({
       row: { ...record('CONFIRMED'), paymentBlockReason: '考勤规则变更待复核' },
     })
-    expect(button('登记发放')!.attributes('disabled')).toBeDefined()
+    expect(button('登记发放')!.attributes('disabled')).toBeUndefined()
+    await button('登记发放')!.trigger('click')
+    expect(wrapper.emitted('paid')).toHaveLength(1)
     expect(wrapper.text()).toContain('考勤规则变更待复核')
   })
 
@@ -71,12 +75,12 @@ describe('薪酬下一步操作', () => {
     expect(wrapper.text()).toContain('下一步：登记剩余发放')
     expect(button('登记发放')).toBeDefined()
   })
-  it('当前和未来月份未结束时不可确认，并说明原因', async () => {
+  it('当前和未来月份保留点击校验入口，并说明月份未结束', async () => {
     render(record('READY', '2026-10'))
-    expect(button('确认薪酬')!.attributes('disabled')).toBeDefined()
+    expect(button('确认薪酬')!.attributes('disabled')).toBeUndefined()
     expect(wrapper.text()).toContain('月份尚未结束')
     await wrapper.setProps({ row: record('READY', '2026-11') })
-    expect(button('确认薪酬')!.attributes('disabled')).toBeDefined()
+    expect(button('确认薪酬')!.attributes('disabled')).toBeUndefined()
     await wrapper.setProps({ row: record('READY', '2026-09') })
     expect(button('确认薪酬')!.attributes('disabled')).toBeUndefined()
   })

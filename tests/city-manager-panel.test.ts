@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import Panel from '@/views/supply-chain/hr/components/CityManagerPanel.vue'
 import { completePages, managerGroups } from '@/views/supply-chain/hr/city-manager-model'
@@ -47,6 +47,7 @@ afterEach(() => {
 })
 async function open() {
   wrapper = mount(Panel, {
+    attachTo: document.body,
     props: {
       employees: [
         { employeeCode: 'M1', employeeName: '张经理' },
@@ -75,6 +76,20 @@ async function filter(label: string, value: string) {
     .find((s) => s.props('ariaLabel') === label)!
     .vm.$emit('update:modelValue', value)
   await flushPromises()
+}
+
+async function expandedCities(index = 0) {
+  const summary = wrapper.findAllComponents({ name: 'SupplyScopeSummary' })[index]!
+  await summary.get('button').trigger('click')
+  await flushPromises()
+  const visibleList = () =>
+    [...document.body.querySelectorAll('[aria-label="全部城市"]')]
+      .map((list) => new DOMWrapper(list))
+      .find((list) => list.isVisible())
+  await vi.waitFor(() => expect(visibleList()).toBeDefined())
+  return visibleList()!
+    .findAll('li')
+    .map((item) => item.text())
 }
 
 describe('城市总完整规则分组', () => {
@@ -129,7 +144,7 @@ describe('城市总管辖汇总', () => {
     await wrapper.setProps({ canOpenEmployee: false })
     expect(wrapper.text()).not.toContain('查看员工档案')
   })
-  it('一人一行显示全部在管城市，按城市筛选后也不隐藏该人的其他城市', async () => {
+  it('一人一行展示城市摘要，可展开完整名单，按城市筛选也不隐藏该人的其他城市', async () => {
     vi.mocked(getPayrollRules).mockResolvedValue(
       page([
         rule('one'),
@@ -150,9 +165,9 @@ describe('城市总管辖汇总', () => {
     await flushPromises()
     expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(1)
     const group = wrapper.get('.el-table__body-wrapper .el-table__row').text()
-    expect(group).toContain('唐山市')
     expect(group).toContain('石家庄市')
-    expect(group).toContain('石家庄市，唐山市')
+    expect(group).toContain('共 2 个')
+    expect(await expandedCities()).toEqual(['石家庄市', '唐山市'])
     await click('重置')
     expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(2)
   })
@@ -165,7 +180,7 @@ describe('城市总管辖汇总', () => {
     vi.mocked(getPayrollRules).mockResolvedValue(page(rows))
     await open()
     expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(10)
-    expect(wrapper.get('.el-table__body-wrapper .el-table__row').text()).toContain('唐山市')
+    expect(await expandedCities()).toEqual(['石家庄市', '唐山市'])
     wrapper.getComponent({ name: 'ElPagination' }).vm.$emit('update:current-page', 2)
     await flushPromises()
     expect(wrapper.findAll('.el-table__body-wrapper .el-table__row')).toHaveLength(1)
@@ -182,8 +197,9 @@ describe('城市总管辖汇总', () => {
       ]),
     )
     await open()
-    expect(wrapper.findAll('.city-names')).toHaveLength(1)
-    expect(wrapper.find('.city-names').text()).toBe('石家庄市')
+    expect(wrapper.findAllComponents({ name: 'SupplyScopeSummary' })).toHaveLength(1)
+    expect(wrapper.get('.scope-summary__preview').text()).toBe('石家庄市')
+    expect(wrapper.find('.scope-summary__more').exists()).toBe(false)
     await filter('管辖城市筛选', 'TS')
     await wrapper.get('form').trigger('submit')
     await flushPromises()

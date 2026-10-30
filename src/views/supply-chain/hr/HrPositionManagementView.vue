@@ -40,10 +40,21 @@
       class="business-table supply-scroll-table"
       border
     >
-      <el-table-column type="index" label="序号" width="72" :index="rowIndex" />
-      <el-table-column prop="positionCode" label="岗位编码" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="positionName" label="岗位名称" min-width="140" />
-      <el-table-column prop="sortOrder" label="岗位顺序" width="100" />
+      <el-table-column type="index" label="序号" width="72" fixed="left" :index="rowIndex" />
+      <el-table-column
+        prop="positionCode"
+        label="岗位编码"
+        min-width="180"
+        show-overflow-tooltip
+        :formatter="displayCell"
+      />
+      <el-table-column
+        prop="positionName"
+        label="岗位名称"
+        min-width="140"
+        :formatter="displayCell"
+      />
+      <el-table-column prop="sortOrder" label="岗位顺序" width="100" :formatter="displayCell" />
       <el-table-column label="状态" width="95"
         ><template #default="{ row }"
           ><el-tag :type="row.statusCode === 'ACTIVE' ? 'success' : 'info'">{{
@@ -51,32 +62,18 @@
           }}</el-tag></template
         ></el-table-column
       >
-      <el-table-column prop="remark" label="岗位职责" min-width="160" show-overflow-tooltip />
-      <el-table-column label="创建人" min-width="140"
-        ><template #default="{ row }">{{
-          auditActorLabel(row.createdBy)
-        }}</template></el-table-column
-      >
-      <el-table-column label="创建时间" min-width="180"
-        ><template #default="{ row }">{{
-          displayDateTime(row.createdTime)
-        }}</template></el-table-column
-      >
-      <el-table-column label="修改人" min-width="140"
-        ><template #default="{ row }">{{
-          auditActorLabel(row.updatedBy)
-        }}</template></el-table-column
-      >
-      <el-table-column label="修改时间" min-width="180"
-        ><template #default="{ row }">{{
-          displayDateTime(row.updatedTime)
-        }}</template></el-table-column
-      >
       <!-- @vue-generic {HrPositionRecord} -->
-      <el-table-column v-if="can('hr:position:write')" label="操作" width="140" fixed="right"
+      <el-table-column label="操作" width="180" fixed="right"
         ><template #default="{ row }"
-          ><el-button link type="primary" @click="openEditor(row)">编辑</el-button
-          ><el-button link type="danger" @click="remove(row)">删除</el-button></template
+          ><el-button link type="primary" @click="detailRecord = row as HrPositionRecord"
+            >查看</el-button
+          >
+          <el-button v-if="can('hr:position:write')" link type="primary" @click="openEditor(row)"
+            >编辑</el-button
+          >
+          <el-button v-if="can('hr:position:write')" link type="danger" @click="remove(row)"
+            >删除</el-button
+          ></template
         ></el-table-column
       >
     </el-table>
@@ -89,6 +86,52 @@
       @current-change="load"
       @size-change="search"
     />
+    <el-dialog
+      :model-value="!!detailRecord"
+      title="岗位详情"
+      width="min(800px,94vw)"
+      class="business-detail-panel"
+      @close="detailRecord = null"
+    >
+      <dl v-if="detailRecord" class="business-detail-fields">
+        <div>
+          <dt>岗位名称</dt>
+          <dd>{{ detailRecord.positionName }}</dd>
+        </div>
+        <div>
+          <dt>岗位编码</dt>
+          <dd>{{ detailRecord.positionCode }}</dd>
+        </div>
+        <div>
+          <dt>显示顺序</dt>
+          <dd>{{ detailRecord.sortOrder }}</dd>
+        </div>
+        <div>
+          <dt>岗位状态</dt>
+          <dd>{{ detailRecord.statusCode === 'ACTIVE' ? '正常' : '停用' }}</dd>
+        </div>
+        <div>
+          <dt>岗位职责</dt>
+          <dd>{{ detailRecord.remark || '-' }}</dd>
+        </div>
+        <div>
+          <dt>创建人</dt>
+          <dd>{{ auditActorLabel(detailRecord.createdBy) }}</dd>
+        </div>
+        <div>
+          <dt>创建时间</dt>
+          <dd>{{ displayDateTime(detailRecord.createdTime) }}</dd>
+        </div>
+        <div>
+          <dt>修改人</dt>
+          <dd>{{ auditActorLabel(detailRecord.updatedBy) }}</dd>
+        </div>
+        <div>
+          <dt>修改时间</dt>
+          <dd>{{ displayDateTime(detailRecord.updatedTime) }}</dd>
+        </div>
+      </dl>
+    </el-dialog>
     <el-dialog
       v-model="editorVisible"
       :title="editingId ? '编辑岗位' : '新增岗位'"
@@ -142,12 +185,13 @@
 </template>
 <script setup lang="ts">
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
+import { displayCell } from '@/utils/business-display'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
-import { auditActorLabel } from '@/utils/audit-actor'
-import { displayDateTime } from '@/utils/business-date'
+import { displayRecordActor as auditActorLabel } from '@/utils/business-display'
+import { displayRecordDateTime as displayDateTime } from '@/utils/business-display'
 import {
   createHrPosition,
   updateHrPosition,
@@ -157,6 +201,7 @@ import {
   type HrPage,
 } from '@/api/core/hr'
 const { can } = useSupplyPermissions()
+const detailRecord = ref<HrPositionRecord | null>(null)
 const loading = ref(false),
   saving = ref(false),
   editorVisible = ref(false)

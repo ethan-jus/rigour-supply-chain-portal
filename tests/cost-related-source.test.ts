@@ -33,7 +33,18 @@ describe('reimbursement original cost trace', () => {
     const wrapper = mount(Source, { props: { data: data() } })
     await flushPromises()
     expect(getCost).toHaveBeenCalledWith('logistics', 'original-id')
-    expect(wrapper.text()).toContain('CST001 · 门店配送')
+    expect(wrapper.findAll('dt').map((field) => field.text())).toEqual(
+      expect.arrayContaining([
+        '费用单号',
+        '费用事项',
+        '费用归属',
+        '费用月份',
+        '登记金额（元）',
+        '确认状态',
+      ]),
+    )
+    expect(wrapper.findAll('dd').map((field) => field.text())).toContain('CST001')
+    expect(wrapper.findAll('dd').map((field) => field.text())).toContain('门店配送')
     expect(wrapper.get('a').attributes('href')).toBe(
       '#/supply-chain/cost/logistics?sourceId=original-id',
     )

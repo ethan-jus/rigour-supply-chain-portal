@@ -1,10 +1,7 @@
 <template>
   <div class="commission-rate">
     <el-select :model-value="rule.excluded ? 'NONE' : rule.method" @change="changeMethod">
-      <el-option value="PERCENT" label="按回款比例" /><el-option
-        value="QUANTITY"
-        label="按数量"
-      /><el-option value="NONE" label="明确不计提" />
+      <el-option v-for="option in commissionMethodOptions" :key="option.value" v-bind="option" />
     </el-select>
     <template v-if="!rule.excluded">
       <el-input-number
@@ -30,6 +27,7 @@
 </template>
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { commissionMethodOptions } from '@/utils/payroll-rule-options'
 import type { PayrollSchemeCommissionRule } from '@/api/core/payroll-scheme/models/PayrollSchemeCommissionRule'
 import { costOptions } from '../../cost/cost-dictionaries'
 import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'

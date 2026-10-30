@@ -81,7 +81,7 @@ describe('选择核算人员', () => {
     try {
       await flushPromises()
       for (const name of ['甲', '乙']) {
-        await wrapper.get('input[placeholder="员工姓名／编号"]').setValue(name)
+        await wrapper.get('input[aria-label="准备员工姓名"]').setValue(name)
         await click('选择筛选结果')
       }
       expect(wrapper.text()).toContain('已选 2 人')
@@ -125,7 +125,7 @@ describe('选择核算人员', () => {
     })
     try {
       await flushPromises()
-      await wrapper.get('input[placeholder="员工姓名／编号"]').setValue('测试')
+      await wrapper.get('input[aria-label="准备员工姓名"]').setValue('测试')
       await wrapper
         .findAll('button')
         .find((b) => b.text() === '选择筛选结果')!
@@ -181,10 +181,10 @@ describe('选择核算人员', () => {
       await flushPromises()
       expect(previewPayroll).toHaveBeenCalledExactlyOnceWith('2026-09', ['L'])
       expect(calculatePayroll).not.toHaveBeenCalled()
-      expect(wrapper.text()).toContain('应付 待核定 元')
+      expect(wrapper.text()).toContain('应付 - 元')
       await wrapper.setProps({ month: '2026-10' })
       await flushPromises()
-      expect(wrapper.text()).not.toContain('应付 待核定 元')
+      expect(wrapper.text()).not.toContain('应付 - 元')
     } finally {
       wrapper.unmount()
     }

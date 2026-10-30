@@ -1,25 +1,24 @@
 import type { NavigationNode } from '@/types/management'
+import { businessNavigationName } from './business-page-labels'
 
 const sections = [
-  { title: '工资与人员', paths: ['payroll', 'employees'] },
   {
-    title: '独立规则配置',
+    title: '员工与组织',
+    paths: ['employees', 'departments', 'positions', 'assignments', 'city-managers'],
+  },
+  { title: '考勤管理', paths: ['attendance', 'attendance-rules'] },
+  {
+    title: '薪酬与绩效',
     paths: [
-      'attendance-rules',
+      'payroll',
       'performance-rules',
       'target-settings',
       'commission-rules',
       'allowance-rules',
     ],
   },
-  { title: '任职与来源', paths: ['city-managers', 'attendance'] },
-  { title: '基础人事', paths: ['departments', 'assignments', 'positions', 'expenses'] },
+  { title: '员工报销', paths: ['expenses'] },
 ]
-const labels: Record<string, string> = {
-  'performance-rules': '绩效规则设置',
-  'commission-rules': '提成设置',
-  'allowance-rules': '补贴及其他薪资设置',
-}
 
 /** 只重排 IAM 已授权且可见的入口，不创建菜单或扩大权限。 */
 export function hrNavigationSections(nodes: NavigationNode[]) {
@@ -39,7 +38,7 @@ export function hrNavigationSections(nodes: NavigationNode[]) {
       const node = entries.find((entry) => entry.routePath === `/supply-chain/hr/${path}`)
       if (!node) return []
       used.add(node.id)
-      return [{ ...node, displayName: labels[path] || node.displayName, children: [] }]
+      return [{ ...node, displayName: businessNavigationName(node), children: [] }]
     }),
   }))
   const extra = entries.filter(

@@ -3,6 +3,7 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { reactive } from 'vue'
 import ElementPlus from 'element-plus'
 import { createPinia } from 'pinia'
+import { businessPageLabels } from '@/utils/business-page-labels'
 import CostManagementView from '@/views/supply-chain/cost/CostManagementView.vue'
 import {
   getCosts,
@@ -74,7 +75,16 @@ async function render(advanced = true) {
   wrapper = mount(CostManagementView, {
     global: {
       plugins: [ElementPlus, createPinia()],
-      stubs: { SupplyPageTitle: true, ElDialog: true, ElDrawer: true },
+      stubs: {
+        SupplyPageTitle: true,
+        ElDialog: true,
+        ElDrawer: {
+          name: 'ElDrawer',
+          props: ['modelValue', 'title'],
+          template: '<section><slot v-if="modelValue" /></section>',
+        },
+        CostAttachments: true,
+      },
     },
   })
   await flushPromises()
@@ -137,60 +147,62 @@ describe('cost management workflow', () => {
       const drawer = wrapper!
         .findAllComponents({ name: 'ElDrawer' })
         .find(
-          (component) =>
-            component.props('title') === 'CST-' + ['DRAFT', 'CONFIRMED', 'VOID'][index],
+          (component) => component.props('title') === businessPageLabels[state.route.path] + '详情',
         )!
       expect(drawer.props('modelValue')).toBe(true)
+      if (category === 'purchases' || category === 'losses') {
+        const specification = drawer
+          .findAll('.business-detail-fields > div')
+          .find((field) => field.find('dt').text() === '规格')
+        expect(specification?.find('dd').text()).toBe('-')
+        expect(drawer.text()).not.toContain(category === 'purchases' ? '损耗原因' : '进货单价')
+      }
     }
   })
-  it.each([
-    ['PERSONNEL_COST', '人员成本'],
-    ['COMMISSION', '佣金提成'],
-  ])('filters marketing costs by the new dictionary type %s', async (typeCode, label) => {
-    state.route.path = '/supply-chain/cost/marketing'
-    state.permissions = new Set(['erp:cost:marketing:read'])
-    await render(false)
-    await wrapper!
-      .findAll('button')
-      .find((button) => button.text() === label)!
-      .trigger('click')
-    await flushPromises()
-    expect(getCosts).toHaveBeenLastCalledWith(
-      'marketing',
-      expect.objectContaining({ typeCode, begin: 0 }),
-    )
-    const typeSelect = wrapper!.findComponent({ name: 'CostDictSelect' })
-    expect(typeSelect.props('code')).toBe('MARKETING_EXPENSE_TYPE')
-    expect(typeSelect.props('modelValue')).toBe(typeCode)
-  })
-  it('keeps marketing keywords visible and submits the chosen dictionary type', async () => {
+  it.each(['PERSONNEL_COST', 'COMMISSION'])(
+    'filters marketing costs by the new dictionary type %s',
+    async (typeCode) => {
+      state.route.path = '/supply-chain/cost/marketing'
+      state.permissions = new Set(['erp:cost:marketing:read'])
+      await render(false)
+      const typeSelect = wrapper!
+        .findAllComponents({ name: 'CostDictSelect' })
+        .find((select) => select.props('code') === 'MARKETING_EXPENSE_TYPE')!
+      typeSelect.vm.$emit('update:modelValue', typeCode)
+      await wrapper!.get('.supply-list-filters form').trigger('submit')
+      await flushPromises()
+      expect(getCosts).toHaveBeenLastCalledWith(
+        'marketing',
+        expect.objectContaining({ typeCode, begin: 0 }),
+      )
+      expect(
+        wrapper!
+          .findAllComponents({ name: 'CostDictSelect' })
+          .some((select) => select.props('code') === 'MARKETING_EXPENSE_TYPE'),
+      ).toBe(true)
+    },
+  )
+  it('营销按事项和实际负责人筛选，类型仍保留业务入口', async () => {
     state.route.path = '/supply-chain/cost/marketing'
     state.permissions = new Set(['erp:cost:marketing:read'])
     await render(false)
     expect(wrapper!.find('input[aria-label="费用事项"]').exists()).toBe(true)
-    expect(wrapper!.find('input[aria-label="收款方"]').exists()).toBe(false)
     expect(wrapper!.find('input[aria-label="手填经办人"]').exists()).toBe(false)
-    await wrapper!
-      .findAll('button')
-      .find((button) => button.text() === '推广活动')!
-      .trigger('click')
-    await flushPromises()
-    expect(getCosts).toHaveBeenLastCalledWith(
-      'marketing',
-      expect.objectContaining({ typeCode: 'PROMOTION', begin: 0 }),
-    )
-    await wrapper!
-      .findAll('button')
-      .find((button) => button.text() === '更多筛选')!
-      .trigger('click')
-    await wrapper!.get('input[aria-label="收款方"]').setValue('合作公司')
-    await wrapper!.get('input[aria-label="手填经办人"]').setValue('经办甲')
+    wrapper!
+      .findAllComponents({ name: 'CostDictSelect' })
+      .find((select) => select.props('code') === 'MARKETING_EXPENSE_TYPE')!
+      .vm.$emit('update:modelValue', 'PROMOTION')
+    await wrapper!.get('input[aria-label="费用事项"]').setValue('门店活动')
+    wrapper!
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.props('ariaLabel') === '费用负责人筛选')!
+      .vm.$emit('update:modelValue', 'E1')
     await wrapper!.get('.supply-list-filters form').trigger('submit')
     expect(getCosts).toHaveBeenLastCalledWith(
       'marketing',
       expect.objectContaining({
-        payeeName: '合作公司',
-        ownerName: '经办甲',
+        title: '门店活动',
+        ownerEmployeeCode: 'E1',
         typeCode: 'PROMOTION',
       }),
     )
@@ -206,18 +218,15 @@ describe('cost management workflow', () => {
           .some((picker) => picker.props('type') === 'month'),
       ).toBe(true)
       expect(wrapper!.find('input[aria-label="费用开始日期"]').exists()).toBe(false)
-      await wrapper!
-        .findAll('button')
-        .find((button) => button.text() === '更多筛选')!
-        .trigger('click')
-      expect(wrapper!.find('input[aria-label="费用开始日期"]').exists()).toBe(true)
-      expect(wrapper!.find('input[aria-label="出租方"]').exists()).toBe(true)
+      expect(wrapper!.find('input[aria-label="场地名称筛选"]').exists()).toBe(true)
+      expect(wrapper!.find('input[aria-label="租赁合同编号"]').exists()).toBe(true)
+      expect(wrapper!.findAll('button').some((button) => button.text() === '更多筛选')).toBe(false)
     },
   )
   it('does not show unknown aggregate values as zero or a currency-prefixed missing amount', async () => {
     await render(false)
     expect(wrapper!.get('.cost-summary').text()).not.toContain('¥待补金额')
-    expect(wrapper!.get('.cost-summary').text()).toContain('已登记金额—')
+    expect(wrapper!.get('.summary-registered strong').text()).toBe('-')
   })
   it('loads the Order list and keeps mutation controls hidden for read-only access', async () => {
     await render()
@@ -228,33 +237,29 @@ describe('cost management workflow', () => {
     expect(wrapper!.findAll('button').some((button) => /新增/.test(button.text()))).toBe(false)
   })
   it.each(['expenses', 'marketing', 'warehouse-rentals', 'logistics'] as const)(
-    'submits independent document, title, remark and date filters for %s',
+    '费用筛选仅提交对应业务的独立条件 %s',
     async (category) => {
       state.route.path =
         category === 'expenses' ? '/supply-chain/hr/expenses' : `/supply-chain/cost/${category}`
       await render()
       await wrapper!.get('input[aria-label="费用单号"]').setValue(' DOC-1 ')
-      await wrapper!.get('input[aria-label="费用事项"]').setValue(' 差旅 ')
-      await wrapper!.get('input[aria-label="备注"]').setValue(' 发票 ')
-      const dates = wrapper!.findAllComponents({ name: 'ElDatePicker' })
-      dates
-        .find((picker) => picker.props('ariaLabel') === '费用开始日期')!
-        .vm.$emit('update:modelValue', '2026-10-01')
-      dates
-        .find((picker) => picker.props('ariaLabel') === '费用截止日期')!
-        .vm.$emit('update:modelValue', '2026-10-13')
+      const field =
+        category === 'warehouse-rentals'
+          ? ['场地名称筛选', 'objectName', '北京仓']
+          : category === 'logistics'
+            ? ['运单号', 'trackingNo', 'WAY-1']
+            : ['费用事项', 'title', '差旅']
+      await wrapper!.get(`input[aria-label="${field[0]}"]`).setValue(field[2])
       await wrapper!.get('.supply-list-filters form').trigger('submit')
       await flushPromises()
       expect(getCosts).toHaveBeenLastCalledWith(category, {
         documentNo: 'DOC-1',
-        title: '差旅',
-        remark: '发票',
-        dateFrom: '2026-10-01',
-        dateTo: '2026-10-13',
+        [field[1]]: field[2],
         begin: 0,
         step: 20,
       })
-      expect(wrapper!.find('input[aria-label="关键词"]').exists()).toBe(false)
+      for (const label of ['备注', '来源系统', '关键词'])
+        expect(wrapper!.find(`input[aria-label="${label}"]`).exists()).toBe(false)
       await wrapper!
         .findAll('button')
         .find((button) => button.text() === '重置')!
@@ -266,7 +271,7 @@ describe('cost management workflow', () => {
   it('keeps applied filters during pagination and does not double query after resetting the page', async () => {
     vi.mocked(getCosts).mockResolvedValue({ ...empty, total: 45 })
     await render()
-    await wrapper!.get('input[aria-label="费用事项"]').setValue('未提交')
+    await wrapper!.get('input[aria-label="运单号"]').setValue('未提交')
     await wrapper!.get('.el-pagination .btn-next').trigger('click')
     await flushPromises()
     expect(getCosts).toHaveBeenLastCalledWith('logistics', { begin: 20, step: 20 })
@@ -274,26 +279,25 @@ describe('cost management workflow', () => {
     await wrapper!.get('.supply-list-filters form').trigger('submit')
     await flushPromises()
     expect(getCosts).toHaveBeenCalledTimes(1)
-    expect(getCosts).toHaveBeenLastCalledWith('logistics', { begin: 0, step: 20, title: '未提交' })
+    expect(getCosts).toHaveBeenLastCalledWith('logistics', {
+      begin: 0,
+      step: 20,
+      trackingNo: '未提交',
+    })
   })
   it('does not carry logistics-only filters to a different cost category', async () => {
     await render()
     await wrapper!.get('input[aria-label="运单号"]').setValue('WAY-1')
-    await wrapper!.get('input[aria-label="来源单号"]').setValue('SRC-1')
     await wrapper!.get('.supply-list-filters form').trigger('submit')
     await flushPromises()
     expect(getCosts).toHaveBeenLastCalledWith(
       'logistics',
-      expect.objectContaining({ trackingNo: 'WAY-1', sourceDocumentNo: 'SRC-1' }),
+      expect.objectContaining({ trackingNo: 'WAY-1' }),
     )
     state.route.path = '/supply-chain/cost/warehouse-rentals'
     await flushPromises()
     expect(getCosts).toHaveBeenLastCalledWith('warehouse-rentals', { begin: 0, step: 20 })
     expect(wrapper!.find('input[aria-label="运单号"]').exists()).toBe(false)
-    await wrapper!
-      .findAll('button')
-      .find((button) => button.text() === '更多筛选')!
-      .trigger('click')
     await wrapper!.get('input[aria-label="租赁合同编号"]').setValue('LEASE-1')
     await wrapper!.get('.supply-list-filters form').trigger('submit')
     await flushPromises()

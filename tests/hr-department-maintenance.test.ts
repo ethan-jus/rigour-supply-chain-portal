@@ -9,13 +9,40 @@ import {
   departmentTree,
   filterDepartmentTree,
   departmentParentTree,
+  departmentScopeTree,
 } from '@/utils/hr-department-tree'
 const permission = vi.hoisted(() => ({ write: true }))
+
+describe('规则适用部门组织树', () => {
+  const departments = [
+    { id: 1, parentId: null, name: '公司', sortOrder: 0 },
+    { id: 2, parentId: 1, name: '销售部', sortOrder: 0 },
+    { id: 3, parentId: 2, name: '武汉市', sortOrder: 0 },
+    { id: 4, parentId: 1, name: '财务部', sortOrder: 1 },
+  ]
+  it('保留真实祖先且不把祖先或其他分支当作已选部门', () => {
+    const tree = departmentScopeTree(departments, [3])
+    expect(tree[0]?.selected).toBe(false)
+    expect(tree[0]?.children).toHaveLength(1)
+    expect(tree[0]?.children[0]?.selected).toBe(false)
+    expect(tree[0]?.children[0]?.children[0]).toMatchObject({ id: 3, selected: true })
+  })
+  it('选择父部门不自动扩大到它的全部下级，历史缺失部门仍可辨认', () => {
+    const tree = departmentScopeTree(departments, [2, 99])
+    expect(tree[0]?.children[0]?.children).toEqual([])
+    expect(tree[1]).toMatchObject({ id: 99, selected: true, name: '未匹配部门（99）' })
+  })
+  it('层级循环明确报错，不构造虚假的上下级关系', () => {
+    expect(() =>
+      departmentScopeTree([{ ...departments[0]!, parentId: 2 }, departments[1]!], [2]),
+    ).toThrow('部门层级存在循环')
+  })
+})
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => permission.write }),
 }))
 vi.mock('@/api/core/hr', () => ({
-  getHrEmployees: vi.fn().mockResolvedValue({items:[],total:0}),
+  getHrEmployees: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   hrOrganizationApi: { departments: vi.fn(), saveDepartment: vi.fn(), deleteDepartment: vi.fn() },
 }))
 vi.mock('@/stores/navigation', () => ({ useNavigationStore: () => ({ getNavigation: () => [] }) }))
@@ -93,7 +120,7 @@ describe('部门维护：真实表格与表单交互', () => {
     await button('展开全部').trigger('click')
     await flushPromises()
     expect(wrapper!.findAll('tr.el-table__row').filter((r) => r.isVisible())).toHaveLength(4)
-    await wrapper!.get('input[aria-label="搜索部门"]').setValue('杭州')
+    await wrapper!.get('input[aria-label="部门名称筛选"]').setValue('杭州')
     await flushPromises()
     const content = wrapper!.get('.el-table').text()
     expect(content).toContain('瑞盖')
@@ -108,7 +135,7 @@ describe('部门维护：真实表格与表单交互', () => {
       return saved
     })
     await render()
-    await wrapper!.get('input[aria-label="搜索部门"]').setValue('杭州')
+    await wrapper!.get('input[aria-label="部门名称筛选"]').setValue('杭州')
     await flushPromises()
     const target = wrapper!.findAll('tr.el-table__row').find((r) => r.text().includes('杭州市'))!
     await target
@@ -122,9 +149,9 @@ describe('部门维护：真实表格与表单交互', () => {
       null,
       expect.objectContaining({ parentId: 3, departmentName: '西湖销售组', revision: 0 }),
     )
-    expect((wrapper!.get('input[aria-label="搜索部门"]').element as HTMLInputElement).value).toBe(
-      '',
-    )
+    expect(
+      (wrapper!.get('input[aria-label="部门名称筛选"]').element as HTMLInputElement).value,
+    ).toBe('')
     expect(wrapper!.get('.el-table').text()).toContain('西湖销售组')
     expect(wrapper!.find('[role="dialog"]').exists()).toBe(false)
     expect(ElMessage.success).toHaveBeenCalledWith('部门已保存')
@@ -138,7 +165,10 @@ describe('部门维护：真实表格与表单交互', () => {
     await render()
     await button('新增部门').trigger('click')
     await wrapper!.get('input[placeholder="例如：销售部、浙江区域、杭州市"]').setValue('运营部')
-    wrapper!.findAllComponents({name:'ElSelect'}).find(c=>c.props('placeholder')==='搜索并选择在职员工')!.vm.$emit('update:modelValue','EMP1')
+    wrapper!
+      .findAllComponents({ name: 'ElSelect' })
+      .find((c) => c.props('placeholder') === '搜索并选择在职员工')!
+      .vm.$emit('update:modelValue', 'EMP1')
     await wrapper!.get('input[placeholder="请输入联系电话"]').setValue('0571-12345678')
     wrapper!.getComponent({ name: 'ElDatePicker' }).vm.$emit('update:modelValue', '2020-05-06')
     await button('确定').trigger('click')
@@ -152,8 +182,24 @@ describe('部门维护：真实表格与表单交互', () => {
     expect(command).not.toHaveProperty('createdBy')
     expect(command).not.toHaveProperty('updatedBy')
     expect(command).not.toHaveProperty('createdTime')
-    expect(wrapper!.get('.el-table').text()).toContain('2020-05-06')
-    expect(wrapper!.get('.el-table').text()).toContain('管理员')
+    expect(wrapper!.get('.el-table').text()).not.toContain('2020-05-06')
+    const readonlyRow = wrapper!
+      .findAll('tr.el-table__row')
+      .find((r) => r.text().includes('运营部'))!
+    await readonlyRow
+      .findAll('button')
+      .find((b) => b.text() === '查看')!
+      .trigger('click')
+    await flushPromises()
+    const readonlyDialog = wrapper!.get('[role="dialog"]')
+    expect(readonlyDialog.text()).toContain('2020-05-06')
+    expect(readonlyDialog.text()).toContain('管理员')
+    expect(readonlyDialog.findAll('input, textarea')).toHaveLength(0)
+    wrapper!
+      .findAllComponents(Dialog)
+      .find((dialog) => dialog.props('title') === '部门详情')!
+      .vm.$emit('close')
+    await flushPromises()
     const savedRow = wrapper!.findAll('tr.el-table__row').find((r) => r.text().includes('运营部'))!
     await savedRow
       .findAll('button')
@@ -162,7 +208,12 @@ describe('部门维护：真实表格与表单交互', () => {
     await flushPromises()
     expect(wrapper!.get('[role="dialog"]').text()).toContain('创建时间')
     expect(wrapper!.get('[role="dialog"]').text()).toContain('管理员')
-    expect(wrapper!.findAllComponents({name:'ElSelect'}).find(c=>c.props('placeholder')==='搜索并选择在职员工')!.props('modelValue')).toBe('EMP1')
+    expect(
+      wrapper!
+        .findAllComponents({ name: 'ElSelect' })
+        .find((c) => c.props('placeholder') === '搜索并选择在职员工')!
+        .props('modelValue'),
+    ).toBe('EMP1')
   })
   it('保存失败保留表单和服务端错误，不假报成功', async () => {
     vi.mocked(hrOrganizationApi.saveDepartment).mockRejectedValue({

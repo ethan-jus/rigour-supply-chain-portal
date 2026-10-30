@@ -162,15 +162,56 @@ describe('标准双 Token 自动续期', () => {
     expect(hasRefreshToken()).toBe(false)
   })
 
-  it.each(['network', '503', 'invalid-response'])('刷新遇到 %s 保留会话并报告可重试错误', async kind => {
+  it.each(['network', '503', 'invalid-response'])(
+    '刷新遇到 %s 保留会话并报告可重试错误',
+    async (kind) => {
+      const fetch = await login()
+      vi.mocked(Date.now).mockReturnValue(now + 901_000)
+      if (kind === 'network') fetch.mockRejectedValue(new TypeError('offline'))
+      else
+        fetch.mockResolvedValue(
+          kind === '503'
+            ? body({ error: 'server_error' }, 503)
+            : body({ access_token: 'incomplete' }),
+        )
+      await expect(ensureAccessToken()).rejects.toMatchObject({
+        code: 'IAM_UNAVAILABLE',
+        reason: kind === 'network' ? 'NETWORK' : kind === '503' ? 'HTTP_ERROR' : 'INVALID_RESPONSE',
+      })
+      expect(hasRefreshToken()).toBe(true)
+      fetch.mockResolvedValue(body(tokens()))
+      await expect(ensureAccessToken()).resolves.toBe('access-2')
+    },
+  )
+
+  it.each([502, 503])(
+    '代理返回非 JSON 的 HTTP %s 时保留真实状态，不误报网络故障',
+    async (status) => {
+      const fetch = await login()
+      vi.mocked(Date.now).mockReturnValue(now + 901_000)
+      fetch.mockResolvedValue(new Response('<html>gateway unavailable</html>', { status }))
+      await expect(ensureAccessToken()).rejects.toMatchObject({
+        code: 'IAM_UNAVAILABLE',
+        reason: 'HTTP_ERROR',
+        status,
+        message: expect.stringContaining(`HTTP ${status}`),
+      })
+      expect(hasRefreshToken()).toBe(true)
+      expect(fetch).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it('成功响应中的无效 JSON 属于响应异常，不清除会话，也不自动重放刷新令牌', async () => {
     const fetch = await login()
     vi.mocked(Date.now).mockReturnValue(now + 901_000)
-    if (kind === 'network') fetch.mockRejectedValue(new TypeError('offline'))
-    else fetch.mockResolvedValue(kind === '503' ? body({ error: 'server_error' }, 503) : body({ access_token: 'incomplete' }))
-    await expect(ensureAccessToken()).rejects.toMatchObject({ code: 'IAM_UNAVAILABLE' })
+    fetch.mockResolvedValue(new Response('not-json', { status: 200 }))
+    await expect(ensureAccessToken()).rejects.toMatchObject({
+      code: 'IAM_UNAVAILABLE',
+      reason: 'INVALID_RESPONSE',
+      status: 200,
+    })
     expect(hasRefreshToken()).toBe(true)
-    fetch.mockResolvedValue(body(tokens()))
-    await expect(ensureAccessToken()).resolves.toBe('access-2')
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('退出后迟到的刷新响应不能恢复登录', async () => {
@@ -214,7 +255,7 @@ describe('标准双 Token 自动续期', () => {
     fetch.mockImplementation((_url, options) => new Promise((_, reject) => {
       options.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
     }))
-    const rejected = expect(ensureAccessToken()).rejects.toMatchObject({ code: 'IAM_UNAVAILABLE' })
+    const rejected = expect(ensureAccessToken()).rejects.toMatchObject({ code: 'IAM_UNAVAILABLE', reason: 'TIMEOUT' })
     await vi.advanceTimersByTimeAsync(10_000)
     await rejected
     expect(hasRefreshToken()).toBe(true)

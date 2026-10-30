@@ -39,9 +39,10 @@
     <el-table-column label="区间内计分方式" min-width="190">
       <template #default="{ row }"
         ><el-select v-model="row.mode"
-          ><el-option value="LINEAR" label="完成率 × 倍数" /><el-option
-            value="FIXED"
-            label="直接采用固定系数" /></el-select
+          ><el-option
+            v-for="option in coefficientModeOptions"
+            :key="option.value"
+            v-bind="option" /></el-select
       ></template>
     </el-table-column>
     <el-table-column label="倍数 / 固定系数" min-width="160">
@@ -105,6 +106,7 @@
 </template>
 <script setup lang="ts">
 import { computed, inject } from 'vue'
+import { coefficientModeOptions, payrollRatePercent } from '@/utils/payroll-rule-options'
 import { ElMessage, formContextKey } from 'element-plus'
 import 'element-plus/theme-chalk/el-message.css'
 import type { PayrollMetricStep } from '@/api/core/payroll-scheme/models/PayrollMetricStep'
@@ -143,8 +145,7 @@ function pasteRow(target: PayrollMetricStep) {
   steps.value = steps.value.map((row) => (row === target ? copied : row))
   ElMessage.success('本行区间已粘贴，仅覆盖当前行，保存规则后生效。')
 }
-const percent = (value: number | null) =>
-  value == null ? undefined : Number((value * 100).toFixed(4))
+const percent = (value: number | null) => payrollRatePercent(value) ?? undefined
 const rate = (value: number | undefined | null) => (value == null ? null : value / 100)
 </script>
 <style scoped>

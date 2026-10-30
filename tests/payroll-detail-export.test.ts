@@ -62,6 +62,20 @@ const record = (code: string): PayrollRecord => ({
 })
 
 describe('薪酬 Excel', () => {
+  it('提成方法与表单选项一致，标准数值不换算为其他金额', async () => {
+    const row = record('A')
+    Object.assign(row.calculation.details[0]!, { trace: { method: 'PERCENT', rate: 4 } })
+    Object.assign(row.calculation.details[1]!, { trace: { method: 'QUANTITY', rate: 15.25 } })
+    const workbook = await buildPayrollWorkbook([row])
+    const page = workbook.getWorksheet('商品提成明细')!
+    const columns = page.getRow(1).values as string[]
+    const method = columns.indexOf('方法')
+    const standard = columns.indexOf('标准')
+    expect(page.getCell(2, method).value).toBe('按回款比例')
+    expect(page.getCell(3, method).value).toBe('按数量')
+    expect(page.getCell(2, standard).value).toBe(4)
+    expect(page.getCell(3, standard).value).toBe(15.25)
+  })
   it('金额明确人民币元、数值可汇总，所有工作表不导出版本列', async () => {
     const workbook = await buildPayrollWorkbook([record('A')])
     workbook.eachSheet(page => expect(page.getRow(1).values).not.toContain('版本'))

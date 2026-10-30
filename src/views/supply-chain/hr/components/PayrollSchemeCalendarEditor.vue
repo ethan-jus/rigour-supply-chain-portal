@@ -1,7 +1,7 @@
 <template>
   <el-form label-position="top" :disabled="disabled">
     <h3 class="calendar-title">部门工作日历</h3>
-    <div class="calendar-settings">
+    <div v-if="!disabled" class="calendar-settings">
       <el-switch
         v-model="followStatutory"
         :disabled="disabled"
@@ -10,6 +10,12 @@
       />
       <span class="field-hint">法定放假安排自动更新，大小周和特殊调休可直接在日历中调整。</span>
     </div>
+    <dl v-if="disabled" class="business-detail-fields">
+      <div>
+        <dt>工作日历</dt>
+        <dd>{{ followStatutory ? '跟随法定节假日' : '自定义工作日历' }}</dd>
+      </div>
+    </dl>
     <div class="calendar-legend">
       <span class="work-legend">工作日</span><span class="rest-legend">休息日</span
       ><span class="makeup-legend">调休补班</span>
@@ -61,17 +67,17 @@
       title="本历史规则含部门免考核日期，继续保留历史依据；新增个人免考核请在员工档案维护。"
     />
     <el-divider content-position="left">薪资核算的打卡日期归属窗口（北京时间）</el-divider>
-    <div class="scheme-grid">
-      <el-form-item label="开始时间（包含）"
+    <div v-if="!disabled" class="scheme-grid">
+      <el-form-item label="打卡归属开始时间（包含）"
         ><el-time-picker
           v-model="form.calendar.window.start"
           value-format="HH:mm:ss"
           format="HH:mm"
       /></el-form-item>
-      <el-form-item label="结束时间（不包含）"
+      <el-form-item label="打卡归属结束时间（不包含）"
         ><el-time-picker v-model="form.calendar.window.end" value-format="HH:mm:ss" format="HH:mm"
       /></el-form-item>
-      <el-form-item label="结束日期"
+      <el-form-item label="结束时间所在日"
         ><el-switch v-model="form.calendar.window.nextDay" active-text="次日" inactive-text="当日"
       /></el-form-item>
       <el-form-item label="窗口外打卡"
@@ -81,6 +87,40 @@
             value="CALENDAR_DAY" /></el-select
       ></el-form-item>
     </div>
+    <dl v-if="disabled" class="business-detail-fields">
+      <div>
+        <dt>打卡归属开始时间（包含）</dt>
+        <dd>{{ form.calendar.window.start?.slice(0, 5) || '-' }}</dd>
+      </div>
+      <div>
+        <dt>打卡归属结束时间（不包含）</dt>
+        <dd>{{ form.calendar.window.end?.slice(0, 5) || '-' }}</dd>
+      </div>
+      <div>
+        <dt>结束时间所在日</dt>
+        <dd>
+          {{
+            form.calendar.window.nextDay === true
+              ? '次日'
+              : form.calendar.window.nextDay === false
+                ? '当日'
+                : '-'
+          }}
+        </dd>
+      </div>
+      <div>
+        <dt>窗口外打卡</dt>
+        <dd>
+          {{
+            form.calendar.window.outside === 'IGNORE'
+              ? '不计入考核，保留原始记录'
+              : form.calendar.window.outside === 'CALENDAR_DAY'
+                ? '按打卡自然日计入'
+                : '-'
+          }}
+        </dd>
+      </div>
+    </dl>
     <p class="field-hint">
       例如当日09:00至次日06:00，次日凌晨打卡归前一工作日。06:00至09:00按上方“窗口外打卡”处理，不能跨日抵消任务缺项。
     </p>

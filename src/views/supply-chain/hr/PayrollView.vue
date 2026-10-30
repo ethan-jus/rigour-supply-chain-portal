@@ -5,19 +5,13 @@
         <SupplyPageTitle>月度薪酬</SupplyPageTitle>
         <SupplyPageHelp>选择月份和人员，按当月生效的档案与规则计算工资。</SupplyPageHelp>
       </div>
-      <el-button
-        v-if="can('hr:payroll:calculate')"
-        type="primary"
-        :disabled="batchBusy"
-        @click="calculateVisible = true"
-        >生成月度薪酬</el-button
-      >
     </div>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
     <el-alert v-if="reviewError" :title="reviewError" type="error" :closable="false" />
     <PayrollRuleReviewPanel
       :reviews="ruleReviews"
       subject="PAYROLL"
+      compact
       :can-process="can('hr:payroll:confirm')"
       @locate="locateRuleReview"
       @resolved="load"
@@ -30,12 +24,21 @@
             type="month"
             value-format="YYYY-MM"
             placeholder="薪酬月份"
+            aria-label="薪酬月份"
             :clearable="false" /></el-form-item
-        ><el-form-item label="员工"
+        ><el-form-item label="员工姓名"
           ><el-input
-            v-model="keyword"
+            v-model="employeeNameFilter"
             clearable
-            placeholder="员工姓名 / 编号"
+            placeholder="请输入员工姓名"
+            aria-label="员工姓名"
+            @keyup.enter="search" /></el-form-item
+        ><el-form-item label="员工编号"
+          ><el-input
+            v-model="employeeCodeFilter"
+            clearable
+            placeholder="请输入员工编号"
+            aria-label="员工编号"
             @keyup.enter="search" /></el-form-item
         ><el-form-item label="部门"
           ><el-tree-select
@@ -50,8 +53,13 @@
             :render-after-expand="false"
             placeholder="全部部门"
             aria-label="部门筛选" /></el-form-item
-        ><el-form-item label="薪资类别"
-          ><el-select v-model="payrollCategory" clearable placeholder="全部类别">
+        ><el-form-item label="薪酬身份"
+          ><el-select
+            v-model="payrollCategory"
+            clearable
+            placeholder="全部薪酬身份"
+            aria-label="薪酬身份"
+          >
             <el-option
               v-for="role in payrollRoles"
               :key="role.value"
@@ -74,111 +82,146 @@
       v-model="calculateVisible"
       v-model:month="month"
       :department-id="departmentId"
+      :departments="departments"
       @changed="load"
     />
     <PayrollSettlementDialog ref="settlementDialog" @changed="workflowChanged" />
     <PayrollBatchDialog ref="batchDialog" @changed="workflowChanged" @busy="batchBusy = $event" />
-    <section class="payroll-results-overview" aria-label="月度薪酬状态与汇总">
-      <div class="workflow-filter">
-        <el-radio-group
-          v-model="statusCode"
-          :disabled="batchBusy"
-          aria-label="月度薪酬处理阶段"
-          @change="search"
-        >
-          <el-radio-button v-for="stage in workflowStages" :key="stage.code" :value="stage.code">
-            {{ stage.label }}（{{ stageCount(stage.code) }}）
-          </el-radio-button>
-        </el-radio-group>
-        <el-tooltip :content="workflowHint" placement="top" :trigger="['hover', 'focus']">
-          <button type="button" class="summary-help workflow-help" aria-label="查看薪酬状态说明">
-            <el-icon><InfoFilled /></el-icon>
-            <span>状态说明</span>
-          </button>
-        </el-tooltip>
-      </div>
-      <div class="payroll-summary" aria-live="polite" :aria-busy="loading">
-        <div class="summary-card">
-          <div class="summary-label">核算人数</div>
-          <div class="summary-value">
-            <strong>{{ summary?.total ?? '—' }}</strong
-            ><span>人</span>
-          </div>
-          <div class="summary-completion">
-            完整核算 {{ summary?.completeCount ?? '—' }} 人 /
-            <span :class="{ 'summary-pending': (summary?.pendingCount ?? 0) > 0 }">
-              待核定 {{ summary?.pendingCount ?? '—' }} 人
-            </span>
-          </div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-card-heading">
-            <span class="summary-label">应发合计（元）</span>
-            <el-tooltip
-              content="合计仅含当前筛选下的完整结果，不受列表分页影响。待核定工资暂不计入金额合计。"
-              placement="top"
-              :trigger="['hover', 'focus']"
-            >
-              <button
-                type="button"
-                class="summary-help"
-                aria-label="查看汇总口径：合计仅含当前筛选下的完整结果"
-              >
-                <el-icon><InfoFilled /></el-icon>
-              </button>
-            </el-tooltip>
-          </div>
-          <div class="summary-value">
-            <strong>{{ summary?.completeCount ? payrollMoney(summary.grossPay) : '—' }}</strong>
-          </div>
-          <div class="summary-completion">
-            当前筛选 · {{ summary?.completeCount ?? '—' }} 人计入合计
-          </div>
-        </div>
-        <div class="summary-card summary-payable">
-          <div class="summary-label">应付合计（元）</div>
-          <div class="summary-value">
-            <strong>{{ summary?.completeCount ? payrollMoney(summary.netPay) : '—' }}</strong>
-          </div>
-          <div class="summary-completion">应发减其他扣款 · 实际发放见工资表</div>
-        </div>
-      </div>
-    </section>
     <el-card class="list-card" shadow="never">
-      <div class="payroll-list-heading">
-        <h3>员工月度工资表</h3>
-        <span>单位：元</span>
-      </div>
-      <div class="result-heading">
+      <h3 class="payroll-table-title">员工月度工资表</h3>
+      <div class="payroll-list-header">
+        <div class="workflow-filter">
+          <div class="payroll-stage-tabs" role="tablist" aria-label="月度薪酬处理阶段">
+            <button
+              v-for="(stage, index) in workflowStages"
+              :key="stage.code"
+              type="button"
+              role="tab"
+              :id="`payroll-stage-${stage.code || 'ALL'}`"
+              aria-controls="payroll-results-table"
+              class="payroll-stage-tab"
+              :class="{ 'is-active': statusCode === stage.code }"
+              :aria-label="`${stage.label}（${stageCount(stage.code)}）`"
+              :aria-selected="statusCode === stage.code"
+              :tabindex="statusCode === stage.code ? 0 : -1"
+              :disabled="batchBusy"
+              @click="selectStage(stage.code)"
+              @keydown="stageKeydown($event, index)"
+            >
+              <span>{{ stage.label }}</span
+              ><span class="payroll-stage-count">{{ stageCount(stage.code) }}</span>
+            </button>
+          </div>
+          <el-tooltip :content="workflowHint" placement="top" :trigger="['hover', 'focus']">
+            <button type="button" class="summary-help workflow-help" aria-label="查看薪酬状态说明">
+              <el-icon><InfoFilled /></el-icon>
+              <span>状态说明</span>
+            </button>
+          </el-tooltip>
+        </div>
         <div class="list-tools">
-          <span>已选本页 {{ selection.length }} 人</span>
-          <el-button
-            v-if="can('hr:payroll:confirm')"
-            :disabled="!selection.length || loading || saving || batchBusy"
-            @click="batchDialog?.open(selection, 'confirm')"
-            >批量确认</el-button
-          >
           <el-button
             v-if="can('hr:payroll:calculate')"
-            :disabled="!selection.length || loading || saving || batchBusy"
-            @click="batchDialog?.open(selection, 'recalculate')"
-            >批量重算</el-button
+            type="primary"
+            :disabled="batchBusy"
+            @click="calculateVisible = true"
+            >生成月度薪酬</el-button
           >
-        </div>
-        <div class="list-tools">
-          <el-button :loading="exporting" @click="exportAll">导出筛选结果</el-button>
+          <el-button
+            :loading="exporting"
+            aria-label="导出筛选结果"
+            title="导出当前筛选结果"
+            @click="exportAll"
+            >导出</el-button
+          >
           <el-button :loading="loading" :disabled="batchBusy" @click="workflowChanged"
             >刷新</el-button
           >
         </div>
       </div>
-      <div class="table-viewport">
+      <div
+        class="payroll-summary"
+        aria-label="薪酬核算总计"
+        aria-live="polite"
+        :aria-busy="loading"
+      >
+        <div class="summary-card summary-people">
+          <div class="summary-label">核算人数</div>
+          <div class="summary-value">
+            <strong>{{ summary?.total ?? '-' }}</strong
+            ><span>人</span>
+          </div>
+        </div>
+        <div class="summary-card summary-complete">
+          <div class="summary-label">完整核算人数</div>
+          <div class="summary-value">
+            <strong>{{ summary?.completeCount ?? '-' }}</strong
+            ><span>人</span>
+          </div>
+        </div>
+        <div class="summary-card summary-pending-card" title="待核定工资不计入金额合计。">
+          <div class="summary-label">待核定人数</div>
+          <div class="summary-value">
+            <strong>{{ summary?.pendingCount ?? '-' }}</strong
+            ><span>人</span>
+          </div>
+        </div>
+        <div class="summary-card summary-gross">
+          <div class="summary-card-heading">
+            <span class="summary-label">应发合计（元）</span
+            ><el-tooltip
+              :content="`当前筛选全部完整核算结果的应发合计，计入 ${summary?.completeCount ?? '-'} 人，不受列表分页影响。待核定工资不计入。`"
+              placement="top"
+              :trigger="['hover', 'focus']"
+              ><button
+                type="button"
+                class="summary-help"
+                aria-label="查看汇总口径：合计仅含当前筛选下的完整结果"
+              >
+                <el-icon><InfoFilled /></el-icon></button
+            ></el-tooltip>
+          </div>
+          <div class="summary-value">
+            <strong>{{ summary?.completeCount ? payrollMoney(summary.grossPay) : '-' }}</strong>
+          </div>
+        </div>
+        <div
+          class="summary-card summary-payable"
+          title="应付合计为应发合计减其他扣款；实际发放见工资明细。"
+        >
+          <div class="summary-label">应付合计（元）</div>
+          <div class="summary-value">
+            <strong>{{ summary?.completeCount ? payrollMoney(summary.netPay) : '-' }}</strong>
+          </div>
+        </div>
+      </div>
+      <div v-if="selection.length" class="payroll-selection-bar">
+        <span>已选本页 {{ selection.length }} 人</span>
+        <el-button
+          v-if="can('hr:payroll:confirm')"
+          :disabled="!selection.length || loading || saving || batchBusy"
+          @click="batchDialog?.open(selection, 'confirm')"
+          >批量确认</el-button
+        >
+        <el-button
+          v-if="can('hr:payroll:calculate')"
+          :disabled="!selection.length || loading || saving || batchBusy"
+          @click="batchDialog?.open(selection, 'recalculate')"
+          >批量重算</el-button
+        >
+      </div>
+      <div
+        class="table-viewport"
+        id="payroll-results-table"
+        role="tabpanel"
+        :aria-labelledby="`payroll-stage-${statusCode || 'ALL'}`"
+      >
         <el-table
           ref="payrollTable"
           v-loading="loading"
           :data="page.items"
           row-key="id"
-          border
+          height="100%"
           class="business-table supply-scroll-table"
           @selection-change="selection = $event"
         >
@@ -189,7 +232,7 @@
             fixed="left"
             :selectable="() => !batchBusy && !saving"
           />
-          <el-table-column label="员工 / 部门" width="165" fixed="left">
+          <el-table-column label="员工姓名" width="100" fixed="left">
             <template #default="{ row }">
               <el-button
                 link
@@ -198,17 +241,25 @@
                 @click="showDetail(row as PayrollRecord)"
                 >{{ row.employeeName }}</el-button
               >
-              <div class="employee-meta">{{ row.employeeCode }}</div>
-              <div class="employee-meta">
-                {{ row.departmentName }} · {{ payrollRole(row as PayrollRecord) }}
-              </div>
             </template>
           </el-table-column>
           <el-table-column
-            v-for="field in moneyFields"
+            prop="departmentName"
+            label="部门"
+            min-width="105"
+            show-overflow-tooltip
+            :formatter="displayCell"
+          />
+          <el-table-column label="薪酬身份" min-width="105"
+            ><template #default="{ row }">{{
+              payrollRole(row as PayrollRecord)
+            }}</template></el-table-column
+          >
+          <el-table-column
+            v-for="field in moneyFields.filter((item) => ['grossPay', 'netPay'].includes(item.key))"
             :key="field.key"
-            :label="field.label + '（元）'"
-            min-width="100"
+            :label="field.label"
+            :min-width="field.minWidth"
             align="right"
           >
             <template #default="{ row }"
@@ -217,12 +268,7 @@
               }}</span></template
             >
           </el-table-column>
-          <el-table-column label="实际发放（元）" min-width="105" align="right"
-            ><template #default="{ row }">{{
-              payrollMoney(payrollPaid(row as PayrollRecord))
-            }}</template></el-table-column
-          >
-          <el-table-column label="状态" width="165">
+          <el-table-column label="状态" width="90">
             <template #default="{ row }">
               <el-button
                 v-if="row.statusCode === 'REVIEW'"
@@ -230,9 +276,7 @@
                 type="warning"
                 @click="showDetail(row as PayrollRecord, 'review')"
               >
-                待处理<span v-if="row.calculation.issues.length">
-                  · {{ payrollReviewGroups(row.calculation.issues).length }}类</span
-                >
+                待处理
               </el-button>
               <el-tag v-else :type="row.statusCode === 'PAID' ? 'success' : 'primary'">{{
                 payrollStatusLabel(
@@ -240,18 +284,26 @@
                   costLabel('PAYROLL_STATUS', row.statusCode),
                 )
               }}</el-tag>
-              <p v-if="row.paymentBlockReason" class="field-hint">{{ row.paymentBlockReason }}</p>
-              <el-tag v-if="needsRuleReview(row.id)" type="warning">规则变更待复核</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="170" fixed="right">
+          <el-table-column label="创建人" min-width="125" show-overflow-tooltip
+            ><template #default="{ row }">{{
+              row.createdByName || auditActorLabel(row.createdBy)
+            }}</template></el-table-column
+          >
+          <el-table-column label="创建时间" min-width="175"
+            ><template #default="{ row }">{{
+              displayRecordDateTime(row.createdTime)
+            }}</template></el-table-column
+          >
+          <el-table-column label="操作" width="260" fixed="right">
             <template #default="{ row }">
               <div class="row-actions">
                 <el-button link type="primary" @click="showDetail(row as PayrollRecord)"
                   >明细</el-button
                 >
                 <el-button
-                  v-if="row.statusCode === 'REVIEW'"
+                  v-if="row.statusCode === 'REVIEW' && !can('hr:payroll:calculate')"
                   link
                   type="primary"
                   @click="showDetail(row as PayrollRecord, 'review')"
@@ -261,11 +313,9 @@
                   v-if="row.statusCode === 'READY' && can('hr:payroll:confirm')"
                   link
                   type="primary"
-                  :disabled="
-                    saving || batchBusy || row.month >= thisMonth() || !!row.paymentBlockReason
-                  "
-                  @click="settlementDialog?.open(row as PayrollRecord, 'confirm')"
-                  >确认</el-button
+                  :disabled="saving || batchBusy"
+                  @click="openSettlement(row as PayrollRecord, 'confirm')"
+                  >确认工资</el-button
                 >
                 <el-button
                   v-if="unlocked(row as PayrollRecord) && can('hr:payroll:calculate')"
@@ -279,14 +329,8 @@
                   v-if="row.statusCode === 'CONFIRMED' && can('hr:payroll:paid')"
                   link
                   type="primary"
-                  :disabled="
-                    saving ||
-                    batchBusy ||
-                    needsRuleReview(row.id) ||
-                    !!reviewError ||
-                    !!row.paymentBlockReason
-                  "
-                  @click="settlementDialog?.open(row as PayrollRecord, 'paid')"
+                  :disabled="saving || batchBusy"
+                  @click="openSettlement(row as PayrollRecord, 'paid')"
                   >登记发放</el-button
                 >
                 <el-dropdown
@@ -329,16 +373,19 @@
           </el-table-column>
         </el-table>
       </div>
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :disabled="batchBusy"
-        :total="page.total"
-        :page-sizes="[20, 50, 100]"
-        layout="total, sizes, prev, pager, next"
-        @current-change="load"
-        @size-change="search"
-      />
+      <div class="payroll-table-footer">
+        <span class="payroll-unit">金额单位：元</span>
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :disabled="batchBusy"
+          :total="page.total"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          @current-change="load"
+          @size-change="search"
+        />
+      </div>
     </el-card>
     <el-dialog
       v-model="inputVisible"
@@ -472,7 +519,7 @@
               />
               <p class="field-hint">
                 档案部门：{{
-                  inputRow?.departmentName || '未填写'
+                  inputRow?.departmentName || '-'
                 }}。仅调整本人的本月核算归属，不修改同部门其他人的完成率。
               </p>
             </el-form-item>
@@ -500,21 +547,41 @@
       v-model="detailVisible"
       title="员工月度薪酬明细"
       size="min(1440px, 96vw)"
-      class="payroll-payslip"
+      class="payroll-payslip business-detail-panel"
       destroy-on-close
       ><template v-if="detail"
         ><div class="payslip-heading">
-          <strong>{{ detail.employeeName }}</strong
-          ><span>{{ detail.employeeCode }}</span>
-          <span>{{ detail.departmentName }} · {{ payrollRole(detail) }}</span
-          ><span>{{ detail.month }}</span>
-          <el-tag>{{
-            payrollStatusLabel(detail, costLabel('PAYROLL_STATUS', detail.statusCode))
-          }}</el-tag>
-          <div class="payslip-payable">
-            <span>应付工资（元）</span
-            ><strong>{{ payrollMoney(detail.calculation.netPay) }}</strong>
-          </div>
+          <header class="business-detail-hero">
+            <div>
+              <span class="business-detail-kicker">员工月度薪酬明细</span>
+              <h2>{{ detail.employeeName }}</h2>
+            </div>
+            <el-tag>{{
+              payrollStatusLabel(detail, costLabel('PAYROLL_STATUS', detail.statusCode))
+            }}</el-tag>
+          </header>
+          <dl class="business-detail-summary payslip-facts">
+            <div>
+              <dt>员工编号</dt>
+              <dd>{{ detail.employeeCode }}</dd>
+            </div>
+            <div>
+              <dt>部门</dt>
+              <dd>{{ detail.departmentName || '-' }}</dd>
+            </div>
+            <div>
+              <dt>薪酬身份</dt>
+              <dd>{{ payrollRole(detail) }}</dd>
+            </div>
+            <div>
+              <dt>薪酬月份</dt>
+              <dd>{{ detail.month }}</dd>
+            </div>
+            <div>
+              <dt>应付工资（元）</dt>
+              <dd class="business-detail-amount">{{ payrollMoney(detail.calculation.netPay) }}</dd>
+            </div>
+          </dl>
           <el-tag
             v-if="
               detail.calculation.input.baseOverride != null ||
@@ -531,6 +598,37 @@
           <el-tab-pane label="工资组成" name="overview"
             ><PayrollSalaryOverview :row="detail"
           /></el-tab-pane>
+          <el-tab-pane label="核对信息" name="checks">
+            <dl class="business-detail-fields">
+              <div>
+                <dt>创建人</dt>
+                <dd>{{ detail.createdByName || auditActorLabel(detail.createdBy) }}</dd>
+              </div>
+              <div>
+                <dt>创建时间</dt>
+                <dd>{{ displayRecordDateTime(detail.createdTime) }}</dd>
+              </div>
+
+              <div>
+                <dt>待处理类别数</dt>
+                <dd>{{ payrollReviewGroups(detail.calculation.issues).length }}</dd>
+              </div>
+              <div>
+                <dt>规则复核</dt>
+                <dd>
+                  {{ reviewError ? '暂不可用' : needsRuleReview(detail.id) ? '待复核' : '-' }}
+                </dd>
+              </div>
+              <div class="business-detail-field-wide">
+                <dt>确认发放限制</dt>
+                <dd>{{ detail.paymentBlockReason || '-' }}</dd>
+              </div>
+              <div>
+                <dt>实际发放（元）</dt>
+                <dd>{{ payrollMoney(payrollPaid(detail)) }}</dd>
+              </div>
+            </dl>
+          </el-tab-pane>
           <el-tab-pane
             v-if="detail.statusCode === 'REVIEW' || detail.calculation.issues.length"
             label="待处理事项"
@@ -584,14 +682,28 @@
             <template v-if="detail.calculation.performanceDetail">
               <h3>每日打卡与有效拜访明细</h3>
               <el-table :data="detail.calculation.performanceDetail.days" border max-height="420"
-                ><el-table-column prop="date" label="日期" width="115" /><el-table-column
+                ><el-table-column
+                  prop="date"
+                  label="日期"
+                  width="115"
+                  :formatter="displayCell"
+                /><el-table-column
                   prop="checkins"
                   label="有效打卡数"
-                /><el-table-column prop="effectiveVisits" label="有效拜访客户数" /><el-table-column
+                  :formatter="displayCell"
+                /><el-table-column
+                  prop="effectiveVisits"
+                  label="有效拜访客户数"
+                  :formatter="displayCell"
+                /><el-table-column
                   prop="missingCheckins"
                   label="缺少打卡"
-                /><el-table-column prop="missingVisits" label="缺少拜访" /><el-table-column
-                  label="原始扣减（元）"
+                  :formatter="displayCell"
+                /><el-table-column
+                  prop="missingVisits"
+                  label="缺少拜访"
+                  :formatter="displayCell"
+                /><el-table-column label="原始扣减（元）"
                   ><template #default="{ row }">{{
                     costMoney(row.deduction)
                   }}</template></el-table-column
@@ -603,9 +715,15 @@
               >
               <h3>当月回款依据</h3>
               <el-table :data="detail.calculation.performanceDetail.sources" border max-height="360"
-                ><el-table-column prop="orderNo" label="订单号" min-width="180" /><el-table-column
+                ><el-table-column
+                  prop="orderNo"
+                  label="订单号"
+                  min-width="180"
+                  :formatter="displayCell"
+                /><el-table-column
                   prop="date"
                   label="回款日期"
+                  :formatter="displayCell"
                 /><el-table-column label="金额（元）" align="right"
                   ><template #default="{ row }">{{
                     costMoney(row.amount)
@@ -623,33 +741,52 @@
           <el-tab-pane label="规则依据" name="rules">
             <PayrollRuleEvidenceTable :row="detail" />
             <el-table v-if="detail.calculation.rules.length" :data="detail.calculation.rules" border
-              ><el-table-column prop="data.name" label="规则" min-width="180" /><el-table-column
-                label="类别"
-                width="130"
+              ><el-table-column
+                prop="data.name"
+                label="规则"
+                min-width="180"
+                :formatter="displayCell"
+              /><el-table-column label="类别" width="130"
                 ><template #default="{ row }">{{
                   costLabel('PAYROLL_RULE_KIND', row.data.kindCode)
                 }}</template></el-table-column
-              ><el-table-column prop="revision" label="版本" width="70" /><el-table-column
+              ><el-table-column
                 prop="data.effectiveFrom"
                 label="生效日期"
                 width="115"
+                :formatter="displayCell"
               /><el-table-column
                 prop="data.effectiveTo"
                 label="截止日期"
                 width="115"
-              /><el-table-column label="金额 / 标准" min-width="130"
+                :formatter="displayCell"
+              /><el-table-column label="金额（元）" min-width="130" align="right"
                 ><template #default="{ row }">{{
-                  row.data.kindCode === 'COMMISSION'
-                    ? String(row.data.rate) +
-                      (row.data.methodCode === 'PERCENT'
-                        ? '%'
-                        : ' 元/' + payrollUnitName(row.data.unitCode))
-                    : row.data.kindCode === 'CITY_MANAGER'
-                      ? row.data.cityName
-                      : costMoney(row.data.amount)
+                  costMoney(row.data.amount)
                 }}</template></el-table-column
-              ></el-table
-            >
+              >
+              <el-table-column label="提成比例（%）" min-width="140" align="right"
+                ><template #default="{ row }">{{
+                  row.data.methodCode === 'PERCENT' ? (row.data.rate ?? '-') : '-'
+                }}</template></el-table-column
+              >
+              <el-table-column label="每单位提成（元）" min-width="150" align="right"
+                ><template #default="{ row }">{{
+                  row.data.methodCode === 'QUANTITY' ? costMoney(row.data.rate) : '-'
+                }}</template></el-table-column
+              >
+              <el-table-column label="计提单位" min-width="110"
+                ><template #default="{ row }">{{
+                  row.data.methodCode === 'QUANTITY' ? payrollUnitName(row.data.unitCode) : '-'
+                }}</template></el-table-column
+              >
+              <el-table-column
+                prop="data.cityName"
+                label="适用城市"
+                min-width="130"
+                :formatter="displayCell"
+              />
+            </el-table>
           </el-tab-pane>
           <el-tab-pane label="调整与历史" name="payments">
             <h3>人工调整</h3>
@@ -683,17 +820,26 @@
             </p>
             <h3>发放登记</h3>
             <el-table :data="detail.payments ?? []" border
-              ><el-table-column prop="paidDate" label="实际日期" width="120" /><el-table-column
-                label="金额（元）"
+              ><el-table-column
+                prop="paidDate"
+                label="实际日期"
                 width="120"
+                :formatter="displayCell"
+              /><el-table-column label="金额（元）" width="120"
                 ><template #default="{ row }">{{
                   costMoney(row.amount)
                 }}</template></el-table-column
               ><el-table-column
                 prop="referenceNo"
-                label="凭证号 / 流水号"
+                label="发放凭证编号"
                 min-width="160"
-              /><el-table-column prop="reason" label="说明" min-width="180" />
+                :formatter="displayCell"
+              /><el-table-column
+                prop="reason"
+                label="说明"
+                min-width="180"
+                :formatter="displayCell"
+              />
               <el-table-column label="发放凭证" min-width="200">
                 <template #default="{ row }">
                   <PayrollPaymentAttachments
@@ -707,22 +853,31 @@
             </el-table>
             <h3>本月计入的补差</h3>
             <el-table :data="detail.calculation.corrections ?? []" border
-              ><el-table-column prop="sourceMonth" label="原工资月份" /><el-table-column
-                label="差额（元）"
+              ><el-table-column
+                prop="sourceMonth"
+                label="原工资月份"
+                :formatter="displayCell" /><el-table-column label="差额（元）"
                 ><template #default="{ row }">{{
                   costMoney(row.amount)
                 }}</template></el-table-column
-              ><el-table-column prop="reason" label="原因" min-width="220"
+              ><el-table-column prop="reason" label="原因" min-width="220" :formatter="displayCell"
             /></el-table>
             <h3>从本单发起的补差</h3>
             <el-table :data="detail.correctionsIssued ?? []" border
-              ><el-table-column prop="targetMonth" label="计入月份" /><el-table-column
-                label="差额（元）"
+              ><el-table-column
+                prop="targetMonth"
+                label="计入月份"
+                :formatter="displayCell"
+              /><el-table-column label="差额（元）"
                 ><template #default="{ row }">{{
                   costMoney(row.amount)
                 }}</template></el-table-column
-              ><el-table-column prop="reason" label="原因" min-width="160" /><el-table-column
-                label="状态"
+              ><el-table-column
+                prop="reason"
+                label="原因"
+                min-width="160"
+                :formatter="displayCell"
+              /><el-table-column label="状态"
                 ><template #default="{ row }">{{
                   row.statusCode === 'VOID' ? '已作废' : '有效'
                 }}</template></el-table-column
@@ -750,7 +905,7 @@
                 :key="index"
                 :timestamp="displayDateTime(entry.occurredTime)"
                 ><strong>{{ auditLabel(entry.action) }}</strong>
-                <p>{{ entry.reason || '—' }}</p>
+                <p>{{ entry.reason || '-' }}</p>
                 <p class="field-hint">
                   操作人：{{ auditActorLabel(entry.actorId) }}
                 </p></el-timeline-item
@@ -771,8 +926,8 @@
           @close="detailVisible = false"
           @adjust="editInput(detail)"
           @recalculate="recalculate(detail)"
-          @confirm="settlementDialog?.open(detail, 'confirm')"
-          @paid="settlementDialog?.open(detail, 'paid')"
+          @confirm="openSettlement(detail, 'confirm')"
+          @paid="openSettlement(detail, 'paid')"
           @payments="detailTab = 'payments'"
         /> </template
     ></el-drawer>
@@ -780,6 +935,12 @@
 </template>
 <script setup lang="ts">
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
+import { displayBusinessLabel as costLabel } from '@/utils/business-display'
+import {
+  displayCell,
+  displayAmount as payrollMoney,
+  displayAmount as costMoney,
+} from '@/utils/business-display'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { InfoFilled } from '@element-plus/icons-vue'
@@ -801,7 +962,6 @@ import {
   payrollPaid,
   payrollReviewGroups,
   payrollStatusLabel,
-  payrollMoney,
   payrollRole,
 } from '@/utils/payroll-workflow'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
@@ -828,13 +988,14 @@ import {
   type PayrollRecord,
   type PayrollPayment,
 } from '@/api/core/payroll'
-import { costLabel, costMoney } from '../cost/cost-dictionaries'
+
 import { payrollUnitName } from '@/utils/payroll-dictionaries'
 import { exportPayrollRecords, exportPayrollDetails } from '@/utils/payroll-detail-export'
 import { loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { auditLabel } from '../cost/cost-audit'
-import { auditActorLabel } from '@/utils/audit-actor'
-import { displayDateTime } from '@/utils/business-date'
+import { displayRecordDateTime } from '@/utils/business-display'
+import { displayRecordActor as auditActorLabel } from '@/utils/business-display'
+import { displayRecordDateTime as displayDateTime } from '@/utils/business-display'
 import { payrollRoles } from '@/utils/payroll-scheme'
 import { getPayrollSchemeFacts } from '@/api/core/payroll-scheme'
 import type { PayrollSchemeFactsView } from '@/api/core/payroll-scheme/models/PayrollSchemeFactsView'
@@ -844,7 +1005,8 @@ const ruleReviews = ref<PayrollRuleReview[]>([]),
 const needsRuleReview = (id: string) => ruleReviews.value.some((review) => review.subjectId === id)
 async function locateRuleReview(review: PayrollRuleReview) {
   month.value = review.month
-  keyword.value = review.employeeCode
+  employeeNameFilter.value = ''
+  employeeCodeFilter.value = review.employeeCode
   statusCode.value = ''
   departmentId.value = undefined
   payrollCategory.value = ''
@@ -858,7 +1020,8 @@ function thisMonth() {
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0')
 }
 const month = ref(previousPayrollMonth()),
-  keyword = ref(''),
+  employeeNameFilter = ref(''),
+  employeeCodeFilter = ref(''),
   statusCode = ref(''),
   payrollCategory = ref(''),
   departmentId = ref<number | undefined>(),
@@ -893,7 +1056,7 @@ const selection = ref<PayrollRecord[]>([])
 const batchDialog = ref<InstanceType<typeof PayrollBatchDialog>>()
 const batchBusy = ref(false)
 function stageCount(code: string) {
-  if (!summary.value) return '—'
+  if (!summary.value) return '-'
   return code
     ? summary.value.statusCounts[code] || 0
     : Object.values(summary.value.statusCounts).reduce((sum, n) => sum + n, 0)
@@ -934,15 +1097,16 @@ const moneyFields: {
     | 'correctionAmount'
   >
   label: string
+  minWidth: number
 }[] = [
-  { key: 'baseSalary', label: '底薪' },
-  { key: 'performance', label: '绩效' },
-  { key: 'allowance', label: '补贴' },
-  { key: 'commission', label: '提成' },
-  { key: 'correctionAmount', label: '补发补扣' },
-  { key: 'deduction', label: '其他扣款' },
-  { key: 'grossPay', label: '应发工资' },
-  { key: 'netPay', label: '应付工资' },
+  { key: 'baseSalary', label: '底薪', minWidth: 100 },
+  { key: 'performance', label: '绩效', minWidth: 100 },
+  { key: 'allowance', label: '补贴', minWidth: 85 },
+  { key: 'commission', label: '提成', minWidth: 85 },
+  { key: 'correctionAmount', label: '补发补扣', minWidth: 90 },
+  { key: 'deduction', label: '其他扣款', minWidth: 90 },
+  { key: 'grossPay', label: '应发工资', minWidth: 105 },
+  { key: 'netPay', label: '应付工资', minWidth: 105 },
 ]
 const calculateVisible = ref(false)
 const determinationExtra = ref<string[]>([])
@@ -1055,7 +1219,8 @@ async function load() {
       begin: (currentPage.value - 1) * pageSize.value,
       step: pageSize.value,
       month: month.value,
-      keyword: keyword.value || undefined,
+      employeeName: employeeNameFilter.value.trim() || undefined,
+      employeeCode: employeeCodeFilter.value.trim() || undefined,
       departmentId: departmentId.value || undefined,
       statusCode: statusCode.value || undefined,
       payrollCategory: payrollCategory.value || undefined,
@@ -1087,12 +1252,32 @@ async function load() {
     if (version === loadVersion) loading.value = false
   }
 }
+function selectStage(code: string) {
+  if (batchBusy.value || code === statusCode.value) return
+  statusCode.value = code
+  search()
+}
+function stageKeydown(event: KeyboardEvent, index: number) {
+  if (batchBusy.value || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const next =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? workflowStages.length - 1
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + workflowStages.length) %
+          workflowStages.length
+  selectStage(workflowStages[next]!.code)
+  const tab = event.currentTarget as HTMLButtonElement
+  tab.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+}
 function search() {
   currentPage.value = 1
   void load()
 }
 function reset() {
-  keyword.value = ''
+  employeeNameFilter.value = ''
+  employeeCodeFilter.value = ''
   departmentId.value = undefined
   statusCode.value = ''
   payrollCategory.value = ''
@@ -1244,6 +1429,21 @@ async function voidCorrection(correction: PayrollCorrection) {
     if (e !== 'cancel' && e !== 'close') ElMessage.error(errorMessage(e, '作废失败'))
   }
 }
+async function openSettlement(row: PayrollRecord, action: 'confirm' | 'paid') {
+  const reason =
+    action === 'paid'
+      ? reviewError.value ||
+        (needsRuleReview(row.id) ? '规则变更尚未复核，请先完成规则复核后再登记发放。' : '')
+      : ''
+  if (reason) {
+    await ElMessageBox.alert(reason, '暂不能登记发放', {
+      confirmButtonText: '知道了',
+      type: 'warning',
+    }).catch(() => undefined)
+    return
+  }
+  await settlementDialog.value?.open(row, action)
+}
 async function showDetail(row: PayrollRecord, tab?: string) {
   detail.value = row
   detailTab.value = tab || 'overview'
@@ -1270,7 +1470,8 @@ async function exportAll() {
       begin: 0,
       step: 200,
       month: targetMonth,
-      keyword: keyword.value || undefined,
+      employeeName: employeeNameFilter.value.trim() || undefined,
+      employeeCode: employeeCodeFilter.value.trim() || undefined,
       departmentId: departmentId.value,
       statusCode: statusCode.value || undefined,
       payrollCategory: payrollCategory.value || undefined,
@@ -1340,6 +1541,20 @@ onMounted(async () => {
 .payslip-heading .el-button {
   margin-left: auto;
 }
+.payslip-heading .business-detail-hero {
+  width: 100%;
+  margin: 0;
+}
+.payslip-facts {
+  width: 100%;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+@media (max-width: 900px) {
+  .payslip-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 .payroll-summary strong,
 .payroll-total {
   font-variant-numeric: tabular-nums;
@@ -1350,15 +1565,6 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding-bottom: 12px;
-}
-.workflow-filter :deep(.el-radio-group) {
-  min-width: 0;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-}
-.payroll-results-overview {
-  flex: 0 0 auto;
-  min-width: 0;
 }
 .payroll-summary {
   display: grid;
@@ -1385,9 +1591,6 @@ onMounted(async () => {
 .summary-completion {
   color: var(--el-text-color-regular);
   line-height: 20px;
-}
-.summary-pending {
-  color: var(--el-color-warning-dark-2);
 }
 .summary-value {
   display: flex;
@@ -1468,19 +1671,12 @@ onMounted(async () => {
 .row-actions .el-button + .el-button {
   margin-left: 0;
 }
-.employee-meta {
-  color: var(--el-text-color-regular);
-  font-size: var(--app-font-size-base);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .payroll-total {
   font-variant-numeric: tabular-nums;
 }
 .payroll-page :deep(.el-pagination) {
   flex: 0 0 auto;
-  padding: 12px;
+  padding: 0;
   margin: 0;
 }
 @media (max-width: 1100px) {
@@ -1571,8 +1767,12 @@ onMounted(async () => {
 
 <style scoped>
 .payroll-v03-page {
-  gap: 18px;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 8px;
+  overflow: hidden;
 }
 .payroll-v03-page .page-heading {
   display: flex;
@@ -1588,20 +1788,42 @@ onMounted(async () => {
 }
 .payroll-v03-page .filter-card {
   flex-shrink: 0;
-  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .payroll-v03-page .filter-card :deep(.el-card__body) {
-  padding: 20px;
+  padding: 4px 0 8px;
 }
 .payroll-v03-page .filter-card :deep(.el-form) {
   display: grid;
-  grid-template-columns: 180px minmax(200px, 1fr) 180px 160px auto;
-  gap: 18px;
+  grid-template-columns:
+    140px minmax(140px, 180px) minmax(160px, 200px) minmax(160px, 200px)
+    160px max-content;
+  gap: 16px;
   align-items: end;
 }
 .payroll-v03-page .filter-card :deep(.el-form-item) {
   margin: 0;
   min-width: 0;
+}
+.payroll-v03-page .filter-actions {
+  justify-self: start;
+}
+.payroll-v03-page .filter-actions :deep(.el-form-item__content) {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.payroll-v03-page .filter-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+.payroll-v03-page .filter-card :deep(.el-form-item__label) {
+  height: 18px;
+  line-height: 18px;
+  margin: 0 0 4px;
+  padding: 0;
+  color: #64748b;
+  font-size: 12px;
 }
 .payroll-v03-page .filter-card :deep(.el-date-editor) {
   width: 100%;
@@ -1610,52 +1832,329 @@ onMounted(async () => {
   width: 100%;
 }
 .payroll-v03-page .list-card {
-  flex: 1;
-  min-height: 300px;
+  flex: 1 1 0;
+  min-height: 0;
   border-radius: 8px;
 }
 .payroll-v03-page .list-card :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 20px;
+  min-height: 0;
+  padding: 0;
   box-sizing: border-box;
-  gap: 16px;
-}
-.payroll-list-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.payroll-list-heading h3 {
-  margin: 0;
-  font-size: 16px;
-}
-.payroll-list-heading span,
-.employee-meta {
-  color: var(--el-text-color-secondary);
-  font-size: var(--app-font-size-base);
-  line-height: 1.7;
+  gap: 0;
 }
 .payroll-v03-page .result-heading {
   padding: 0;
   margin: 0;
 }
-.payroll-v03-page .table-viewport {
-  flex: 1;
-  min-height: 190px;
+.payroll-v03-page :deep(.supply-scroll-table) {
+  min-height: 0;
 }
-.payslip-payable {
-  margin-left: auto;
+.payroll-table-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.payroll-list-header {
   display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+}
+.payroll-list-header .workflow-filter {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.payroll-list-header .workflow-help {
+  margin-left: 0;
+}
+.payroll-list-header .workflow-help span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.payroll-list-header .list-tools {
+  flex: none;
+  flex-wrap: nowrap;
+}
+.payroll-selection-bar {
+  display: flex;
+  flex: none;
   align-items: center;
   gap: 10px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: #eff6ff;
+  font-size: 12px;
 }
-.payslip-payable strong {
-  color: var(--el-color-primary);
-  font-size: 24px;
+.payroll-v03-page .result-heading {
+  flex-wrap: wrap;
+}
+.payroll-v03-page .payroll-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1.5fr 1.5fr;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border: 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-radius: 0;
+  background: #fff;
+}
+.payroll-v03-page .summary-card {
+  --metric-color: #64748b;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--metric-color) 16%, transparent);
+  border-top: 3px solid var(--metric-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--metric-color) 5%, #fff);
+}
+.payroll-v03-page .summary-pending-card {
+  --metric-color: #b45309;
+}
+.payroll-v03-page .summary-gross {
+  --metric-color: #2563eb;
+}
+.payroll-v03-page .summary-payable {
+  --metric-color: #047857;
+}
+.payroll-v03-page .summary-card .summary-label {
+  color: #64748b;
+}
+.payroll-v03-page .summary-value {
+  color: var(--metric-color);
+}
+.payroll-v03-page .summary-payable .summary-value strong {
+  color: var(--metric-color);
+}
+.payroll-v03-page .summary-card-heading {
+  gap: 2px;
+}
+.payroll-v03-page .payroll-summary .summary-help {
+  height: 20px;
+  padding: 0;
+}
+.payroll-unit {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.payroll-v03-page .summary-card:last-child {
+  border-right-width: 1px;
+}
+.payroll-v03-page .summary-value {
+  margin: 0;
+  line-height: 24px;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+}
+.payroll-v03-page .summary-value strong {
+  font-size: 20px;
+}
+.payroll-v03-page .summary-label {
+  font-size: 12px;
+  line-height: 20px;
+}
+.payroll-v03-page .summary-completion {
+  font-size: 11px;
+  line-height: 18px;
+}
+.payroll-v03-page .summary-payable .summary-completion {
+  display: block;
+}
+.payroll-stage-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+}
+.payroll-stage-tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.payroll-stage-tab:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+.payroll-stage-tab.is-active {
+  background: #eaf2ff;
+  color: #2563eb;
+  font-weight: 600;
+}
+.payroll-stage-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+}
+.payroll-stage-tab.is-active .payroll-stage-count {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.payroll-stage-tab:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+.payroll-stage-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.payroll-v03-page .workflow-filter {
+  padding-bottom: 8px;
+}
+.payroll-v03-page > :deep(.el-alert) {
+  margin: 0;
+  padding: 6px 12px;
+}
+.payroll-v03-page > :deep(.review-alert--compact .el-alert__title) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.payroll-v03-page :deep(.review-alert-note) {
+  font-size: 12px;
+  font-weight: 400;
+}
+.payroll-v03-page :deep(.review-alert--compact .el-button) {
+  height: auto;
+  min-height: 20px;
+  padding: 0;
+}
+.payroll-v03-page :deep(.el-table__header-wrapper .el-table__cell) {
+  padding: 8px 0;
+}
+.payroll-v03-page :deep(.el-table__body-wrapper .el-table__cell) {
+  padding: 7px 0;
+}
+.payroll-v03-page > :deep(.el-alert .el-alert__content) {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 8px 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  text-align: left;
+}
+.payroll-v03-page > :deep(.el-alert .el-alert__title) {
+  justify-content: flex-start;
+  width: 100%;
+}
+.payroll-v03-page > :deep(.el-alert .el-alert__content) {
+  align-items: flex-start;
+}
+.payroll-v03-page :deep(.el-table__header-wrapper .cell) {
+  font-size: 13px;
+}
+.payroll-v03-page :deep(.el-table__body-wrapper .cell) {
+  font-size: 13px;
+}
+.payroll-v03-page .payroll-total {
+  color: #1e3a5f;
+  font-weight: 700;
+}
+.payroll-v03-page :deep(.el-table__body .el-tag) {
+  border: 0;
+  height: 24px;
+  line-height: 24px;
+}
+.payroll-v03-page :deep(.el-pagination) {
+  padding: 0;
+  border: 0;
+}
+.payroll-table-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.payroll-v03-page > :deep(.el-alert .el-alert__description) {
+  margin: 0;
+}
+.payroll-v03-page > :deep(.el-alert .el-alert__icon) {
+  width: 20px;
+  font-size: 20px;
+}
+.payroll-v03-page .table-viewport {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.payroll-v03-page .payroll-list-header,
+.payroll-v03-page .payroll-selection-bar {
+  flex-shrink: 0;
+}
+.payroll-v03-page .result-heading,
+.payroll-v03-page :deep(.el-pagination),
+.payroll-v03-page > :deep(.el-alert) {
+  flex-shrink: 0;
+}
+.row-actions > * {
+  flex-shrink: 0;
+}
+.row-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+@media (max-width: 1000px), (max-height: 580px) {
+  .payroll-v03-page {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+  .payroll-v03-page .list-card {
+    flex: none;
+  }
+  .payroll-v03-page .table-viewport {
+    flex: none;
+    height: 360px;
+  }
 }
 @media (max-width: 1000px) {
+  .payroll-v03-page .payroll-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .payroll-list-header {
+    flex-wrap: wrap;
+  }
+  .payroll-list-header .workflow-filter {
+    flex-basis: 100%;
+  }
   .payroll-v03-page .filter-card :deep(.el-form) {
     grid-template-columns: 1fr 1fr;
   }

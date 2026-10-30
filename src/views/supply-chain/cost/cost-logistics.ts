@@ -35,23 +35,28 @@ export function logisticsRoles(leg?: string) {
     }
   )
 }
-export function logisticsRoute(logistics: CostCommand['logistics'], sources: CostSource[] = []) {
+export function logisticsRoute(
+  logistics: CostCommand['logistics'],
+  sources: CostSource[] = [],
+  missingLabel?: string,
+) {
   const roles = logisticsRoles(logistics?.legCode)
+  const missing = (fallback: string) => missingLabel ?? fallback
   const names = (side: 'senderName' | 'receiverName') => {
     if (sources.length)
       return [
         ...new Set([
           ...sources.map((s) =>
             side === 'senderName' && logistics?.legCode === 'DELIVERY' && !s.warehouseId
-              ? s.senderName?.trim() || logistics.senderName?.trim() || '城市仓待补录'
-              : s[side]?.trim() || '待核对',
+              ? s.senderName?.trim() || logistics.senderName?.trim() || missing('城市仓待补录')
+              : s[side]?.trim() || missing('待核对'),
           ),
           ...(logistics?.externalDocuments || [])
             .filter((d) => !d.linkedId)
-            .map((d) => d[side]?.trim() || '待核对'),
+            .map((d) => d[side]?.trim() || missing('待核对')),
         ]),
       ].join('、')
-    return logistics?.[side]?.trim() || '待补录'
+    return logistics?.[side]?.trim() || missing('待补录')
   }
   return { ...roles, senderName: names('senderName'), receiverName: names('receiverName') }
 }

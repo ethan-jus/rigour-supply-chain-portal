@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import { displayRecordActor } from '@/utils/business-display'
+import { displayCell, displayRecordDateTime } from '@/utils/business-display'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, type TreeInstance } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
+import SupplyFilterTabs from '@/components/supply/SupplyFilterTabs.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { errorMessage } from '@/api/core/error'
+import SupplyDepartmentScope from '@/components/supply/SupplyDepartmentScope.vue'
+import SupplyDepartmentTree from '@/components/supply/SupplyDepartmentTree.vue'
 import { departmentTree } from '@/utils/hr-department-tree'
 import {
   attendanceMonth,
@@ -36,6 +41,14 @@ const page = ref(1),
   loading = ref(false),
   error = ref('')
 const departments = ref<AttendanceDepartment[]>([])
+const departmentCatalog = computed(() =>
+  departments.value.map((department) => ({
+    id: department.id,
+    parentId: department.parentId,
+    sortOrder: department.sortOrder,
+    name: department.departmentName,
+  })),
+)
 const departmentsLoading = ref(false),
   departmentError = ref('')
 const departmentOptions = computed(() => [
@@ -109,16 +122,7 @@ const emptyText = computed(() =>
         ? '暂无符合条件的规则'
         : '本月尚未设置考勤规则',
 )
-const formatTime = (value: string) =>
-  new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(value))
+const formatTime = displayRecordDateTime
 
 const dialogOpen = ref(false),
   mode = ref<'create' | 'edit' | 'view'>('create')
@@ -464,11 +468,14 @@ onMounted(() => {
 
 <template>
   <div>
-    <el-tabs v-model="attendanceTab"
-      ><el-tab-pane name="calendar" label="薪资考勤规则" /><el-tab-pane
-        name="expected"
-        label="月度应出勤天数"
-    /></el-tabs>
+    <SupplyFilterTabs
+      v-model="attendanceTab"
+      label="考勤规则类型"
+      :items="[
+        { value: 'calendar', label: '薪资考勤规则' },
+        { value: 'expected', label: '月度应出勤天数' },
+      ]"
+    />
     <PayrollComponentView v-if="attendanceTab === 'calendar'" component-kind="ATTENDANCE" />
     <template v-else>
       <section
@@ -480,7 +487,7 @@ onMounted(() => {
             >新增规则</el-button
           >
         </div>
-        <SupplyListFilters :loading="loading" @search="search" @reset="reset">
+        <SupplyListFilters compact :loading="loading" @search="search" @reset="reset">
           <el-form-item label="考勤月份">
             <el-date-picker
               v-model="filters.month"
@@ -546,13 +553,22 @@ onMounted(() => {
             border
             class="business-table supply-scroll-table"
           >
-            <el-table-column prop="month" label="考勤月份" width="130" />
             <el-table-column
-              prop="departmentName"
-              label="适用部门"
-              min-width="200"
-              show-overflow-tooltip
+              prop="month"
+              label="考勤月份"
+              width="130"
+              fixed="left"
+              :formatter="displayCell"
             />
+            <el-table-column label="适用部门" min-width="230"
+              ><template #default="{ row }"
+                ><SupplyDepartmentScope
+                  v-if="row.departmentId != null && row.departmentId !== 0"
+                  :departments="departmentCatalog"
+                  :ids="[row.departmentId]"
+                /><span v-else>公司默认</span></template
+              ></el-table-column
+            >
             <el-table-column label="应出勤天数" min-width="140" align="right"
               ><template #default="{ row }">{{ row.expectedDays }} 天</template></el-table-column
             >
@@ -562,6 +578,16 @@ onMounted(() => {
                   row.locked ? '已锁定' : row.canWrite === false ? '只读' : '可修改'
                 }}</el-tag></template
               ></el-table-column
+            >
+            <el-table-column label="创建人" min-width="125"
+              ><template #default="{ row }">{{
+                row.createdByName || displayRecordActor(row.createdBy)
+              }}</template></el-table-column
+            >
+            <el-table-column label="创建时间" min-width="180"
+              ><template #default="{ row }">{{
+                formatTime(row.createdTime)
+              }}</template></el-table-column
             >
             <el-table-column label="最近修改时间" min-width="180"
               ><template #default="{ row }">{{
@@ -609,13 +635,11 @@ onMounted(() => {
             @current-change="changePage"
           />
         </el-card>
-        <p class="rule-hint">
-          新增时勾选父部门会选中全部可设置的下级部门，按部门分别保存。核算优先使用生效的薪资考勤规则，无匹配规则时使用本页补录值或公司默认。
-        </p>
         <el-dialog
           v-model="dialogOpen"
           :title="title"
-          width="min(560px, 94vw)"
+          :class="{ 'business-detail-panel': readOnly }"
+          width="min(680px, 94vw)"
           :close-on-click-modal="false"
           :close-on-press-escape="!saving"
           :show-close="!saving"
@@ -627,7 +651,44 @@ onMounted(() => {
             :closable="false"
             class="editor-alert"
           />
-          <el-form label-position="top" @submit.prevent="save">
+          <dl v-if="mode !== 'create' && rule" class="business-detail-fields attendance-rule-audit">
+            <div>
+              <dt>创建人</dt>
+              <dd>{{ rule.createdByName || displayRecordActor(rule.createdBy) }}</dd>
+            </div>
+            <div>
+              <dt>创建时间</dt>
+              <dd>{{ formatTime(rule.createdTime) }}</dd>
+            </div>
+          </dl>
+          <template v-if="readOnly && rule">
+            <dl class="business-detail-fields">
+              <div>
+                <dt>考勤月份</dt>
+                <dd>{{ editMonth }}</dd>
+              </div>
+              <div>
+                <dt>应出勤天数</dt>
+                <dd>{{ rule.expectedDays ?? '-' }}</dd>
+              </div>
+              <div>
+                <dt>规则状态</dt>
+                <dd>{{ rule.locked ? '已锁定' : '只读' }}</dd>
+              </div>
+              <div>
+                <dt>日历计算天数</dt>
+                <dd>{{ rule.calendarExpectedDays ?? '-' }}</dd>
+              </div>
+            </dl>
+            <h3 class="attendance-scope-heading">适用部门</h3>
+            <SupplyDepartmentTree
+              v-if="editDepartment != null && editDepartment !== 0"
+              :departments="departmentCatalog"
+              :selected-ids="[editDepartment]"
+            />
+            <p v-else>公司默认</p>
+          </template>
+          <el-form v-else label-position="top" @submit.prevent="save">
             <el-form-item label="考勤月份" required
               ><el-date-picker
                 v-model="editMonth"

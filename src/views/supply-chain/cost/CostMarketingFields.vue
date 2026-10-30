@@ -1,4 +1,7 @@
 <template>
+  <p class="field-hint">
+    员工底薪、绩效、提成归入人力成本；同一费用已在报销或薪酬登记的，请勿重复录入。
+  </p>
   <h3 class="cost-section-title">营销事项</h3>
   <div class="cost-field-grid">
     <el-form-item label="费用类型" required>
@@ -17,7 +20,7 @@
       <el-input v-model="form.title" maxlength="200" placeholder="填写具体活动或支出内容" />
     </el-form-item>
   </div>
-  <h3 class="cost-section-title">金额与经办</h3>
+  <h3 class="cost-section-title">金额与负责人</h3>
   <CostRecordBasics
     v-model="form"
     date-label="费用日期"
@@ -25,8 +28,8 @@
     :action="action"
   />
   <div class="cost-field-grid">
-    <el-form-item label="经办人" required>
-      <CostEntryMode v-model="employeeMode" label="经办人">
+    <el-form-item label="费用负责人" required>
+      <CostEntryMode v-model="employeeMode" label="费用负责人">
         <template #linked>
           <el-select
             v-model="form.ownerEmployeeCode"
@@ -63,7 +66,7 @@
                   link
                   type="primary"
                   @click="employeeMode = 'MANUAL'"
-                  >手动填写经办人</el-button
+                  >手动填写费用负责人</el-button
                 >
               </div>
             </template>
@@ -77,7 +80,7 @@
           </span>
         </template>
         <template #manual>
-          <el-input v-model="form.ownerName" maxlength="120" placeholder="填写实际经办人姓名" />
+          <el-input v-model="form.ownerName" maxlength="120" placeholder="填写实际费用负责人姓名" />
         </template>
       </CostEntryMode>
     </el-form-item>
