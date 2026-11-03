@@ -201,6 +201,23 @@ export interface PayrollQuery {
   payrollCategory?: string
   payrollIds?: string[]
 }
+export interface PayrollPerformanceExport {
+  payrollId: string
+  payrollRevision: number
+  month: string
+  employeeCode: string
+  employeeName: string
+  cityName: string | null
+  categories: { code: string; name: string; salesAmount: number; collectionAmount: number; commission: number | null }[]
+  clothSales: { code: string; name: string; salesAmount: number }[]
+  salesAmount: number
+  collectionAmount: number
+  refundAmount: number
+  collectionTarget: number | null
+  salesTarget: number | null
+  commission: number | null
+  issues: string[]
+}
 export interface PayrollPage<T> {
   total: number
   begin: number
@@ -404,6 +421,9 @@ export async function exportPayroll(params: PayrollQuery): Promise<PayrollRecord
     return read()
   }
 }
+export const exportPayrollPerformance = (params: PayrollQuery) =>
+  apiClient.post<PayrollPerformanceExport[]>(`${base}/performance-export`, params,
+    { ...options, timeout: 180000, errorFeedback: 'inline' })
 export const getPayrollDetail = (id: string) =>
   apiClient.get<PayrollRecord>(`${base}/${encodeURIComponent(id)}`, options)
 export const registerPayrollPayment = (

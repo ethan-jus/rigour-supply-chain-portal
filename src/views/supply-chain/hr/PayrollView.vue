@@ -991,6 +991,7 @@ import type { CostAudit } from '@/api/core/cost'
 import {
   calculatePayroll,
   exportPayroll,
+  exportPayrollPerformance,
   getPayrollDetail,
   cancelPayrollCorrection,
   type PayrollCorrection,
@@ -1518,9 +1519,15 @@ async function exportAll() {
       ElMessage.info('当前筛选下暂无工资数据')
       return
     }
+    const performance = []
+    for (let begin = 0; begin < rows.length; begin += 200) {
+      performance.push(...await exportPayrollPerformance({ begin: 0, step: 200, month: targetMonth,
+        payrollIds: rows.slice(begin, begin + 200).map(row => row.id) }))
+    }
     await exportPayrollRecords(
       rows,
-      '薪酬明细_' + targetMonth + (selected.size ? `_已选${selected.size}人` : ''),
+      '项目业绩汇总_' + targetMonth + (selected.size ? `_已选${selected.size}人` : ''),
+      performance,
     )
   } catch (e) {
     ElMessage.error(errorMessage(e, '整月导出失败'))

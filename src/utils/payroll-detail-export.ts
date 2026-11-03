@@ -5,7 +5,8 @@ import {
   commissionCountExplanation,
   payrollAppliedRules,
 } from '@/utils/payroll-commission-detail'
-import type { PayrollRecord } from '@/api/core/payroll'
+import type { PayrollRecord, PayrollPerformanceExport } from '@/api/core/payroll'
+import { appendPayrollPerformance } from '@/utils/payroll-performance-export'
 import { payrollPaid, payrollRemaining, payrollStatusLabel } from '@/utils/payroll-workflow'
 import { payrollSalaryItems } from '@/utils/payroll-salary-items'
 import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
@@ -25,10 +26,11 @@ function exportReviewIssues(row: PayrollRecord): string[] {
 }
 
 /** Export persisted server evidence for the complete authorized result, never browser calculations. */
-export async function buildPayrollWorkbook(records: PayrollRecord[]) {
+export async function buildPayrollWorkbook(records: PayrollRecord[], performance?: PayrollPerformanceExport[]) {
   await loadPayrollProductUnits()
   const { Workbook } = await import('exceljs')
   const workbook = new Workbook()
+  if (performance) appendPayrollPerformance(workbook, records, performance)
   const identity = (row: PayrollRecord) => [row.month, row.employeeCode, row.employeeName]
   const headers = ['月份', '员工编号', '姓名']
   const sheet = (
@@ -388,8 +390,8 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
   return workbook
 }
 
-export async function exportPayrollRecords(records: PayrollRecord[], filename: string) {
-  const workbook = await buildPayrollWorkbook(records)
+export async function exportPayrollRecords(records: PayrollRecord[], filename: string, performance?: PayrollPerformanceExport[]) {
+  const workbook = await buildPayrollWorkbook(records, performance)
   const bytes = new Uint8Array(await workbook.xlsx.writeBuffer())
   const url = URL.createObjectURL(
     new Blob([bytes], {

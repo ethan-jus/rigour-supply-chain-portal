@@ -42,6 +42,7 @@ vi.mock('@/api/core/payroll', () => ({
   savePayrollDetermination: vi.fn(),
   calculatePayroll: vi.fn(),
   exportPayroll: vi.fn(),
+  exportPayrollPerformance: vi.fn().mockResolvedValue([]),
   cancelPayrollCorrection: vi.fn(),
 }))
 vi.mock('@/api/core/payroll-scheme', () => ({
@@ -94,6 +95,7 @@ const Dialog = defineComponent({
 })
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(api.exportPayrollPerformance).mockResolvedValue([])
   routeGuards.leave = []
   routeGuards.update = []
   vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
@@ -387,7 +389,8 @@ describe('工资列表汇总', () => {
     await flushPromises()
     expect(api.exportPayroll).toHaveBeenCalledWith(expect.objectContaining({ payrollIds: [row.id] }))
     const month = vi.mocked(api.exportPayroll).mock.calls[0]![0].month
-    expect(exportPayrollRecords).toHaveBeenCalledExactlyOnceWith([row], `薪酬明细_${month}_已选1人`)
+    expect(exportPayrollRecords).toHaveBeenCalledExactlyOnceWith([row], `项目业绩汇总_${month}_已选1人`, [])
+    expect(api.exportPayrollPerformance).toHaveBeenCalledWith(expect.objectContaining({ payrollIds: [row.id] }))
     expect(vi.mocked(exportPayrollRecords).mock.calls[0]![0][0]!.calculation.commission).toBe(203.64)
     expect(api.calculatePayroll).not.toHaveBeenCalled()
   })
@@ -421,7 +424,7 @@ describe('工资列表汇总', () => {
     await flushPromises()
     expect(vi.mocked(api.exportPayroll).mock.calls.at(-1)?.[0]).not.toHaveProperty('payrollIds')
     const month = vi.mocked(api.exportPayroll).mock.calls[0]![0].month
-    expect(exportPayrollRecords).toHaveBeenCalledExactlyOnceWith([row, other], `薪酬明细_${month}`)
+    expect(exportPayrollRecords).toHaveBeenCalledExactlyOnceWith([row, other], `项目业绩汇总_${month}`, [])
   })
   it('状态标签保留键盘切换、选中态及相同的状态查询条件', async () => {
     await openList()
