@@ -1,8 +1,9 @@
 <template>
   <section class="supply-page department-page" v-loading="loading">
     <header class="page-heading">
-      <div>
+      <div class="list-heading-title">
         <SupplyPageTitle>部门管理</SupplyPageTitle>
+        <SupplyPageHelp>维护部门和上下级关系，新增员工时可选择所属部门。</SupplyPageHelp>
       </div>
       <el-button v-if="can('hr:department:create')" type="primary" @click="edit()"
         >新增部门</el-button
@@ -294,6 +295,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayCell } from '@/utils/business-display'
 import { displayRecordDateTime as displayDateTime } from '@/utils/business-display'
 import { displayRecordActor as auditActorLabel } from '@/utils/business-display'
@@ -540,7 +542,7 @@ onMounted(() => load(true))
   padding-top: 12px;
   border-top: 1px solid #ebeef5;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .department-audit p {
   margin: 0 0 8px;
@@ -565,7 +567,7 @@ onMounted(() => load(true))
 .department-help,
 .field-help {
   color: #64748b;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .page-heading p {
   margin: 8px 0 0;
@@ -608,8 +610,8 @@ onMounted(() => load(true))
 }
 .department-children {
   margin-left: 12px;
-  color: #94a3b8;
-  font-size: 12px;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-base);
 }
 .department-alert {
   margin: 12px 0;

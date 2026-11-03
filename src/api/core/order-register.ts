@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { apiClient } from './client'
 import type { FundDocumentAttachment } from './order-sales'
 
@@ -378,10 +379,11 @@ function productFilterParams(params: Record<string, unknown>) {
   }
 }
 
-export const getOrderRegisterOrders = (params: OrderRegisterOrderQuery) =>
+export const getOrderRegisterOrders = (params: OrderRegisterOrderQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback'> = {}) =>
   apiClient.get<OrderRegisterOrderPage>(`${ORDER_REGISTER_BASE_PATH}/orders`, {
     params,
     ...readOptions,
+    ...feedback,
   })
 
 export const getOrderRegisterLines = (params: OrderRegisterLineQuery) =>
@@ -390,10 +392,11 @@ export const getOrderRegisterLines = (params: OrderRegisterLineQuery) =>
     ...readOptions,
   })
 
-export const getOrderRegisterPayments = (params: OrderRegisterPaymentQuery) =>
+export const getOrderRegisterPayments = (params: OrderRegisterPaymentQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback'> = {}) =>
   apiClient.get<OrderRegisterPaymentPage>(`${ORDER_REGISTER_BASE_PATH}/payments`, {
     params: productFilterParams({ ...params }),
     ...readOptions,
+    ...feedback,
   })
 
 export const getOrderRegisterPeriod = (params: OrderPeriodQuery) =>

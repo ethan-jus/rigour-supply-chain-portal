@@ -8,8 +8,8 @@
   --supply-surface-subtle: #f8fafc;
   --supply-border: #e2e8f0;
   --supply-border-strong: #cbd5e1;
-  --supply-text: #172033;
-  --supply-text-muted: #64748b;
+  --supply-text: var(--app-text-primary);
+  --supply-text-muted: var(--app-text-secondary);
   --supply-primary: #2563eb;
   --supply-primary-hover: #1d4ed8;
   --supply-primary-soft: #eff6ff;
@@ -83,7 +83,7 @@
   .page-header h1,
   .page-heading h1 {
     color: var(--supply-text);
-    font-size: 18px;
+    font-size: var(--app-font-size-heading);
     font-weight: 600;
     line-height: 26px;
     letter-spacing: 0;
@@ -182,11 +182,11 @@
 
   .supply-scroll-table .el-table__header-wrapper th.el-table__cell,
   .supply-scroll-table .el-table__fixed-header-wrapper th.el-table__cell {
-    height: 42px;
-    color: #475569;
+    height: var(--app-table-row-height);
+    color: var(--app-table-header-color);
     background: var(--supply-surface-subtle);
-    font-size: $font-size-xs;
-    font-weight: 600;
+    font-size: var(--app-table-header-size);
+    font-weight: var(--app-table-header-weight);
   }
 
   .supply-scroll-table .el-table__row > td.el-table-fixed-column--left,
@@ -299,7 +299,7 @@
 
     .page-header h1 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--app-font-size-heading);
     }
 
     .query-panel {
@@ -400,7 +400,7 @@
   .supply-page--list > .page-heading h1 {
     margin: 0;
     color: var(--supply-text);
-    font-size: 18px;
+    font-size: var(--app-font-size-heading);
     font-weight: 600;
     line-height: 26px;
   }
@@ -551,7 +551,7 @@
 
     > .page-heading h1 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--app-font-size-heading);
     }
 
     .heading-actions {
@@ -577,7 +577,6 @@
 
     > .business-boundary,
     > .request-hint,
-    > .workflow-strip,
     > .filter-card,
     > .result-heading {
       flex: 0 0 auto;
@@ -588,61 +587,6 @@
       margin-bottom: 8px;
       border-color: #bfdbfe;
       background: #eff6ff;
-    }
-
-    > .workflow-strip {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    .workflow-step {
-      display: grid;
-      grid-template-columns: 24px minmax(0, 1fr);
-      column-gap: 8px;
-      align-items: center;
-      min-height: 40px;
-      padding: 7px 10px;
-      border: 1px solid var(--supply-border);
-      border-radius: var(--supply-radius);
-      background: var(--supply-surface);
-    }
-
-    .workflow-step span {
-      display: inline-grid;
-      width: 24px;
-      height: 24px;
-      border-radius: 999px;
-      background: var(--supply-surface-subtle);
-      color: var(--supply-text-muted);
-      font-size: $font-size-xs;
-      font-weight: 700;
-      place-items: center;
-    }
-
-    .workflow-step strong,
-    .workflow-step small {
-      display: block;
-      overflow: hidden;
-      min-width: 0;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .workflow-step strong {
-      color: var(--supply-text);
-      font-size: $font-size-sm;
-    }
-
-    .workflow-step.is-active {
-      border-color: #bfdbfe;
-      background: var(--supply-primary-soft);
-    }
-
-    .workflow-step.is-active span {
-      background: var(--supply-primary);
-      color: #fff;
     }
 
     > .filter-card,
@@ -1226,7 +1170,7 @@
 
     .fact-grid strong {
       margin-top: 4px;
-      font-size: 18px;
+      font-size: var(--app-font-size-heading);
     }
 
     .evidence-callout {
@@ -1336,7 +1280,7 @@
     .supply-page--dictionary .page-header h1,
     .supply-page--sales > .page-header h1,
     .supply-page--list > .page-heading h1 {
-      font-size: 18px;
+      font-size: var(--app-font-size-heading);
       line-height: 26px;
     }
 

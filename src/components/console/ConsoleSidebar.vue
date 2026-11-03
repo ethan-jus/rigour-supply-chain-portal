@@ -21,8 +21,8 @@
               'module-link--utility': isUtility(node),
             }"
             type="button"
-            :title="node.displayName"
-            :aria-label="node.displayName"
+            :title="moduleName(node)"
+            :aria-label="moduleName(node)"
             :aria-pressed="selected?.id === node.id"
             @click="selectModule(node)"
           >
@@ -56,11 +56,16 @@
         <Expand />
       </button>
     </nav>
-    <section v-show="!workspace.collapsed" id="console-secondary-nav" class="secondary-nav">
+    <section
+      v-show="!workspace.collapsed"
+      id="console-secondary-nav"
+      class="secondary-nav"
+      :class="{ 'secondary-nav--crm': isCrm }"
+    >
       <div class="secondary-nav__brand">供应链数字化平台</div>
       <header class="secondary-nav__heading">
         <strong>{{
-          isHome ? '工作空间' : isHr ? '人事管理' : selected?.displayName || '应用菜单'
+          isHome ? '工作空间' : isHr ? '人事管理' : selected ? moduleName(selected, true) : '应用菜单'
         }}</strong
         ><button
           type="button"
@@ -115,6 +120,18 @@
             >
           </section>
         </template>
+        <nav v-else-if="isCrm" class="crm-navigation" aria-label="客户功能">
+          <section v-for="group in crmGroups" :key="group.title" class="crm-nav-group">
+            <h2 v-if="crmGroups.length > 1">{{ group.title }}</h2>
+            <ConsoleNavTree :nodes="group.nodes" />
+          </section>
+        </nav>
+        <nav v-else-if="isSettings" aria-label="系统设置功能">
+          <section v-for="group in settingsGroups" :key="group.title" class="settings-nav-group">
+            <h2 v-if="settingsGroups.length > 1">{{ group.title }}</h2>
+            <ConsoleNavTree :nodes="group.nodes" />
+          </section>
+        </nav>
         <ConsoleNavTree v-else :nodes="displayNodes" />
         <p v-if="!roots.length" class="secondary-nav__empty">暂无可用菜单</p>
       </div>
@@ -135,6 +152,8 @@ import {
 import { businessNavigationName } from '@/utils/business-page-labels'
 import { hrNavigationSections } from '@/utils/hr-navigation'
 import { costNavigationSections } from '@/utils/cost-navigation'
+import { crmNavigationSections } from '@/utils/crm-navigation'
+import { settingsNavigationSections } from '@/utils/settings-navigation'
 import { useConsoleWorkspace } from '@/stores/console-workspace'
 import ConsoleNavTree from './ConsoleNavTree.vue'
 import ConsoleNavIcon from './ConsoleNavIcon.vue'
@@ -160,6 +179,12 @@ const secondaryNodes = computed(() =>
 )
 const isHr = computed(() => selected.value?.routeKey.split('.')[1] === 'hr')
 const isCost = computed(() => selected.value?.routeKey.split('.')[1] === 'cost')
+const isCrm = computed(() => selected.value?.routeKey.split('.')[1] === 'crm')
+const isSettings = computed(() =>
+  ['setting', 'settings'].includes(selected.value?.routeKey.split('.')[1] || ''),
+)
+const settingsGroups = computed(() => settingsNavigationSections(secondaryNodes.value))
+const crmGroups = computed(() => crmNavigationSections(secondaryNodes.value))
 const displayNodes = computed<NavigationNode[]>(() => {
   const root = selected.value
   if (!root || (!isHr.value && !isCost.value)) return secondaryNodes.value
@@ -195,6 +220,15 @@ const recent = computed(() =>
 function isUtility(node: NavigationNode) {
   return /supply\.(integration|setting)\./.test(node.routeKey)
 }
+function moduleName(node: NavigationNode, heading = false) {
+  if (
+    node.routeKey.split('.')[1] === 'crm' &&
+    ['CRM', '客户', '客户管理', '客户关系管理'].includes(node.displayName)
+  ) {
+    return heading ? '客户关系管理' : 'CRM'
+  }
+  return node.displayName
+}
 function shortName(node: NavigationNode) {
   const domain = node.routeKey.split('.')[1]
   return (
@@ -203,7 +237,7 @@ function shortName(node: NavigationNode) {
         dashboard: '首页',
         bi: '看板',
         order: '订单',
-        crm: '客户',
+        crm: 'CRM',
         erp: 'ERP',
         sales: '销售',
         hr: '人事',
@@ -247,6 +281,31 @@ onMounted(() => compactViewport?.addEventListener('change', collapseForViewport)
 onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseForViewport))
 </script>
 <style scoped lang="scss">
+@use '@/assets/styles/variables' as *;
+
+.crm-nav-group + .crm-nav-group,
+.settings-nav-group + .settings-nav-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid $color-border-light;
+}
+.crm-nav-group h2,
+.settings-nav-group h2 {
+  margin: 4px 12px 8px;
+  color: $color-text-secondary;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 0.04em;
+}
+.secondary-nav--crm .secondary-nav__heading {
+  padding: 12px 12px 12px 24px;
+}
+.secondary-nav--crm .secondary-nav__heading strong {
+  font-size: $font-size-md;
+  font-weight: 600;
+  line-height: 24px;
+}
 .console-navigation {
   display: grid;
   grid-template-columns: 76px 220px;
@@ -301,7 +360,7 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   color: #edf3fc;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--app-menu-font-size);
   line-height: 1.3;
   text-align: center;
   overflow-wrap: anywhere;
@@ -342,9 +401,9 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: #d5e1f1;
-  border-right: 1px solid #becde1;
-  color: #273d5b;
+  background: $color-bg-white;
+  border-right: 1px solid $color-border-base;
+  color: $color-text-regular;
 }
 .secondary-nav__brand {
   height: 70px;
@@ -352,19 +411,19 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   display: flex;
   align-items: center;
   padding: 0 20px;
-  font-size: 20px;
-  letter-spacing: -0.4px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
   white-space: nowrap;
-  color: #10213e;
+  color: $color-text-primary;
+  border-bottom: 1px solid $color-border-light;
 }
 .secondary-nav__heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 23px 19px 15px;
+  padding: 12px 16px 10px;
   gap: 6px;
-  font-size: 14px;
+  font-size: 16px;
 }
 .secondary-nav__heading strong {
   overflow: hidden;
@@ -375,14 +434,14 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   display: flex;
   flex-shrink: 0;
   border: 0;
-  padding: 5px;
+  padding: 7px;
   background: none;
-  color: #395472;
-  border-radius: 4px;
+  color: $color-text-secondary;
+  border-radius: $border-radius-sm;
   cursor: pointer;
 }
 .secondary-nav__heading button:hover {
-  background: #c3d5ed;
+  background: $color-bg-muted;
 }
 .secondary-nav__heading svg {
   width: 18px;
@@ -398,15 +457,15 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
 }
 .secondary-link {
   display: flex;
-  gap: 14px;
+  gap: 10px;
   align-items: center;
-  min-height: 44px;
-  padding: 10px 14px;
+  min-height: 40px;
+  padding: 8px 12px;
   border-left: 3px solid transparent;
   border-radius: 6px;
   text-decoration: none;
-  color: #273d5b;
-  font-size: 14px;
+  color: $color-text-regular;
+  font-size: var(--app-menu-font-size);
 }
 .secondary-link span {
   overflow: hidden;
@@ -415,60 +474,36 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
 }
 .secondary-link.is-active,
 .secondary-link.router-link-exact-active {
-  color: #1764e8;
-  background: white;
-  border-left-color: #257bff;
+  color: $color-primary;
+  background: rgba($color-primary, 0.08);
+  border-left-color: $color-primary;
   font-weight: 600;
 }
-.secondary-link:hover {
-  background: #e8f0fb;
+.secondary-link:not(.is-active):not(.router-link-exact-active):hover {
+  background: $color-bg-muted;
 }
 .secondary-group {
   padding: 20px 0 10px;
   margin-top: 8px;
-  border-bottom: 1px solid #bdcfe6;
+  border-bottom: 1px solid $color-border-light;
 }
 .secondary-group h2 {
   margin: 0 14px 12px;
   font-size: 12px;
   font-weight: 500;
-  color: #526b8b;
+  color: $color-text-secondary;
 }
 .secondary-group--recent {
   margin-top: auto;
 }
 .secondary-nav__empty {
-  font-size: 13px;
+  font-size: var(--app-menu-font-size);
   padding: 14px;
-  color: #526b8b;
-}
-.secondary-nav :deep(.nav-branch),
-.secondary-nav :deep(.nav-item) {
-  color: #273d5b;
-  font-weight: 500;
-  border-radius: 6px;
-}
-.secondary-nav :deep(.nav-item--active) {
-  color: #1764e8;
-  background: white;
-}
-.secondary-nav :deep(.nav-branch--active) {
-  color: #1764e8;
-  background: #eaf1fb;
-  box-shadow: none;
-}
-.secondary-nav :deep(.nav-branch:hover),
-.secondary-nav :deep(.nav-item:hover) {
-  background: #e8f0fb;
-}
-.secondary-nav :deep(.nav-children) {
-  border-color: #b7c9e0;
-  margin-left: 12px;
-  padding-left: 4px;
+  color: $color-text-secondary;
 }
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #3485ff;
+  outline: 2px solid $color-primary;
   outline-offset: -2px;
 }
 @media (max-height: 800px) {

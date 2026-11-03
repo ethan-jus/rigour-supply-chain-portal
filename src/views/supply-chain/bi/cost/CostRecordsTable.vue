@@ -5,7 +5,7 @@
     aria-label="费用支出明细"
     tabindex="0"
   >
-    <table class="cost-table cost-records-table" aria-label="费用支出明细表">
+    <table class="supply-report-table cost-table cost-records-table" aria-label="费用支出明细表">
       <colgroup>
         <col class="record-document-col" />
         <col class="record-category-col" />

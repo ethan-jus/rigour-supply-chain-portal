@@ -178,8 +178,8 @@ describe('合同驱动的供应链页面', () => {
       dictionaryCode: undefined,
     })
     expect(wrapper.text()).not.toContain('快速查找')
-    expect('visibleDictionaries' in wrapper.vm).toBe(false)
-    expect('keyword' in (wrapper.vm as unknown as { filters: Record<string, unknown> }).filters).toBe(false)
+    expect(businessSettingsApi.getBizDictItems).not.toHaveBeenCalled()
+    expect(wrapper.find('[aria-label="字典目录"]').exists()).toBe(true)
   })
 
   it('ERP/CRM/Order/数据字典主流程页面使用统一业务页面骨架', () => {
@@ -191,7 +191,7 @@ describe('合同驱动的供应链页面', () => {
     expect(crmShippingAddressSource).toContain('supply-page--business-main')
     expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('supply-page--business-main')
     expect(fundDocumentSource).toContain('supply-page--business-main')
-    expect(businessDictionarySource).toContain('supply-page--business-main')
+    expect(businessDictionarySource).toContain('master-workspace')
 
     expect(erpProductManagementSource).toContain('维护商品档案、规格价格、图片和上架状态')
     expect(erpProductSpecificationSource).toContain('商品规格')
@@ -204,7 +204,7 @@ describe('合同驱动的供应链页面', () => {
     expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('销售订单')
     expect(fundDocumentSource).toContain('客户资金流水')
     expect(fundDocumentSource).toContain('按收支明细口径查看客户资金来源、关联单据、支付流水和账户信息')
-    expect(businessDictionarySource).toContain('维护业务使用的单位、类型、状态和支付方式')
+    expect(businessDictionarySource).toContain('label="字典项编码"')
   })
 
   it('ERP 单据页面按菜单拆分业务流程，不把库存调拨混入入库单流程', () => {

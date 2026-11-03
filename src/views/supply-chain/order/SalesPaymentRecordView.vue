@@ -627,7 +627,7 @@ function attachmentName(value: string) {
 
 .detail-hero span {
   color: var(--supply-primary, #2563eb);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
 }
 
@@ -678,7 +678,7 @@ function attachmentName(value: string) {
 
 .detail-summary span {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .detail-summary strong {
@@ -712,7 +712,7 @@ function attachmentName(value: string) {
 
 .detail-section-heading span {
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 
 .detail-field-grid {
@@ -738,13 +738,13 @@ function attachmentName(value: string) {
 
 .detail-field span {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .detail-field strong {
   margin-top: 6px;
   color: var(--el-text-color-primary);
-  font-size: 14px;
+  font-size: var(--app-font-size-base);
   font-weight: 600;
   line-height: 1.45;
   overflow-wrap: anywhere;

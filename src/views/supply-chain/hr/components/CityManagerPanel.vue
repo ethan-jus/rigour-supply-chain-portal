@@ -228,7 +228,7 @@ defineExpose({ reload })
 }
 .muted {
   color: var(--el-text-color-regular);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .el-pagination {
   flex-shrink: 0;

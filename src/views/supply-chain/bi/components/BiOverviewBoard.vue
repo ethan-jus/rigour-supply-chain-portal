@@ -208,7 +208,7 @@
             </div>
           </div>
           <div class="overview-table-scroll">
-            <table :class="{ 'with-cohort': !cityReceipt }">
+            <table class="supply-report-table" :class="{ 'with-cohort': !cityReceipt }">
               <thead>
                 <tr>
                   <th>排名</th>
@@ -353,7 +353,7 @@
               ><button :class="{ active: categoryMode }" @click="categoryMode = true">品类</button>
             </div>
           </div>
-          <table class="product-table">
+          <table class="supply-report-table product-table">
             <thead>
               <tr>
                 <th>{{ categoryMode ? '品类' : '商品名称' }}</th>

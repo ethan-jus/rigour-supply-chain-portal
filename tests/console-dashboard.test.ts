@@ -9,6 +9,7 @@ import ConsoleDashboard from '@/components/console/ConsoleDashboard.vue'
 import ConsoleSidebar from '@/components/console/ConsoleSidebar.vue'
 import ConsoleEntrySearch from '@/components/console/ConsoleEntrySearch.vue'
 import { consoleEntries } from '@/utils/console-navigation'
+import { ApiError } from '@/api/core/error'
 import { meetingFixture } from './fixtures/bi-meeting-data'
 
 const mocks = vi.hoisted(() => ({
@@ -122,13 +123,16 @@ describe('供应链工作台', () => {
         from: expect.stringMatching(/-01T00:00:00\+08:00$/),
         to: expect.stringMatching(/T23:59:59\.999999\+08:00$/),
       }),
+      { errorFeedback: 'inline' },
     )
     expect(mocks.orders).toHaveBeenCalledWith(
       expect.objectContaining({ orderStatusCode: 'PENDING_SHIPPED', step: 5 }),
+      { errorFeedback: 'inline' },
     )
-    expect(mocks.orders).toHaveBeenCalledWith(expect.objectContaining({ hasUnpaid: true }))
+    expect(mocks.orders).toHaveBeenCalledWith(expect.objectContaining({ hasUnpaid: true }), { errorFeedback: 'inline' })
     expect(mocks.payments).toHaveBeenCalledWith(
       expect.objectContaining({ paymentStatusCode: 'RECEIVED' }),
+      { errorFeedback: 'inline' },
     )
     expect(wrapper.get('.task-row-action').attributes('href')).toContain(
       'homeTask=payment&orderNo=OLDER-ORDER',
@@ -160,11 +164,26 @@ describe('供应链工作台', () => {
     expect(wrapper.text()).not.toContain('private details')
     expect(wrapper.text()).not.toContain('暂无待核回款事项')
   })
+  it('keeps unavailable services inside their cards and recovers after retry', async () => {
+    const unavailable = new ApiError({ code: 'SERVICE_UNAVAILABLE' }, 503)
+    mocks.scope.mockRejectedValueOnce(unavailable)
+    mocks.payments.mockRejectedValueOnce(unavailable)
+    const { wrapper } = await render()
+    expect(wrapper.text()).toContain('经营数据服务暂不可用，请稍后重试')
+    expect(wrapper.text()).toContain('待办服务暂不可用，请稍后重试')
+    expect(wrapper.text()).not.toContain('检查数据权限')
+    expect(wrapper.text()).not.toContain('暂无待核回款事项')
+    expect(mocks.scope).toHaveBeenCalledWith({ errorFeedback: 'inline' })
+    await wrapper.get('[aria-label="刷新首页数据"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('服务暂不可用')
+    expect(wrapper.get('.summary-metric--receipts strong').text()).toBe('¥106.2万')
+  })
   it('blocks BI queries when the server effective scope denies access', async () => {
     mocks.scope.mockResolvedValue({ accessLevel: 'DENIED' })
     const { wrapper } = await render()
     expect(mocks.overview).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('经营数据暂不可用')
+    expect(wrapper.text()).toContain('当前账号暂无经营数据访问权限')
   })
   it('discards in-flight business responses after permission removal', async () => {
     let resolve!: (data: unknown) => void

@@ -271,7 +271,7 @@ watch(
 }
 .amount-card span {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .amount-card strong {
   color: var(--el-text-color-primary);

@@ -72,6 +72,8 @@ const ROUTES: Record<string, string | null> = {
   'supply.settings.menus': '/supply-chain/settings/menus',
   'supply.settings.parameters': '/supply-chain/settings/parameters',
   'supply.settings.audits': '/supply-chain/settings/audits',
+  'supply.settings.public-reference': null,
+  'supply.settings.admin-divisions': '/supply-chain/settings/admin-divisions',
   'supply.settings.store-territories': '/supply-chain/settings/store-territories',
   'supply.setting.menu': null,
   'supply.setting.index': '/supply-chain/settings', 'supply.integration.menu': null,

@@ -1,10 +1,9 @@
 <template>
   <div class="fund-document-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">Order · 客户资金</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>客户资金流水</SupplyPageTitle>
-        <p>按收支明细口径查看客户资金来源、关联单据、支付流水和账户信息。</p>
+        <SupplyPageHelp>按收支明细口径查看客户资金来源、关联单据、支付流水和账户信息。</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton
@@ -357,6 +356,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
@@ -701,7 +701,7 @@ function errorMessage(reason: unknown, fallback: string): string {
 }
 
 .detail-hero span {
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   opacity: 0.85;
 }
 
@@ -748,7 +748,7 @@ function errorMessage(reason: unknown, fallback: string): string {
 }
 
 .attachment-unavailable {
-  color: #909399;
-  font-size: 12px;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-base);
 }
 </style>

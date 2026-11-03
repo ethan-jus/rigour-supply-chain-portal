@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { apiClient } from './client'
 export interface BiEffectiveScope {
   accessLevel: 'TENANT' | 'CITY' | 'SELF' | 'SCOPED' | 'DENIED'
@@ -11,7 +12,8 @@ export interface BiEffectiveScope {
   globalGovernance: boolean
   unavailableSubjects: string[]
 }
-export const getBiEffectiveScope = () =>
+export const getBiEffectiveScope = (feedback: Pick<AxiosRequestConfig, 'errorFeedback'> = {}) =>
   apiClient.get<BiEffectiveScope>('/analytics/supply-dashboard/effective-scope', {
     stayOnUnauthorized: true,
+    ...feedback,
   })

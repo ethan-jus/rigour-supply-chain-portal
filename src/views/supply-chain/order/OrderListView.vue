@@ -849,7 +849,7 @@ watch(
 </script>
 
 <style scoped>
-.monthly-export-note { color: #64748b; font-size: 13px; line-height: 1.7; }
+.monthly-export-note { color: #64748b; font-size: var(--app-font-size-base); line-height: 1.7; }
 .order-register-page {
   display: flex;
   min-height: 0;
@@ -876,7 +876,7 @@ watch(
 /* 表头加粗放大，长列表滚动时更容易定位列。 */
 .order-register-table :deep(.el-table__header-wrapper tr th.el-table__cell) {
   color: var(--supply-text);
-  font-size: 13px;
+  font-size: var(--app-table-header-size);
   font-weight: 700;
 }
 
@@ -921,7 +921,7 @@ watch(
   height: 24px;
   min-height: 24px;
   padding: 0;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .order-register-table :deep(.el-table__row .order-action + .order-action) {

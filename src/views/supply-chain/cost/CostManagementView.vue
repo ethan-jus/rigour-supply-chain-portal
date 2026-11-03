@@ -2,7 +2,10 @@
   <div class="supply-page supply-page--list supply-page--filtered-list cost-page">
     <div class="page-heading">
       <div class="cost-heading-context">
-        <SupplyPageTitle>{{ title }}</SupplyPageTitle>
+        <div class="list-heading-title">
+          <SupplyPageTitle>{{ title }}</SupplyPageTitle>
+          <SupplyPageHelp>{{ description }}</SupplyPageHelp>
+        </div>
         <SupplyFilterTabs
           v-if="category === 'logistics'"
           class="cost-transport-segments"
@@ -1120,6 +1123,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayBusinessLabel as costLabel } from '@/utils/business-display'
 import { displayCell, displayAmount as costMoney } from '@/utils/business-display'
 import { businessPageLabels } from '@/utils/business-page-labels'
@@ -1218,6 +1222,15 @@ const titles: Record<CostCategory, string> = {
   expenses: businessPageLabels['/supply-chain/hr/expenses']!,
 }
 const title = computed(() => titles[category.value])
+const description = computed(() =>
+  category.value === 'logistics'
+    ? '选择本系统单据，或手工补录订货宝单据，再登记运费。确认表示记录已核对。'
+    : isGoods.value
+      ? '手工记录进货或损耗；已有商品和采购单可关联，确认不改变库存。'
+      : isRental.value
+        ? '按场地与费用月份登记租赁费，押金单列，不自动分摊。'
+        : '手工登记、核对并保留记录。',
+)
 const permission = computed(() =>
   category.value === 'expenses'
     ? 'hr:expense'
@@ -2237,7 +2250,7 @@ watch(
 .ledger-subline {
   margin-top: 5px;
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   line-height: 1.5;
   overflow: hidden;
   white-space: nowrap;
@@ -2272,7 +2285,7 @@ watch(
 }
 .reference-error {
   color: var(--el-color-danger);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .heading-actions {
   display: flex;
@@ -2284,7 +2297,7 @@ watch(
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.6;
   color: var(--el-text-color-regular);
 }
@@ -2294,7 +2307,7 @@ watch(
 .page-heading p,
 .field-hint {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .cost-editor :deep(.el-select),
 .full-width {
@@ -2327,7 +2340,7 @@ watch(
 pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 @media (max-width: 768px) {
   .page-heading {
@@ -2394,7 +2407,7 @@ pre {
   .field-hint {
     margin: 6px 0 0;
     color: var(--el-text-color-secondary);
-    font-size: 12px;
+    font-size: var(--app-font-size-base);
     line-height: 1.5;
   }
   .el-collapse {

@@ -2032,7 +2032,7 @@ function errorMessage(reason: unknown, fallback: string) {
   gap: 8px;
   color: #475569;
   background: #f8fafc;
-  font-size: 14px;
+  font-size: var(--app-font-size-base);
   font-weight: 600;
 }
 
@@ -2051,7 +2051,7 @@ function errorMessage(reason: unknown, fallback: string) {
 }
 
 .outcome-panel--idle {
-  border-left-color: #94a3b8;
+  border-left-color: var(--app-text-secondary);
   background: #f8fafc;
 }
 
@@ -2083,7 +2083,7 @@ function errorMessage(reason: unknown, fallback: string) {
 .outcome-state span {
   display: block;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .outcome-copy strong {
@@ -2129,7 +2129,7 @@ function errorMessage(reason: unknown, fallback: string) {
 }
 
 .eyebrow {
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   font-weight: 700;
   color: #0f766e;
 }
@@ -2153,7 +2153,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
 .upload-text {
   color: #334155;
-  font-size: 14px;
+  font-size: var(--app-font-size-base);
   font-weight: 600;
 }
 
@@ -2247,7 +2247,7 @@ function errorMessage(reason: unknown, fallback: string) {
   display: block;
   margin-bottom: 6px;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .section-toolbar strong {
@@ -2284,7 +2284,7 @@ function errorMessage(reason: unknown, fallback: string) {
   display: block;
   margin-bottom: 6px;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .issue-action-heading strong {
@@ -2333,7 +2333,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
 .issue-action-item span {
   color: #475569;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   font-weight: 600;
 }
 
@@ -2346,7 +2346,7 @@ function errorMessage(reason: unknown, fallback: string) {
 .issue-action-item p {
   margin: 0;
   color: #475569;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   line-height: 1.55;
 }
 
@@ -2368,7 +2368,7 @@ function errorMessage(reason: unknown, fallback: string) {
   display: block;
   margin-bottom: 6px;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 
 .selected-file-card strong,
@@ -2390,7 +2390,7 @@ function errorMessage(reason: unknown, fallback: string) {
   display: block;
   margin-top: 4px;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   font-style: normal;
 }
 
@@ -2456,7 +2456,7 @@ function errorMessage(reason: unknown, fallback: string) {
 }
 
 .muted-text {
-  color: #94a3b8;
+  color: var(--app-text-secondary);
 }
 
 .floating-import-actions {

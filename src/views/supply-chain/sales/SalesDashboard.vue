@@ -231,27 +231,27 @@ onMounted(() => { void load() })
 .range-shortcuts { display: flex; gap: $spacing-sm; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: $spacing-sm; }
 .metric-card { min-height: 104px; padding: 12px 14px; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-base; box-shadow: none; }
-.metric-card > span { color: $color-text-secondary; font-size: $font-size-sm; }
+.metric-card > span { color: $color-text-secondary; font-size: var(--app-font-size-base); }
 .metric-card > strong { display: block; margin-top: 7px; color: $color-text-primary; font-size: 26px; line-height: 1; }
-.metric-card > p { margin: 7px 0 0; color: $color-text-secondary; font-size: $font-size-xs; line-height: 1.35; }
+.metric-card > p { margin: 7px 0 0; color: $color-text-secondary; font-size: var(--app-font-size-base); line-height: 1.35; }
 .metric-card--primary > strong { color: $color-primary; }
 .metric-card--success > strong { color: $color-success; }
 .metric-card--warning > strong { color: $color-warning; }
 .operations-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: $spacing-sm; }
 .fact-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: $spacing-sm; text-align: center; }
 .fact-grid div { padding: 9px; background: $color-bg-muted; border-radius: $border-radius-base; }
-.fact-grid span { display: block; color: $color-text-secondary; font-size: $font-size-xs; }
+.fact-grid span { display: block; color: $color-text-secondary; font-size: var(--app-font-size-base); }
 .fact-grid strong { display: block; margin-top: 5px; color: $color-text-primary; font-size: $font-size-lg; }
 .evidence-callout { padding: 4px 2px; }
-.evidence-callout span { color: $color-text-secondary; font-size: $font-size-sm; }
+.evidence-callout span { color: $color-text-secondary; font-size: var(--app-font-size-base); }
 .evidence-callout strong { display: block; margin-top: 5px; color: $color-success; font-size: 24px; }
 .evidence-callout--warning strong { color: $color-warning; }
-.evidence-callout p { margin: 5px 0 0; color: $color-text-secondary; font-size: $font-size-xs; line-height: 1.35; }
+.evidence-callout p { margin: 5px 0 0; color: $color-text-secondary; font-size: var(--app-font-size-base); line-height: 1.35; }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .card-header > div { display: flex; flex-direction: column; gap: 4px; }
 .card-header small { color: $color-text-secondary; }
 .sales-cell { display: flex; flex-direction: column; gap: 4px; }
-.sales-cell span { color: $color-text-secondary; font-size: $font-size-xs; }
+.sales-cell span { color: $color-text-secondary; font-size: var(--app-font-size-base); }
 .rate-cell { min-width: 130px; }
 @media (max-width: 760px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } .operations-grid { grid-template-columns: 1fr; } .fact-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 520px) { .metric-grid { grid-template-columns: 1fr; } }

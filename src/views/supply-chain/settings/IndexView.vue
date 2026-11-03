@@ -55,7 +55,8 @@ const descriptions: Record<string, string> = {
   'numbering-dictionaries': '维护业务使用的字典项',
   parameters: '维护各业务模块的参数',
   audits: '查询系统设置操作记录',
-  'store-territories': '维护部门客户地域，查询七大区域及省市区县目录',
+  'store-territories': '配置部门可以访问和负责的客户地域范围',
+  'admin-divisions': '查询全国省市县行政编码及七大区域，核对目录来源和版本',
 }
 const entries = computed(() => {
   const result: { path: string; name: string; description: string }[] = []

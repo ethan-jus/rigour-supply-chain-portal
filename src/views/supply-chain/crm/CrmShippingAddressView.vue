@@ -1,10 +1,9 @@
 <template>
   <div class="crm-shipping-address-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">CRM · 客户管理</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>客户地址</SupplyPageTitle>
-        <p>查看客户收货地址簿，地址来源于 CRM 本地表，不在页面实时访问订货宝。</p>
+        <SupplyPageHelp>查看客户收货地址簿，地址来源于 CRM 本地表，不在页面实时访问订货宝。</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton scope="ADDRESS" label="收货地址" @completed="loadRows" />
@@ -134,6 +133,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'

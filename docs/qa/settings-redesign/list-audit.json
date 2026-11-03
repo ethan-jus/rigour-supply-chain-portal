@@ -1,0 +1,568 @@
+[
+  {
+    "file": "src/views/supply-chain/order/SalesPaymentRecordView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/InvoiceManagementView.vue",
+    "changes": [
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/FulfillmentView.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/SalesRefundRecordView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/SalesOrderView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/FundDocumentView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/OrderLineListView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/OrderStatisticsView.vue",
+    "changes": [
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/OrderListView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/PaymentRecordListView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/SalesShipmentView.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/RoleView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/UserView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/BusinessDictionaryView.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/AuditView.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/RoleMembersDrawer.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/MenuView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/AdminDivisionView.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/MemberCustomersDrawer.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/DictionarySourceMappings.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/settings/StoreTerritoryView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/sales/SalesDashboard.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/sales/SalesReviewQueue.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/sales/SalesVisitPlans.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/feishu/FeishuImportPage.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/crm/CrmCustomerDictionaryView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/crm/CrmCustomerManagementView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/crm/CrmShippingAddressView.vue",
+    "changes": [
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/crm/CustomerResponsibilityDrawer.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/crm/CrmStorePoolView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/crm/CustomerShippingAddresses.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/cost/CostDocumentSelect.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/cost/CostExpenseBatch.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/cost/CostManagementView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/cost/CostAttachments.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/HrAttendanceView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/HrAttendanceRuleView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/HrTargetSettingsView.vue",
+    "changes": [
+      "原生表格接入统一表头和行高"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/PayrollView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/PayrollComponentView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/HrPositionManagementView.vue",
+    "changes": [
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/HrDepartmentManagementView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/HrEmployeeManagementView.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/IndexView.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/VisitDashboardView.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/HrDashboardView.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/CostDashboardView.vue",
+    "changes": [
+      "报表表格接入字号设置，保留原有深浅色主题和报表密度"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/dhb/DhbPage.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/erp/ErpProductCustomerTypePriceView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/erp/ErpInventoryBalanceView.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/erp/ErpProductSpecificationView.vue",
+    "changes": [
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/erp/ErpDocumentManagementView.vue",
+    "changes": [
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/erp/ErpProductManagementView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/erp/ErpBasicDataManagementView.vue",
+    "changes": [
+      "字号及文字对比度接入主题",
+      "标题说明改为按需查看"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/cost/CostRecordsTable.vue",
+    "changes": [
+      "报表表格接入字号设置，保留原有深浅色主题和报表密度"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/CustomerAttributeAnalyticsDialog.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/BiMeetingBoard.vue",
+    "changes": [
+      "报表表格接入字号设置，保留原有深浅色主题和报表密度"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/CityProductReport.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/BiReconciliationCenter.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/BiOperationsWorkbench.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/BiReceiptDetails.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/CityProductSupplyInvestigation.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/BiSalesMeetingBoard.vue",
+    "changes": [
+      "报表表格接入字号设置，保留原有深浅色主题和报表密度"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/BiOverviewBoard.vue",
+    "changes": [
+      "报表表格接入字号设置，保留原有深浅色主题和报表密度"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/PaymentRiskBoard.vue",
+    "changes": [
+      "报表表格接入字号设置，保留原有深浅色主题和报表密度"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/bi/components/BiCitySalesComparison.vue",
+    "changes": [
+      "报表表格接入字号设置，保留原有深浅色主题和报表密度"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollPreparationPanel.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollAllowanceEditor.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollCommissionOrderTable.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollRuleEvidenceTable.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollSchemeCommissionEditor.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/AttendanceAssessmentPanel.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollBatchDialog.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollSchemeBaseEditor.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/AttendanceExceptionEditor.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollPreviewResults.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollSchemeResult.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/EmployeeCityScope.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollCoefficientEditor.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/CityManagerPanel.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollRuleReviewPanel.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollGradeEditor.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollSchemePerformanceEditor.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollSalaryOverview.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/AttendanceDetail.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollSalaryEditor.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/hr/components/PayrollCommissionDetail.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/components/PaymentTransactionCheckDialog.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/components/PaymentVoucherTransactionsDialog.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/components/OrderRegisterDetailDrawer.vue",
+    "changes": [
+      "字号及文字对比度接入主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/components/OrderProductRepairDialog.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  },
+  {
+    "file": "src/views/supply-chain/order/components/PaymentVoucherAuditDialog.vue",
+    "changes": [
+      "继承公共 Element Plus 表格主题"
+    ]
+  }
+]

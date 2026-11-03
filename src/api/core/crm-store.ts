@@ -1,13 +1,8 @@
 import { apiClient } from './client'
+import type { AdminArea } from './admin-divisions'
+export type { AdminArea } from './admin-divisions'
 
 export type StoreView = 'PUBLIC' | 'MINE' | 'TEAM' | 'COOPERATED' | 'ALL' | 'LEADS' | 'COVERAGE'
-export interface AdminArea {
-  code: string
-  name: string
-  level: 'PROVINCE' | 'PREFECTURE' | 'COUNTY'
-  parentCode: string | null
-  regionCode: string | null
-}
 export interface StoreContext {
   areaVersion: string
   scopeLabel: string
@@ -68,6 +63,7 @@ export interface StoreQuery {
   tier?: string
   activity?: string
   potential?: string
+  storeType?: string
   cursor?: string
   size: number
 }
@@ -75,6 +71,34 @@ export interface StorePage {
   total: number
   items: StoreRow[]
   nextCursor: string | null
+}
+export interface StoreMapBounds {
+  west: number
+  south: number
+  east: number
+  north: number
+}
+export interface StoreMapPoint {
+  id: string
+  storeId: string | null
+  name: string | null
+  longitude: number
+  latitude: number
+  coordinateSystem: string
+  count: number
+  privateCount: number
+  cooperatedCount: number
+  bounds: StoreMapBounds
+  areaCode: string | null
+  areaLevel: 'PROVINCE' | 'PREFECTURE' | 'COUNTY' | null
+}
+export interface StoreMapResult {
+  total: number
+  located: number
+  visible: number
+  bounds: StoreMapBounds | null
+  points: StoreMapPoint[]
+  level: 'PROVINCE' | 'PREFECTURE' | 'COUNTY' | 'STORE'
 }
 export interface StoreLead {
   id: string
@@ -168,6 +192,10 @@ export const crmStoreApi = {
   context: (view: StoreView) =>
     apiClient.get<StoreContext>(`${base}/context`, { ...options, params: { view } }),
   list: (params: StoreQuery) => apiClient.get<StorePage>(base, { ...options, params }),
+  map: (params: StoreQuery & Partial<StoreMapBounds> & { zoom?: number }, signal?: AbortSignal) =>
+    apiClient.get<StoreMapResult>(`${base}/map`, { ...options, params, signal }),
+  mapStores: (params: StoreQuery & StoreMapBounds & { coordinateSystem: string }) =>
+    apiClient.get<StorePage>(`${base}/map/stores`, { ...options, params }),
   detail: (id: string, view: StoreView) =>
     apiClient.get<StoreRow>(`${base}/${encodeURIComponent(id)}`, { ...options, params: { view } }),
   claim: (id: string, revision: number, requestId: string) =>

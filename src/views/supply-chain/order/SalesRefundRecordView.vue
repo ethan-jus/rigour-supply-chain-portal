@@ -1,10 +1,9 @@
 <template>
   <div class="sales-refund-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">Order · 退款中心</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>销售退款</SupplyPageTitle>
-        <p>查看销售订单对应的退款记录、退款方式、退款状态、退款人和金额。</p>
+        <SupplyPageHelp>查看销售订单对应的退款记录、退款方式、退款状态、退款人和金额。</SupplyPageHelp>
       </div>
     </div>
 
@@ -245,6 +244,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
@@ -461,7 +461,7 @@ function errorMessage(reason: unknown, fallback: string): string {
 }
 
 .detail-hero span {
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   opacity: 0.85;
 }
 

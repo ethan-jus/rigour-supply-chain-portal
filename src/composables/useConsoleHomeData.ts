@@ -9,6 +9,7 @@ import { getBiEffectiveScope } from '@/api/core/bi-access'
 import { getOrderRegisterOrders, getOrderRegisterPayments } from '@/api/core/order-register'
 import { businessDate, businessDateRange } from '@/utils/business-date'
 import type { ConsoleEntry } from '@/utils/console-navigation'
+import { ApiError } from '@/api/core/error'
 import { useAuthStore } from '@/stores/auth'
 
 export type HomeTask = 'shipment' | 'payment' | 'unpaid'
@@ -36,6 +37,18 @@ export const homeTaskQueries = {
   unpaid: { hasUnpaid: true },
 } as const
 
+const inlineFeedback = { errorFeedback: 'inline' } as const
+
+function homeLoadError(error: unknown, subject: string): string {
+  if (error instanceof ApiError) {
+    if (error.status === 403) return `当前账号暂无${subject}访问权限`
+    if ([502, 503, 504].includes(error.status || 0)) return `${subject}服务暂不可用，请稍后重试`
+    if (error.code === 'NETWORK_ERROR') return `${subject}加载失败，请检查网络后重试`
+    if (error.code === 'REQUEST_TIMEOUT') return `${subject}加载超时，请重试`
+  }
+  return `${subject}加载失败，请稍后重试`
+}
+
 export function useConsoleHomeData(entries: Ref<ConsoleEntry[]>) {
   const auth = useAuthStore()
   const today = ref(businessDate(new Date()))
@@ -62,21 +75,24 @@ export function useConsoleHomeData(entries: Ref<ConsoleEntry[]>) {
   async function loadSummary(version: number) {
     summaryLoading.value = true
     try {
-      const scope = await getBiEffectiveScope()
+      const scope = await getBiEffectiveScope(inlineFeedback)
       if (version !== generation) return
-      if (scope.accessLevel === 'DENIED') throw new Error('DENIED')
+      if (scope.accessLevel === 'DENIED') {
+        summaryError.value = '当前账号暂无经营数据访问权限'
+        return
+      }
       scopeLabel.value = scope.accessLevel === 'TENANT' ? '企业经营数据' : '授权数据范围'
       const [data, retention] = await Promise.allSettled([
-        getSupplyDashboardOverview(query.value),
-        getSupplyDashboardOperatingAnalysis(query.value),
+        getSupplyDashboardOverview(query.value, inlineFeedback),
+        getSupplyDashboardOperatingAnalysis(query.value, inlineFeedback),
       ])
       if (version !== generation) return
       if (data.status === 'rejected') throw data.reason
       overview.value = data.value
       if (retention.status === 'fulfilled') analysis.value = retention.value
       else retentionError.value = '复购数据暂不可用'
-    } catch {
-      if (version === generation) summaryError.value = '经营数据暂不可用，请重试或检查数据权限'
+    } catch (error) {
+      if (version === generation) summaryError.value = homeLoadError(error, '经营数据')
     } finally {
       if (version === generation) summaryLoading.value = false
     }
@@ -91,7 +107,7 @@ export function useConsoleHomeData(entries: Ref<ConsoleEntry[]>) {
           ...homeTaskQueries.payment,
           sortBy: 'paymentTime',
           sortDirection: 'desc',
-        })
+        }, inlineFeedback)
         if (version !== generation) return
         tasks[key].count = page.total
         tasks[key].rows = page.items.map((row) => ({
@@ -108,7 +124,7 @@ export function useConsoleHomeData(entries: Ref<ConsoleEntry[]>) {
           ...homeTaskQueries[key],
           sortBy: 'orderDate',
           sortDirection: 'desc',
-        })
+        }, inlineFeedback)
         if (version !== generation) return
         tasks[key].count = page.total
         tasks[key].rows = page.items.map((row) => ({
@@ -119,8 +135,8 @@ export function useConsoleHomeData(entries: Ref<ConsoleEntry[]>) {
           amount: key === 'unpaid' ? row.unpaidAmount : row.payableAmount,
         }))
       }
-    } catch {
-      if (version === generation) tasks[key].error = '待办加载失败，请重试'
+    } catch (error) {
+      if (version === generation) tasks[key].error = homeLoadError(error, '待办')
     } finally {
       if (version === generation) tasks[key].loading = false
     }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { remainingTime, storeAreaOptions, storeMapUrl } from '@/utils/crm-store'
+import {
+  remainingTime,
+  storeAreaOptions,
+  storeLeadAreaOptions,
+  storeMapUrl,
+} from '@/utils/crm-store'
 import type { AdminArea } from '@/api/core/crm-store'
 import { constantRoutes } from '@/router/routes'
 
@@ -12,6 +17,28 @@ const areas: AdminArea[] = [
   { code: '620102', name: '城关区', level: 'COUNTY', parentCode: '620100', regionCode: null },
 ]
 describe('CRM 门店地区和位置交互', () => {
+  it('新增门店保留授权区县与合法市级叶子，生成完整路径，不扩张城市权限', () => {
+    expect(storeLeadAreaOptions(areas.slice(0, 3))).toEqual([
+      { value: '330105', label: '浙江省 / 杭州市 / 拱墅区' },
+    ])
+    const special: AdminArea[] = [
+      { code: '440000', name: '广东省', level: 'PROVINCE', parentCode: null, regionCode: 'SOUTH' },
+      {
+        code: '441900',
+        name: '东莞市',
+        level: 'PREFECTURE',
+        parentCode: '440000',
+        regionCode: null,
+      },
+      { code: '110000', name: '北京市', level: 'PROVINCE', parentCode: null, regionCode: 'NORTH' },
+      { code: '110101', name: '东城区', level: 'COUNTY', parentCode: '110000', regionCode: null },
+    ]
+    expect(storeLeadAreaOptions(special)).toEqual([
+      { value: '441900', label: '广东省 / 东莞市' },
+      { value: '110101', label: '北京市 / 东城区' },
+    ])
+    expect(storeLeadAreaOptions([])).toEqual([])
+  })
   it('全国账号可按七区、省、市、县逐层收窄，清空显示全部授权数据', () => {
     expect(storeAreaOptions(areas, '', '', '').provinces).toHaveLength(2)
     expect(storeAreaOptions(areas, 'EAST', '', '').cities.map((a) => a.code)).toEqual(['330100'])

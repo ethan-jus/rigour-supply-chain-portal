@@ -1,8 +1,9 @@
 <template>
   <div class="supply-page position-page">
     <div class="page-heading">
-      <div>
+      <div class="list-heading-title">
         <SupplyPageTitle>岗位管理</SupplyPageTitle>
+        <SupplyPageHelp>维护员工可选岗位，顺序越小越靠前。</SupplyPageHelp>
       </div>
       <el-button v-if="can('hr:position:write')" type="primary" @click="openEditor()"
         >新增岗位</el-button
@@ -183,6 +184,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayCell } from '@/utils/business-display'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'

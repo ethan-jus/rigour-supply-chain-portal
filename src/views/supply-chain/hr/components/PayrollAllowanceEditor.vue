@@ -89,13 +89,13 @@ const total = computed(() => form.value.allowances.reduce((sum, a) => sum + (a.a
   flex-direction: column;
   gap: $spacing-sm;
   color: $color-text-regular;
-  font-size: $font-size-base;
+  font-size: var(--app-font-size-base);
   font-weight: 500;
 }
 
 .allowance-summary-caption {
   color: $color-text-secondary;
-  font-size: $font-size-sm;
+  font-size: var(--app-font-size-base);
   font-weight: 400;
 }
 
@@ -106,7 +106,7 @@ const total = computed(() => form.value.allowances.reduce((sum, a) => sum + (a.a
   justify-content: flex-end;
   gap: $spacing-sm;
   color: $color-text-secondary;
-  font-size: $font-size-base;
+  font-size: var(--app-font-size-base);
 
   strong {
     color: $color-primary;

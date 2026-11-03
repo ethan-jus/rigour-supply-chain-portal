@@ -1,0 +1,88 @@
+@use './variables' as *;
+
+// 全站文字主题入口。页面只选择语义角色，不重复定义字体族和表头样式。
+html:root {
+  --app-font-family: 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --app-font-size-base: 14px;
+  --app-font-size-small: 13px;
+  --app-font-size-caption: 12px;
+  --app-font-size-heading: 18px;
+  --app-text-primary: #{$color-text-primary};
+  --app-text-regular: #{$color-text-regular};
+  --app-text-secondary: #{$color-text-secondary};
+  --app-menu-font-size: 14px;
+  --app-table-header-size: 14px;
+  --app-table-row-height: 40px;
+  --app-table-font-size: var(--app-font-size-base);
+  --app-table-header-color: var(--app-text-primary);
+  --app-table-header-weight: 600;
+  --el-font-family: var(--app-font-family);
+  --el-font-size-base: var(--app-font-size-base);
+  --el-font-size-small: var(--app-font-size-small);
+  --el-font-size-extra-small: var(--app-font-size-caption);
+  --el-text-color-primary: var(--app-text-primary);
+  --el-text-color-regular: var(--app-text-regular);
+  --el-text-color-secondary: var(--app-text-secondary);
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+.el-table {
+  --el-table-header-text-color: var(--app-table-header-color);
+  --el-table-text-color: var(--app-text-regular);
+  font-family: var(--app-font-family);
+  font-size: var(--app-table-font-size);
+}
+
+.el-table th.el-table__cell {
+  color: var(--app-table-header-color);
+  font-size: var(--app-table-header-size);
+  font-weight: var(--app-table-header-weight);
+}
+
+// 表格字号与最小行高统一；多行内容仍按内容自然撑开。
+html .el-table td.el-table__cell,
+html .el-table th.el-table__cell {
+  height: var(--app-table-row-height);
+  padding: 6px 0;
+}
+html .el-table .cell {
+  line-height: 1.5;
+}
+html .el-table,
+html .el-table--small {
+  font-size: var(--app-table-font-size);
+}
+html .el-table .el-button,
+html .el-table .el-tag {
+  font-size: var(--app-table-font-size);
+}
+.supply-data-table {
+  font-family: var(--app-font-family);
+  font-size: var(--app-table-font-size);
+  color: var(--app-text-regular);
+}
+.supply-data-table > thead > tr > th {
+  font-size: var(--app-table-header-size);
+  font-weight: var(--app-table-header-weight);
+  color: var(--app-table-header-color);
+  background: #f1f3f6;
+}
+.supply-data-table > tbody > tr > td,
+.supply-data-table > thead > tr > th {
+  height: var(--app-table-row-height);
+}
+.list-heading-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.console table.supply-report-table { font-family: var(--app-font-family); font-size: var(--app-table-font-size); }
+.console table.supply-report-table > thead > tr > th { font-size: var(--app-table-header-size); font-weight: var(--app-table-header-weight); }

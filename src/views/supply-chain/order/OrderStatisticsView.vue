@@ -1,10 +1,9 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">订单管理 · 订单与回款统计</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>订单与回款统计</SupplyPageTitle>
-        <p>期间发生额与截至日余额分开统计；期末未回款从订单侧重建，不遗漏无收款订单。</p>
+        <SupplyPageHelp>期间发生额与截至日余额分开统计；期末未回款从订单侧重建，不遗漏无收款订单。</SupplyPageHelp>
       </div>
     </div>
 
@@ -294,6 +293,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'

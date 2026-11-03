@@ -1,9 +1,10 @@
 <template>
   <section class="supply-page payroll-rules-page">
     <div class="page-heading">
-      <div>
+      <div class="list-heading-title">
         <h3 v-if="componentKind">{{ title }}</h3>
         <SupplyPageTitle v-else>{{ title }}</SupplyPageTitle>
+        <SupplyPageHelp>{{ description }}。调整时设置生效月份，历史工资的计算依据保留。</SupplyPageHelp>
       </div>
       <el-button v-if="!historyOnly && can(writePermission)" type="primary" @click="open()"
         >新增{{ ruleName }}</el-button
@@ -613,6 +614,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { performanceModeOptions, payrollOptionLabel } from '@/utils/payroll-rule-options'
 import { displayCell } from '@/utils/business-display'
 import { randomId } from '@/utils/random-id'
@@ -691,6 +693,17 @@ const title = computed(
       PERFORMANCE: '绩效考核规则',
       COMMISSION: '商品提成规则',
       ATTENDANCE: '考勤规则设置',
+    })[kind.value],
+)
+const description = computed(
+  () =>
+    ({
+      SALARY: '维护本员工底薪与绩效基数',
+      ALLOWANCE: '维护交通、话费、电脑等补贴项目、金额及发放口径',
+      PERFORMANCE: '维护销售、城市总及总部人员的绩效计算规则；个人月度完成率在月度薪酬中核定',
+      COMMISSION: '引用 ERP 商品分类与规格，维护销售和城市总提成标准',
+      ATTENDANCE:
+        '维护部门工作日历和跨日归属口径；个人免考核日期在员工薪资标准中维护，原始打卡由销售打卡服务提供',
     })[kind.value],
 )
 const ruleName = computed(
@@ -1420,7 +1433,7 @@ onMounted(async () => {
 }
 :deep(.field-hint) {
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 :deep(.el-table),
 :deep(.el-alert) {
@@ -1455,7 +1468,7 @@ onMounted(async () => {
   display: block;
   color: var(--el-text-color-secondary);
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .payroll-rules-page .rule-filters {
   padding: 20px;
@@ -1494,7 +1507,7 @@ onMounted(async () => {
 }
 .rule-list-heading span {
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
 }
 .performance-role-tabs {
   flex-shrink: 0;

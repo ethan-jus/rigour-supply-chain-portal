@@ -762,7 +762,7 @@ onMounted(() => {
 
 .order-register-table :deep(.el-table__header-wrapper tr th.el-table__cell) {
   color: var(--supply-text);
-  font-size: 13px;
+  font-size: var(--app-table-header-size);
   font-weight: 700;
 }
 
@@ -798,7 +798,7 @@ onMounted(() => {
   border-radius: 6px;
   background: var(--supply-surface-subtle);
   color: var(--supply-text-muted);
-  font-size: 11px;
+  font-size: var(--app-font-size-base);
 }
 
 .line-product__image-fallback {
@@ -808,7 +808,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   color: var(--supply-text-muted);
-  font-size: 11px;
+  font-size: var(--app-font-size-base);
 }
 
 .line-product__text {
@@ -829,7 +829,7 @@ onMounted(() => {
 .line-product__meta {
   overflow: hidden;
   color: var(--supply-text-muted);
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

@@ -117,7 +117,7 @@
             <span>点击销售姓名查看个人详情</span>
           </div>
           <div class="sales-table-scroll">
-            <table class="sales-rank-table">
+            <table class="supply-report-table sales-rank-table">
               <thead>
                 <tr>
                   <th>排名</th>
@@ -312,7 +312,7 @@
         <section v-if="showMonths && !dayMode" class="sales-month-detail">
           <h2>{{ year }} 年月度明细</h2>
           <div class="sales-table-scroll">
-            <table>
+            <table class="supply-report-table">
               <thead>
                 <tr>
                   <th>月份</th>
@@ -376,7 +376,7 @@
           <article>
             <h2>重点客户 <small>按本期交易额排序</small></h2>
             <div class="sales-table-scroll">
-              <table>
+              <table class="supply-report-table">
                 <thead>
                   <tr>
                     <th>客户名称</th>
@@ -460,7 +460,7 @@
           </div>
           <template v-else
             ><div class="sales-table-scroll">
-              <table>
+              <table class="supply-report-table">
                 <thead>
                   <tr>
                     <th>商品 / 型号</th>

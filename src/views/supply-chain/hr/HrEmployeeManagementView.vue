@@ -956,7 +956,7 @@ onMounted(async () => {
   background: $color-bg-muted;
   color: $color-text-secondary;
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   font-variant-numeric: tabular-nums;
 }
 .department-context-copy p {
@@ -964,7 +964,7 @@ onMounted(async () => {
   gap: 8px;
   margin: 3px 0 0;
   color: $color-text-secondary;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .directory-actions {
   display: flex;
@@ -1012,12 +1012,12 @@ onMounted(async () => {
   border-top: 1px solid $color-border-lighter;
   color: $color-text-regular;
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   flex: none;
 }
 .sort-hint {
   color: $color-text-secondary;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   font-weight: 400;
 }
 .employee-name {
@@ -1034,7 +1034,7 @@ onMounted(async () => {
   gap: 6px;
   padding: 3px 9px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
   line-height: 20px;
   font-weight: 600;
 }
@@ -1115,24 +1115,24 @@ onMounted(async () => {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  font-size: 14px;
+  font-size: var(--app-font-size-base);
 }
 .employee-table-viewport {
   flex: 1;
   min-height: 0;
 }
 .employee-table-viewport :deep(.el-table) {
-  font-size: 13px;
+  font-size: var(--app-font-size-base);
   --el-table-border-color: #f1f5f9;
   --el-table-header-bg-color: #f8fafc;
-  --el-table-header-text-color: #64748b;
+  --el-table-header-text-color: var(--app-table-header-color);
   --el-table-row-hover-bg-color: #eff6ff;
 }
 .employee-table-viewport :deep(.cell) {
   white-space: nowrap;
 }
 .employee-table-viewport :deep(.el-table__cell) {
-  padding: 11px 0;
+  padding: 6px 0;
 }
 .employee-table-viewport :deep(.el-table__row) {
   cursor: pointer;
@@ -1173,7 +1173,7 @@ onMounted(async () => {
 }
 .employee-list-footer > span {
   color: $color-text-secondary;
-  font-size: 12px;
+  font-size: var(--app-font-size-base);
 }
 .el-pagination {
   margin: 0;

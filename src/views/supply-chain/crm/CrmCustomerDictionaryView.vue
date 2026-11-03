@@ -1,10 +1,9 @@
 <template>
   <div class="crm-dictionary-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <div>
-        <span class="supply-page__eyebrow">CRM · 客户管理</span>
+      <div class="list-heading-title">
         <SupplyPageTitle>{{ pageConfig.title }}</SupplyPageTitle>
-        <p>{{ pageConfig.description }}</p>
+        <SupplyPageHelp>{{ pageConfig.description }}</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton
@@ -179,6 +178,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import { buildAreaTree, filterAreaTree, areaDescendantCodes } from '@/utils/crm-area-tree'
 import { displayDateTime } from '@/utils/business-date'
@@ -430,8 +430,8 @@ function errorMessage(reason: unknown, fallback: string) {
 <style scoped lang="scss">
 .area-toolbar { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; color: var(--el-text-color-secondary); }
 .area-name { display: inline; font-weight: 500; }
-.area-child-count { margin-left: 12px; font-size: 12px; color: var(--el-text-color-secondary); }
-.area-source-hint { margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px; }
+.area-child-count { margin-left: 12px; font-size: var(--app-font-size-base); color: var(--el-text-color-secondary); }
+.area-source-hint { margin-left: 8px; color: var(--el-text-color-secondary); font-size: var(--app-font-size-base); }
 .crm-dictionary-page {
   min-height: 0;
 }

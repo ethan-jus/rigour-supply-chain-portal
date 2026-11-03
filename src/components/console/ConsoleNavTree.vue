@@ -22,7 +22,11 @@
         >
           <ConsoleNavIcon v-if="depth === 0" :icon-key="node.iconKey" />
           <span class="nav-branch__text">{{ node.displayName }}</span>
-          <span class="nav-chevron" :class="{ 'nav-chevron--collapsed': !isExpanded(node) }" aria-hidden="true" />
+          <span
+            class="nav-chevron"
+            :class="{ 'nav-chevron--collapsed': !isExpanded(node) }"
+            aria-hidden="true"
+          />
         </button>
 
         <router-link
@@ -59,10 +63,13 @@ import ConsoleNavIcon from '@/components/console/ConsoleNavIcon.vue'
 
 defineOptions({ name: 'ConsoleNavTree' })
 
-const props = withDefaults(defineProps<{
-  nodes: NavigationNode[]
-  depth?: number
-}>(), { depth: 0 })
+const props = withDefaults(
+  defineProps<{
+    nodes: NavigationNode[]
+    depth?: number
+  }>(),
+  { depth: 0 },
+)
 
 const route = useRoute()
 const expandedByNode = ref<Record<string, boolean>>({})
@@ -106,7 +113,11 @@ function syncActiveBranch(nodes: NavigationNode[]): void {
   })
 }
 
-watch(() => route.path, () => syncActiveBranch(props.nodes), { immediate: true })
+watch(
+  () => route.path,
+  () => syncActiveBranch(props.nodes),
+  { immediate: true },
+)
 </script>
 
 <style scoped lang="scss">
@@ -118,7 +129,7 @@ watch(() => route.path, () => syncActiveBranch(props.nodes), { immediate: true }
 }
 
 .nav-node--depth-0 {
-  margin: 3px 0;
+  margin: 2px 0;
 }
 
 .nav-branch,
@@ -126,83 +137,90 @@ watch(() => route.path, () => syncActiveBranch(props.nodes), { immediate: true }
   position: relative;
   display: flex;
   width: 100%;
+  box-sizing: border-box;
   align-items: center;
-  color: #fff;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 12px;
+  color: $color-text-regular;
+  font: inherit;
+  font-size: var(--app-menu-font-size);
+  line-height: 22px;
   text-align: left;
   text-decoration: none;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: $border-radius-sm;
   cursor: pointer;
-  transition: color $transition-fast, background $transition-fast, transform $transition-fast;
+  transition:
+    color $transition-fast,
+    background $transition-fast;
 
   &:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.1);
+    color: $color-text-primary;
+    background: $color-bg-muted;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $color-primary;
+    outline-offset: -2px;
   }
 }
 
-.nav-branch--depth-0,
-.nav-item--depth-0 {
-  gap: 11px;
-  min-height: 44px;
-  padding: 0 12px;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 700;
+.nav-branch :deep(.nav-icon),
+.nav-item :deep(.nav-icon) {
+  color: $color-text-secondary;
 }
 
-.nav-branch--depth-0.nav-branch--active,
-.nav-item--depth-0.nav-item--active {
-  color: #fff;
-  background: rgba(37, 99, 235, 0.2);
-  box-shadow: inset 3px 0 0 $color-primary-light;
+.nav-branch {
+  font-weight: 500;
 }
 
 .nav-branch--depth-1,
 .nav-item--depth-1 {
   min-height: 38px;
-  padding: 0 12px 0 16px;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
+  padding: 8px 12px;
 }
 
 .nav-branch--depth-2,
 .nav-item--depth-2,
 .nav-branch--depth-3,
 .nav-item--depth-3 {
-  min-height: 36px;
-  padding: 0 10px 0 28px;
-  color: #fff;
-  font-size: $font-size-sm;
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: var(--app-menu-font-size);
+}
+
+.nav-branch--active {
+  color: $color-text-primary;
+}
+
+.nav-item--active,
+.nav-item--active:hover {
+  color: $color-primary;
+  background: rgba($color-primary, 0.08);
   font-weight: 600;
-}
 
-.nav-branch--depth-1.nav-branch--active {
-  color: #fff;
-}
-
-.nav-item--active {
-  color: #fff;
-  background: rgba(37, 99, 235, 0.24);
+  :deep(.nav-icon) {
+    color: currentColor;
+  }
 
   &::before {
     position: absolute;
     top: 10px;
     bottom: 10px;
-    left: 0;
-    width: 3px;
-    background: $color-primary-light;
-    border-radius: 0 3px 3px 0;
+    left: 2px;
+    width: 2px;
+    background: $color-primary;
+    border-radius: 2px;
     content: '';
   }
 }
 
 .nav-children {
   margin: 4px 0 8px 20px;
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  padding-left: 4px;
+  border-left: 1px solid $color-border-base;
 }
 
 .nav-tree--depth-2 .nav-children {
@@ -230,6 +248,14 @@ watch(() => route.path, () => syncActiveBranch(props.nodes), { immediate: true }
   &--collapsed {
     margin-bottom: 0;
     transform: rotate(-45deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-branch,
+  .nav-item,
+  .nav-chevron {
+    transition: none;
   }
 }
 </style>

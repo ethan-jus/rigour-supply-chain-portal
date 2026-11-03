@@ -228,7 +228,7 @@
             <span class="matrix-unit">单位：{{ countMode ? '单' : '万元' }}</span>
           </div>
           <div class="matrix-scroll">
-            <table class="risk-matrix">
+            <table class="supply-report-table risk-matrix">
               <thead>
                 <tr>
                   <th>城市</th>
@@ -326,7 +326,7 @@
             <span class="amount-key"><i />金额占比</span><span>单位：万元</span>
           </div>
           <div class="ranking-scroll">
-            <table class="ranking sales-ranking">
+            <table class="supply-report-table ranking sales-ranking">
               <thead>
                 <tr>
                   <th>业务员</th>
@@ -371,7 +371,7 @@
           <div class="product-composition">
             <EchartsChart :option="productChart" :height="240" @chart-click="onProductChartClick" />
             <div class="ranking-scroll">
-              <table class="ranking product-ranking">
+              <table class="supply-report-table ranking product-ranking">
                 <thead>
                   <tr>
                     <th>{{ productMode ? '产品' : '产品分类' }}</th>
@@ -404,7 +404,7 @@
           <h2>风险判定规则</h2>
         </div>
         <div class="panel-meta"><span>订单日起算</span><span>单位：天</span></div>
-        <table>
+        <table class="supply-report-table">
           <thead>
             <tr>
               <th>产品分类</th>
@@ -447,7 +447,7 @@
           <button class="outline" @click="detailsOpen = false">收起明细</button>
         </div>
         <div class="detail-scroll">
-          <table>
+          <table class="supply-report-table">
             <thead>
               <tr>
                 <th>订单号 / 客户</th>

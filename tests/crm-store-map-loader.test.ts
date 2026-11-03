@@ -68,3 +68,44 @@ it('CRM与销售共用一个SDK加载请求和后台浏览器配置，忽略后�
   ;(window as unknown as Record<string, () => void>)[url.searchParams.get('callback')!]()
   expect(await crm).toBe(await sales)
 })
+
+it('首次全国视图按容器尺寸适配中国边界，避免退到重复的世界地图', async () => {
+  const { fitStoreMapBounds } = await import('@/utils/crm-store-map')
+  const bounds = { west: 75.084625, south: 18.222006, east: 134.302343, north: 52.974758 }
+  const fitted = fitStoreMapBounds(bounds, 2200, 1000)
+  expect(fitted.zoom).toBeGreaterThan(4.7)
+  expect(fitted.zoom).toBeLessThan(5)
+  expect(fitted.center[0]).toBeCloseTo(104.69, 1)
+  expect(fitted.center[1]).toBeGreaterThan(35)
+  expect(fitted.center[1]).toBeLessThan(40)
+  expect(fitStoreMapBounds({ west: 120, east: 120, north: 30, south: 30 }, 800, 600).zoom).toBe(16)
+})
+
+it('密集区域标签错开且保留全部区域，孤立标签不移动', async () => {
+  const { layoutStoreMapLabels } = await import('@/utils/crm-store-map')
+  const labels = [
+    { x: 300, y: 200, width: 110, height: 56 },
+    { x: 325, y: 220, width: 110, height: 56 },
+    { x: 300, y: 240, width: 110, height: 56 },
+    { x: 620, y: 410, width: 110, height: 56 },
+  ]
+  const offsets = layoutStoreMapLabels(labels, 900, 600)
+  expect(offsets).toHaveLength(labels.length)
+  expect(offsets[0]).toEqual({ x: 0, y: 0 })
+  expect(offsets[3]).toEqual({ x: 0, y: 0 })
+  const placed = labels.map((label, i) => ({
+    ...label,
+    x: label.x + offsets[i].x,
+    y: label.y + offsets[i].y,
+  }))
+  placed.forEach((a, i) =>
+    placed.slice(i + 1).forEach((b) => {
+      expect(
+        a.x + a.width <= b.x ||
+          b.x + b.width <= a.x ||
+          a.y + a.height <= b.y ||
+          b.y + b.height <= a.y,
+      ).toBe(true)
+    }),
+  )
+})
