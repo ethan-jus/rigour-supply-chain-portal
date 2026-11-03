@@ -3,6 +3,8 @@ import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-uti
 import { defineComponent, h } from 'vue'
 import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import Rules from '@/views/supply-chain/hr/PayrollComponentView.vue'
+import PersonalPolicyEditor from '@/views/supply-chain/hr/components/PayrollPersonalPolicyEditor.vue'
+import { getHrEmployees, hrOrganizationApi, type HrEmployeeRecord } from '@/api/core/hr'
 import {
   getPayrollComponents,
   savePayrollComponent,
@@ -56,6 +58,10 @@ vi.mock('@/api/core/payroll', () => ({
     .mockResolvedValue([{ id: 1, name: '方便面', parentId: null }]),
   getPayrollProducts: vi.fn().mockResolvedValue([]),
 }))
+vi.mock('@/api/core/hr', () => ({
+  getHrEmployees: vi.fn(),
+  hrOrganizationApi: { assignments: vi.fn() },
+}))
 vi.mock('@/api/core/hr-attendance', () => ({
   getAttendanceDepartments: vi.fn().mockResolvedValue([]),
   attendanceMonth: () => '2026-10',
@@ -98,6 +104,29 @@ beforeEach(() => {
       },
     ],
   })
+  vi.mocked(getHrEmployees).mockResolvedValue({
+    begin: 0,
+    step: 2,
+    total: 1,
+    items: [
+      {
+        id: 'CURRENT-ID',
+        employeeCode: 'E1',
+        entryDate: '2000-01-01T00:00:00Z',
+      } as HrEmployeeRecord,
+    ],
+  })
+  vi.mocked(hrOrganizationApi.assignments).mockResolvedValue([
+    {
+      id: 1,
+      departmentId: 1,
+      departmentName: '销售部',
+      positionCode: 'SALES',
+      positionName: '销售',
+      effectiveFrom: '2000-01-01T00:00:00Z',
+      effectiveTo: null,
+    },
+  ])
   state.route.path = '/supply-chain/hr/allowance-rules'
   vi.mocked(getPayrollComponents).mockResolvedValue([])
   vi.mocked(getPayrollDepartments).mockResolvedValue([
@@ -901,6 +930,8 @@ describe('独立薪资规则入口', () => {
     await open()
     await basics()
     expect(wrapper.find('[role="dialog"]').text()).toContain('750.00')
+    expect(wrapper.find('[role="dialog"]').text()).toContain('月补贴标准÷员工当月应出勤×实际出勤')
+    expect(wrapper.find('[role="dialog"]').text()).toContain('入职日至月底的工作日')
     expect(wrapper.find('[role="dialog"]').text()).not.toContain('绩效基数')
     await click('保存')
     expect(savePayrollComponent).toHaveBeenCalledWith(
@@ -916,7 +947,7 @@ describe('独立薪资规则入口', () => {
               expect.objectContaining({ amount: 150 }),
               expect.objectContaining({ amount: 100 }),
             ]),
-            proration: 'NONE',
+            proration: 'CONFIRMED_ATTENDANCE',
           },
         }),
       }),
@@ -990,6 +1021,50 @@ describe('独立薪资规则入口', () => {
         }),
       }),
     )
+  })
+  it('员工薪资保存先核对旧关联补贴，不适用时不发送保存请求，明确清除后才可沿用部门规则', async () => {
+    const plan = commissionRule('other-department', 'ALLOWANCE-OTHER', 1)
+    Object.assign(plan.definition, {
+      kind: 'ALLOWANCE',
+      role: 'SALES',
+      departmentIds: [2],
+      effectiveFrom: '2000-01-01',
+      effectiveTo: '9999-12-31',
+      commission: null,
+      allowance: {
+        proration: 'NONE',
+        items: [{ code: 'transport', name: '交通补贴', amount: 750 }],
+      },
+    })
+    vi.mocked(getPayrollComponents).mockImplementation(async (kind) =>
+      kind === 'ALLOWANCE' ? [plan] : [],
+    )
+    await open('SALARY')
+    const policy = wrapper.getComponent(PersonalPolicyEditor)
+    const current = policy.props('modelValue')
+    policy.vm.$emit('update:modelValue', {
+      ...current,
+      personalPolicy: { ...current.personalPolicy!, allowanceVersionId: plan.id },
+    })
+    await flushPromises()
+    await field('变更说明').get('textarea').setValue('维护薪资标准')
+    await click('保存')
+    expect(savePayrollComponent).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="dialog"]').text()).toContain(
+      '关联补贴方案不适用于当前身份、任职部门或生效月份',
+    )
+    expect(policy.props('modelValue').personalPolicy?.allowanceVersionId).toBe(plan.id)
+    policy.getComponent({ name: 'ElSelect' }).vm.$emit('update:modelValue', null)
+    await flushPromises()
+    await click('保存')
+    expect(savePayrollComponent).toHaveBeenCalledTimes(1)
+    expect(
+      vi.mocked(savePayrollComponent).mock.calls[0]![0].definition.salary?.personalPolicy
+        ?.allowanceVersionId,
+    ).toBeNull()
+    expect(vi.mocked(savePayrollComponent).mock.calls[0]![0].definition.employeeCodes).toEqual([
+      'E1',
+    ])
   })
   it('商品规则仅引用ERP目录，方便面模板同时创建销售与城市总标准', async () => {
     vi.mocked(getPayrollProducts).mockResolvedValue([

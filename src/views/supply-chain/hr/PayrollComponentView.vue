@@ -553,7 +553,13 @@
                 :clearable="false"
             /></el-form-item>
           </div>
-          <PayrollSalaryEditor :disabled="readonly" v-if="kind === 'SALARY'" v-model="form" />
+          <PayrollSalaryEditor
+            ref="salaryEditor"
+            :disabled="readonly"
+            v-if="kind === 'SALARY'"
+            v-model="form"
+            :employee-code="employeeCode"
+          />
           <PayrollAllowanceEditor v-else-if="kind === 'ALLOWANCE'" v-model="form" />
           <template v-else-if="kind === 'PERFORMANCE'"
             ><PayrollSchemePerformanceEditor
@@ -1052,6 +1058,7 @@ function standardSummary(row: PayrollComponentVersionView) {
 }
 const grades = ref<PayrollGradeBand[]>([])
 const commissionEditor = ref<{ validate: () => string | null } | null>(null)
+const salaryEditor = ref<{ validate: () => string | null } | null>(null)
 const form = ref(newPayrollScheme()),
   previousId = ref<string | null>(null),
   requestId = ref(''),
@@ -1278,6 +1285,13 @@ async function save() {
       return
     }
   }
+  if (kind.value === 'SALARY') {
+    const validationMessage = salaryEditor.value?.validate()
+    if (validationMessage) {
+      editorError.value = validationMessage
+      return
+    }
+  }
   saving.value = true
   editorError.value = ''
   try {
@@ -1318,7 +1332,10 @@ async function save() {
             : null,
         allowance:
           kind.value === 'ALLOWANCE'
-            ? { items: f.allowances, proration: f.proration.allowance }
+            ? {
+                items: f.allowances,
+                proration: f.role === 'SALES' ? 'CONFIRMED_ATTENDANCE' : f.proration.allowance,
+              }
             : null,
         commission: kind.value === 'COMMISSION' ? f.commission : null,
         calendar: kind.value === 'ATTENDANCE' ? f.calendar : null,

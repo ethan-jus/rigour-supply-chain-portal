@@ -74,6 +74,9 @@ export function payrollSalaryItems(record: PayrollRecord): PayrollSalaryItem[] {
                 : '按本月绩效规则及折算依据计算',
     })
   const allowances = s?.scheme.definition.allowances ?? []
+  const allowanceExplanation = s?.explanations?.find((line) =>
+    line.startsWith('销售补贴按月补贴标准'),
+  )
   if (allowances.length) {
     for (const item of allowances)
       result.push({
@@ -94,7 +97,7 @@ export function payrollSalaryItems(record: PayrollRecord): PayrollSalaryItem[] {
         basis:
           c.input.allowanceOverride != null
             ? `HR 核定：${c.input.reason}`
-            : '按补贴规则折算；与上述项目之和等于本月补贴',
+            : allowanceExplanation || '按补贴规则折算；与上述项目之和等于本月补贴',
       })
   } else
     result.push({
