@@ -74,6 +74,9 @@ describe('项目业绩汇总主表', () => {
     expect(page.getCell('M2').master.address).toBe('K2')
     expect(page.getCell('V2').master.address).toBe('Q2')
     expect(page.getCell('A3').master.address).toBe('A2')
+    expect(page.getCell('Q3').value).toBe('A300/500B\n付清数量（按单位）')
+    expect(page.getCell('R3').value).toBe('A600/700/800\n付清数量（按单位）')
+    expect(page.getCell('S3').value).toBe('澳洋斯诺克\n付清数量（按单位）')
     expect(page.getCell('D4').value).toBe(22)
     expect(page.getCell('E4').value).toBe(21)
     expect(page.getCell('J4').value).toBe(120)
@@ -135,7 +138,7 @@ describe('项目业绩汇总主表', () => {
     expect(book.getWorksheet('城市业绩汇总')!.getCell('I3').value).toBe('-')
     const missing = report()
     delete (missing.clothSales[0] as Partial<PayrollPerformanceExport['clothSales'][number]>).quantities
-    expect(() => appendPayrollPerformance(new Workbook(), [record], [missing])).toThrow('按单位销量')
+    expect(() => appendPayrollPerformance(new Workbook(), [record], [missing])).toThrow('按单位付清数量')
   })
   it('单位名称和新增单位从当前字典读取，不依赖床/套映射', () => {
     seedBusinessDictionaryForTest('', 'PRODUCT_UNIT', [{ code: 'SET', name: '业务套装' }, { code: 'BED', name: '整床' }, { code: 'ROLL', name: '卷' }])

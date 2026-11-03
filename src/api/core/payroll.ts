@@ -219,6 +219,7 @@ export interface PayrollPerformanceExport {
     code: string
     name: string
     salesAmount: number
+    /** 当月首次整单付清订单的台呢数量，按订单原单位分别汇总。 */
     quantities: { unitCode: string; quantity: number }[]
   }[]
   salesAmount: number

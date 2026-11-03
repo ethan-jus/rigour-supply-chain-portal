@@ -6,7 +6,7 @@ const moneyFormat = '#,##0.00;[Red]-#,##0.00;0.00'
 const numeric = (value: number | null | undefined): CellValue => (value == null ? '-' : value)
 const quantity = (item: PayrollPerformanceExport['clothSales'][number] | undefined): CellValue => {
   if (!item || !Array.isArray(item.quantities))
-    throw new Error('业绩服务尚未提供按单位销量，请更新HR服务后重新导出')
+    throw new Error('业绩服务尚未提供按单位付清数量，请更新HR服务后重新导出')
   return item.quantities.length
     ? item.quantities.map((q) => {
       const name = payrollUnitName(q.unitCode)
@@ -125,9 +125,9 @@ export function appendPayrollPerformance(
     '销售额',
     '回款额',
     '提成',
-    'A300/500B\n销量（按单位）',
-    'A600/700/800\n销量（按单位）',
-    '澳洋斯诺克\n销量（按单位）',
+    'A300/500B\n付清数量（按单位）',
+    'A600/700/800\n付清数量（按单位）',
+    '澳洋斯诺克\n付清数量（按单位）',
     '销售总额',
     '回款总额',
     '提成',
@@ -199,7 +199,7 @@ export function appendPayrollPerformance(
     page.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8CBAD' } }
   page.autoFilter = `A3:AD${ordered.length + 3}`
   page.headerFooter.oddFooter =
-    '金额单位：元；台呢型号列为销量，按订单单位分别汇总。 第 &P 页 / 共 &N 页'
+    '金额单位：元；台呢数量按本月首次整单付清订单及原单位汇总。 第 &P 页 / 共 &N 页'
   appendCitySummary(workbook, ordered, months[0]!)
   const source = workbook.addWorksheet('品类业绩明细')
   source.addRow([
@@ -229,8 +229,9 @@ export function appendPayrollPerformance(
   const end = source.rowCount
   source.addRow([])
   for (const [label, text] of [
-    ['销售', '销售按下单月，按订单应付金额分摊整单优惠；型号列按订单数量和单位分别汇总。'],
+    ['销售', '销售按下单月，按订单应付金额分摊整单优惠。'],
     ['回款', '按当月首次整单付清业绩（含跨月订单），未付清订单不计入。'],
+    ['台呢数量', '三组型号按本月首次整单付清订单中的台呢数量统计，包含跨月订单；按订单原单位分别汇总，不换算、不跨单位相加。'],
     ['提成', '主表沿用已保存工资；历史补算先导出提成试算差异，不在导出时保存工资。'],
     ['过程', '应/实打卡和拜访来自保存的日明细；扣款采用保存的过程绩效扣款。'],
     [
