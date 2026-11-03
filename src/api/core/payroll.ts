@@ -199,6 +199,7 @@ export interface PayrollQuery {
   departmentId?: number
   statusCode?: string
   payrollCategory?: string
+  payrollIds?: string[]
 }
 export interface PayrollPage<T> {
   total: number
@@ -380,13 +381,21 @@ export const previewPayroll = (month: string, employeeCodes: string[]) =>
 export const updatePayrollProfiles = (employees: PayrollProfilePatch[], reason: string) =>
   apiClient.put<void>(`${base}/employee-profiles`, { employees, reason }, options)
 export async function exportPayroll(params: PayrollQuery): Promise<PayrollRecord[]> {
-  const read = () =>
-    apiClient.get<PayrollRecord[]>(`${base}/export`, {
-      params,
-      ...options,
-      timeout: 120000,
-      errorFeedback: 'inline',
-    })
+  const requestOptions = { ...options, timeout: 120000, errorFeedback: 'inline' as const }
+  const read = async () => {
+    if (!params.payrollIds)
+      return apiClient.get<PayrollRecord[]>(`${base}/export`, { params, ...requestOptions })
+    try {
+      // Large selections must not exceed gateway URL/header limits. This endpoint only reads.
+      return await apiClient.post<PayrollRecord[]>(`${base}/export`, params, requestOptions)
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 405) throw error
+      // Compatibility with GET-only services; the caller still enforces the selected ID set.
+      const filters = { ...params }
+      delete filters.payrollIds
+      return apiClient.get<PayrollRecord[]>(`${base}/export`, { params: filters, ...requestOptions })
+    }
+  }
   try {
     return await read()
   } catch (error) {

@@ -12,6 +12,18 @@ import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictio
 import { appendPayrollPaymentEvidence } from '@/utils/payroll-payment-export'
 import { businessDateTime } from '@/utils/business-date'
 
+function exportReviewIssues(row: PayrollRecord): string[] {
+  const issues = [...row.calculation.issues]
+  if (row.calculation.commission == null && !issues.length) {
+    const pending = row.calculation.details.filter((line) => line.released == null)
+    issues.push(...pending.map((line) =>
+      `${line.orderNo} / ${line.productName}：${line.message || '提成金额尚未核定'}`,
+    ))
+    if (!issues.length) issues.push('提成金额为空，当前工资单未记录核对原因')
+  }
+  return [...new Set(issues)]
+}
+
 /** Export persisted server evidence for the complete authorized result, never browser calculations. */
 export async function buildPayrollWorkbook(records: PayrollRecord[]) {
   await loadPayrollProductUnits()
@@ -43,8 +55,8 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
       }
     })
     page.views = [{ state: 'frozen', ySplit: 1 }]
-    page.columns.forEach((column) => {
-      column.width = 22
+    page.columns.forEach((column, index) => {
+      column.width = [...headers, ...columns][index] === '核对说明' ? 64 : 22
     })
     page.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '1:1' }
     page.autoFilter = {
@@ -70,9 +82,11 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
       '已登记发放（元）',
       '待发金额（元）',
       '发放凭证',
+      '核对说明',
     ],
     records.map((row) => {
       const c = row.calculation
+      const issues = exportReviewIssues(row)
       return [
         ...identity(row),
         row.departmentName,
@@ -91,6 +105,9 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
         c.netPay == null ? null : payrollRemaining(row),
         row.payments?.some(p => p.attachments?.length)
           ? '见发放凭证页' : '-',
+        issues.length
+          ? issues[0] + (issues.length > 1 ? `；另有${issues.length - 1}项，详见核对事项` : '')
+          : '—',
       ]
     }),
   )
@@ -365,7 +382,7 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
   sheet(
     '核对事项',
     ['说明'],
-    records.flatMap((row) => row.calculation.issues.map((issue) => [...identity(row), issue])),
+    records.flatMap((row) => exportReviewIssues(row).map((issue) => [...identity(row), issue])),
   )
   await appendPayrollPaymentEvidence(workbook, records)
   return workbook

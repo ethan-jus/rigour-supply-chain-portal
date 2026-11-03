@@ -10,6 +10,12 @@ import { getPayrollSchemeFacts } from '@/api/core/payroll-scheme'
 import { newPayrollScheme } from '@/utils/payroll-scheme'
 import { getPayrollRuleReviews } from '@/api/core/payroll-scheme/components'
 import type { PayrollSchemeFactsView } from '@/api/core/payroll-scheme/models/PayrollSchemeFactsView'
+import { exportPayrollRecords } from '@/utils/payroll-detail-export'
+
+vi.mock('@/utils/payroll-detail-export', () => ({
+  exportPayrollRecords: vi.fn().mockResolvedValue(undefined),
+  exportPayrollDetails: vi.fn().mockResolvedValue(undefined),
+}))
 
 const routeGuards = vi.hoisted(() => ({
   leave: [] as Array<() => Promise<boolean>>,
@@ -285,7 +291,7 @@ describe('工资列表汇总', () => {
     )
     expect(loadBusinessDictionaries).toHaveBeenCalled()
   })
-  it('主列表直接展示核算金额和状态，取消补充列开关，追溯字段放在只读详情', async () => {
+  it('列表保留原有工资构成、实际发放及确认限制，详情和操作入口继续可用', async () => {
     row.paymentBlockReason = '当月考勤尚未确认'
     await openList()
     expect(wrapper.find('.payroll-list-header .el-switch').exists()).toBe(false)
@@ -293,7 +299,23 @@ describe('工资列表汇总', () => {
     const table = wrapper.get('.table-viewport')
     expect(table.find('[label="应付工资"]').exists()).toBe(true)
     expect(table.find('[label="状态"]').exists()).toBe(true)
-    expect(table.find('[label="员工编号"]').exists()).toBe(false)
+    for (const label of [
+      '员工编号',
+      '底薪',
+      '绩效',
+      '补贴',
+      '提成',
+      '补发补扣',
+      '其他扣款',
+      '应发工资',
+      '应付工资',
+      '实际发放',
+    ])
+      expect(table.find(`[label="${label}"]`).exists()).toBe(true)
+    expect(table.text()).toContain('当月考勤尚未确认')
+    expect(table.text()).toContain('待处理')
+    expect(table.text()).toContain('4,000.00')
+    expect(table.text()).toContain('750.00')
     await button('明细').trigger('click')
     await flushPromises()
     const checks = wrapper.findAll('.business-detail-fields > div')
@@ -304,6 +326,26 @@ describe('工资列表汇总', () => {
         .text(),
     ).toBe('当月考勤尚未确认')
     expect(checks.some((field) => field.find('dt').text() === '实际发放（元）')).toBe(true)
+  })
+  it('汇总接口失败时保留已查询到的工资明细，显示汇总错误，不伪造为零', async () => {
+    vi.mocked(api.getPayrollSummary).mockRejectedValueOnce({
+      code: 'SERVICE_UNAVAILABLE',
+      message: 'service unavailable',
+    })
+    await openList()
+    expect(wrapper.get('.table-viewport').text()).toContain(row.employeeName)
+    expect(wrapper.text()).toContain('薪酬汇总暂不可用')
+    expect(wrapper.get('.summary-gross').text()).not.toContain('0.00')
+    expect(button('核定薪酬').exists()).toBe(true)
+  })
+  it('列表接口失败时显示明确的加载错误，保留独立取得的汇总，不伪装成没有记录', async () => {
+    vi.mocked(api.getPayroll).mockRejectedValueOnce({ code: 'SERVICE_UNAVAILABLE' })
+    await openList()
+    expect(wrapper.text()).toContain('薪酬列表加载失败')
+    expect(wrapper.get('.table-viewport > div').attributes('empty-text')).toBe(
+      '薪酬列表暂不可用，请重试',
+    )
+    expect(wrapper.get('.summary-people .summary-value').text()).toContain('1')
   })
   it('姓名和编号是独立条件，列表、总计、导出保持一致，重置清空两个字段', async () => {
     vi.mocked(api.exportPayroll).mockResolvedValue([])
@@ -328,6 +370,58 @@ describe('工资列表汇总', () => {
     expect(api.getPayroll).toHaveBeenLastCalledWith(
       expect.objectContaining({ employeeName: undefined, employeeCode: undefined }),
     )
+  })
+  it('勾选一人后顶部导出只包含该工资单，兼容旧服务返回全部筛选结果', async () => {
+    row.employeeName = '李怀伦'
+    row.statusCode = 'READY'
+    row.calculation = { ...row.calculation, baseSalary: 3600, performance: 1640, allowance: 750,
+      commission: 203.64, grossPay: 6193.64, netPay: 6193.64, issues: [] }
+    const other = { ...row, id: 'other-payroll', employeeCode: 'OTHER', employeeName: '其他员工',
+      statusCode: 'REVIEW', calculation: { ...row.calculation, commission: null, grossPay: null, netPay: null,
+        issues: ['其他员工的提成依据待核对'] } }
+    vi.mocked(api.exportPayroll).mockResolvedValue([other, row])
+    await openList()
+    wrapper.findComponent(Table).vm.$emit('selection-change', [row])
+    await flushPromises()
+    await button('导出已选（1）').trigger('click')
+    await flushPromises()
+    expect(api.exportPayroll).toHaveBeenCalledWith(expect.objectContaining({ payrollIds: [row.id] }))
+    const month = vi.mocked(api.exportPayroll).mock.calls[0]![0].month
+    expect(exportPayrollRecords).toHaveBeenCalledExactlyOnceWith([row], `薪酬明细_${month}_已选1人`)
+    expect(vi.mocked(exportPayrollRecords).mock.calls[0]![0][0]!.calculation.commission).toBe(203.64)
+    expect(api.calculatePayroll).not.toHaveBeenCalled()
+  })
+  it('勾选记录缺失时停止导出，不扩大为全部人员', async () => {
+    vi.mocked(api.exportPayroll).mockResolvedValue([])
+    await openList()
+    wrapper.findComponent(Table).vm.$emit('selection-change', [row])
+    await flushPromises()
+    await button('导出已选（1）').trigger('click')
+    await flushPromises()
+    expect(exportPayrollRecords).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('部分勾选工资单已变更或无访问权限')
+  })
+  it('勾选多人后即使响应顺序不同且包含未选人员，也只导出已选集合', async () => {
+    const selected = { ...row, id: 'selected-second', employeeCode: 'SELECTED-2' }
+    const other = { ...row, id: 'not-selected', employeeCode: 'NOT-SELECTED' }
+    vi.mocked(api.exportPayroll).mockResolvedValue([selected, other, row])
+    await openList()
+    wrapper.findComponent(Table).vm.$emit('selection-change', [row, selected])
+    await flushPromises()
+    await button('导出已选（2）').trigger('click')
+    await flushPromises()
+    expect(api.exportPayroll).toHaveBeenCalledWith(expect.objectContaining({ payrollIds: [row.id, selected.id] }))
+    expect(vi.mocked(exportPayrollRecords).mock.calls[0]![0]).toEqual([selected, row])
+  })
+  it('没有勾选时导出全部筛选结果，不能局限在当前页', async () => {
+    const other = { ...row, id: 'next-page-payroll', employeeCode: 'NEXT-PAGE' }
+    vi.mocked(api.exportPayroll).mockResolvedValue([row, other])
+    await openList()
+    await button('导出').trigger('click')
+    await flushPromises()
+    expect(vi.mocked(api.exportPayroll).mock.calls.at(-1)?.[0]).not.toHaveProperty('payrollIds')
+    const month = vi.mocked(api.exportPayroll).mock.calls[0]![0].month
+    expect(exportPayrollRecords).toHaveBeenCalledExactlyOnceWith([row, other], `薪酬明细_${month}`)
   })
   it('状态标签保留键盘切换、选中态及相同的状态查询条件', async () => {
     await openList()
