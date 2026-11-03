@@ -930,8 +930,10 @@ describe('独立薪资规则入口', () => {
     await open()
     await basics()
     expect(wrapper.find('[role="dialog"]').text()).toContain('750.00')
-    expect(wrapper.find('[role="dialog"]').text()).toContain('月补贴标准÷员工当月应出勤×实际出勤')
-    expect(wrapper.find('[role="dialog"]').text()).toContain('入职日至月底的工作日')
+    expect(wrapper.find('[role="dialog"]').text()).toContain(
+      '月补贴标准÷部门整月应出勤天数×员工实际出勤天数',
+    )
+    expect(wrapper.find('[role="dialog"]').text()).toContain('入职当月也使用部门整月分母')
     expect(wrapper.find('[role="dialog"]').text()).not.toContain('绩效基数')
     await click('保存')
     expect(savePayrollComponent).toHaveBeenCalledWith(

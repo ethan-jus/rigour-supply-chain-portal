@@ -112,7 +112,7 @@
     >
     <el-divider content-position="left">入离职及出勤折算</el-divider>
     <p v-if="form.role === 'SALES'" class="field-hint">
-      销售底薪按整月应出勤和实际出勤折算；补贴按“月补贴标准÷员工当月应出勤×实际出勤”计算，入职当月应出勤仅计入职日至月底的工作日。绩效按原绩效规则核算。
+      销售底薪按整月应出勤和实际出勤折算；补贴按“月补贴标准÷部门整月应出勤天数×员工实际出勤天数”计算，入职当月也使用部门整月分母。绩效按原绩效规则核算。
     </p>
     <div v-if="form.role !== 'SALES'" class="scheme-grid">
       <el-form-item v-for="item in prorationFields" :key="item.key" :label="item.label"

@@ -85,15 +85,26 @@ describe('工资组成展示与核算快照对账', () => {
     expect(rows.find((r) => r.name === '绩效折算 / 核定差额')?.amount).toBeNull()
     expect(rows.find((r) => r.name === '应付工资')?.amount).toBeNull()
   })
-  it('销售补贴缺勤差额展示核算快照中的个人应出勤依据，不在前端重算或改写历史金额', () => {
+  it('销售补贴差额展示核算快照中的部门整月应出勤依据，不在前端重算', () => {
+    const data = record()
+    const explanation =
+      '销售补贴按月补贴标准÷部门整月应出勤天数×员工实际出勤天数计算；本次部门整月应出勤：22天；实际出勤：1天'
+    data.calculation.scheme!.explanations = [explanation]
+    data.calculation.allowance = 34.09
+    const adjustment = payrollSalaryItems(data).find((r) => r.name === '补贴折算 / 核定差额')
+    expect(adjustment).toMatchObject({ amount: -715.91, basis: explanation })
+    expect(data.calculation.allowance).toBe(34.09)
+  })
+  it('历史补贴快照仍展示保存时的依据和金额', () => {
     const data = record()
     const explanation =
       '销售补贴按月补贴标准÷员工当月应出勤×实际出勤计算；本次补贴应出勤：2天；实际出勤：1天'
     data.calculation.scheme!.explanations = [explanation]
     data.calculation.allowance = 375
-    const adjustment = payrollSalaryItems(data).find((r) => r.name === '补贴折算 / 核定差额')
-    expect(adjustment).toMatchObject({ amount: -375, basis: explanation })
-    expect(data.calculation.allowance).toBe(375)
+    expect(payrollSalaryItems(data).find((r) => r.name === '补贴折算 / 核定差额')).toMatchObject({
+      amount: -375,
+      basis: explanation,
+    })
   })
   it('城市总只展示一项绩效并使用登记的实际发放', () => {
     const data = record()

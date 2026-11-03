@@ -43,7 +43,7 @@
     </div>
   </section>
   <p v-if="form.role === 'SALES'" class="field-hint">
-    销售补贴按“月补贴标准÷员工当月应出勤×实际出勤”计算。入职当月应出勤仅计入职日至月底的工作日，入职后全勤发放完整月补贴，缺勤按比例折算。
+    销售补贴按“月补贴标准÷部门整月应出勤天数×员工实际出勤天数”计算，入职当月也使用部门整月分母，按实际出勤比例折算。
   </p>
   <el-form-item label="补贴折算"
     ><el-input v-if="form.role === 'SALES'" model-value="按已确认出勤" disabled />
