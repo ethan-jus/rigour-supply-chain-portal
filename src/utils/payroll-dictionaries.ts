@@ -1,7 +1,8 @@
-import { businessDictionaryItemName, loadBusinessDictionaries } from './business-dictionary'
+import { businessDictionaryItemName, loadBusinessDictionaries, refreshBusinessDictionary } from './business-dictionary'
 
-export const loadPayrollProductUnits = () =>
-  loadBusinessDictionaries([{ moduleCode: '', code: 'PRODUCT_UNIT' }])
+export const loadPayrollProductUnits = (refresh = false) => refresh
+  ? refreshBusinessDictionary('PRODUCT_UNIT')
+  : loadBusinessDictionaries([{ moduleCode: '', code: 'PRODUCT_UNIT' }])
 
 /** Unit codes remain unchanged in requests and calculations; only their labels are displayed. */
 export function payrollUnitName(code: string | null | undefined): string {

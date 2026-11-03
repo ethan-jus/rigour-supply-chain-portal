@@ -11,6 +11,9 @@ import { newPayrollScheme } from '@/utils/payroll-scheme'
 import { getPayrollRuleReviews } from '@/api/core/payroll-scheme/components'
 import type { PayrollSchemeFactsView } from '@/api/core/payroll-scheme/models/PayrollSchemeFactsView'
 import { exportPayrollRecords } from '@/utils/payroll-detail-export'
+import { exportCommissionReviewWorkbook } from '@/utils/payroll-commission-review-export'
+
+vi.mock('@/utils/payroll-commission-review-export', () => ({ exportCommissionReviewWorkbook: vi.fn().mockResolvedValue(undefined) }))
 
 vi.mock('@/utils/payroll-detail-export', () => ({
   exportPayrollRecords: vi.fn().mockResolvedValue(undefined),
@@ -43,6 +46,7 @@ vi.mock('@/api/core/payroll', () => ({
   calculatePayroll: vi.fn(),
   exportPayroll: vi.fn(),
   exportPayrollPerformance: vi.fn().mockResolvedValue([]),
+  previewPayrollCommission: vi.fn().mockResolvedValue([]),
   cancelPayrollCorrection: vi.fn(),
 }))
 vi.mock('@/api/core/payroll-scheme', () => ({
@@ -96,6 +100,7 @@ const Dialog = defineComponent({
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(api.exportPayrollPerformance).mockResolvedValue([])
+  vi.mocked(api.previewPayrollCommission).mockResolvedValue([])
   routeGuards.leave = []
   routeGuards.update = []
   vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
@@ -393,6 +398,28 @@ describe('工资列表汇总', () => {
     expect(api.exportPayrollPerformance).toHaveBeenCalledWith(expect.objectContaining({ payrollIds: [row.id] }))
     expect(vi.mocked(exportPayrollRecords).mock.calls[0]![0][0]!.calculation.commission).toBe(203.64)
     expect(api.calculatePayroll).not.toHaveBeenCalled()
+  })
+  it('历史提成试算只读取所选工资，不能调用重算或保存工资', async () => {
+    vi.mocked(api.exportPayroll).mockResolvedValue([row])
+    await openList()
+    wrapper.findComponent(Table).vm.$emit('selection-change', [row])
+    await flushPromises()
+    await button('提成试算差异').trigger('click')
+    await flushPromises()
+    expect(api.previewPayrollCommission).toHaveBeenCalledWith(expect.objectContaining({ payrollIds: [row.id] }))
+    expect(exportCommissionReviewWorkbook).toHaveBeenCalledWith([row], [])
+    expect(api.calculatePayroll).not.toHaveBeenCalled()
+    expect(api.savePayrollDetermination).not.toHaveBeenCalled()
+  })
+  it('试算接口不能收到勾选范围外的工资', async () => {
+    vi.mocked(api.exportPayroll).mockResolvedValue([row, { ...row, id: 'unexpected' }])
+    await openList()
+    wrapper.findComponent(Table).vm.$emit('selection-change', [row])
+    await flushPromises()
+    await button('提成试算差异').trigger('click')
+    await flushPromises()
+    expect(api.previewPayrollCommission).not.toHaveBeenCalled()
+    expect(exportCommissionReviewWorkbook).not.toHaveBeenCalled()
   })
   it('勾选记录缺失时停止导出，不扩大为全部人员', async () => {
     vi.mocked(api.exportPayroll).mockResolvedValue([])

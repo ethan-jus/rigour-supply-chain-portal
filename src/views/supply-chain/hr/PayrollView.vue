@@ -129,6 +129,14 @@
             >生成月度薪酬</el-button
           >
           <el-button
+            v-if="can('hr:payroll:calculate')"
+            :loading="reviewExporting"
+            :disabled="loading || saving || batchBusy || exporting"
+            title="按现行付清日规则试算缺少历史政策的销售订单，仅导出差异，不保存工资"
+            @click="exportCommissionReview"
+            >提成试算差异</el-button
+          >
+          <el-button
             :loading="exporting"
             :disabled="loading || saving || batchBusy"
             :aria-label="selection.length ? `导出已选${selection.length}人` : '导出筛选结果'"
@@ -992,6 +1000,7 @@ import {
   calculatePayroll,
   exportPayroll,
   exportPayrollPerformance,
+  previewPayrollCommission,
   getPayrollDetail,
   cancelPayrollCorrection,
   type PayrollCorrection,
@@ -1011,6 +1020,7 @@ import {
 
 import { payrollUnitName } from '@/utils/payroll-dictionaries'
 import { exportPayrollRecords, exportPayrollDetails } from '@/utils/payroll-detail-export'
+import { exportCommissionReviewWorkbook } from '@/utils/payroll-commission-review-export'
 import { loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { auditLabel } from '../cost/cost-audit'
 import { displayRecordDateTime } from '@/utils/business-display'
@@ -1494,6 +1504,25 @@ async function showDetail(row: PayrollRecord, tab?: string) {
   }
 }
 const exporting = ref(false)
+const reviewExporting = ref(false)
+async function exportCommissionReview() {
+  reviewExporting.value = true
+  try {
+    const ids = [...new Set(selection.value.map(r => r.id))]
+    const rows = await exportPayroll({ begin: 0, step: 200, month: month.value,
+      employeeName: employeeNameFilter.value.trim() || undefined, employeeCode: employeeCodeFilter.value.trim() || undefined,
+      departmentId: departmentId.value, statusCode: statusCode.value || undefined, payrollCategory: payrollCategory.value || undefined,
+      ...(ids.length ? { payrollIds: ids } : {}) })
+    if (ids.length && (rows.length !== ids.length || rows.some(r => !ids.includes(r.id)))) throw new Error('所选工资单已变更，请刷新后重新选择')
+    if (!rows.length) { ElMessage.info('当前范围没有工资单'); return }
+    const reviews = []
+    for (let begin = 0; begin < rows.length; begin += 200) reviews.push(...await previewPayrollCommission({ begin: 0, step: 200,
+      month: month.value, payrollIds: rows.slice(begin, begin + 200).map(r => r.id) }))
+    await exportCommissionReviewWorkbook(rows, reviews)
+    ElMessage.success('提成试算差异已导出，正式工资未修改')
+  } catch (e) { ElMessage.error(errorMessage(e, '提成试算失败')) }
+  finally { reviewExporting.value = false }
+}
 async function exportAll() {
   exporting.value = true
   try {

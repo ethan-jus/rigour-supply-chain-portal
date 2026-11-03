@@ -645,6 +645,10 @@ describe('一期考勤', () => {
     for (const [label, value] of [
       ['核定缺卡次数', '0'],
       ['核定缺拜访次数', '2'],
+      ['应打卡次数', '154'],
+      ['实打卡次数', '160'],
+      ['应有效拜访次数', '66'],
+      ['实有效拜访次数', '70'],
     ]) {
       const input = page.get(`input[aria-label="${label}"]`)
       await input.setValue(value)
@@ -663,6 +667,10 @@ describe('一期考勤', () => {
           missingCheckins: 0,
           missingVisits: 2,
           reason: '已核对补卡，缺两次拜访',
+          expectedCheckins: 154,
+          actualCheckins: 160,
+          expectedVisits: 66,
+          actualVisits: 70,
         },
       }),
     )

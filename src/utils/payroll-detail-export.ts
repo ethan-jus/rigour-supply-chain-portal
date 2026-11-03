@@ -28,7 +28,8 @@ function exportReviewIssues(row: PayrollRecord): string[] {
 /** Export persisted server evidence for the complete authorized result, never browser calculations. */
 export async function buildPayrollWorkbook(records: PayrollRecord[], performance?: PayrollPerformanceExport[]) {
   await loadPayrollProductUnits()
-  const { Workbook } = await import('exceljs')
+  const excel = await import('exceljs')
+  const { Workbook } = excel.default || excel
   const workbook = new Workbook()
   if (performance) appendPayrollPerformance(workbook, records, performance)
   const identity = (row: PayrollRecord) => [row.month, row.employeeCode, row.employeeName]
@@ -333,6 +334,13 @@ export async function buildPayrollWorkbook(records: PayrollRecord[], performance
       '回款目标（元）',
       '整单付清业绩（元）',
       '回款达标绩效（折算前）（元）',
+      '核定应打卡次数',
+      '核定实打卡次数',
+      '核定应有效拜访次数',
+      '核定实有效拜访次数',
+      '核定缺卡次数',
+      '核定缺拜访次数',
+      '次数核定依据',
     ],
     records.flatMap((row) => {
       const p = row.calculation.performanceDetail
@@ -347,6 +355,13 @@ export async function buildPayrollWorkbook(records: PayrollRecord[], performance
               p.collectionTarget,
               p.collections,
               p.collectionPay,
+              p.assessmentOverride?.expectedCheckins,
+              p.assessmentOverride?.actualCheckins,
+              p.assessmentOverride?.expectedVisits,
+              p.assessmentOverride?.actualVisits,
+              p.assessmentOverride?.missingCheckins,
+              p.assessmentOverride?.missingVisits,
+              p.assessmentOverride?.reason,
             ],
           ]
         : []
@@ -391,6 +406,8 @@ export async function buildPayrollWorkbook(records: PayrollRecord[], performance
 }
 
 export async function exportPayrollRecords(records: PayrollRecord[], filename: string, performance?: PayrollPerformanceExport[]) {
+  // 每次下载刷新当前租户单位名称，业务字典改名或新增单位后不沿用旧导出缓存。
+  await loadPayrollProductUnits(true)
   const workbook = await buildPayrollWorkbook(records, performance)
   const bytes = new Uint8Array(await workbook.xlsx.writeBuffer())
   const url = URL.createObjectURL(

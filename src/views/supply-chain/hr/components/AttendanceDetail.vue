@@ -110,6 +110,10 @@ const exceptionLabels = {
             >{{ days(row.absentDays)
             }}<span v-if="row.absentDaysOverride != null"> · 人工核定</span></el-descriptions-item
           >
+          <el-descriptions-item label="应打卡次数">{{ row.assessmentOverride?.expectedCheckins ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="实打卡次数">{{ row.assessmentOverride?.actualCheckins ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="应有效拜访次数">{{ row.assessmentOverride?.expectedVisits ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="实有效拜访次数">{{ row.assessmentOverride?.actualVisits ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="核定缺卡次数">{{
             row.assessmentOverride?.missingCheckins ?? row.assessment?.missingCheckins ?? '待核对'
           }}</el-descriptions-item>

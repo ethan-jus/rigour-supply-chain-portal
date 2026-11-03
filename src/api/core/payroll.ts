@@ -208,14 +208,72 @@ export interface PayrollPerformanceExport {
   employeeCode: string
   employeeName: string
   cityName: string | null
-  categories: { code: string; name: string; salesAmount: number; collectionAmount: number; commission: number | null }[]
-  clothSales: { code: string; name: string; salesAmount: number }[]
+  categories: {
+    code: string
+    name: string
+    salesAmount: number
+    collectionAmount: number
+    commission: number | null
+  }[]
+  clothSales: {
+    code: string
+    name: string
+    salesAmount: number
+    quantities: { unitCode: string; quantity: number }[]
+  }[]
   salesAmount: number
   collectionAmount: number
   refundAmount: number
   collectionTarget: number | null
   salesTarget: number | null
   commission: number | null
+  issues: string[]
+  cityCode: string | null
+  role: string | null
+  entryDate: string | null
+  leaveDate: string | null
+  summary: {
+    expectedDays: number | null
+    actualDays: number | null
+    expectedCheckins: number | null
+    actualCheckins: number | null
+    expectedVisits: number | null
+    actualVisits: number | null
+    processDeduction: number | null
+  } | null
+  metrics: {
+    code: string
+    name: string
+    actual: number | null
+    target: number | null
+    weight: number | null
+    evidence: string | null
+  }[]
+  collectionTargetBasis: string | null
+}
+export interface PayrollCommissionReview {
+  payrollId: string
+  payrollRevision: number
+  month: string
+  employeeCode: string
+  employeeName: string
+  sourceFingerprint: string
+  savedCommission: number | null
+  previewCommission: number | null
+  difference: number | null
+  resolvedSubtotal: number
+  lines: {
+    sourceLineId: string
+    recipientRole: string
+    orderNo: string
+    productName: string
+    unitCode: string
+    quantity: number | null
+    savedAmount: number | null
+    previewAmount: number | null
+    ruleName: string | null
+    basis: string | null
+  }[]
   issues: string[]
 }
 export interface PayrollPage<T> {
@@ -410,7 +468,10 @@ export async function exportPayroll(params: PayrollQuery): Promise<PayrollRecord
       // Compatibility with GET-only services; the caller still enforces the selected ID set.
       const filters = { ...params }
       delete filters.payrollIds
-      return apiClient.get<PayrollRecord[]>(`${base}/export`, { params: filters, ...requestOptions })
+      return apiClient.get<PayrollRecord[]>(`${base}/export`, {
+        params: filters,
+        ...requestOptions,
+      })
     }
   }
   try {
@@ -422,8 +483,17 @@ export async function exportPayroll(params: PayrollQuery): Promise<PayrollRecord
   }
 }
 export const exportPayrollPerformance = (params: PayrollQuery) =>
-  apiClient.post<PayrollPerformanceExport[]>(`${base}/performance-export`, params,
-    { ...options, timeout: 180000, errorFeedback: 'inline' })
+  apiClient.post<PayrollPerformanceExport[]>(`${base}/performance-export`, params, {
+    ...options,
+    timeout: 180000,
+    errorFeedback: 'inline',
+  })
+export const previewPayrollCommission = (params: PayrollQuery) =>
+  apiClient.post<PayrollCommissionReview[]>(`${base}/commission-review`, params, {
+    ...options,
+    timeout: 180000,
+    errorFeedback: 'inline',
+  })
 export const getPayrollDetail = (id: string) =>
   apiClient.get<PayrollRecord>(`${base}/${encodeURIComponent(id)}`, options)
 export const registerPayrollPayment = (
