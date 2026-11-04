@@ -1,4 +1,18 @@
 import type { AdminArea, StoreRow } from '@/api/core/crm-store'
+import { ApiError } from '@/api/core/error'
+
+/** Only known, safe reasons receive specific guidance; arbitrary 5xx messages remain hidden. */
+export function storePoiErrorMessage(error: unknown): string {
+  if (
+    error instanceof ApiError &&
+    error.details.some(
+      (detail) => detail.field === 'amap' && detail.reason === 'AMAP_IP_NOT_ALLOWED',
+    )
+  ) {
+    return '高德拒绝当前服务器 IP（10005），请将 Sales 服务出口公网 IP 加入 Web 服务 Key 的 IP 白名单。'
+  }
+  return error instanceof Error ? error.message : '操作失败，请稍后重试'
+}
 
 export { GEO_REGIONS } from './admin-divisions'
 const municipalities = new Set(['110000', '120000', '310000', '500000'])

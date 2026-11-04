@@ -27,12 +27,12 @@ export interface HomeTaskState {
   error: string
 }
 export const homeTaskLabels: Record<HomeTask, string> = {
-  shipment: '待发货',
+  shipment: '进行中订单',
   payment: '待核回款',
   unpaid: '待回款',
 }
 export const homeTaskQueries = {
-  shipment: { orderStatusCode: 'PENDING_SHIPPED' },
+  shipment: { orderStatusCode: 'SUBMITTED' },
   payment: { paymentStatusCode: 'RECEIVED' },
   unpaid: { hasUnpaid: true },
 } as const

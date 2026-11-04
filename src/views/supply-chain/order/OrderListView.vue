@@ -105,7 +105,6 @@
           <el-option label="已关联" value="true" />
           <el-option label="未关联" value="false" />
         </el-select>
-        <el-checkbox v-model="pageFilters.hasUnpaid">仅看待回款</el-checkbox>
         <el-select v-model="pageFilters.invoiceStatusCode" aria-label="发票状态" clearable placeholder="发票状态" style="width: 115px">
           <el-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
@@ -227,13 +226,13 @@
           <el-table-column v-if="orderColumns.isVisible('paymentStatus')" label="收款状态" width="110">
             <template #default="{ row }">
               <el-tag class="order-status-tag" :type="orderPaymentStatusTag(row.paymentStatusCode)" effect="light">
-                {{ row.paymentStatusCode === 'UNPAID' ? '未收款' : orderPaymentStatusLabel(row.paymentStatusCode) }}
+                {{ orderPaymentStatusLabel(row.paymentStatusCode) }}
               </el-tag>
             </template>
           </el-table-column>
           <el-table-column v-if="orderColumns.isVisible('paymentTime')" label="收款日期" width="170" sortable="custom" prop="paymentTime">
             <template #header>
-              <el-tooltip content="整单最近一次有效收款日期；查询当月结清业绩时，请同时选择收款状态“已收款”。"><span class="column-header-hint">收款日期</span></el-tooltip>
+              <el-tooltip content="最近一次有效收款日期；查当月结清订单，请选“已结清”。"><span class="column-header-hint">收款日期</span></el-tooltip>
             </template>
             <template #default="{ row }">
               <el-link
@@ -280,7 +279,7 @@
                 placement="top"
               >
                 <el-tag class="order-status-tag" :type="orderStatusTone(row as OrderRegisterOrderItem)" effect="light">
-                {{ orderStatusText(row as OrderRegisterOrderItem) }}
+                {{ orderStatusLabel(row.orderStatusCode) }}
               </el-tag>
               </el-tooltip>
             </template>
@@ -292,7 +291,7 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('checkedAmount')" label="已核对金额" width="120" align="right" prop="checkedAmount">
+          <el-table-column v-if="orderColumns.isVisible('checkedAmount')" label="已确认金额" width="120" align="right" prop="checkedAmount">
             <template #default="{ row }">
               <span class="amount amount--muted">{{ moneyText(row.checkedAmount) }}</span>
             </template>
@@ -421,6 +420,7 @@
 </template>
 
 <script setup lang="ts">
+import { loadOrderDictionaries, orderLifecycleOptions, paymentDictionaryOptions } from '@/utils/order-register-status'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { businessMonth } from '@/utils/business-date'
 import { useRoute, useRouter } from 'vue-router'
@@ -479,7 +479,7 @@ const orderColumns = useColumnSettings('order-list', [
   { key: 'discountRate', label: '优惠率' },
   { key: 'orderStatus', label: '订单状态' },
   { key: 'invoiceStatus', label: '发票状态' },
-  { key: 'checkedAmount', label: '已核对金额' },
+  { key: 'checkedAmount', label: '已确认金额' },
   { key: 'shipmentTime', label: '发货时间' },
   { key: 'dhbOrderNo', label: '订货宝订单号' },
   { key: 'sourceOrderNo', label: '来源单号' },
@@ -507,7 +507,6 @@ const {
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
   paymentTimeRange: null as [string, string] | null,
-  hasUnpaid: false,
   discountStatus: '' as string | undefined,
   dhbOrderNo: '',
   orderStatusCode: '',
@@ -517,24 +516,8 @@ const pageFilters = reactive({
   dhbLinked: '',
 })
 
-const orderStatusOptions = [
-  { value: 'DRAFT', label: '草稿（含待完善）' },
-  { value: 'PENDING_OUTBOUND', label: '待出库' },
-  { value: 'PENDING_SHIPPED', label: '待发货' },
-  { value: 'RECEIVED', label: '已收货' },
-  { value: 'COMPLETED', label: '已完成' },
-  { value: 'CANCELLED', label: '已取消' },
-  { value: 'RETURNED', label: '已退货' },
-  { value: 'SUBMITTED', label: '已提交（飞书历史）' },
-]
-const paymentStatusOptions = [
-  { value: 'UNPAID', label: '未收款' },
-  { value: 'PARTIAL_PAID', label: '部分收款' },
-  { value: 'PAID', label: '已收款' },
-  { value: 'COMPLETED', label: '已完成' },
-  { value: 'REFUNDED', label: '已退款' },
-  { value: 'CANCELLED', label: '已取消' },
-]
+const orderStatusOptions = computed(orderLifecycleOptions)
+const paymentStatusOptions = computed(() => paymentDictionaryOptions('ORDER_COLLECTION_STATUS'))
 /** 与列表展示口径一致：已撤回和没有发票行都按“未申请”处理。 */
 const invoiceStatusOptions = [
   { value: 'NOT_APPLIED', label: '未申请' },
@@ -665,7 +648,6 @@ function buildQuery() {
     paymentStatusCode: empty(pageFilters.paymentStatusCode),
     invoiceStatusCode: empty(pageFilters.invoiceStatusCode),
     dhbLinked: empty(pageFilters.dhbLinked) == null ? undefined : pageFilters.dhbLinked === 'true',
-    hasUnpaid: pageFilters.hasUnpaid || undefined,
     hasDiscount: empty(pageFilters.discountStatus) == null ? undefined : pageFilters.discountStatus === 'true',
     sortBy: sortBy.value,
     sortDirection: sortDirection.value,
@@ -699,7 +681,6 @@ function search() {
 
 function clearFilters() {
   pageFilters.paymentTimeRange = null
-  pageFilters.hasUnpaid = false
   pageFilters.discountStatus = ''
   resetCommonFilters()
   pageFilters.orderStatusCode = ''
@@ -740,13 +721,9 @@ function openDetail(row: { id?: string | number }, tab = 'overview') {
   detailVisible.value = true
 }
 
-/** 草稿且资料待完善的历史单据单独展示为“待完善”，避免误读为可提交草稿。 */
+/** 资料待完善仅提示，不替代订单主状态。 */
 function needsCompletion(row: OrderRegisterOrderItem) {
   return row.orderStatusCode === 'DRAFT' && row.dataQualityStatusCode === 'NEEDS_REVIEW'
-}
-
-function orderStatusText(row: OrderRegisterOrderItem) {
-  return needsCompletion(row) ? '待完善' : orderStatusLabel(row.orderStatusCode)
 }
 
 function orderStatusTone(row: OrderRegisterOrderItem) {
@@ -754,7 +731,7 @@ function orderStatusTone(row: OrderRegisterOrderItem) {
 }
 
 function orderStatusHint(row: OrderRegisterOrderItem) {
-  if (needsCompletion(row)) return '飞书历史单据：资料待补齐，历史回款已入账；补齐客户与商品后可提交'
+  if (needsCompletion(row)) return '资料待完善，补齐客户与商品后可提交'
   return ''
 }
 
@@ -824,14 +801,15 @@ watch(
   ([task, orderNo]) => {
     if (task !== 'shipment' && task !== 'unpaid' && typeof orderNo !== 'string') return
     clearFilters()
-    pageFilters.orderStatusCode = task === 'shipment' ? 'PENDING_SHIPPED' : ''
-    pageFilters.hasUnpaid = task === 'unpaid'
+    pageFilters.orderStatusCode = task === 'shipment' ? 'SUBMITTED' : ''
+    pageFilters.paymentStatusCode = task === 'unpaid' ? 'UNPAID' : ''
     filters.orderNo = typeof orderNo === 'string' ? orderNo.trim() : ''
     search()
   },
   { immediate: true },
 )
 onMounted(() => {
+  void loadOrderDictionaries()
   void loadOptions()
   if (!route.query.orderNo && !['shipment', 'unpaid'].includes(String(route.query.homeTask))) void loadOrders()
 })

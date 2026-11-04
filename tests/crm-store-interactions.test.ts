@@ -8,6 +8,11 @@ import CrmStoreMap from '@/views/supply-chain/crm/CrmStoreMap.vue'
 import { crmStoreApi, type StoreRow, type StoreMapResult } from '@/api/core/crm-store'
 import { loadStoreMapSdk, storeMapPositions, type StoreMapSdk } from '@/utils/crm-store-map'
 import { sampleStore, sampleStores, storeContext } from './fixtures/crm-stores'
+import { auditActorLabel } from '@/utils/audit-actor'
+
+vi.mock('@/utils/audit-actor', () => ({
+  auditActorLabel: vi.fn((value: string) => (value ? '测试姓名' : '未记录')),
+}))
 
 vi.mock('@/api/core/crm-store', () => ({
   crmStoreApi: {
@@ -125,12 +130,12 @@ afterEach(() => {
   document.body.innerHTML = ''
   vi.useRealTimers()
 })
-async function mountPage() {
+async function mountPage(path = 'public') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/:pathMatch(.*)*', component: CrmStorePoolView }],
   })
-  await router.push('/supply-chain/crm/stores/public')
+  await router.push('/supply-chain/crm/stores/' + path)
   await router.isReady()
   wrapper = mount(CrmStorePoolView, {
     attachTo: document.body,
@@ -144,6 +149,138 @@ async function display(mode: 'list' | 'map') {
   await flushPromises()
 }
 describe('门店列表、详情和地图的真实组件交互', () => {
+  it('商家库展示管理范围、档案状态和维护入口，不复制公海认领列表', async () => {
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: ['crm:store:manage', 'crm:pool:claim'],
+    })
+    vi.mocked(crmStoreApi.list).mockResolvedValue({
+      total: 1,
+      items: [{ ...sampleStore, recordStatus: 'SUSPENDED' }],
+      nextCursor: null,
+    })
+    await mountPage('library')
+    expect(crmStoreApi.list).toHaveBeenCalledWith(expect.objectContaining({ view: 'ALL' }))
+    expect(wrapper!.text()).toContain('公司门店总账')
+    expect(wrapper!.text()).toContain('已停用')
+    expect(wrapper!.findAll('button').some((b) => b.text() === '维护')).toBe(true)
+    expect(wrapper!.findAll('button').some((b) => b.text() === '认领')).toBe(false)
+    const pool = wrapper!
+      .findAllComponents({ name: 'ElSelect' })
+      .find((c) => c.props('ariaLabel') === '客户池')!
+    const status = wrapper!
+      .findAllComponents({ name: 'ElSelect' })
+      .find((c) => c.props('ariaLabel') === '档案状态')!
+    pool.vm.$emit('update:modelValue', 'PRIVATE')
+    status.vm.$emit('update:modelValue', 'SUSPENDED')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '查询')!
+      .trigger('click')
+    await flushPromises()
+    expect(crmStoreApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ view: 'ALL', pool: 'PRIVATE', recordStatus: 'SUSPENDED' }),
+    )
+  })
+  it('商家库分开客户池和负责人，完整展示基础资料，审计姓名在时间前且不暴露账号ID', async () => {
+    const actorId = '11111111-1111-4111-8111-111111111111'
+    const privateRow = {
+      ...sampleStore,
+      poolType: 'PRIVATE',
+      ownerEmployeeId: 'OTHER',
+      ownerName: 'EMP001',
+      primaryPoi: 'B0TESTPOI',
+      updatedBy: actorId,
+      createdBy: actorId,
+    }
+    vi.mocked(crmStoreApi.list).mockResolvedValue({
+      total: 2,
+      items: [privateRow, { ...sampleStore, id: 'TEST-PUBLIC' }],
+      nextCursor: null,
+    })
+    vi.mocked(crmStoreApi.detail).mockResolvedValue(privateRow)
+    await mountPage('library')
+    const headers = wrapper!.findAll('th').map((c) => c.text())
+    for (const title of [
+      'POI',
+      '省份',
+      '市',
+      '区县',
+      '地址',
+      '客户池',
+      '负责人',
+      '修改人',
+      '修改时间',
+    ])
+      expect(headers).toContain(title)
+    expect(headers).not.toContain('当前归属')
+    expect(headers).not.toContain('修改时间 / 修改人')
+    expect(headers.indexOf('修改人')).toBeLessThan(headers.indexOf('修改时间'))
+    expect(wrapper!.text()).toContain('私海')
+    expect(wrapper!.text()).toContain('未分配')
+    expect(wrapper!.text()).toContain('测试姓名')
+    expect(wrapper!.text()).not.toContain(actorId)
+    expect(vi.mocked(auditActorLabel)).toHaveBeenCalledWith(actorId)
+    expect(vi.mocked(auditActorLabel)).toHaveBeenCalledWith('EMP001')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === sampleStore.name)!
+      .trigger('click')
+    await flushPromises()
+    const detail = document.querySelector('[role="dialog"]')!
+    const labels = [...detail.querySelectorAll('.el-descriptions__label')].map((c) =>
+      c.textContent?.trim(),
+    )
+    expect(labels.indexOf('创建人')).toBeLessThan(labels.indexOf('创建时间'))
+    expect(labels.indexOf('修改人')).toBeLessThan(labels.indexOf('修改时间'))
+    expect(detail.textContent).not.toContain(actorId)
+  })
+  it('私海默认展示跟进信息，筛选随团队范围传递，暂缓核验不显示到期回收', async () => {
+    const row = {
+      ...sampleStore,
+      poolType: 'PRIVATE',
+      phase: 'FOLLOW_UP',
+      currentOwnershipId: '10',
+      ownerEmployeeId: storeContext.employeeId,
+      deadlineAt: '2020-01-01T00:00:00Z',
+      holdReason: 'PENDING_REVIEW',
+    }
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: ['crm:pool:private-read', 'crm:pool:team-read', 'crm:pool:release'],
+    })
+    vi.mocked(crmStoreApi.list).mockResolvedValue({ total: 1, items: [row], nextCursor: null })
+    vi.mocked(crmStoreApi.detail).mockResolvedValue(row)
+    await mountPage('mine')
+    expect(wrapper!.text()).toContain('最近拜访')
+    expect(wrapper!.text()).toContain('最近成交')
+    expect(wrapper!.text()).toContain('暂缓回收 · 核验中')
+    const phase = wrapper!
+      .findAllComponents({ name: 'ElSelect' })
+      .find((c) => c.props('ariaLabel') === '跟进阶段')!
+    phase.vm.$emit('update:modelValue', 'FOLLOW_UP')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '查询')!
+      .trigger('click')
+    await flushPromises()
+    expect(crmStoreApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ view: 'MINE', phase: 'FOLLOW_UP' }),
+    )
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '跟进')!
+      .trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('有效拜访后延续 7 天跟进期')
+    await wrapper!.get('input[type="radio"][value="true"]').setValue(true)
+    await flushPromises()
+    expect(crmStoreApi.context).toHaveBeenLastCalledWith('TEAM')
+    expect(crmStoreApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ view: 'TEAM', phase: 'FOLLOW_UP' }),
+    )
+    expect(wrapper!.text()).toContain('团队客户')
+  })
   it('省级显示名称、数量和层级，单店区域仍按地区下钻', async () => {
     const data = mapResult([sampleStore])
     data.level = 'PROVINCE'

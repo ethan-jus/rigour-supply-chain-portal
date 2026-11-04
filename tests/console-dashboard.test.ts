@@ -126,7 +126,7 @@ describe('供应链工作台', () => {
       { errorFeedback: 'inline' },
     )
     expect(mocks.orders).toHaveBeenCalledWith(
-      expect.objectContaining({ orderStatusCode: 'PENDING_SHIPPED', step: 5 }),
+      expect.objectContaining({ orderStatusCode: 'SUBMITTED', step: 5 }),
       { errorFeedback: 'inline' },
     )
     expect(mocks.orders).toHaveBeenCalledWith(expect.objectContaining({ hasUnpaid: true }), { errorFeedback: 'inline' })

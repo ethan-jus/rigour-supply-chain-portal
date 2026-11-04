@@ -15,9 +15,19 @@ vi.mock('@/api/core/order-register', () => ({
   exportOrderRegisterCsv: mocks.exportCsv,
 }))
 vi.mock('@/utils/file-download', () => ({ csvFilename: () => 'lines.csv', downloadBlob: vi.fn() }))
-vi.mock('@/utils/business-dictionary', () => ({
-  loadBusinessDictionaries: vi.fn(),
-  businessDictionaryLabel: (_module: string, _code: string, value: string) => value || '-',
+vi.mock('@/api/core/business-settings', () => ({
+  resolveBizDict: vi.fn(async (code: string) => {
+    const values: Record<string, Array<[string, string]>> = {
+      ORDER_COLLECTION_STATUS: [['UNPAID','未收款'],['PARTIAL_PAID','部分收款'],['PAID','已结清'],['NOT_REQUIRED','无需收款']],
+      PAYMENT_RECEIPT_STATUS: [['PENDING','待收款'],['RECEIVED','租户已到账'],['CANCELLED','已作废']],
+      PAYMENT_CONFIRMATION_STATUS: [['UNCONFIRMED','待确认'],['CONFIRMED','财务已确认']],
+      PAYMENT_VOUCHER_AUDIT_STATUS: [['PENDING_REVIEW','待核查'],['NORMAL','正常'],['ABNORMAL','异常']],
+      PAYMENT_VOUCHER_AUDIT_REASON: [['MISSING_VOUCHER','缺少付款凭证'],['OTHER','其他原因']],
+    }
+    return { dictionary: { dictionaryCode: code }, items: (values[code] ?? []).map(([value,name],i) => ({
+      id: String(i),dictionaryCode:code,dictionaryItemCode:value,dictionaryItemName:name,ordinal:i,enabled:true,
+    })) }
+  }),
 }))
 vi.mock('@/api/core/erp-product', () => ({
   getErpManagedProducts: mocks.getProducts,

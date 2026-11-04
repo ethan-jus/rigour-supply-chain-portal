@@ -1165,11 +1165,12 @@ import {
   pickRegionMatchedWarehouse,
   warehouseOptionLabel,
 } from '@/utils/warehouse-region-match'
+import { orderLifecycleOptions } from '@/utils/order-register-status'
 import { formatOrderStatus as formatDhbOrderStatus } from '@/utils/dhb-order-status'
 import { auditActorLabel } from '@/utils/audit-actor'
 
 const productUnitOptions = computed(() => businessDictionaryOptions('COMMON', 'PRODUCT_UNIT'))
-const orderStatusOptions = computed(() => businessDictionaryOptions('ORDER', 'SALES_ORDER_STATUS'))
+const orderStatusOptions = computed(orderLifecycleOptions)
 const { can } = useSupplyPermissions()
 const attributionVisible = ref(false),
   attributionOrderId = ref<string | number | null>(null)
@@ -1217,12 +1218,6 @@ const dataQualityStatusOptions = [
   { label: '完整', value: 'COMPLETE' },
   { label: '待完善', value: 'NEEDS_REVIEW' },
 ]
-const salesOrderStatusFallbackLabels: Record<string, string> = {
-  DRAFT: '草稿',
-  SUBMITTED: '已提交',
-  COMPLETED: '已完成',
-  CANCELLED: '已取消',
-}
 const dhbOrderStatusFallbackLabels: Record<string, string> = {
   pricing: '待核价',
   pending: '待审核',
@@ -2198,7 +2193,7 @@ function statusLabel(
 }
 
 function salesOrderStatusLabel(value: string | null | undefined) {
-  return statusLabel(orderStatusOptions.value, value, salesOrderStatusFallbackLabels)
+  return businessDictionaryLabel('ORDER', 'SALES_ORDER_STATUS', value)
 }
 
 function dhbOrderStatusLabel(value: string | null | undefined) {
@@ -2275,7 +2270,7 @@ function unitLabel(value: string | null | undefined) {
 
 function orderStatusTag(value: string) {
   if (value === 'SUBMITTED' || value === 'COMPLETED') return 'success'
-  if (value === 'CANCELLED') return 'info'
+  if (value === 'CANCELLED' || value === 'DELETED') return 'info'
   return 'warning'
 }
 
@@ -2288,7 +2283,7 @@ function outboundStatusTag(value: string) {
 function shipmentStatusTag(value: string) {
   if (value === 'SIGNED') return 'success'
   if (value === 'SHIPPED') return 'warning'
-  if (value === 'CANCELLED') return 'info'
+  if (value === 'CANCELLED' || value === 'DELETED') return 'info'
   return 'primary'
 }
 

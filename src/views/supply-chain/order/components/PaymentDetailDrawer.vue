@@ -37,9 +37,10 @@
             <strong class="summary-text">{{ displayDateTime(payment.paymentTime) }}</strong>
           </div>
           <div class="summary-card">
-            <span class="summary-card__label">核对记录</span>
+            <span class="summary-card__label">财务确认</span>
             <strong class="summary-text">
-              {{ payment.checkedBy ? `${payment.checkedBy} · ${displayDateTime(payment.checkedAt)}` : '未核对' }}
+              {{ paymentConfirmationLabel(payment.paymentStatusCode) }}
+              <span v-if="payment.paymentStatusCode === 'CHECKED' && payment.checkedBy"> · {{ payment.checkedBy }} · {{ displayDateTime(payment.checkedAt) }}</span>
             </strong>
           </div>
         </div>
@@ -52,6 +53,7 @@
                 <strong>{{ payment.paymentNo }}</strong>
               </el-descriptions-item>
               <el-descriptions-item label="关联订单号">{{ payment.orderNo || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="凭证核查">{{ auditLoading ? '加载中' : auditError ? '加载失败' : auditState ? auditStatusLabel(auditState.statusCode) : '—' }}</el-descriptions-item>
               <el-descriptions-item label="交易单号">{{ payment.transactionNo || '-' }}</el-descriptions-item>
               <el-descriptions-item label="订单金额">{{ moneyText(payment.orderAmount) }}</el-descriptions-item>
               <el-descriptions-item label="客户名称">{{ payment.customerName || '-' }}</el-descriptions-item>
@@ -88,7 +90,12 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted as onPaymentMounted } from 'vue'
+import { loadPaymentDictionaries, paymentConfirmationLabel } from '@/utils/order-register-status'
+onPaymentMounted(() => { void loadPaymentDictionaries() })
 import { computed, ref, watch } from 'vue'
+import { getPaymentAuditStates, type PaymentAuditState } from '@/api/core/payment-voucher-audit'
+import { auditStatusLabel } from '@/utils/payment-voucher-audit'
 import FundAttachmentThumbnails from '@/components/supply/FundAttachmentThumbnails.vue'
 import { displayDateTime } from '@/utils/business-date'
 import { moneyText, paymentRecordStatusLabel, paymentRecordStatusTag } from '@/utils/order-register-status'
@@ -104,6 +111,26 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 const loading = ref(false)
 const loadError = ref('')
 const detail = ref<SalesPaymentDetail | null>(null)
+const auditState = ref<PaymentAuditState | null>(null)
+const auditLoading = ref(false)
+const auditError = ref(false)
+let auditRequest = 0
+watch(() => [props.modelValue, props.payment?.id] as const, async ([visible, id]) => {
+  const request = ++auditRequest
+  auditState.value = null
+  auditError.value = false
+  auditLoading.value = false
+  if (!visible || !id) return
+  auditLoading.value = true
+  try {
+    const states = await getPaymentAuditStates([String(id)])
+    if (request === auditRequest) auditState.value = states[String(id)] ?? null
+  } catch {
+    if (request === auditRequest) auditError.value = true
+  } finally {
+    if (request === auditRequest) auditLoading.value = false
+  }
+})
 
 const attachmentItems = computed<Array<FundDocumentAttachment | string>>(() => {
   const detailItems: FundDocumentAttachment[] = (

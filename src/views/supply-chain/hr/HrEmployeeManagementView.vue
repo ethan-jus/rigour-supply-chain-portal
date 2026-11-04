@@ -235,7 +235,7 @@
               </template></el-table-column
             >
             <!-- @vue-generic {HrEmployeeRecord} -->
-            <el-table-column label="操作" width="135" fixed="right"
+            <el-table-column label="操作" width="180" fixed="right"
               ><template #default="{ row }"
                 ><el-button
                   v-if="row.dhbReviewCount"
@@ -250,6 +250,14 @@
                   type="primary"
                   @click.stop="openEditor(row)"
                   >编辑</el-button
+                ><el-button
+                  v-if="can('hr:employee:delete')"
+                  link
+                  type="danger"
+                  :loading="deletingId === row.id"
+                  :disabled="deletingId !== null && deletingId !== row.id"
+                  @click.stop="removeEmployee(row)"
+                  >删除</el-button
                 ></template
               ></el-table-column
             >
@@ -569,7 +577,7 @@ import { useRoute } from 'vue-router'
 import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
 import DhbBindingReviewDrawer from './DhbBindingReviewDrawer.vue'
 import { WarningFilled, OfficeBuilding, Plus, Refresh } from '@element-plus/icons-vue'
-import { ElMessage, type TableInstance } from 'element-plus'
+import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
 import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
 import HrEmployeeEditor from './HrEmployeeEditor.vue'
 import PayrollComponentView from './PayrollComponentView.vue'
@@ -658,6 +666,7 @@ const employeeNameFilter = ref(''),
   loading = ref(false),
   loadError = ref('')
 const data = ref<HrPage<HrEmployeeRecord>>({ items: [], total: 0, begin: 0, step: 20 })
+const deletingId = ref<string | null>(null)
 const editorVisible = ref(false),
   editing = ref<HrEmployeeRecord | null>(null),
   detailVisible = ref(false),
@@ -730,6 +739,26 @@ function reset() {
   sortDirection.value = 'desc'
   if (employeeTable.value) employeeTable.value.sort('entryDate', 'descending')
   else search()
+}
+async function removeEmployee(row: HrEmployeeRecord) {
+  if (!can('hr:employee:delete') || deletingId.value !== null) return
+  deletingId.value = row.id
+  try {
+    await ElMessageBox.confirm(`删除员工“${row.employeeName}”？历史记录保留。`, '删除员工', {
+      type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
+    })
+    if (!can('hr:employee:delete')) return
+    await hrOrganizationApi.deleteEmployee(row.id, row.revision)
+    ElMessage.success('已删除')
+    if (detail.value?.id === row.id) detailVisible.value = false
+    if (data.value.items.length === 1 && page.value > 1) page.value--
+    await Promise.all([load(), loadRisks()])
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close')
+      ElMessage.error(error instanceof Error ? error.message : '删除失败')
+  } finally {
+    deletingId.value = null
+  }
 }
 function openEditor(row?: HrEmployeeRecord, tab: 'basic' | 'city-scope' = 'basic') {
   editorInitialTab.value = tab

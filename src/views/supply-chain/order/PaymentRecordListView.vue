@@ -2,6 +2,7 @@
   <div class="order-register-page supply-page supply-page--business-main">
     <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="resetFilters">
       <template #actions>
+        <OrderPackageSyncButton plain vouchers-only @completed="search" />
         <el-button plain @click="auditVisible = true">回款凭证核查</el-button>
         <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
         <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
@@ -55,6 +56,9 @@
         <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 170px" @keyup.enter="search" />
         <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态" style="width: 130px">
           <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-select v-model="pageFilters.confirmationStatusCode" aria-label="财务确认" clearable placeholder="财务确认" style="width: 130px">
+          <el-option v-for="item in confirmationOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-tree-select
           v-model="filters.regionCode"
@@ -194,8 +198,8 @@
         <span class="order-summary__label">商品数</span>
         <strong class="order-summary__value">{{ pageData.totals.quantitySum?.toLocaleString('zh-CN', { maximumFractionDigits: 6 }) ?? '-' }}</strong>
       </div>
-      <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已核对收款合计。">
-        <span class="order-summary__label">{{ allocationActive ? '已核对金额（分摊）' : '已核对金额' }}</span>
+      <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已确认收款合计。">
+        <span class="order-summary__label">{{ allocationActive ? '已确认金额（分摊）' : '已确认金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
       </div>
     </div>
@@ -269,13 +273,11 @@
           <el-table-column v-if="allocationActive" label="筛选商品分摊金额" width="170" align="right">
             <template #default="{ row }"><strong class="allocation-value">{{ allocationMoney(row.allocatedPaymentAmount) }}</strong></template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('paymentTime')" label="收款时间" width="170" sortable="custom" prop="paymentTime">
-            <template #default="{ row }">{{ displayDateTime(row.paymentTime) }}</template>
-          </el-table-column>
+
           <el-table-column v-if="paymentColumns.isVisible('paymentStatus')" label="收款状态" width="100">
             <template #default="{ row }">
               <el-tag class="order-status-tag" :type="paymentRecordStatusTag(row.paymentStatusCode)" effect="light">
-                {{ row.paymentStatusCode === 'CHECKED' ? '已收款' : paymentRecordStatusLabel(row.paymentStatusCode) }}
+                {{ paymentRecordStatusLabel(row.paymentStatusCode) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -288,18 +290,18 @@
           <el-table-column v-if="paymentColumns.isVisible('regionName')" label="归属地区" width="140">
             <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedStatus')" label="核对状态" width="100">
+          <el-table-column v-if="paymentColumns.isVisible('checkedStatus')" label="财务确认" width="100">
             <template #default="{ row }">
               <el-tag class="order-status-tag" :type="row.paymentStatusCode === 'CHECKED' ? 'success' : row.paymentStatusCode === 'CANCELLED' ? 'info' : 'warning'" effect="light">
-                {{ row.paymentStatusCode === 'CHECKED' ? '已核对' : row.paymentStatusCode === 'CANCELLED' ? '-' : '未核对' }}
+                {{ paymentConfirmationLabel(row.paymentStatusCode) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedBy')" label="核对人" width="110" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.paymentStatusCode === 'CHECKED' ? auditActorLabel(row.checkedBy) : '-' }}</template>
+          <el-table-column v-if="paymentColumns.isVisible('paymentTime')" label="收款时间" width="170" sortable="custom" prop="paymentTime">
+            <template #default="{ row }">{{ displayDateTime(row.paymentTime) }}</template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('checkedAt')" label="核对时间" width="170">
-            <template #default="{ row }">{{ displayDateTime(row.checkedAt) }}</template>
+          <el-table-column v-if="paymentColumns.isVisible('voucherPaidTime')" label="凭证付款时间" width="180">
+            <template #default="{ row }"><div v-for="time in auditStates[row.id]?.voucherTimes || []" :key="time.paidTime">{{ voucherTimeText(time.paidTime, time.precision) }}</div><span v-if="!auditStates[row.id]?.voucherTimes?.length">未识别</span></template>
           </el-table-column>
           <el-table-column
             v-if="paymentColumns.isVisible('transactionNo')"
@@ -313,6 +315,28 @@
                 <el-button link type="primary" @click="voucherTarget = row as OrderRegisterPaymentItem; voucherVisible = true">{{ number }}</el-button>
               </div>
             </template>
+          </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('attachments')" label="付款凭证" width="130">
+            <template #default="{ row }">
+              <FundAttachmentThumbnails
+                :attachments="row.attachmentViews?.length ? row.attachmentViews : row.attachments"
+              />
+              <el-button v-if="row.attachments?.length" link type="primary" @click="voucherTarget = row as OrderRegisterPaymentItem; voucherVisible = true">识别信息</el-button>
+            </template>
+          </el-table-column>
+          <el-table-column label="凭证核查状态" width="125">
+            <template #default="{ row }">
+              <el-tooltip v-if="auditStates[row.id]" :content="auditStates[row.id].reasonCodes.map(auditReasonLabel).join('；')" :disabled="!auditStates[row.id].reasonCodes.length">
+                <el-tag :type="auditStates[row.id].statusCode === 'NORMAL' ? 'success' : auditStates[row.id].statusCode === 'ABNORMAL' ? 'danger' : 'warning'">{{ auditStatusLabel(auditStates[row.id].statusCode) }}</el-tag>
+              </el-tooltip>
+              <span v-else>{{ auditLoadFailed ? '加载失败' : '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('checkedBy')" label="确认人" width="110" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.paymentStatusCode === 'CHECKED' ? auditActorLabel(row.checkedBy) : '-' }}</template>
+          </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('checkedAt')" label="确认时间" width="170">
+            <template #default="{ row }">{{ displayDateTime(row.checkedAt) }}</template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('createdBy')" label="创建人" width="110" show-overflow-tooltip>
             <template #header>
@@ -355,13 +379,7 @@
             <template #default="{ row }">{{ displayDateTime(row.syncedAt) }}</template>
           </el-table-column>
 
-          <el-table-column v-if="paymentColumns.isVisible('attachments')" label="付款凭证" width="130">
-            <template #default="{ row }">
-              <FundAttachmentThumbnails
-                :attachments="row.attachmentViews?.length ? row.attachmentViews : row.attachments"
-              />
-            </template>
-          </el-table-column>
+
           <el-table-column
             v-if="paymentColumns.isVisible('sourcePaymentCode')"
             prop="sourceRecordId"
@@ -384,10 +402,10 @@
                 plain
                 @click="openCheck(row as OrderRegisterPaymentItem)"
               >
-                <el-icon><CircleCheck /></el-icon>核对
+                <el-icon><CircleCheck /></el-icon>确认
               </el-button>
               <span v-else-if="row.paymentStatusCode === 'CHECKED'" class="payment-check-state payment-check-state--done">
-                <el-icon><CircleCheck /></el-icon>已核对
+                <el-icon><CircleCheck /></el-icon>已确认
               </span>
               <span v-else class="payment-check-state">—</span>
             </template>
@@ -407,7 +425,7 @@
       </div>
     </el-card>
 
-    <PaymentVoucherAuditDialog v-model="auditVisible" />
+    <PaymentVoucherAuditDialog v-model="auditVisible" @reviewed="loadPayments" />
     <PaymentTransactionCheckDialog v-model="transactionCheckVisible" />
     <PaymentVoucherTransactionsDialog v-model="voucherVisible" :payment="voucherTarget" />
     <PaymentCheckDialog v-model="checkVisible" :payment="checkTarget" @checked="onChecked" />
@@ -417,6 +435,10 @@
 </template>
 
 <script setup lang="ts">
+import OrderPackageSyncButton from '@/components/supply/OrderPackageSyncButton.vue'
+import { getPaymentAuditStates, type PaymentAuditState } from '@/api/core/payment-voucher-audit'
+import { auditStatusLabel, auditReasonLabel, voucherTimeText } from '@/utils/payment-voucher-audit'
+import { loadPaymentDictionaries, paymentDictionaryOptions, paymentConfirmationLabel } from '@/utils/order-register-status'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -465,10 +487,11 @@ const paymentColumns = useColumnSettings('order-payments', [
   { key: 'orderAmount', label: '订单金额' },
   { key: 'paidAmount', label: '收款金额' },
   { key: 'paymentTime', label: '收款时间' },
-  { key: 'paymentStatus', label: '收款状态' },
-  { key: 'checkedStatus', label: '核对状态' },
-  { key: 'checkedBy', label: '核对人' },
+  { key: 'voucherPaidTime', label: '凭证付款时间' },
   { key: 'transactionNo', label: '交易单号' },
+  { key: 'paymentStatus', label: '收款状态' },
+  { key: 'checkedStatus', label: '财务确认' },
+  { key: 'checkedBy', label: '确认人' },
   { key: 'attachments', label: '付款凭证' },
   { key: 'createdBy', label: '创建人', defaultVisible: false },
   { key: 'createdTime', label: '创建时间', defaultVisible: false },
@@ -477,7 +500,7 @@ const paymentColumns = useColumnSettings('order-payments', [
   { key: 'syncedBy', label: '同步人', defaultVisible: false },
   { key: 'syncedAt', label: '同步时间', defaultVisible: false },
   { key: 'sourcePaymentCode', label: '来源付款编码' },
-  { key: 'checkedAt', label: '核对时间', defaultVisible: false },
+  { key: 'checkedAt', label: '确认时间', defaultVisible: false },
 ])
 const {
   areaTree,
@@ -501,6 +524,7 @@ const pageFilters = reactive({
   paymentNo: '',
   transactionNo: '',
   paymentStatusCode: '',
+  confirmationStatusCode: '',
   paymentTimeRange: null as [string, string] | null,
 })
 
@@ -518,14 +542,11 @@ function allocationMoney(amount: number | null | undefined) {
   return amount == null ? '无法分摊' : moneyText(amount)
 }
 
-const paymentStatusOptions = [
-  { value: 'PENDING', label: '待收款' },
-  { value: 'CONFIRMED', label: '已收款' },
-  { value: 'RECEIVED', label: '已回款（未核对）' },
-  { value: 'CHECKED', label: '已核对' },
-  { value: 'CANCELLED', label: '已取消' },
-]
+const paymentStatusOptions = computed(() => paymentDictionaryOptions('PAYMENT_RECEIPT_STATUS'))
+const confirmationOptions = computed(() => paymentDictionaryOptions('PAYMENT_CONFIRMATION_STATUS'))
 
+const auditStates = ref<Record<string, PaymentAuditState>>({})
+const auditLoadFailed = ref(false)
 const loading = ref(false)
 const exporting = ref(false)
 const currentPage = ref(1)
@@ -602,7 +623,8 @@ async function buildQuery() {
     createdBy: empty(filters.createdBy),
     paymentNo: empty(pageFilters.paymentNo),
     transactionNo: empty(pageFilters.transactionNo),
-    paymentStatusCode: empty(pageFilters.paymentStatusCode),
+    receiptStatusCode: empty(pageFilters.paymentStatusCode),
+    confirmationStatusCode: empty(pageFilters.confirmationStatusCode),
     sortBy: sortBy.value,
     sortDirection: sortDirection.value,
     ...orderDate,
@@ -623,6 +645,11 @@ async function loadPayments() {
     }
     pageData.value = data
     allocationActive.value = query.productIds != null
+    auditStates.value = {}
+    auditLoadFailed.value = false
+    void getPaymentAuditStates(data.items.map(row => String(row.id))).then(states => {
+      if (request === paymentRequest) auditStates.value = states
+    }).catch(() => { if (request === paymentRequest) auditLoadFailed.value = true })
   } catch (reason) {
     if (request !== paymentRequest) return
     loadFailed.value = true
@@ -646,6 +673,7 @@ function clearFilters() {
   pageFilters.paymentNo = ''
   pageFilters.transactionNo = ''
   pageFilters.paymentStatusCode = ''
+  pageFilters.confirmationStatusCode = ''
   pageFilters.paymentTimeRange = null
   sortBy.value = 'paymentTime'
   sortDirection.value = 'desc'
@@ -706,6 +734,7 @@ watch(
     if (task === 'payment') {
       clearFilters()
       pageFilters.paymentStatusCode = 'RECEIVED'
+      pageFilters.confirmationStatusCode = 'UNCONFIRMED'
       filters.orderNo = typeof value === 'string' ? value.trim() : ''
       search()
     } else if (typeof value === 'string' && value.trim()) {
@@ -726,6 +755,7 @@ watch(
 )
 
 onMounted(() => {
+  void loadPaymentDictionaries()
   void loadOptions()
   void loadCategoryOptions()
   if (!route.query.orderNo && route.query.homeTask !== 'payment') void loadPayments()

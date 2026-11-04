@@ -54,7 +54,7 @@
               <el-descriptions-item label="发货时间">{{ displayDateTime(detail.shipmentTime) }}</el-descriptions-item>
               <el-descriptions-item label="订单状态">{{ orderStatusLabel(detail.orderStatusCode) }}</el-descriptions-item>
               <el-descriptions-item label="收款状态">
-                {{ orderPaymentStatusLabel(detail.paymentStatusCode) }}
+                {{ orderPaymentStatusLabel(detail.payableAmount != null && Number(detail.payableAmount) === 0 ? 'NOT_REQUIRED' : detail.paymentStatusCode) }}
               </el-descriptions-item>
               <el-descriptions-item label="备注">{{ detail.remark || '-' }}</el-descriptions-item>
             </el-descriptions>
@@ -112,7 +112,7 @@
               <el-table-column label="回款金额" width="110" align="right">
                 <template #default="{ row }">{{ moneyText(row.paidAmount) }}</template>
               </el-table-column>
-              <el-table-column label="状态" width="100">
+              <el-table-column label="回款状态" width="100">
                 <template #default="{ row }">
                   <el-tag :type="paymentRecordStatusTag(row.paymentStatusCode)" effect="plain" size="small">
                     {{ paymentRecordStatusLabel(row.paymentStatusCode) }}
@@ -131,9 +131,10 @@
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column label="核对" min-width="150">
+              <el-table-column label="财务确认" min-width="150">
                 <template #default="{ row }">
-                  {{ row.checkedBy ? `${row.checkedBy} · ${displayDateTime(row.checkedAt)}` : '未核对' }}
+                  {{ paymentConfirmationLabel(row.paymentStatusCode) }}
+                  <span v-if="row.paymentStatusCode === 'CHECKED' && row.checkedBy"> · {{ row.checkedBy }} · {{ displayDateTime(row.checkedAt) }}</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -164,6 +165,9 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted as onPaymentMounted } from 'vue'
+import { loadOrderDictionaries, paymentConfirmationLabel } from '@/utils/order-register-status'
+onPaymentMounted(() => { void loadOrderDictionaries() })
 import { ref, watch } from 'vue'
 import { displayDateTime } from '@/utils/business-date'
 import {

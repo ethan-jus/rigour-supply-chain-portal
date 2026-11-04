@@ -64,6 +64,10 @@ export interface StoreQuery {
   activity?: string
   potential?: string
   storeType?: string
+  pool?: string
+  recordStatus?: string
+  phase?: string
+  protection?: string
   cursor?: string
   size: number
 }
@@ -122,6 +126,16 @@ export interface StoreLeadCommand {
   longitude: number
   latitude: number
   publicPhone: string | null
+}
+export interface StorePoi {
+  id: string
+  name: string
+  address: string | null
+  publicPhone: string | null
+  typeCode: string | null
+  areaCode: string
+  longitude: number
+  latitude: number
 }
 export interface StoreOwnership {
   id: string
@@ -230,7 +244,12 @@ export const crmStoreApi = {
       ...options,
       params: { view },
     }),
-  update: (row: StoreRow, reason: string) =>
+  poiCandidates: (id: string, keyword: string, areaCode: string) =>
+    apiClient.get<StorePoi[]>(`${base}/${encodeURIComponent(id)}/poi-candidates`, {
+      ...options,
+      params: { keyword, areaCode },
+    }),
+  update: (row: StoreRow, reason: string, amapPoiId?: string) =>
     apiClient.put<void>(
       `${base}/${encodeURIComponent(row.id)}`,
       {
@@ -240,6 +259,13 @@ export const crmStoreApi = {
         address: row.address,
         publicPhone: row.publicPhone,
         storeTypeCode: row.storeTypeCode || null,
+        location: {
+          areaCode: row.areaCode,
+          longitude: row.longitude,
+          latitude: row.latitude,
+          coordinateSystem: row.coordinateSystem,
+        },
+        amapPoiId,
         reason,
       },
       options,

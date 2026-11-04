@@ -1,10 +1,10 @@
 <template>
   <el-button v-if="can('integration:dhb:write')" :plain="plain" :loading="loading" @click="open">{{
-    jobBusy ? '查看同步进度' : '同步订单'
+    jobBusy ? '查看同步进度' : props.vouchersOnly ? '补齐付款凭证' : '同步订单'
   }}</el-button>
-  <el-dialog v-model="visible" title="同步订货宝订单" width="780px" :close-on-click-modal="false">
+  <el-dialog v-model="visible" :title="props.vouchersOnly ? '补齐付款凭证' : '同步订货宝订单'" width="780px" :close-on-click-modal="false">
     <el-alert
-      title="按依赖顺序同步订货宝订单（含明细）、收款和付款，使用服务端增量游标，并重新核对本地待处理记录。订单、明细、收款沿用来源业务创建/修改人和时间。"
+      :title="props.vouchersOnly ? '后台检查缺图回款，按来源收款号补齐凭证；有图后自动识别。来源缺图次日复查，不改回款金额。' : '按顺序同步订单、收款和付款，同时补查缺失凭证；图片自动识别。'"
       type="info"
       :closable="false"
     />
@@ -80,9 +80,10 @@ import { getDhbSyncTasks, type DhbSyncOrchestrationResult } from '@/api/core/dhb
 import { useDhbSyncJob } from '@/composables/useDhbSyncJob'
 import DhbSyncJobProgress from './DhbSyncJobProgress.vue'
 
-defineProps<{
+const props = defineProps<{
   /** 与查询区其他次级按钮保持一致的浅底样式。 */
   plain?: boolean
+  vouchersOnly?: boolean
 }>()
 const emit = defineEmits<{ completed: [result: DhbSyncOrchestrationResult] }>()
 const { can } = useSupplyPermissions()
@@ -104,7 +105,7 @@ const {
 })
 const busy = computed(() => loading.value || jobBusy.value)
 
-const packageObjectTypes = new Set(['SALES_ORDER', 'ORDER_LINE', 'RECEIPT', 'PAYMENT'])
+const packageObjectTypes = new Set(['SALES_ORDER', 'ORDER_LINE', 'RECEIPT', 'PAYMENT', 'VOUCHER_BACKFILL'])
 const steps = computed(() => result.value?.tenants.flatMap((item) => item.steps) ?? [])
 const packageSteps = computed(() =>
   steps.value.filter((item) => packageObjectTypes.has(item.objectType)),
@@ -122,6 +123,7 @@ function objectLabel(value: string) {
   if (value === 'ORDER_LINE') return '订单明细'
   if (value === 'RECEIPT') return '收款'
   if (value === 'PAYMENT') return '付款'
+  if (value === 'VOUCHER_BACKFILL') return '付款凭证'
   return value
 }
 
@@ -190,7 +192,7 @@ async function run() {
   result.value = null
   try {
     await start({
-      scope: 'ORDER_SALES_PACKAGE',
+      scope: props.vouchersOnly ? 'VOUCHER_BACKFILL' : 'ORDER_SALES_PACKAGE',
       connectorId: connectorId.value,
       incremental: true,
       maxPages: 500,

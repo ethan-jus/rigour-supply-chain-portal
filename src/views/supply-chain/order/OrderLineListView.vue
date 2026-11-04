@@ -149,9 +149,7 @@
           <el-option label="无优惠" value="false" />
         </el-select>
         <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态" style="width: 130px">
-          <el-option label="未收款" value="UNPAID" />
-          <el-option label="部分收款" value="PARTIAL_PAID" />
-          <el-option label="已收款" value="PAID" />
+          <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </template>
     </OrderRegisterFilterCard>
@@ -299,13 +297,13 @@
           <el-table-column v-if="lineColumns.isVisible('paymentStatus')" label="收款状态" width="110">
             <template #default="{ row }">
               <el-tag class="order-status-tag" :type="orderPaymentStatusTag(row.paymentStatusCode)" effect="light">
-                {{ row.paymentStatusCode === 'UNPAID' ? '未收款' : orderPaymentStatusLabel(row.paymentStatusCode) }}
+                {{ orderPaymentStatusLabel(row.paymentStatusCode) }}
               </el-tag>
             </template>
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('paymentTime')" label="收款日期" width="170">
             <template #header>
-              <el-tooltip content="整单最近一次有效收款日期；查询当月结清业绩时，请同时选择收款状态“已收款”。"><span>收款日期</span></el-tooltip>
+              <el-tooltip content="最近一次有效收款日期；查当月结清订单，请选“已结清”。"><span>收款日期</span></el-tooltip>
             </template>
             <template #default="{ row }">{{ row.paymentTime ? displayDateTime(row.paymentTime) : '' }}</template>
           </el-table-column>
@@ -406,7 +404,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { loadPaymentDictionaries, paymentDictionaryOptions } from '@/utils/order-register-status'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
@@ -472,6 +471,7 @@ const {
   employeeLabel,
 } = useOrderRegisterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
+const paymentStatusOptions = computed(() => paymentDictionaryOptions('ORDER_COLLECTION_STATUS'))
 const pageFilters = reactive({
   paymentTimeRange: null as [string, string] | null,
   discountStatus: '' as string | undefined,
@@ -728,6 +728,7 @@ watch(
 )
 
 onMounted(() => {
+  void loadPaymentDictionaries()
   void loadOptions()
   void loadBusinessDictionaries([{ moduleCode: 'COMMON', code: 'PRODUCT_UNIT' }])
   void loadCategoryOptions()

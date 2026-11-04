@@ -66,6 +66,8 @@ export interface OrderRegisterPaymentQuery extends OrderRegisterCommonQuery {
   paymentNo?: string
   transactionNo?: string
   paymentStatusCode?: string
+  receiptStatusCode?: string
+  confirmationStatusCode?: string
   paymentTimeFrom?: string
   paymentTimeTo?: string
 }
@@ -614,6 +616,11 @@ export const getMonthlyPerformance = (params: { monthFrom: string; monthTo: stri
 
 /** 按图片记录的凭证信息；voucherAmount 不参与回款汇总。 */
 export interface PaymentVoucherTransaction {
+  paidTime?: string | null
+  paidTimePrecision?: string | null
+  recognitionStatus?: string | null
+  payee?: string | null
+  paymentResult?: string | null
   voucherKey: string
   voucherAmount: number | null
   transactionNo: string | null
@@ -642,3 +649,5 @@ export const checkPaymentTransaction = (transactionNo: string) =>
   apiClient.get<PaymentTransactionMatch[]>(`${ORDER_REGISTER_BASE_PATH}/payments/transaction-check`, {
     params: { transactionNo }, ...readOptions,
   })
+
+export const recognizePaymentVouchers = (id: string) => apiClient.post<number>(`${ORDER_REGISTER_BASE_PATH}/payments/${id}/voucher-recognition`, {})

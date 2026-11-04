@@ -35,6 +35,17 @@ beforeEach(() => {
 })
 
 describe('订单包同步按钮', () => {
+  it('凭证补齐单独提交后台任务，不重放订单或回款金额', async () => {
+    mocks.sync.mockResolvedValue({ status: 'SUCCEEDED', tenants: [{ steps: [{ objectType: 'VOUCHER_BACKFILL', status: 'SUCCEEDED', fetched: 1, created: 0, updated: 0, repaired: 1, rejected: 0, unmapped: 0 }] }] })
+    const wrapper = mount(OrderPackageSyncButton, { props: { vouchersOnly: true }, global: { plugins: [ElementPlus] } })
+    expect(wrapper.get('button').text()).toBe('补齐付款凭证')
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(mocks.sync).toHaveBeenCalledWith({ scope: 'VOUCHER_BACKFILL', connectorId: 'connector-1', incremental: true, maxPages: 500 })
+    expect(wrapper.text()).toContain('付款凭证')
+    wrapper.unmount()
+  })
+
   it('一个按钮按依赖顺序提交 ORDER_SALES_PACKAGE 增量同步，不填人工时间窗口', async () => {
     mocks.sync.mockResolvedValue({
       status: 'SUCCEEDED',

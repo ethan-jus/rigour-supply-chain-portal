@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="核对回款" width="680px" :close-on-click-modal="false">
+  <el-dialog v-model="visible" title="确认回款" width="680px" :close-on-click-modal="false">
     <template v-if="payment">
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="订单号">{{ payment.orderNo || '-' }}</el-descriptions-item>
@@ -29,7 +29,7 @@
         class="payment-check__hint"
         type="info"
         :closable="false"
-        title="请与银行流水核对一致后填写交易单号并点击核对通过；交易单号用于付款凭证验重（重复会被拒绝）与财务对账。"
+        title="请与银行流水核对一致后填写交易单号并点击确认收款；交易单号用于付款凭证验重（重复会被拒绝）与财务对账。"
       />
 
       <el-form label-width="96px" class="payment-check__form" @submit.prevent>
@@ -49,12 +49,15 @@
 
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="submit">核对通过</el-button>
+      <el-button type="primary" :loading="submitting" @click="submit">确认收款</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
+import { onMounted as onPaymentMounted } from 'vue'
+import { loadPaymentDictionaries } from '@/utils/order-register-status'
+onPaymentMounted(() => { void loadPaymentDictionaries() })
 import { computed, ref, watch } from 'vue'
 import PaymentTransactionCheckDialog from './PaymentTransactionCheckDialog.vue'
 import { ElMessage } from 'element-plus'
@@ -109,7 +112,7 @@ async function submit() {
   if (!current || submitting.value) return
   const value = transactionNo.value.trim()
   if (!value) {
-    checkError.value = '请填写交易单号后再点击核对通过'
+    checkError.value = '请填写交易单号后再点击确认收款'
     return
   }
   submitting.value = true
@@ -121,9 +124,9 @@ async function submit() {
     })
     emit('checked', updated)
     visible.value = false
-    ElMessage.success('回款已核对')
+    ElMessage.success('回款已确认')
   } catch (reason) {
-    checkError.value = errorMessage(reason, '核对失败，请稍后重试')
+    checkError.value = errorMessage(reason, '确认失败，请稍后重试')
   } finally {
     submitting.value = false
   }

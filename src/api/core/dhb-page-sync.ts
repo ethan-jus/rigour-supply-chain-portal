@@ -3,6 +3,7 @@ import type { DhbSyncOrchestrationResult } from './dhb-orchestration'
 export type DhbPageScope =
   | 'SALESPERSON'
   | 'ORDER_SALES_PACKAGE'
+  | 'VOUCHER_BACKFILL'
   | 'SALES_ORDER'
   | 'RECEIPT'
   | 'PAYMENT'

@@ -6,6 +6,7 @@ import { reactive } from 'vue'
 const mocks = vi.hoisted(() => ({
   routeQuery: {} as Record<string, string>,
   getPayments: vi.fn(),
+  getAuditStates: vi.fn().mockResolvedValue({}),
   getCategories: vi.fn().mockResolvedValue({ total: 0, items: [] }),
   getProducts: vi.fn().mockResolvedValue({ total: 0, begin: 0, step: 200, items: [] }),
   exportCsv: vi.fn().mockResolvedValue(new Blob()),
@@ -15,10 +16,21 @@ vi.mock('@/api/core/order-register', () => ({
   getOrderRegisterPayments: mocks.getPayments,
   exportOrderRegisterCsv: mocks.exportCsv,
 }))
+vi.mock('@/api/core/payment-voucher-audit', () => ({ getPaymentAuditStates: mocks.getAuditStates }))
 vi.mock('@/utils/file-download', () => ({ csvFilename: () => 'lines.csv', downloadBlob: vi.fn() }))
-vi.mock('@/utils/business-dictionary', () => ({
-  loadBusinessDictionaries: vi.fn(),
-  businessDictionaryLabel: (_module: string, _code: string, value: string) => value || '-',
+vi.mock('@/api/core/business-settings', () => ({
+  resolveBizDict: vi.fn(async (code: string) => {
+    const values: Record<string, Array<[string, string]>> = {
+      ORDER_COLLECTION_STATUS: [['UNPAID','未收款'],['PARTIAL_PAID','部分收款'],['PAID','已结清'],['NOT_REQUIRED','无需收款']],
+      PAYMENT_RECEIPT_STATUS: [['PENDING','待收款'],['RECEIVED','租户已到账'],['CANCELLED','已作废']],
+      PAYMENT_CONFIRMATION_STATUS: [['UNCONFIRMED','待确认'],['CONFIRMED','财务已确认']],
+      PAYMENT_VOUCHER_AUDIT_STATUS: [['PENDING_REVIEW','待核查'],['NORMAL','正常'],['ABNORMAL','异常']],
+      PAYMENT_VOUCHER_AUDIT_REASON: [['MISSING_VOUCHER','缺少付款凭证'],['OTHER','其他原因']],
+    }
+    return { dictionary: { dictionaryCode: code }, items: (values[code] ?? []).map(([value,name],i) => ({
+      id: String(i),dictionaryCode:code,dictionaryItemCode:value,dictionaryItemName:name,ordinal:i,enabled:true,
+    })) }
+  }),
 }))
 vi.mock('@/api/core/erp-product', () => ({
   getErpManagedProducts: mocks.getProducts,
@@ -85,6 +97,7 @@ describe('回款商品分摊', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.routeQuery = {}
+    mocks.getAuditStates.mockResolvedValue({})
     mocks.getPayments.mockResolvedValue(paymentPage())
     mocks.getCategories.mockResolvedValue({ total: 2, items: [
       { id: 1, categoryName: '商品', parentId: null }, { id: 2, categoryName: '食品', parentId: 1 },
@@ -153,17 +166,50 @@ describe('回款商品分摊', () => {
     expect(wrapper.text()).not.toContain('¥50.00')
     wrapper.unmount()
   })
+  it('已收款查询与导出使用同一汇总状态，清空后取消状态筛选', async () => {
+    const wrapper = mountPage(); await flushPromises()
+    const status = wrapper.findAllComponents(ElSelect).find(c => c.props('ariaLabel') === '收款状态')!
+    status.vm.$emit('update:modelValue', 'RECEIVED')
+    await wrapper.find('form').trigger('submit'); await flushPromises()
+    expect(mocks.getPayments).toHaveBeenLastCalledWith(expect.objectContaining({ receiptStatusCode: 'RECEIVED' }))
+    expect(wrapper.find('[aria-label="回款统计"]').text()).toContain('¥10.00')
+    await wrapper.findAll('button').find(b => b.text() === '导出')!.trigger('click'); await flushPromises()
+    expect(mocks.exportCsv).toHaveBeenLastCalledWith('payments', expect.objectContaining({ receiptStatusCode: 'RECEIVED' }))
+    status.vm.$emit('update:modelValue', undefined)
+    await wrapper.find('form').trigger('submit'); await flushPromises()
+    expect(mocks.getPayments.mock.calls.at(-1)![0].receiptStatusCode).toBeUndefined()
+    wrapper.unmount()
+  })
   it('首页待核回款按到账未审核条件进入列表，重置后清除状态', async () => {
     mocks.routeQuery = { homeTask: 'payment', orderNo: 'OLD-ORDER' }
     const wrapper = mountPage()
     await flushPromises()
     expect(mocks.getPayments).toHaveBeenCalledTimes(1)
-    expect(mocks.getPayments).toHaveBeenLastCalledWith(expect.objectContaining({ orderNo: 'OLD-ORDER', paymentStatusCode: 'RECEIVED' }))
+    expect(mocks.getPayments).toHaveBeenLastCalledWith(expect.objectContaining({ orderNo: 'OLD-ORDER', receiptStatusCode: 'RECEIVED', confirmationStatusCode: 'UNCONFIRMED' }))
     const status = wrapper.findAllComponents(ElSelect).find(c => c.props('ariaLabel') === '收款状态')!
     expect(status.props('modelValue')).toBe('RECEIVED')
     await wrapper.findAll('button').find(button => button.text() === '重置')!.trigger('click')
     await flushPromises()
-    expect(mocks.getPayments.mock.calls.at(-1)![0].paymentStatusCode).toBeUndefined()
+    expect(mocks.getPayments.mock.calls.at(-1)![0].receiptStatusCode).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('使用真实字典解析，财务确认与凭证核查独立，核查失败不清空金额', async () => {
+    mocks.getAuditStates.mockResolvedValue({ '1': { statusCode: 'PENDING_REVIEW', reasonCodes: ['MISSING_VOUCHER'] } })
+    const wrapper = mountPage(); await flushPromises()
+    expect(wrapper.text()).toContain('租户已到账')
+    expect(wrapper.text()).toContain('财务已确认')
+    expect(wrapper.text()).toContain('待核查')
+    const confirmation = wrapper.findAllComponents(ElSelect).find(c => c.props('ariaLabel') === '财务确认')!
+    confirmation.vm.$emit('update:modelValue', 'UNCONFIRMED')
+    mocks.getAuditStates.mockRejectedValueOnce(new Error('核查暂不可用'))
+    await wrapper.find('form').trigger('submit'); await flushPromises()
+    expect(mocks.getPayments.mock.calls.at(-1)![0].confirmationStatusCode).toBe('UNCONFIRMED')
+    expect(wrapper.text()).toContain('加载失败')
+    expect(wrapper.text()).toContain('¥50.00')
+    expect(wrapper.find('[aria-label="回款统计"]').text()).toContain('¥10.00')
+    await wrapper.findAll('button').find(b => b.text() === '导出')!.trigger('click'); await flushPromises()
+    expect(mocks.exportCsv).toHaveBeenLastCalledWith('payments',expect.objectContaining({ confirmationStatusCode: 'UNCONFIRMED' }))
     wrapper.unmount()
   })
 

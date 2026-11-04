@@ -61,6 +61,16 @@
         </el-popover>
       </div>
     </header>
+    <p v-if="view === 'ALL'" class="workspace-purpose">
+      公司门店总账 · 统一维护公海、私海及合作门店；合作历史独立保留。未迁移的历史客户档案暂不计入。
+    </p>
+    <p v-else-if="view === 'MINE'" class="workspace-purpose">
+      {{
+        team
+          ? '查看授权团队的客户跟进与保护期限；拜访仍由当前负责人发起。'
+          : '认领后 24 小时内首访，随后 7 天内跟进；本轮成交后按 60 天维护。'
+      }}
+    </p>
 
     <el-alert
       v-if="error"
@@ -106,6 +116,50 @@
           filterable
           clearable
         />
+        <el-select
+          v-if="view === 'ALL'"
+          v-model="filters.pool"
+          aria-label="客户池"
+          placeholder="全部客户池"
+          clearable
+        >
+          <el-option label="公海 · 无负责人" value="PUBLIC" />
+          <el-option label="私海 · 已归属" value="PRIVATE" />
+        </el-select>
+        <el-select
+          v-if="view === 'ALL'"
+          v-model="filters.recordStatus"
+          aria-label="档案状态"
+          placeholder="全部档案状态"
+          clearable
+        >
+          <el-option
+            v-for="(label, key) in recordStatusLabels"
+            :key="key"
+            :label="label"
+            :value="key"
+          />
+        </el-select>
+        <el-select
+          v-if="view === 'MINE' || filters.pool === 'PRIVATE'"
+          v-model="filters.phase"
+          aria-label="跟进阶段"
+          placeholder="全部跟进阶段"
+          clearable
+        >
+          <el-option v-for="(label, key) in phaseLabels" :key="key" :label="label" :value="key" />
+        </el-select>
+        <el-select
+          v-if="view === 'MINE' || filters.pool === 'PRIVATE'"
+          v-model="filters.protection"
+          aria-label="保护期限"
+          placeholder="全部保护状态"
+          clearable
+        >
+          <el-option label="24 小时内到期" value="DUE_SOON" />
+          <el-option label="已到期待回收" value="OVERDUE" />
+          <el-option label="暂缓回收" value="HELD" />
+        </el-select>
         <el-select
           v-model="filters.cooperation"
           aria-label="合作历史"
@@ -268,18 +322,36 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column v-if="view !== 'PUBLIC'" label="当前归属" min-width="110"
-            ><template #default="{ row }"
-              ><span>{{ row.poolType === 'PUBLIC' ? '公海' : '私海' }}</span
-              ><span class="secondary-line">{{ row.ownerName || '' }}</span></template
-            ></el-table-column
-          >
+          <el-table-column v-if="view === 'ALL' || view === 'COOPERATED'" label="客户池" width="96">
+            <template #default="{ row }">{{
+              row.poolType === 'PUBLIC' ? '公海' : '私海'
+            }}</template>
+          </el-table-column>
+          <el-table-column v-if="view !== 'PUBLIC'" label="负责人" min-width="130">
+            <template #default="{ row }">{{ ownerLabel(row as StoreRow) }}</template>
+          </el-table-column>
+          <el-table-column v-if="view === 'ALL'" label="档案状态" width="100">
+            <template #default="{ row }">
+              <el-tag
+                size="small"
+                :type="row.recordStatus === 'ACTIVE' ? 'success' : 'info'"
+                effect="plain"
+              >
+                {{ recordStatusLabels[row.recordStatus] ?? row.recordStatus }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column v-if="view === 'MINE'" label="保护期限" min-width="160"
             ><template #default="{ row }"
               ><span>{{ phaseLabels[row.phase] ?? '—' }}</span
-              ><span class="secondary-line" :class="{ urgent: nearDeadline(row.deadlineAt) }">{{
-                remainingTime(row.deadlineAt, now)
-              }}</span></template
+              ><span
+                class="secondary-line"
+                :class="{ urgent: !row.holdReason && nearDeadline(row.deadlineAt) }"
+                :title="row.holdReason ? holdLabels[row.holdReason] : dateTime(row.deadlineAt)"
+                >{{
+                  row.holdReason ? '暂缓回收 · 核验中' : remainingTime(row.deadlineAt, now)
+                }}</span
+              ></template
             ></el-table-column
           >
           <el-table-column v-if="shown('lastVisit')" label="最近拜访" width="132"
@@ -301,18 +373,18 @@
               row.publicPhone || '未维护'
             }}</template></el-table-column
           >
-          <el-table-column v-if="shown('created')" label="创建时间 / 创建人" min-width="220"
-            ><template #default="{ row }"
-              >{{ dateTime(row.createdAt)
-              }}<span class="secondary-line actor">{{ actor(row.createdBy) }}</span></template
-            ></el-table-column
-          >
-          <el-table-column v-if="shown('updated')" label="修改时间 / 修改人" min-width="220"
-            ><template #default="{ row }"
-              >{{ dateTime(row.updatedAt)
-              }}<span class="secondary-line actor">{{ actor(row.updatedBy) }}</span></template
-            ></el-table-column
-          >
+          <el-table-column v-if="shown('createdBy')" label="创建人" min-width="130">
+            <template #default="{ row }">{{ actor(row.createdBy) }}</template>
+          </el-table-column>
+          <el-table-column v-if="shown('createdAt')" label="创建时间" width="180">
+            <template #default="{ row }">{{ dateTime(row.createdAt) }}</template>
+          </el-table-column>
+          <el-table-column v-if="shown('updatedBy')" label="修改人" min-width="130">
+            <template #default="{ row }">{{ actor(row.updatedBy) }}</template>
+          </el-table-column>
+          <el-table-column v-if="shown('updatedAt')" label="修改时间" width="180">
+            <template #default="{ row }">{{ dateTime(row.updatedAt) }}</template>
+          </el-table-column>
           <el-table-column
             v-if="view === 'PUBLIC' && shown('claimStatus')"
             label="认领状态"
@@ -327,14 +399,14 @@
             ></el-table-column
           >
           <el-table-column
-            v-if="can('crm:pool:claim') && view !== 'MINE'"
+            v-if="view === 'ALL' || view === 'MINE' || can('crm:pool:claim')"
             label="操作"
-            width="90"
+            :width="view === 'MINE' ? 132 : 90"
             :fixed="compactViewport ? false : 'right'"
             ><template #default="{ row }"
               ><div class="row-actions">
                 <el-tooltip
-                  v-if="row.poolType === 'PUBLIC' && can('crm:pool:claim')"
+                  v-if="view !== 'ALL' && row.poolType === 'PUBLIC' && can('crm:pool:claim')"
                   :content="row.claimBlockedReason || '认领门店'"
                   :disabled="!row.claimBlockedReason"
                 >
@@ -357,6 +429,24 @@
                     >
                   </span>
                 </el-tooltip>
+                <el-button
+                  v-if="view === 'ALL'"
+                  link
+                  type="primary"
+                  @click="openDetail(row as StoreRow)"
+                  >维护</el-button
+                >
+                <template v-if="view === 'MINE'">
+                  <el-button link type="primary" @click="openDetail(row as StoreRow)"
+                    >跟进</el-button
+                  >
+                  <el-button
+                    v-if="isOwnStore(row as StoreRow) && can('crm:pool:release')"
+                    link
+                    @click="release(row as StoreRow)"
+                    >退回</el-button
+                  >
+                </template>
               </div></template
             ></el-table-column
           >
@@ -468,6 +558,36 @@
           }}</el-tag
           ><el-tag type="info">{{ activityLabels[selected.activityStatus] }}</el-tag>
         </div>
+        <section v-if="selected.poolType === 'PRIVATE'" class="ownership-work">
+          <div class="ownership-work-heading">
+            <strong>{{ phaseLabels[selected.phase ?? ''] ?? '客户跟进' }}</strong>
+            <span :class="{ urgent: !selected.holdReason && nearDeadline(selected.deadlineAt) }">
+              {{ selected.holdReason ? '暂缓回收' : remainingTime(selected.deadlineAt, now) }}
+            </span>
+          </div>
+          <p>{{ phaseGuidance[selected.phase ?? ''] ?? '' }}</p>
+          <dl>
+            <div>
+              <dt>当前负责人</dt>
+              <dd>{{ ownerLabel(selected) }}</dd>
+            </div>
+            <div>
+              <dt>保护截止</dt>
+              <dd>{{ dateTime(selected.deadlineAt) }}</dd>
+            </div>
+            <div>
+              <dt>最近有效拜访</dt>
+              <dd>{{ dateTime(selected.lastVisitAt) }}</dd>
+            </div>
+            <div>
+              <dt>最近有效订单</dt>
+              <dd>{{ dateTime(selected.lastOrderAt) }}</dd>
+            </div>
+          </dl>
+          <p v-if="isOwnStore(selected) && can('crm:store:visit-write')" class="work-entry-note">
+            到店拜访请从销售工作台「CRM 私海」进入，继续采集定位、照片和录音证据。
+          </p>
+        </section>
         <el-alert
           v-if="selected.holdReason"
           :title="holdLabels[selected.holdReason] ?? '归属正在核验，暂缓回收'"
@@ -510,18 +630,25 @@
                   >{{ selected.primaryPoi }} · 复制</el-button
                 ><span v-else>未关联</span></el-descriptions-item
               ><el-descriptions-item label="公司门店 ID">{{ selected.id }}</el-descriptions-item
-              ><el-descriptions-item label="当前负责人">{{
-                selected.ownerName || '无'
+              ><el-descriptions-item label="档案状态">{{
+                recordStatusLabels[selected.recordStatus] ?? selected.recordStatus
               }}</el-descriptions-item
-              ><el-descriptions-item label="创建时间 / 创建人"
-                >{{ dateTime(selected.createdAt) }}<br />{{
-                  actor(selected.createdBy)
-                }}</el-descriptions-item
-              ><el-descriptions-item label="修改时间 / 修改人"
-                >{{ dateTime(selected.updatedAt) }}<br />{{
-                  actor(selected.updatedBy)
-                }}</el-descriptions-item
-              ></el-descriptions
+              ><el-descriptions-item label="客户池">{{
+                selected.poolType === 'PUBLIC' ? '公海' : '私海'
+              }}</el-descriptions-item
+              ><el-descriptions-item label="负责人">{{ ownerLabel(selected) }}</el-descriptions-item
+              ><el-descriptions-item label="创建人">{{
+                actor(selected.createdBy)
+              }}</el-descriptions-item
+              ><el-descriptions-item label="创建时间">{{
+                dateTime(selected.createdAt)
+              }}</el-descriptions-item
+              ><el-descriptions-item label="修改人">{{
+                actor(selected.updatedBy)
+              }}</el-descriptions-item
+              ><el-descriptions-item label="修改时间">{{
+                dateTime(selected.updatedAt)
+              }}</el-descriptions-item></el-descriptions
             >
           </el-tab-pane>
           <el-tab-pane v-if="can('crm:store:history-read')" label="拜访记录" name="visits">
@@ -683,32 +810,13 @@
         ></template
       >
     </el-dialog>
-    <el-dialog v-model="editOpen" title="完善门店资料" width="560px" :close-on-click-modal="false"
-      ><el-form v-if="editing" label-position="top"
-        ><el-form-item label="门店名称" required
-          ><el-input v-model="editing.name" maxlength="200" /></el-form-item
-        ><el-form-item label="详细地址" required
-          ><el-input v-model="editing.address" maxlength="500" /></el-form-item
-        ><el-form-item label="门店类型"
-          ><el-cascader
-            v-model="editing.storeTypeCode"
-            :options="classificationCatalog.options"
-            :props="{ emitPath: false, checkStrictly: true }"
-            filterable
-            clearable
-            placeholder="选择门店行业分类"
-            style="width: 100%" /></el-form-item
-        ><el-form-item label="公开电话"
-          ><el-input v-model="editing.publicPhone" maxlength="50" /></el-form-item
-        ><el-form-item label="修改原因" required
-          ><el-input v-model="editReason" type="textarea" maxlength="500" /></el-form-item></el-form
-      ><template #footer
-        ><el-button @click="editOpen = false">取消</el-button
-        ><el-button type="primary" :loading="saving" @click="saveEdit"
-          >保存并留痕</el-button
-        ></template
-      ></el-dialog
-    >
+    <CrmStoreEditor
+      v-if="editing"
+      :store="editing"
+      :store-types="storeTypes"
+      @close="editing = null"
+      @saved="onStoreSaved"
+    />
   </section>
 </template>
 
@@ -728,6 +836,7 @@ import {
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import CrmStoreMap from './CrmStoreMap.vue'
 import CrmVisitEvidence from './CrmVisitEvidence.vue'
+import CrmStoreEditor from './CrmStoreEditor.vue'
 import {
   crmStoreApi,
   type StoreContext,
@@ -742,6 +851,7 @@ import {
 } from '@/api/core/crm-store'
 import { resolveBizDict, type DictItemView } from '@/api/core/business-settings'
 import { storeClassificationCatalog } from '@/utils/crm-store-classification'
+import { auditActorLabel } from '@/utils/audit-actor'
 import {
   GEO_REGIONS,
   remainingTime,
@@ -772,7 +882,7 @@ const title = computed(
       ALL: '商家库管理',
       LEADS: '门店提报',
       COVERAGE: '客户经营分析',
-    })[view.value],
+    })[view.value === 'MINE' && team.value ? 'TEAM' : view.value],
 )
 const isList = computed(() => !['LEADS', 'COVERAGE'].includes(view.value))
 const displayMode = ref<'list' | 'map'>('list')
@@ -807,6 +917,10 @@ const filters = reactive({
   activity: '',
   potential: '',
   storeType: '',
+  pool: '',
+  recordStatus: '',
+  phase: '',
+  protection: '',
 })
 const team = ref(false),
   reviewMode = ref(false),
@@ -830,11 +944,19 @@ const optionalColumns = [
   { key: 'activity', label: '交易活跃度' },
   { key: 'phone', label: '公开电话' },
   { key: 'poi', label: '高德 POI' },
-  { key: 'created', label: '创建时间 / 创建人' },
-  { key: 'updated', label: '修改时间 / 修改人' },
+  { key: 'createdBy', label: '创建人' },
+  { key: 'createdAt', label: '创建时间' },
+  { key: 'updatedBy', label: '修改人' },
+  { key: 'updatedAt', label: '修改时间' },
 ]
-const defaultColumns = ['poi', 'type', 'province', 'city', 'county', 'address', 'tags']
-const columns = ref([...defaultColumns]),
+const defaultColumns = computed(() =>
+  view.value === 'MINE'
+    ? ['city', 'county', 'tags', 'lastVisit', 'lastOrder', 'phone']
+    : view.value === 'ALL'
+      ? ['poi', 'type', 'province', 'city', 'county', 'address', 'tags', 'updatedBy', 'updatedAt']
+      : ['poi', 'type', 'province', 'city', 'county', 'address', 'tags'],
+)
+const columns = ref([...defaultColumns.value]),
   shown = (key: string) => columns.value.includes(key)
 const now = ref(Date.now()),
   timer = setInterval(() => {
@@ -848,6 +970,10 @@ onBeforeUnmount(() => {
   detailGeneration++
 })
 const can = (permission: string) => context.value?.permissions.includes(permission) === true
+const isOwnStore = (row: StoreRow) =>
+  !!context.value?.employeeId &&
+  row.ownerEmployeeId === context.value.employeeId &&
+  row.poolType === 'PRIVATE'
 const effectiveView = computed<StoreView>(() =>
   view.value === 'MINE' && team.value ? 'TEAM' : view.value,
 )
@@ -864,9 +990,20 @@ const potentialLabels: Record<string, string> = {
   UNKNOWN: '潜力未知',
 }
 const phaseLabels: Record<string, string> = {
-  FIRST_VISIT: '首次有效拜访',
-  FOLLOW_UP: '持续有效跟进',
+  FIRST_VISIT: '待首访',
+  FOLLOW_UP: '持续跟进',
   COOPERATING: '合作维护',
+}
+const recordStatusLabels: Record<string, string> = {
+  ACTIVE: '正常',
+  SUSPENDED: '已停用',
+  CLOSED: '已停业',
+  MERGED: '已合并',
+}
+const phaseGuidance: Record<string, string> = {
+  FIRST_VISIT: '本轮认领后 24 小时内完成有效首访；历史合作不会自动获得 60 天保护。',
+  FOLLOW_UP: '有效拜访后延续 7 天跟进期；本轮有效成交后进入 60 天合作维护。',
+  COOPERATING: '60 天内有效拜访或复购可延长归属；拜访不改变交易活跃度。',
 }
 const leadLabels: Record<string, string> = {
   PENDING_REVIEW: '待审核',
@@ -964,9 +1101,15 @@ const actor = (value: string) =>
       CRM_LIFECYCLE: '归属自动任务',
       SALES_EVIDENCE: '销售证据自动核验',
     }) as Record<string, string>
-  )[value] ||
-  value ||
-  '未知'
+  )[value] || auditActorLabel(value)
+function ownerLabel(row: StoreRow) {
+  if (row.poolType === 'PUBLIC') return '未分配'
+  if (!row.ownerName) return '负责人姓名未记录'
+  // 本人返回 HR 姓名，其他负责人当前返回员工编码，复用租户内批量姓名解析。
+  return row.ownerEmployeeId === context.value?.employeeId
+    ? row.ownerName
+    : auditActorLabel(row.ownerName)
+}
 const nearDeadline = (value: string | null) =>
   !!value && Date.parse(value) - now.value < 24 * 3600000
 const rate = (part: number, all: number) => (all ? `${((part / all) * 100).toFixed(1)}%` : '—')
@@ -992,6 +1135,9 @@ function query(): StoreQuery {
     view: effectiveView.value,
     ...filters,
     storeType: filters.storeType || undefined,
+    phase: view.value === 'MINE' || filters.pool === 'PRIVATE' ? filters.phase : undefined,
+    protection:
+      view.value === 'MINE' || filters.pool === 'PRIVATE' ? filters.protection : undefined,
     cursor: cursors.value[pageIndex.value],
     size: pageSize.value,
   }
@@ -1295,31 +1441,15 @@ async function submitLead() {
     saving.value = false
   }
 }
-const editOpen = ref(false),
-  editing = ref<StoreRow | null>(null),
-  editReason = ref('')
+const editing = ref<StoreRow | null>(null)
 function openEdit() {
   editing.value = selected.value ? { ...selected.value } : null
-  editReason.value = ''
-  editOpen.value = true
 }
-async function saveEdit() {
-  if (!editing.value || !editReason.value.trim()) {
-    ElMessage.warning('请填写修改原因')
-    return
-  }
-  saving.value = true
-  try {
-    await crmStoreApi.update(editing.value, editReason.value)
-    editOpen.value = false
-    ElMessage.success('已保存并记录变更')
-    await openDetail(editing.value)
-    await loadRows()
-  } catch (e) {
-    ElMessage.error(message(e))
-  } finally {
-    saving.value = false
-  }
+async function onStoreSaved() {
+  const row = editing.value
+  editing.value = null
+  if (row) await openDetail(row)
+  await loadRows()
 }
 async function initializePolicy() {
   try {
@@ -1346,6 +1476,7 @@ watch(
   () => route.path,
   () => {
     team.value = false
+    columns.value = [...defaultColumns.value]
     reviewMode.value = false
     Object.keys(filters).forEach((key) => {
       filters[key as keyof typeof filters] = ''
@@ -1358,6 +1489,49 @@ watch(
 
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
+.workspace-purpose {
+  margin: -4px 0 0;
+  color: $color-text-secondary;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ownership-work {
+  padding: 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  margin: 16px 0;
+  p {
+    color: $color-text-secondary;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 10px 0 0;
+  }
+  dl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 16px 0 0;
+  }
+  dt {
+    color: $color-text-secondary;
+    font-size: 12px;
+  }
+  dd {
+    margin: 4px 0 0;
+    font-size: 13px;
+  }
+  .work-entry-note {
+    padding-top: 12px;
+    border-top: 1px solid var(--el-border-color-lighter);
+  }
+}
+.ownership-work-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
 .store-workspace {
   display: flex;
   flex-direction: column;
@@ -1609,9 +1783,6 @@ button.store-address:hover {
 }
 .secondary-line {
   color: var(--app-text-secondary);
-}
-.actor {
-  word-break: break-all;
 }
 .urgent {
   color: #b45309;

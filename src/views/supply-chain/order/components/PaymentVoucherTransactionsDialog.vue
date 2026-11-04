@@ -1,6 +1,7 @@
 <template>
-  <el-dialog v-model="visible" title="逐张凭证交易单号" width="900px" append-to-body>
+  <el-dialog v-model="visible" title="付款凭证识别" width="900px" append-to-body>
     <p>收款编号：{{ payment?.paymentNo }}　回款金额：{{ moneyText(payment?.paidAmount) }}</p>
+    <el-button v-if="can('order:payment:check')" :loading="recognizing" @click="recognize">识别凭证</el-button>
     <p>以下金额来自付款凭证，不重复计入回款。空白单号表示尚无可确认的单号。</p>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <el-table v-loading="loading" :data="rows" max-height="530">
@@ -9,6 +10,9 @@
         <span v-else>图片暂不可用</span>
       </template></el-table-column>
       <el-table-column label="凭证金额" width="120"><template #default="{ row }">{{ row.voucherAmount == null ? '未识别' : moneyText(row.voucherAmount) }}</template></el-table-column>
+      <el-table-column label="凭证付款时间" width="180"><template #default="{ row }">{{ voucherTimeText(row.paidTime, row.paidTimePrecision) }}</template></el-table-column>
+      <el-table-column label="识别状态" width="110"><template #default="{ row }">{{ ({PENDING:'待识别',RECOGNIZED:'已识别',REVIEW:'需核对',FAILED:'识别失败'} as Record<string,string>)[row.recognitionStatus] || '历史记录' }}</template></el-table-column>
+      <el-table-column prop="payee" label="凭证收款方" min-width="220" />
       <el-table-column label="交易单号" min-width="280"><template #default="{ row }">
         <el-button v-if="row.transactionNo" link type="primary" @click="check(row.transactionNo)">{{ row.transactionNo }}</el-button>
         <span v-else>—</span>
@@ -20,7 +24,10 @@
 </template>
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { getPaymentVoucherTransactions, type PaymentVoucherTransaction, type OrderRegisterPaymentItem } from '@/api/core/order-register'
+import { ElMessage } from 'element-plus'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
+import { getPaymentVoucherTransactions, recognizePaymentVouchers, type PaymentVoucherTransaction, type OrderRegisterPaymentItem } from '@/api/core/order-register'
+import { voucherTimeText } from '@/utils/payment-voucher-audit'
 import { moneyText } from '@/utils/order-register-status'
 import PaymentTransactionCheckDialog from './PaymentTransactionCheckDialog.vue'
 const props = defineProps<{ modelValue: boolean; payment: OrderRegisterPaymentItem | null }>()
@@ -28,6 +35,17 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
 const rows = ref<PaymentVoucherTransaction[]>([]), error = ref('')
 const loading = ref(false), checkVisible = ref(false), selectedTransaction = ref('')
+const { can } = useSupplyPermissions()
+const recognizing = ref(false)
+async function recognize() {
+  if (!props.payment) return
+  recognizing.value = true
+  try {
+    const count = await recognizePaymentVouchers(props.payment.id)
+    ElMessage.success(count ? '已加入识别队列，稍后重新打开查看结果' : '没有可重新识别的凭证')
+  } catch (e) { ElMessage.error(e instanceof Error ? e.message : '提交失败') }
+  finally { recognizing.value = false }
+}
 let requestId = 0
 function check(value: string) { selectedTransaction.value = value; checkVisible.value = true }
 watch([() => props.modelValue, () => props.payment?.id], async ([open]) => {

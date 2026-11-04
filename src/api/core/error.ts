@@ -67,7 +67,7 @@ interface FailureBody {
   message?: string
   requestId?: string
   timestamp?: string
-  details?: { field?: string; code?: string; message?: string }[]
+  details?: { field?: string; code?: string; reason?: string; message?: string }[]
 }
 
 /** 页面统一接收 Error，既可读取 message，也可按 HTTP 状态/业务码处理。 */

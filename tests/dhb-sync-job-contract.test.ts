@@ -68,7 +68,7 @@ afterEach(() => {
 })
 
 describe('后台任务真实响应契约', () => {
-  it.each(['CUSTOMER', 'ORDER_SALES_PACKAGE', 'SALESPERSON'] as const)(
+  it.each(['CUSTOMER', 'ORDER_SALES_PACKAGE', 'SALESPERSON', 'VOUCHER_BACKFILL'] as const)(
     '%s 在 HTTP 环境没有 randomUUID 时仍用安全随机编号提交任务',
     async (scope) => {
       const getRandomValues = vi.fn(crypto.getRandomValues.bind(crypto))

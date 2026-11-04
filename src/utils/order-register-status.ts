@@ -1,56 +1,31 @@
-/**
- * 订单注册页面使用的内部状态文案。
- *
- * 切换后订单状态以订货宝映射后的内部 code 为准；飞书历史可能保留旧值，
- * 未命中映射时回退展示原值，不猜测含义。
- */
-export const orderStatusLabels: Record<string, string> = {
-  DRAFT: '草稿',
-  PENDING_OUTBOUND: '待出库',
-  PENDING_SHIPPED: '待发货',
-  RECEIVED: '已收货',
-  COMPLETED: '已完成',
-  CANCELLED: '已取消',
-  RETURNED: '已退货',
-  SUBMITTED: '已提交',
-}
+import { businessDictionaryLabel, businessDictionaryOptions, loadBusinessDictionaries } from './business-dictionary'
+export const paymentDictionaryRefs = ['ORDER_COLLECTION_STATUS', 'PAYMENT_RECEIPT_STATUS',
+  'PAYMENT_CONFIRMATION_STATUS', 'PAYMENT_VOUCHER_AUDIT_STATUS', 'PAYMENT_VOUCHER_AUDIT_REASON']
+  .map(code => ({ moduleCode: 'ORDER', code }))
+export const loadPaymentDictionaries = () => loadBusinessDictionaries(paymentDictionaryRefs)
+export const loadOrderDictionaries = () => loadBusinessDictionaries([
+  { moduleCode: 'ORDER', code: 'SALES_ORDER_STATUS' }, ...paymentDictionaryRefs,
+])
+export const paymentDictionaryOptions = (code: string) => businessDictionaryOptions('ORDER', code)
+export const receiptStatusCode = (code: string | null | undefined) => code === 'CHECKED' ? 'RECEIVED' : code
+export const confirmationStatusCode = (code: string | null | undefined) => code === 'CHECKED' ? 'CONFIRMED' : code === 'RECEIVED' ? 'UNCONFIRMED' : null
+export const paymentConfirmationLabel = (code: string | null | undefined) => businessDictionaryLabel('ORDER', 'PAYMENT_CONFIRMATION_STATUS', confirmationStatusCode(code))
 
-export const orderPaymentStatusLabels: Record<string, string> = {
-  UNPAID: '待收款',
-  PARTIAL_PAID: '部分收款',
-  PAID: '已收款',
-  CANCELLED: '已取消',
-  REFUNDED: '已退款',
-  COMPLETED: '已完成',
-}
-
-export const paymentRecordStatusLabels: Record<string, string> = {
-  PENDING: '待收款',
-  CONFIRMED: '已收款',
-  RECEIVED: '已收款',
-  CANCELLED: '已取消',
-  CHECKED: '已审核',
-}
-
-function mappedLabel(
-  value: string | null | undefined,
-  labels: Record<string, string>,
-): string {
-  const raw = value?.trim()
-  if (!raw) return '-'
-  return labels[raw] || labels[raw.toUpperCase()] || raw
-}
+// 名称和排序来自字典；可选编码必须是 Order 支持的主状态，历史自动项不可参与业务筛选。
+const orderLifecycleCodes = new Set(['DRAFT', 'SUBMITTED', 'COMPLETED', 'CANCELLED', 'DELETED'])
+export const orderLifecycleOptions = () => businessDictionaryOptions('ORDER', 'SALES_ORDER_STATUS')
+  .filter(item => orderLifecycleCodes.has(item.value))
 
 export function orderStatusLabel(value: string | null | undefined): string {
-  return mappedLabel(value, orderStatusLabels)
+  return businessDictionaryLabel('ORDER', 'SALES_ORDER_STATUS', value)
 }
 
 export function orderPaymentStatusLabel(value: string | null | undefined): string {
-  return mappedLabel(value, orderPaymentStatusLabels)
+  return businessDictionaryLabel('ORDER', 'ORDER_COLLECTION_STATUS', value)
 }
 
 export function paymentRecordStatusLabel(value: string | null | undefined): string {
-  return mappedLabel(value, paymentRecordStatusLabels)
+  return businessDictionaryLabel('ORDER', 'PAYMENT_RECEIPT_STATUS', receiptStatusCode(value))
 }
 
 export function orderStatusTag(
@@ -59,7 +34,7 @@ export function orderStatusTag(
   const raw = value?.toUpperCase()
   if (raw === 'COMPLETED' || raw === 'PAID' || raw === 'CONFIRMED' || raw === 'CHECKED')
     return 'success'
-  if (raw === 'CANCELLED' || raw === 'RETURNED') return 'info'
+  if (raw === 'CANCELLED' || raw === 'DELETED' || raw === 'RETURNED') return 'info'
   if (raw === 'PARTIAL_PAID') return 'warning'
   if (raw === 'UNPAID' || raw === 'PENDING') return 'danger'
   return 'primary'

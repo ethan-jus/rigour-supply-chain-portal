@@ -25,7 +25,7 @@ vi.mock('@/views/supply-chain/hr/components/EmployeeCityScope.vue', () => ({
     template: '<div class="employee-city-scope">管辖城市：{{ employee.employeeName }}</div>',
   },
 }))
-const links = vi.hoisted(() => ({ query: {} as Record<string, string>, canUpdate: true }))
+const links = vi.hoisted(() => ({ query: {} as Record<string, string>, canUpdate: true, canDelete: false }))
 vi.mock('vue-router', () => ({ useRoute: () => links }))
 vi.mock('@/api/core/hr', () => ({
   getHrEmployee: vi.fn(),
@@ -33,11 +33,11 @@ vi.mock('@/api/core/hr', () => ({
   confirmDhbBinding: vi.fn(),
   getHrEmployees: vi.fn(),
   getHrPositions: vi.fn(),
-  hrOrganizationApi: { employeeDepartments: vi.fn(), saveEmployee: vi.fn(), assignments: vi.fn() },
+  hrOrganizationApi: { employeeDepartments: vi.fn(), saveEmployee: vi.fn(), deleteEmployee: vi.fn(), assignments: vi.fn() },
 }))
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({
-    can: (permission: string) => (permission === 'hr:employee:update' ? links.canUpdate : true),
+    can: (permission: string) => (permission === 'hr:employee:delete' ? links.canDelete : permission === 'hr:employee:update' ? links.canUpdate : true),
   }),
 }))
 vi.mock('@/stores/navigation', () => ({ useNavigationStore: () => ({ getNavigation: () => [] }) }))
@@ -65,6 +65,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   links.query = {}
   links.canUpdate = true
+  links.canDelete = false
   vi.mocked(getDhbBindingRisks).mockResolvedValue([])
   vi.mocked(hrOrganizationApi.employeeDepartments).mockResolvedValue(deps)
   vi.mocked(getHrPositions).mockResolvedValue({
@@ -520,5 +521,56 @@ describe('关联风险确认', () => {
     expect(wrapper!.text()).toContain('关联已更新，请刷新后重新核对')
     expect(wrapper!.emitted('resolved')).toBeUndefined()
     expect(ElMessage.success).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('员工删除', () => {
+  const row = { id: '9', employeeCode: 'E9', employeeName: '测试员工', revision: 3,
+    employmentStatus: 'ACTIVE' } as HrEmployeeRecord
+  async function openList() {
+    vi.mocked(getHrEmployees).mockResolvedValue({ items: [row], total: 1, begin: 0, step: 20 })
+    wrapper = mount(Employees, {
+      global: { plugins: [ElementPlus, createPinia()], stubs: { HrEmployeeEditor: true, ElDialog: Dialog } },
+    })
+    await flushPromises()
+  }
+  function deleteButton() { return wrapper!.findAll('button').find(b => b.text() === '删除') }
+  it('仅有编辑权限不显示删除', async () => {
+    await openList()
+    expect(deleteButton()).toBeUndefined()
+    expect(hrOrganizationApi.deleteEmployee).not.toHaveBeenCalled()
+  })
+  it('有删除权限，确认后带版本删除并刷新', async () => {
+    links.canDelete = true
+    await openList()
+    const calls = vi.mocked(getHrEmployees).mock.calls.length
+    vi.mocked(hrOrganizationApi.deleteEmployee).mockResolvedValue(undefined)
+    await deleteButton()!.trigger('click')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith('删除员工“测试员工”？历史记录保留。', '删除员工', expect.any(Object))
+    expect(hrOrganizationApi.deleteEmployee).toHaveBeenCalledWith('9', 3)
+    expect(getHrEmployees).toHaveBeenCalledTimes(calls + 1)
+    expect(ElMessage.success).toHaveBeenCalledWith('已删除')
+  })
+  it('取消不发送删除请求', async () => {
+    links.canDelete = true
+    vi.mocked(ElMessageBox.confirm).mockRejectedValue('cancel')
+    await openList()
+    await deleteButton()!.trigger('click')
+    await flushPromises()
+    expect(hrOrganizationApi.deleteEmployee).not.toHaveBeenCalled()
+  })
+  it('失败保留列表并提示服务端原因', async () => {
+    links.canDelete = true
+    vi.spyOn(ElMessage, 'error').mockReturnValue({ close: vi.fn() })
+    vi.mocked(hrOrganizationApi.deleteEmployee).mockRejectedValue(new Error('员工已修改，请刷新'))
+    await openList()
+    const calls = vi.mocked(getHrEmployees).mock.calls.length
+    await deleteButton()!.trigger('click')
+    await flushPromises()
+    expect(ElMessage.error).toHaveBeenCalledWith('员工已修改，请刷新')
+    expect(getHrEmployees).toHaveBeenCalledTimes(calls)
+    expect(wrapper!.text()).toContain('测试员工')
   })
 })

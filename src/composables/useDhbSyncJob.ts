@@ -19,7 +19,7 @@ function requireJob(value: unknown): asserts value is DhbPageSyncJob {
     !item.jobId.trim() ||
     typeof item.connectorId !== 'string' ||
     !item.connectorId.trim() ||
-    !['CUSTOMER', 'ORDER_SALES_PACKAGE', 'SALESPERSON', 'BUSINESS_CHAIN'].includes(item.scope ?? '') ||
+    !['CUSTOMER', 'ORDER_SALES_PACKAGE', 'SALESPERSON', 'BUSINESS_CHAIN', 'VOUCHER_BACKFILL'].includes(item.scope ?? '') ||
     !['QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'UNKNOWN'].includes(item.status ?? '') ||
     typeof item.stage !== 'string' ||
     typeof item.startedAt !== 'string' ||

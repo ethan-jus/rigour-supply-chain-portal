@@ -23,6 +23,9 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
+import { onMounted as onPaymentMounted } from 'vue'
+import { loadPaymentDictionaries } from '@/utils/order-register-status'
+onPaymentMounted(() => { void loadPaymentDictionaries() })
 import { computed, ref, watch } from 'vue'
 import { checkPaymentTransaction, type PaymentTransactionMatch } from '@/api/core/order-register'
 import { moneyText, paymentRecordStatusLabel } from '@/utils/order-register-status'

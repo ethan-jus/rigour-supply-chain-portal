@@ -291,6 +291,8 @@ export const hrOrganizationApi = {
     id === null
       ? apiClient.post<HrEmployeeRecord>('/hr/employees', command)
       : apiClient.put<HrEmployeeRecord>(`/hr/employees/${encodeURIComponent(id)}`, command),
+  deleteEmployee: (id: string, revision: number) =>
+    apiClient.delete<void>(`/hr/employees/${encodeURIComponent(id)}`, { params: { revision } }),
   identity: (code: string) =>
     apiClient.get<HrEmployeeIdentity>(`/hr/employee-identities/${encodeURIComponent(code)}`),
   identities: (keyword: string, begin = 0, step = 20) =>

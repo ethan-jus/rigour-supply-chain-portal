@@ -54,6 +54,7 @@ vi.mock('vue-router', async (importOriginal) => {
 })
 
 import OrderListView from '@/views/supply-chain/order/OrderListView.vue'
+import { clearBusinessDictionariesForTest, seedBusinessDictionaryForTest } from '@/utils/business-dictionary'
 
 function pageResponse() {
   return {
@@ -77,7 +78,7 @@ function pageResponse() {
         ownerEmployeeName: '张三',
         departmentId: 1,
         departmentName: '销售部',
-        orderStatusCode: 'PENDING_OUTBOUND',
+        orderStatusCode: 'SUBMITTED',
         paymentStatusCode: 'UNPAID',
         dataQualityStatusCode: 'COMPLETE',
         invoiceStatusCode: null,
@@ -112,6 +113,11 @@ function pageResponse() {
 describe('订单列表页', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearBusinessDictionariesForTest()
+    seedBusinessDictionaryForTest('ORDER', 'SALES_ORDER_STATUS', [
+      { code: 'DRAFT', name: '草稿' }, { code: 'SUBMITTED', name: '进行中' },
+      { code: 'COMPLETED', name: '已完成' }, { code: 'CANCELLED', name: '已取消' },
+    ])
     mocks.routeQuery = {}
     mocks.getOrders.mockResolvedValue(pageResponse())
     mocks.getAllAreas.mockResolvedValue([])
@@ -156,11 +162,11 @@ describe('订单列表页', () => {
     expect(wrapper.text()).toContain('¥1,000.00')
     expect(wrapper.text()).toContain('收款金额')
     expect(wrapper.text()).toContain('待收金额')
-    expect(wrapper.text()).toContain('已核对金额')
+    expect(wrapper.text()).toContain('已确认金额')
     wrapper.unmount()
   })
 
-  it('金额和回款率取全部筛选汇总，移除已核对金额统计', async () => {
+  it('金额和回款率取全部筛选汇总，移除已确认金额统计', async () => {
     const page = pageResponse()
     mocks.getOrders.mockResolvedValue({ ...page, totals: {
       originalAmount: 400, payableAmount: 350, discountAmount: 50, discountRate: 0.125,
@@ -169,7 +175,7 @@ describe('订单列表页', () => {
     const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     const summary = wrapper.find('[aria-label="金额统计"]').text()
-    expect(summary).not.toContain('已核对金额')
+    expect(summary).not.toContain('已确认金额')
     for (const text of ['订货金额', '¥400.00', '订单金额', '¥350.00', '优惠额', '¥50.00', '优惠率', '12.50%', '回款金额', '回款率', '34.29%', '¥120.00', '待收金额', '¥230.00']) {
       expect(summary).toContain(text)
     }
@@ -470,7 +476,7 @@ describe('订单列表页', () => {
     document.body.innerHTML = ''
   })
 
-  it('订单状态显示中文，待完善单据不显示原始编码', async () => {
+  it('订单状态来自字典，资料待完善不替代草稿状态', async () => {
     const base = pageResponse()
     const draft = { ...base.items[0], id: '2', orderStatusCode: 'DRAFT', paymentStatusCode: 'PAID' }
     const completion = {
@@ -486,7 +492,7 @@ describe('订单列表页', () => {
 
     const text = wrapper.find('.order-register-table').text()
     expect(text).toContain('草稿')
-    expect(text).toContain('待完善')
+    expect(text).not.toContain('待完善')
     expect(text).not.toContain('DRAFT')
     expect(text).not.toContain('NEEDS_REVIEW')
     wrapper.unmount()
@@ -497,12 +503,31 @@ describe('订单列表页', () => {
     await flushPromises()
     expect(mocks.getOrders).toHaveBeenCalledTimes(1)
     expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining({
-      orderNo: 'FROM-HOME', orderStatusCode: task === 'shipment' ? 'PENDING_SHIPPED' : undefined,
-      hasUnpaid: task === 'unpaid' ? true : undefined,
+      orderNo: 'FROM-HOME', orderStatusCode: task === 'shipment' ? 'SUBMITTED' : undefined,
+      paymentStatusCode: task === 'unpaid' ? 'UNPAID' : undefined,
     }))
     await wrapper.findAll('button').find(button => button.text() === '重置')!.trigger('click')
     await flushPromises()
-    expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining({ orderNo: undefined, orderStatusCode: undefined, hasUnpaid: undefined }))
+    expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining({ orderNo: undefined, orderStatusCode: undefined, paymentStatusCode: undefined }))
+    wrapper.unmount()
+  })
+
+  it('订单状态筛选和列表使用租户字典名称', async () => {
+    seedBusinessDictionaryForTest('ORDER', 'SALES_ORDER_STATUS', [
+      { code: 'SUBMITTED', name: '租户履约中' },
+      { code: 'DELETED', name: '已删除' },
+      { code: 'AUTO_PAID', name: '已结清' },
+      { code: 'AUTO_APPROVED', name: '已审核' },
+    ])
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(wrapper.find('.order-register-table').text()).toContain('租户履约中')
+    const select = wrapper.findAllComponents(ElSelect).find(item => item.props('placeholder') === '订单状态')!
+    expect(select.findAllComponents({ name: 'ElOption' }).map(item => item.props('label'))).toEqual(['租户履约中', '已删除'])
+    select.vm.$emit('update:modelValue', 'DELETED')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining({ orderStatusCode: 'DELETED' }))
     wrapper.unmount()
   })
 

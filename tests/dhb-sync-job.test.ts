@@ -47,6 +47,25 @@ afterEach(() => {
 })
 
 describe('后台同步状态恢复', () => {
+  it('凭证补齐接收任务并轮询到结束，展示单笔上限结果，不重复提交', async () => {
+    const voucherCommand = { ...command, scope: 'VOUCHER_BACKFILL' as const }
+    api.start.mockResolvedValue({ ...running, scope: voucherCommand.scope })
+    const { state, wrapper, completed } = setup()
+    await state.start(voucherCommand)
+    expect(state.job.value?.scope).toBe('VOUCHER_BACKFILL')
+    const result = { status: 'SUCCEEDED_WITH_WARNINGS', tenants: [] }
+    api.get.mockResolvedValue({
+      ...running, scope: voucherCommand.scope, status: 'SUCCEEDED', result,
+      stage: '已检查1笔，已达本轮上限',
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(state.busy.value).toBe(false)
+    expect(state.notice.value).toBe('')
+    expect(completed).toHaveBeenCalledWith(result)
+    expect(api.start).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
   it('提交立即返回并查询状态，长任务不占一个 HTTP 请求', async () => {
     const { state, wrapper, completed } = setup()
     await state.start(command)
