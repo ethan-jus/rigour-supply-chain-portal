@@ -17,6 +17,7 @@ import {
   type CostAttachmentDraft,
 } from '@/views/supply-chain/cost/cost-attachment-draft'
 import CostAttachmentEditor from '@/views/supply-chain/cost/CostAttachmentEditor.vue'
+import { createLedgerCommand } from '@/views/supply-chain/cost/cost-ledger'
 vi.mock('@/api/core/cost', () => ({
   getCost: vi.fn(),
   saveCost: vi.fn(),
@@ -169,6 +170,48 @@ describe('按业务选择填单附件', () => {
   })
 })
 describe('费用与附件保存闭环', () => {
+  it('物流详情补全档案名称不会误报并发修改，重试仍沿用原费用', async () => {
+    const form = createLedgerCommand(true)
+    const saved = row(form)
+    const enriched = structuredClone(form)
+    enriched.revision = 2
+    enriched.ledger!.sender.displayName = '武汉仓'
+    enriched.ledger!.receivingPoints[0]!.displayName = '长江门店'
+    vi.mocked(saveCost).mockResolvedValue(saved)
+    vi.mocked(uploadCostAttachment)
+      .mockRejectedValueOnce(new Error('存储暂不可用'))
+      .mockResolvedValueOnce(attachment('a'))
+    vi.mocked(getCost)
+      .mockResolvedValueOnce(row(enriched, 2))
+      .mockResolvedValueOnce(row(enriched, 3))
+    const drafts = await appendCostAttachmentFiles([], [pdf()], 0)
+    const session = new CostAttachmentSaveSession()
+    await expect(session.save('logistics', null, form, drafts, vi.fn())).rejects.toThrow(
+      '费用已保存',
+    )
+    const result = await session.save('logistics', saved.id, form, drafts, vi.fn())
+    expect(result.revision).toBe(3)
+    expect(saveCost).toHaveBeenCalledTimes(1)
+    expect(uploadCostAttachment).toHaveBeenCalledTimes(2)
+    expect(drafts[0]!.status).toBe('uploaded')
+  })
+  it('物流收货地址被修改后仍拦截旧附件重试', async () => {
+    const form = createLedgerCommand(true)
+    vi.mocked(saveCost).mockResolvedValue(row(form))
+    vi.mocked(uploadCostAttachment).mockRejectedValueOnce(new Error('存储暂不可用'))
+    const session = new CostAttachmentSaveSession()
+    const drafts = await appendCostAttachmentFiles([], [pdf()], 0)
+    await expect(session.save('logistics', null, form, drafts, vi.fn())).rejects.toThrow(
+      '费用已保存',
+    )
+    const changed = structuredClone(form)
+    changed.ledger!.receivingPoints[0]!.address = '新的收货地址'
+    vi.mocked(getCost).mockResolvedValue(row(changed, 2))
+    await expect(session.save('logistics', 'one-bill', form, drafts, vi.fn())).rejects.toThrow(
+      '其他操作修改',
+    )
+    expect(uploadCostAttachment).toHaveBeenCalledTimes(1)
+  })
   it('先保存一次费用，逐个读取新版本后上传附件', async () => {
     const form = command(),
       saved = row(form)

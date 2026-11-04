@@ -171,6 +171,9 @@ export interface ErpSupplierProfileView {
   address: string | null
   bankName: string | null
   bankAccountNo: string | null
+  accountName?: string | null
+  invoiceTitle?: string | null
+  taxpayerNumber?: string | null
   statusCode: string
   remark: string | null
   revision: number
@@ -187,6 +190,9 @@ export interface ErpSupplierProfileCommand {
   address?: string | null
   bankName?: string | null
   bankAccountNo?: string | null
+  accountName?: string | null
+  invoiceTitle?: string | null
+  taxpayerNumber?: string | null
   statusCode?: string | null
   remark?: string | null
   revision?: number | null

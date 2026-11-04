@@ -28,6 +28,110 @@ beforeEach(() => {
   mocks.tasks.mockResolvedValue([{ connectorId: 'connector-1' }])
 })
 describe('逐页手动同步', () => {
+  it.each(['SUPPLIER', 'PURCHASE_ORDER', 'WAREHOUSE'] as const)(
+    '%s明确核对全部来源，不发送无效日期窗口',
+    async (scope) => {
+      mocks.sync.mockResolvedValue({
+        status: 'SUCCEEDED',
+        tenants: [
+          {
+            steps: [
+              {
+                objectType: scope,
+                status: 'SUCCEEDED',
+                fetched: 5,
+                changed: 2,
+                created: 1,
+                updated: 1,
+                duplicates: 3,
+                rejected: 0,
+                unmapped: 0,
+              },
+            ],
+          },
+        ],
+      })
+      const w = mount(Button, {
+        props: { scope, label: '档案' },
+        global: { plugins: [ElementPlus] },
+      })
+      await w.get('button').trigger('click')
+      await flushPromises()
+      expect(w.findComponent({ name: 'ElDatePicker' }).exists()).toBe(false)
+      expect(mocks.sync).not.toHaveBeenCalled()
+      await (w.vm as unknown as { run: () => Promise<void> }).run()
+      await flushPromises()
+      expect(mocks.sync).toHaveBeenCalledWith({ scope, connectorId: 'connector-1', maxPages: 100 })
+      expect(w.text()).toContain('新增 1 条，更新 1 条，无需更新 3 条')
+      expect(w.text()).toContain('未导入')
+      w.unmount()
+    },
+  )
+  it('采购部分拒绝不报全部完成，显示可操作原因和明确数量', async () => {
+    mocks.sync.mockResolvedValue({
+      status: 'SUCCEEDED_WITH_WARNINGS',
+      tenants: [
+        {
+          steps: [
+            {
+              objectType: 'PURCHASE_ORDER',
+              status: 'SUCCEEDED_WITH_WARNINGS',
+              fetched: 36,
+              changed: 1,
+              created: 1,
+              updated: 0,
+              duplicates: 0,
+              rejected: 35,
+              unmapped: 0,
+              message: '缺少仓库来源关联，请先到仓库信息同步仓库（35条）',
+            },
+          ],
+        },
+      ],
+    })
+    const w = mount(Button, {
+      props: { scope: 'PURCHASE_ORDER', label: '采购单' },
+      global: { plugins: [ElementPlus] },
+    })
+    await w.get('button').trigger('click')
+    await flushPromises()
+    await (w.vm as unknown as { run: () => Promise<void> }).run()
+    await flushPromises()
+    expect(w.text()).toContain('同步未全部完成：35条未导入')
+    expect(w.text()).toContain('仓库信息同步仓库')
+    w.unmount()
+  })
+  it('旧服务拒绝结果不暴露内部统计标记，也不虚构新增数量', async () => {
+    mocks.sync.mockResolvedValue({
+      status: 'SUCCEEDED_WITH_WARNINGS',
+      tenants: [
+        {
+          steps: [
+            {
+              objectType: 'SUPPLIER',
+              status: 'SUCCEEDED_WITH_WARNINGS',
+              fetched: 5,
+              changed: 0,
+              unmapped: 0,
+              message: '来源明细：SUPPLIER=5；DHB_SYNC_WINDOW_REQUESTED=1；未变化0条；拒绝5条',
+            },
+          ],
+        },
+      ],
+    })
+    const w = mount(Button, {
+      props: { scope: 'SUPPLIER', label: '供应商' },
+      global: { plugins: [ElementPlus] },
+    })
+    await w.get('button').trigger('click')
+    await flushPromises()
+    await (w.vm as unknown as { run: () => Promise<void> }).run()
+    await flushPromises()
+    expect(w.text()).toContain('5条未导入')
+    expect(w.text()).not.toContain('DHB_SYNC_WINDOW')
+    expect(w.text()).not.toContain('新增 0 条')
+    w.unmount()
+  })
   it('回款按钮仅提交RECEIPT并保留明确窗口，不在打开页面时写入', async () => {
     mocks.sync.mockResolvedValue({
       status: 'PARTIAL',

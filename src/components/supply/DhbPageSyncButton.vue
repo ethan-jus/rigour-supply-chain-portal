@@ -5,24 +5,29 @@
   <el-dialog
     v-model="visible"
     :title="syncLabel"
-    :width="incrementalCustomer ? '760px' : '600px'"
+    :width="incrementalCustomer || catalogSnapshot ? 'min(920px, 96vw)' : '600px'"
     :close-on-click-modal="false"
   >
     <el-alert
       :title="
         incrementalCustomer
           ? '同步订货宝新增和变更的客户，并重新核对本地待关联记录。保留客户原始创建时间和创建人。'
-          : `本次只同步${label}。缺少客户、商品等映射时会保留待处理，请到对应页面补齐。`
+          : catalogSnapshot
+            ? snapshotHint
+            : `本次只同步${label}。缺少客户、商品等映射时会保留待处理，请到对应页面补齐。`
       "
       type="info"
       :closable="false"
     />
     <el-form label-width="90px" style="margin-top: 16px">
-      <el-form-item v-if="!incrementalCustomer" label="来源连接器"
+      <el-form-item v-if="catalogSnapshot && connectors.length === 1" label="同步来源">
+        订货宝
+      </el-form-item>
+      <el-form-item v-else-if="!incrementalCustomer" label="来源连接器"
         ><el-select v-model="connectorId" aria-label="来源连接器" :disabled="busy"
           ><el-option v-for="id in connectors" :key="id" :value="id" :label="id" /></el-select
       ></el-form-item>
-      <el-form-item v-if="!incrementalCustomer" label="变更范围"
+      <el-form-item v-if="!incrementalCustomer && !catalogSnapshot" label="变更范围"
         ><el-date-picker
           v-model="range"
           type="datetimerange"
@@ -79,6 +84,28 @@
           {{ step.message }}
         </p>
       </template>
+      <el-table v-else-if="catalogSnapshot" :data="steps" size="small" class="snapshot-results">
+        <el-table-column label="对象" width="100">
+          <template #default="{ row }">{{ objectLabel(row.objectType) }}</template>
+        </el-table-column>
+        <el-table-column label="读取" prop="fetched" width="65" align="right" />
+        <el-table-column label="新增" width="65" align="right">
+          <template #default="{ row }">{{ row.created ?? '—' }}</template>
+        </el-table-column>
+        <el-table-column label="更新" width="65" align="right">
+          <template #default="{ row }">{{ row.updated ?? '—' }}</template>
+        </el-table-column>
+        <el-table-column label="无需更新" width="85" align="right">
+          <template #default="{ row }">{{ row.duplicates ?? '—' }}</template>
+        </el-table-column>
+        <el-table-column label="未导入" width="75" align="right">
+          <template #default="{ row }">{{ row.rejected ?? '—' }}</template>
+        </el-table-column>
+        <!-- @vue-generic {DhbSyncOrchestrationStep} -->
+        <el-table-column label="结果说明" min-width="260">
+          <template #default="{ row }">{{ snapshotExplanation(row) }}</template>
+        </el-table-column>
+      </el-table>
       <el-table v-else :data="steps" size="small">
         <el-table-column label="对象" prop="objectType" />
         <el-table-column label="读取" prop="fetched" />
@@ -96,7 +123,7 @@
         v-if="!incrementalCustomer"
         type="primary"
         :loading="busy"
-        :disabled="!connectorId || (!incrementalCustomer && !range)"
+        :disabled="!connectorId || (!incrementalCustomer && !catalogSnapshot && !range)"
         @click="run"
         >开始{{ syncLabel }}</el-button
       ></template
@@ -106,12 +133,24 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
-import { getDhbSyncTasks, type DhbSyncOrchestrationResult } from '@/api/core/dhb-orchestration'
+import {
+  getDhbSyncTasks,
+  type DhbSyncOrchestrationResult,
+  type DhbSyncOrchestrationStep,
+} from '@/api/core/dhb-orchestration'
 import { syncDhbPage, type DhbPageScope } from '@/api/core/dhb-page-sync'
 import { useDhbSyncJob } from '@/composables/useDhbSyncJob'
 import DhbSyncJobProgress from './DhbSyncJobProgress.vue'
 const props = defineProps<{ scope: DhbPageScope; label: string; buttonLabel?: string }>()
 const incrementalCustomer = computed(() => props.scope === 'CUSTOMER')
+const catalogSnapshot = computed(() =>
+  ['SUPPLIER', 'PURCHASE_ORDER', 'WAREHOUSE'].includes(props.scope),
+)
+const snapshotHint = computed(() =>
+  props.scope === 'PURCHASE_ORDER'
+    ? '核对订货宝全部采购单。请先在供应商档案、仓库信息和商品页面同步基础资料，缺少来源关联的单据不会导入。'
+    : `核对订货宝全部${props.label}，按来源关联新增或更新档案，保留本地手工维护的信息。`,
+)
 const syncLabel = computed(() => (incrementalCustomer.value ? '同步' : `同步${props.label}`))
 const emit = defineEmits<{ completed: [result: DhbSyncOrchestrationResult] }>()
 const { can } = useSupplyPermissions()
@@ -134,7 +173,29 @@ const {
 })
 const busy = computed(() => loading.value || jobBusy.value)
 const steps = computed(() => result.value?.tenants.flatMap((t) => t.steps) ?? [])
-const success = computed(() => result.value?.status === 'SUCCEEDED' && steps.value.length > 0)
+const success = computed(
+  () =>
+    result.value?.status === 'SUCCEEDED' &&
+    steps.value.length > 0 &&
+    steps.value.every((step) => !step.rejected && !step.unmapped && step.status === 'SUCCEEDED'),
+)
+const snapshotLabels: Record<string, string> = {
+  SUPPLIER: '供应商',
+  PURCHASE_ORDER: '采购单',
+  WAREHOUSE: '仓库',
+}
+const objectLabel = (type: string) => snapshotLabels[type] || type
+function snapshotExplanation(step: DhbSyncOrchestrationStep) {
+  // 兼容尚未重启的旧服务，内部统计标记不作为面向业务的结果说明。
+  if (step.message?.startsWith('来源明细：')) {
+    const rejected = step.rejected ?? Number(step.message.match(/拒绝(\d+)条/)?.[1] || 0)
+    if (rejected) return `${rejected}条未导入，请核对供应商、仓库和商品来源关联后重试。`
+    if (step.message.includes('DHB_SYNC_WINDOW_UNSUPPORTED_BY_SOURCE_API=1'))
+      return '来源接口不支持变更时间筛选，本次已核对全部来源记录。'
+    return '来源记录已核对。'
+  }
+  return step.message || (step.unmapped ? `${step.unmapped}项字典待关联` : '来源记录已核对。')
+}
 const customerMetrics = computed(() => {
   const sum = (key: 'created' | 'updated' | 'repaired' | 'rejected') =>
     steps.value.length && steps.value.every((step) => step[key] != null)
@@ -155,6 +216,20 @@ const customerMetrics = computed(() => {
   ]
 })
 const resultTitle = computed(() => {
+  if (catalogSnapshot.value) {
+    if (!steps.value.length) return '同步未取得完整结果，请查看结果说明'
+    const rejected = steps.value.reduce(
+      (n, step) => n + (step.rejected ?? Number(step.message?.match(/拒绝(\d+)条/)?.[1] || 0)),
+      0,
+    )
+    if (rejected) return `同步未全部完成：${rejected}条未导入，请按结果说明补齐后重试`
+    if (!success.value) return '同步结束，仍有待核对项，请查看结果说明'
+    const completeCounts = steps.value.every(
+      (step) => step.created != null && step.updated != null && step.duplicates != null,
+    )
+    if (!completeCounts) return '同步完成，当前服务未提供新增、更新的完整明细'
+    return `同步完成：新增 ${steps.value.reduce((n, s) => n + s.created!, 0)} 条，更新 ${steps.value.reduce((n, s) => n + s.updated!, 0)} 条，无需更新 ${steps.value.reduce((n, s) => n + s.duplicates!, 0)} 条`
+  }
   const completed =
     success.value ||
     (steps.value.length &&
@@ -191,7 +266,12 @@ async function open() {
   if (incrementalCustomer.value && connectorId.value && !error.value) await run()
 }
 async function run() {
-  if ((!incrementalCustomer.value && !range.value) || !connectorId.value || busy.value) return
+  if (
+    (!incrementalCustomer.value && !catalogSnapshot.value && !range.value) ||
+    !connectorId.value ||
+    busy.value
+  )
+    return
   loading.value = true
   error.value = ''
   result.value = null
@@ -210,7 +290,9 @@ async function run() {
       connectorId: connectorId.value,
       ...(incrementalCustomer.value
         ? { incremental: true }
-        : { from: range.value![0].toISOString(), to: range.value![1].toISOString() }),
+        : catalogSnapshot.value
+          ? {}
+          : { from: range.value![0].toISOString(), to: range.value![1].toISOString() }),
       maxPages: 100,
     })
     emit('completed', result.value)

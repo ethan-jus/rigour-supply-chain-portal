@@ -1,5 +1,6 @@
 import { randomId } from '@/utils/random-id'
 import { errorMessage } from '@/api/core/error'
+import type { LedgerParty } from '@/types/cost-ledger'
 import {
   getCost,
   saveCost,
@@ -97,7 +98,21 @@ function stable(value: unknown): string {
   )
 }
 function formSignature(command: CostCommand) {
-  return stable({ ...command, revision: null })
+  const data = { ...command, revision: null }
+  if (data.ledger) {
+    // 档案名称由详情接口按编码补全，不属于费用业务修订；地址和联系人仍参与校验。
+    const withoutDisplayName = (party: LedgerParty) => {
+      const result = { ...party }
+      delete result.displayName
+      return result
+    }
+    data.ledger = {
+      ...data.ledger,
+      sender: withoutDisplayName(data.ledger.sender),
+      receivingPoints: data.ledger.receivingPoints.map(withoutDisplayName),
+    }
+  }
+  return stable(data)
 }
 
 /** 保存结果不确定或附件部分失败时沿用本次单据，不重新创建费用。 */
@@ -114,7 +129,10 @@ export class CostAttachmentSaveSession {
   ): Promise<CostRecord> {
     if (this.savedRecord) {
       const current = await getCost(category, this.savedRecord.id)
-      if (current.statusCode !== 'DRAFT' || stable(current.data) !== stable(this.savedRecord.data))
+      if (
+        current.statusCode !== 'DRAFT' ||
+        formSignature(current.data) !== formSignature(this.savedRecord.data)
+      )
         throw new Error('费用已被其他操作修改，请保留附件并重新打开费用核对')
       this.savedRecord = current
       command.revision = current.revision
@@ -144,7 +162,10 @@ export class CostAttachmentSaveSession {
       } catch {
         throw new Error('附件已上传，费用信息刷新失败，请重试核对')
       }
-      if (current.statusCode !== 'DRAFT' || stable(current.data) !== stable(this.savedRecord.data))
+      if (
+        current.statusCode !== 'DRAFT' ||
+        formSignature(current.data) !== formSignature(this.savedRecord.data)
+      )
         throw new Error('费用已被其他操作修改，请重新打开费用核对')
       this.savedRecord = current
       command.revision = current.revision

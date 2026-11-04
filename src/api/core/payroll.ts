@@ -199,6 +199,83 @@ export interface PayrollQuery {
   departmentId?: number
   statusCode?: string
   payrollCategory?: string
+  payrollIds?: string[]
+}
+export interface PayrollPerformanceExport {
+  payrollId: string
+  payrollRevision: number
+  month: string
+  employeeCode: string
+  employeeName: string
+  cityName: string | null
+  categories: {
+    code: string
+    name: string
+    salesAmount: number
+    collectionAmount: number
+    commission: number | null
+  }[]
+  clothSales: {
+    code: string
+    name: string
+    salesAmount: number
+    /** 当月首次整单付清订单的台呢数量，按订单原单位分别汇总。 */
+    quantities: { unitCode: string; quantity: number }[]
+  }[]
+  salesAmount: number
+  collectionAmount: number
+  refundAmount: number
+  collectionTarget: number | null
+  salesTarget: number | null
+  commission: number | null
+  issues: string[]
+  cityCode: string | null
+  role: string | null
+  entryDate: string | null
+  leaveDate: string | null
+  summary: {
+    expectedDays: number | null
+    actualDays: number | null
+    expectedCheckins: number | null
+    actualCheckins: number | null
+    expectedVisits: number | null
+    actualVisits: number | null
+    processDeduction: number | null
+  } | null
+  metrics: {
+    code: string
+    name: string
+    actual: number | null
+    target: number | null
+    weight: number | null
+    evidence: string | null
+  }[]
+  collectionTargetBasis: string | null
+}
+export interface PayrollCommissionReview {
+  payrollId: string
+  payrollRevision: number
+  month: string
+  employeeCode: string
+  employeeName: string
+  sourceFingerprint: string
+  savedCommission: number | null
+  previewCommission: number | null
+  difference: number | null
+  resolvedSubtotal: number
+  lines: {
+    sourceLineId: string
+    recipientRole: string
+    orderNo: string
+    productName: string
+    unitCode: string
+    quantity: number | null
+    savedAmount: number | null
+    previewAmount: number | null
+    ruleName: string | null
+    basis: string | null
+  }[]
+  issues: string[]
 }
 export interface PayrollPage<T> {
   total: number
@@ -380,13 +457,24 @@ export const previewPayroll = (month: string, employeeCodes: string[]) =>
 export const updatePayrollProfiles = (employees: PayrollProfilePatch[], reason: string) =>
   apiClient.put<void>(`${base}/employee-profiles`, { employees, reason }, options)
 export async function exportPayroll(params: PayrollQuery): Promise<PayrollRecord[]> {
-  const read = () =>
-    apiClient.get<PayrollRecord[]>(`${base}/export`, {
-      params,
-      ...options,
-      timeout: 120000,
-      errorFeedback: 'inline',
-    })
+  const requestOptions = { ...options, timeout: 120000, errorFeedback: 'inline' as const }
+  const read = async () => {
+    if (!params.payrollIds)
+      return apiClient.get<PayrollRecord[]>(`${base}/export`, { params, ...requestOptions })
+    try {
+      // Large selections must not exceed gateway URL/header limits. This endpoint only reads.
+      return await apiClient.post<PayrollRecord[]>(`${base}/export`, params, requestOptions)
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 405) throw error
+      // Compatibility with GET-only services; the caller still enforces the selected ID set.
+      const filters = { ...params }
+      delete filters.payrollIds
+      return apiClient.get<PayrollRecord[]>(`${base}/export`, {
+        params: filters,
+        ...requestOptions,
+      })
+    }
+  }
   try {
     return await read()
   } catch (error) {
@@ -395,6 +483,18 @@ export async function exportPayroll(params: PayrollQuery): Promise<PayrollRecord
     return read()
   }
 }
+export const exportPayrollPerformance = (params: PayrollQuery) =>
+  apiClient.post<PayrollPerformanceExport[]>(`${base}/performance-export`, params, {
+    ...options,
+    timeout: 180000,
+    errorFeedback: 'inline',
+  })
+export const previewPayrollCommission = (params: PayrollQuery) =>
+  apiClient.post<PayrollCommissionReview[]>(`${base}/commission-review`, params, {
+    ...options,
+    timeout: 180000,
+    errorFeedback: 'inline',
+  })
 export const getPayrollDetail = (id: string) =>
   apiClient.get<PayrollRecord>(`${base}/${encodeURIComponent(id)}`, options)
 export const registerPayrollPayment = (

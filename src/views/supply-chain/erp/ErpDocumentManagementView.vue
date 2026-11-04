@@ -9,6 +9,7 @@
         </SupplyPageHelp>
       </div>
       <div class="heading-actions">
+        <el-button v-if="mode === 'stockIn' && can('erp:stock-in:confirm', 'erp:supply:write')" type="primary" @click="purchaseReceiptVisible = true">采购入库</el-button>
         <DhbPageSyncButton
           :scope="pageSyncScope"
           :label="pageConfig.shortTitle"
@@ -24,6 +25,7 @@
       </div>
     </div>
 
+    <ErpProcurementStockInDialog v-model="purchaseReceiptVisible" @saved="loadRows" />
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="searchRows">
         <el-form-item :label="`${pageConfig.shortTitle}号`">
@@ -847,6 +849,7 @@ import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
+import ErpProcurementStockInDialog from '@/components/erp/ErpProcurementStockInDialog.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
 import type { DhbPageScope } from '@/api/core/dhb-page-sync'
 import { randomId } from '@/utils/random-id'
@@ -936,6 +939,7 @@ interface StockInLineForm {
   quantity: number
 }
 
+const purchaseReceiptVisible = ref(false)
 const route = useRoute()
 const { can } = useSupplyPermissions()
 function canChange(action: string) {

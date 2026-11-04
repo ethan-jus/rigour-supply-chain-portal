@@ -1027,6 +1027,7 @@
             <dd>{{ responsibleName(detail) }}</dd>
           </div>
         </dl>
+        <el-alert v-if="detail.procurementReference" :title="'货款来源于已确认采购单 ' + detail.procurementReference.orderCode + '，需到采购订单查看原始记录。'" type="info" :closable="false" />
         <CostRelatedSource v-if="detail.data.expense?.relatedCost" :data="detail.data" />
         <template v-if="detail.data.logistics">
           <h3>{{ logisticsRoles(detail.data.logistics.legCode).title }}</h3>
@@ -1052,9 +1053,10 @@
         </section>
         <section class="cost-detail-section">
           <CostAttachments
+            v-if="!detail.procurementReference"
             :category="category"
             :row="detail"
-            :editable="can(permission + ':write')"
+            :editable="!detail.procurementReference && can(permission + ':write')"
             @changed="refreshDetail"
           />
         </section>
@@ -1062,7 +1064,7 @@
       <template #footer>
         <div v-if="detail" class="heading-actions">
           <el-button
-            v-if="detail.statusCode !== 'VOID' && can(permission + ':write')"
+            v-if="!detail.procurementReference && detail.statusCode !== 'VOID' && can(permission + ':write')"
             :disabled="saving"
             @click="editDetail"
             >编辑费用</el-button
@@ -1076,7 +1078,7 @@
             >核对并确认</el-button
           >
           <el-button
-            v-if="detail.statusCode !== 'VOID' && can(permission + ':void')"
+            v-if="!detail.procurementReference && detail.statusCode !== 'VOID' && can(permission + ':void')"
             :disabled="saving"
             @click="transition(detail, 'void')"
             >作废</el-button

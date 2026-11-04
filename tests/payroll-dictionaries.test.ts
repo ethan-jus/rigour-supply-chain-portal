@@ -39,6 +39,14 @@ beforeEach(() => {
 })
 afterEach(clearBusinessDictionariesForTest)
 describe('薪酬商品单位展示', () => {
+  it('导出主动刷新单位，即使60秒缓存未过期也采用业务最新名称', async () => {
+    vi.mocked(resolveBizDict).mockResolvedValueOnce(units('旧单位')).mockResolvedValueOnce(units('更新后的单位'))
+    await loadPayrollProductUnits()
+    expect(payrollUnitName('SET')).toBe('旧单位')
+    await loadPayrollProductUnits(true)
+    expect(payrollUnitName('SET')).toBe('更新后的单位')
+    expect(resolveBizDict).toHaveBeenCalledTimes(2)
+  })
   it('直接进入页面时加载当前字典，异步返回后名称响应更新，不硬编码套的名称', async () => {
     let finish!: (value: EffectiveDictView) => void
     vi.mocked(resolveBizDict).mockReturnValueOnce(

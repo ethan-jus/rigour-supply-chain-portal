@@ -10,6 +10,9 @@ const moneyHeaders = new Set([
   '押金',
   '单价',
   '进货单价',
+  '本单我方费用（元）',
+  '本单费用总额（元）',
+  '筛选期归属费用（元）',
 ])
 const numericHeaders = new Set([...moneyHeaders, '数量', '面积（㎡）'])
 

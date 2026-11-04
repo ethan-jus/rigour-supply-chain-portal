@@ -48,17 +48,26 @@
         @update:model-value="policy.allowanceVersionId = $event || null"
         clearable
         filterable
-        :loading="loading"
-        :disabled="disabled"
+        :loading="loading || employmentLoading"
+        :disabled="disabled || (!!employeeCode && (employmentLoading || !!employmentIssue))"
         placeholder="未单独关联时，沿用适用的部门补贴规则"
       >
         <el-option v-for="plan in plans" :key="plan.id" :value="plan.id" :label="planLabel(plan)" />
       </el-select>
       <p v-if="policy.allowanceVersionId && !activeSelection" class="field-hint">
-        历史关联：{{ historicalSelection }}。当前不可重新选用，可选择使用中的方案替换。
+        已关联：{{ historicalSelection }}。当前条件下不可选用，请核对身份、任职部门和生效月份。
         <el-button v-if="!disabled" link type="primary" @click="policy.allowanceVersionId = null"
           >清除历史关联</el-button
         >
+      </p>
+      <p v-if="employeeCode && employmentIssue" class="field-hint" role="alert">
+        {{ employmentIssue }}
+      </p>
+      <p
+        v-else-if="employeeCode && !loading && !employmentLoading && !plans.length"
+        class="field-hint"
+      >
+        该员工在所选生效月份暂无可关联的补贴方案，请先维护适用补贴规则，或留空沿用部门规则。
       </p>
       <p class="field-hint">
         关联方案替代部门补贴，不重复累加。750元可维护为一个固定补贴项，也可由交通、话费、电脑补贴合计组成。
@@ -105,15 +114,21 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import type { PayrollComponentVersionView } from '@/api/core/payroll-scheme/models/PayrollComponentVersionView'
 import { getPayrollComponents } from '@/api/core/payroll-scheme/components'
 import { errorMessage } from '@/api/core/error'
 import { componentVersionState } from '@/utils/payroll-component-versions'
-import { businessDate } from '@/utils/business-date'
+import { businessDate, businessMonthRange } from '@/utils/business-date'
+import {
+  getHrEmployees,
+  hrOrganizationApi,
+  type HrAssignment,
+  type HrEmployeeRecord,
+} from '@/api/core/hr'
 import HrDateCalendar from './HrDateCalendar.vue'
-const props = defineProps<{ disabled?: boolean }>()
+const props = defineProps<{ disabled?: boolean; employeeCode?: string }>()
 const form = defineModel<PayrollSchemeDefinition>({ required: true })
 if (!props.disabled)
   form.value.personalPolicy ??= {
@@ -138,11 +153,83 @@ const isManager = computed(() => ['CITY_MANAGER', 'TRAINEE_MANAGER'].includes(fo
 const options = ref<PayrollComponentVersionView[]>([]),
   loading = ref(false),
   error = ref('')
+const employee = ref<HrEmployeeRecord | null>(null)
+const assignments = ref<HrAssignment[]>([])
+const employmentLoading = ref(false)
+const employmentError = ref('')
+let employmentRequest = 0
+watch(
+  () => props.employeeCode,
+  async (code) => {
+    const request = ++employmentRequest
+    employee.value = null
+    assignments.value = []
+    employmentError.value = ''
+    employmentLoading.value = !!code
+    if (!code) return
+    try {
+      const page = await getHrEmployees({ begin: 0, step: 2, employeeCode: code })
+      // 同名离职档案不能代替本次选中的员工编号。
+      const matches = page.items.filter((row) => row.employeeCode === code)
+      if (matches.length !== 1) throw new Error('无法唯一定位当前员工档案，请刷新后重试')
+      const current = matches[0]!
+      const history = await hrOrganizationApi.assignments(current.id)
+      if (current.entryDate) businessDate(current.entryDate)
+      for (const assignment of history) {
+        businessDate(assignment.effectiveFrom)
+        if (assignment.effectiveTo) businessDate(assignment.effectiveTo)
+      }
+      if (request !== employmentRequest) return
+      employee.value = current
+      assignments.value = history
+    } catch (e) {
+      if (request === employmentRequest)
+        employmentError.value = errorMessage(e, '员工任职记录加载失败，请重试')
+    } finally {
+      if (request === employmentRequest) employmentLoading.value = false
+    }
+  },
+  { immediate: true },
+)
+const salaryMonth = computed(() =>
+  /^\d{4}-\d{2}-01$/.test(form.value.effectiveFrom) ? form.value.effectiveFrom : '',
+)
+const assignmentDate = computed(() => {
+  if (!salaryMonth.value) return ''
+  const entry = employee.value?.entryDate ? businessDate(employee.value.entryDate) : null
+  if (!entry || entry <= salaryMonth.value) return salaryMonth.value
+  return entry <= businessMonthRange(salaryMonth.value.slice(0, 7))[1] ? entry : ''
+})
+const matchingAssignments = computed(() =>
+  assignmentDate.value
+    ? assignments.value.filter(
+        (row) =>
+          businessDate(row.effectiveFrom) <= assignmentDate.value &&
+          (!row.effectiveTo || businessDate(row.effectiveTo) >= assignmentDate.value),
+      )
+    : [],
+)
+const employmentIssue = computed(() => {
+  if (!props.employeeCode || employmentLoading.value) return ''
+  if (employmentError.value) return employmentError.value
+  if (!salaryMonth.value) return '请先选择有效的薪资生效月份'
+  if (!assignmentDate.value) return '薪资生效月份早于该员工档案的入职月份，请核对生效月份'
+  if (matchingAssignments.value.length !== 1)
+    return '该员工在薪资生效月份没有唯一有效的任职部门，请核对入职日期和任职记录'
+  return ''
+})
 const plans = computed(() =>
   options.value.filter(
     (p) =>
-      ['ALL', form.value.role].includes(p.definition.role) &&
-      componentVersionState(p, options.value, businessDate(new Date())) === '使用中',
+      !p.deleted &&
+      p.definition.role === form.value.role &&
+      !!salaryMonth.value &&
+      componentVersionState(p, options.value, salaryMonth.value) === '使用中' &&
+      (!props.employeeCode ||
+        (!employmentLoading.value &&
+          !employmentIssue.value &&
+          matchingAssignments.value.length === 1 &&
+          p.definition.departmentIds.includes(matchingAssignments.value[0]!.departmentId))),
   ),
 )
 const activeSelection = computed(() =>
@@ -159,6 +246,16 @@ function planLabel(plan: PayrollComponentVersionView) {
     plan.definition.allowance?.items.reduce((s, item) => s + (item.amount || 0), 0) || 0
   return `${plan.definition.name} · ${amount.toFixed(2)}元/月 · ${plan.definition.effectiveFrom}起 · v${plan.version}`
 }
+function validate() {
+  if (!policy.value?.allowanceVersionId) return null
+  if (loading.value || employmentLoading.value) return '正在核对关联补贴方案，请稍候再保存'
+  if (error.value) return error.value
+  if (employmentIssue.value) return employmentIssue.value
+  return activeSelection.value
+    ? null
+    : '关联补贴方案不适用于当前身份、任职部门或生效月份，请重新选择或清除关联'
+}
+defineExpose({ validate })
 onMounted(async () => {
   loading.value = true
   try {

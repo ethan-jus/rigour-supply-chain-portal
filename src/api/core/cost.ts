@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import type { LogisticsLedger, WarehouseLedger } from '@/types/cost-ledger'
 export type CostCategory =
   | 'logistics'
   | 'marketing'
@@ -27,6 +28,10 @@ export interface CostQuery {
   objectName?: string
   productName?: string
   specification?: string
+  ledgerFeeType?: string
+  warehouseCode?: string
+  carrierCode?: string
+  orderTypeCode?: string
   senderName?: string
   receiverName?: string
   carrierName?: string
@@ -106,6 +111,8 @@ export interface CostExpenseDetails {
   relatedCost?: { source: 'ERP' | 'ORDER'; category: string; id: string; revision: number } | null
 }
 export interface CostCommand {
+  ledger?: LogisticsLedger | null
+  warehouseLedger?: WarehouseLedger | null
   requestId: string
   revision: number | null
   title: string
@@ -163,6 +170,8 @@ export interface CostCommand {
   reason: string
 }
 export interface CostRecord {
+  procurementReference?: { orderId: number; orderCode: string; lineId: number } | null
+  periodAmount?: number | null
   id: string
   documentNo: string
   categoryCode: string
@@ -178,6 +187,9 @@ export interface CostRecord {
   updatedTime: string
 }
 export interface CostPage {
+  pendingAmount?: number
+  warehouseCount?: number
+  thirdPartyCount?: number
   total: number
   begin: number
   step: number
@@ -289,11 +301,13 @@ export async function saveCost(
       payeeName,
       marketing,
       externalDocuments,
+      ledger,
+      warehouseLedger,
       ...common
     } = source
     const command =
       category === 'logistics'
-        ? { ...common, logistics }
+        ? { ...common, logistics, ledger }
         : {
             ...common,
             rental,
@@ -303,6 +317,7 @@ export async function saveCost(
             payeeName,
             marketing,
             externalDocuments,
+            warehouseLedger,
           }
     return id
       ? apiClient.put<CostRecord>(path, command, options)

@@ -7,6 +7,7 @@
       </div>
     </div>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
+    <el-alert v-if="summaryError" :title="summaryError" type="error" :closable="false" />
     <el-alert v-if="reviewError" :title="reviewError" type="error" :closable="false" />
     <PayrollRuleReviewPanel
       :reviews="ruleReviews"
@@ -128,11 +129,20 @@
             >生成月度薪酬</el-button
           >
           <el-button
+            v-if="can('hr:payroll:calculate')"
+            :loading="reviewExporting"
+            :disabled="loading || saving || batchBusy || exporting"
+            title="按现行付清日规则试算缺少历史政策的销售订单，仅导出差异，不保存工资"
+            @click="exportCommissionReview"
+            >提成试算差异</el-button
+          >
+          <el-button
             :loading="exporting"
-            aria-label="导出筛选结果"
-            title="导出当前筛选结果"
+            :disabled="loading || saving || batchBusy"
+            :aria-label="selection.length ? `导出已选${selection.length}人` : '导出筛选结果'"
+            :title="selection.length ? '仅导出已勾选的工资单' : '导出当前筛选条件下全部工资单'"
             @click="exportAll"
-            >导出</el-button
+            >{{ selection.length ? `导出已选（${selection.length}）` : '导出' }}</el-button
           >
           <el-button :loading="loading" :disabled="batchBusy" @click="workflowChanged"
             >刷新</el-button
@@ -197,6 +207,7 @@
       </div>
       <div v-if="selection.length" class="payroll-selection-bar">
         <span>已选本页 {{ selection.length }} 人</span>
+        <span class="field-hint">导出仅包含已选人员</span>
         <el-button
           v-if="can('hr:payroll:confirm')"
           :disabled="!selection.length || loading || saving || batchBusy"
@@ -221,12 +232,13 @@
           v-loading="loading"
           :data="page.items"
           row-key="id"
+          :empty-text="loadError ? '薪酬列表暂不可用，请重试' : '当前筛选下暂无薪酬记录'"
           height="100%"
+          scrollbar-always-on
           class="business-table supply-scroll-table"
           @selection-change="selection = $event"
         >
           <el-table-column
-            v-if="can('hr:payroll:confirm') || can('hr:payroll:calculate')"
             type="selection"
             width="44"
             fixed="left"
@@ -244,6 +256,12 @@
             </template>
           </el-table-column>
           <el-table-column
+            prop="employeeCode"
+            label="员工编号"
+            min-width="150"
+            show-overflow-tooltip
+          />
+          <el-table-column
             prop="departmentName"
             label="部门"
             min-width="105"
@@ -256,7 +274,7 @@
             }}</template></el-table-column
           >
           <el-table-column
-            v-for="field in moneyFields.filter((item) => ['grossPay', 'netPay'].includes(item.key))"
+            v-for="field in moneyFields"
             :key="field.key"
             :label="field.label"
             :min-width="field.minWidth"
@@ -268,7 +286,12 @@
               }}</span></template
             >
           </el-table-column>
-          <el-table-column label="状态" width="90">
+          <el-table-column label="实际发放" min-width="110" align="right"
+            ><template #default="{ row }">{{
+              payrollMoney(payrollPaid(row as PayrollRecord))
+            }}</template></el-table-column
+          >
+          <el-table-column label="状态" min-width="180">
             <template #default="{ row }">
               <el-button
                 v-if="row.statusCode === 'REVIEW'"
@@ -276,7 +299,9 @@
                 type="warning"
                 @click="showDetail(row as PayrollRecord, 'review')"
               >
-                待处理
+                待处理<span v-if="row.calculation.issues?.length">
+                  · {{ payrollReviewGroups(row.calculation.issues).length }}类</span
+                >
               </el-button>
               <el-tag v-else :type="row.statusCode === 'PAID' ? 'success' : 'primary'">{{
                 payrollStatusLabel(
@@ -284,6 +309,8 @@
                   costLabel('PAYROLL_STATUS', row.statusCode),
                 )
               }}</el-tag>
+              <p v-if="row.paymentBlockReason" class="field-hint">{{ row.paymentBlockReason }}</p>
+              <el-tag v-if="needsRuleReview(row.id)" type="warning">规则变更待复核</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="创建人" min-width="125" show-overflow-tooltip
@@ -972,6 +999,8 @@ import type { CostAudit } from '@/api/core/cost'
 import {
   calculatePayroll,
   exportPayroll,
+  exportPayrollPerformance,
+  previewPayrollCommission,
   getPayrollDetail,
   cancelPayrollCorrection,
   type PayrollCorrection,
@@ -991,6 +1020,7 @@ import {
 
 import { payrollUnitName } from '@/utils/payroll-dictionaries'
 import { exportPayrollRecords, exportPayrollDetails } from '@/utils/payroll-detail-export'
+import { exportCommissionReviewWorkbook } from '@/utils/payroll-commission-review-export'
 import { loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { auditLabel } from '../cost/cost-audit'
 import { displayRecordDateTime } from '@/utils/business-display'
@@ -1047,6 +1077,7 @@ const workflowHint = computed(
 )
 const loading = ref(false),
   loadError = ref(''),
+  summaryError = ref(''),
   saving = ref(false)
 const preparationPanel = ref<InstanceType<typeof PayrollPreparationPanel>>(),
   settlementDialog = ref<InstanceType<typeof PayrollSettlementDialog>>()
@@ -1209,6 +1240,7 @@ async function load() {
   const version = ++loadVersion
   loading.value = true
   loadError.value = ''
+  summaryError.value = ''
   ruleReviews.value = []
   reviewError.value = ''
   try {
@@ -1225,7 +1257,7 @@ async function load() {
       statusCode: statusCode.value || undefined,
       payrollCategory: payrollCategory.value || undefined,
     }
-    const [result, totals, reviews] = await Promise.all([
+    const [result, totals, reviews] = await Promise.allSettled([
       getPayroll(query),
       getPayrollSummary(query),
       getPayrollRuleReviews('PAYROLL', month.value)
@@ -1236,10 +1268,20 @@ async function load() {
         })),
     ])
     if (version === loadVersion) {
-      ruleReviews.value = reviews.items
-      reviewError.value = reviews.error
-      page.value = result
-      summary.value = totals
+      if (reviews.status === 'fulfilled') {
+        ruleReviews.value = reviews.value.items
+        reviewError.value = reviews.value.error
+      } else reviewError.value = errorMessage(reviews.reason, '规则复核状态加载失败，请重试')
+      if (result.status === 'fulfilled') page.value = result.value
+      else {
+        page.value = { ...page.value, items: [], total: 0 }
+        loadError.value = '薪酬列表加载失败：' + errorMessage(result.reason, '请稍后重试')
+      }
+      if (totals.status === 'fulfilled') summary.value = totals.value
+      else {
+        summary.value = null
+        summaryError.value = '薪酬汇总暂不可用：' + errorMessage(totals.reason, '请稍后重试')
+      }
     }
   } catch (e) {
     if (version === loadVersion) {
@@ -1462,11 +1504,31 @@ async function showDetail(row: PayrollRecord, tab?: string) {
   }
 }
 const exporting = ref(false)
+const reviewExporting = ref(false)
+async function exportCommissionReview() {
+  reviewExporting.value = true
+  try {
+    const ids = [...new Set(selection.value.map(r => r.id))]
+    const rows = await exportPayroll({ begin: 0, step: 200, month: month.value,
+      employeeName: employeeNameFilter.value.trim() || undefined, employeeCode: employeeCodeFilter.value.trim() || undefined,
+      departmentId: departmentId.value, statusCode: statusCode.value || undefined, payrollCategory: payrollCategory.value || undefined,
+      ...(ids.length ? { payrollIds: ids } : {}) })
+    if (ids.length && (rows.length !== ids.length || rows.some(r => !ids.includes(r.id)))) throw new Error('所选工资单已变更，请刷新后重新选择')
+    if (!rows.length) { ElMessage.info('当前范围没有工资单'); return }
+    const reviews = []
+    for (let begin = 0; begin < rows.length; begin += 200) reviews.push(...await previewPayrollCommission({ begin: 0, step: 200,
+      month: month.value, payrollIds: rows.slice(begin, begin + 200).map(r => r.id) }))
+    await exportCommissionReviewWorkbook(rows, reviews)
+    ElMessage.success('提成试算差异已导出，正式工资未修改')
+  } catch (e) { ElMessage.error(errorMessage(e, '提成试算失败')) }
+  finally { reviewExporting.value = false }
+}
 async function exportAll() {
   exporting.value = true
   try {
     const targetMonth = month.value
-    const rows = await exportPayroll({
+    const selectedIds = [...new Set(selection.value.map((row) => row.id))]
+    const results = await exportPayroll({
       begin: 0,
       step: 200,
       month: targetMonth,
@@ -1475,12 +1537,27 @@ async function exportAll() {
       departmentId: departmentId.value,
       statusCode: statusCode.value || undefined,
       payrollCategory: payrollCategory.value || undefined,
+      ...(selectedIds.length ? { payrollIds: selectedIds } : {}),
     })
+    // Older services may ignore the new query field. Keep the requested IDs authoritative.
+    const selected = new Set(selectedIds)
+    const rows = selected.size ? results.filter((row) => selected.has(row.id)) : results
+    if (selected.size && new Set(rows.map((row) => row.id)).size !== selected.size)
+      throw new Error('部分勾选工资单已变更或无访问权限，请刷新列表后重新选择')
     if (!rows.length) {
       ElMessage.info('当前筛选下暂无工资数据')
       return
     }
-    await exportPayrollRecords(rows, '薪酬明细_' + targetMonth)
+    const performance = []
+    for (let begin = 0; begin < rows.length; begin += 200) {
+      performance.push(...await exportPayrollPerformance({ begin: 0, step: 200, month: targetMonth,
+        payrollIds: rows.slice(begin, begin + 200).map(row => row.id) }))
+    }
+    await exportPayrollRecords(
+      rows,
+      '项目业绩汇总_' + targetMonth + (selected.size ? `_已选${selected.size}人` : ''),
+      performance,
+    )
   } catch (e) {
     ElMessage.error(errorMessage(e, '整月导出失败'))
   } finally {

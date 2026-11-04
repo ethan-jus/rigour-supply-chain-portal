@@ -55,7 +55,7 @@
     </template>
     <el-divider content-position="left">入离职及出勤折算</el-divider>
     <p v-if="form.role === 'SALES'" class="field-hint">
-      销售底薪及补贴按“（底薪＋补贴）÷应出勤×实际出勤”折算；绩效按绩效规则及入离职口径核算，不随出勤比例折减。
+      销售底薪按整月应出勤和实际出勤折算；补贴按“月补贴标准÷部门整月应出勤天数×员工实际出勤天数”计算，入职当月也使用部门整月分母。绩效按原绩效规则核算。
     </p>
     <div v-if="form.role !== 'SALES'" class="scheme-grid">
       <el-form-item v-for="item in fields" :key="item.key" :label="item.label"
@@ -66,16 +66,24 @@
             v-bind="option" /></el-select
       ></el-form-item>
     </div>
-    <PayrollPersonalPolicyEditor v-model="form" :disabled="disabled" />
+    <PayrollPersonalPolicyEditor
+      ref="personalEditor"
+      v-model="form"
+      :disabled="disabled"
+      :employee-code="employeeCode"
+    />
   </el-form>
 </template>
 <script setup lang="ts">
+import { ref } from 'vue'
 import { displayCell } from '@/utils/business-display'
 import type { PayrollSchemeDefinition } from '@/api/core/payroll-scheme/models/PayrollSchemeDefinition'
 import PayrollPersonalPolicyEditor from './PayrollPersonalPolicyEditor.vue'
 import { prorationOptions } from '@/utils/payroll-scheme'
-defineProps<{ disabled?: boolean }>()
+defineProps<{ disabled?: boolean; employeeCode?: string }>()
 const form = defineModel<PayrollSchemeDefinition>({ required: true })
+const personalEditor = ref<InstanceType<typeof PayrollPersonalPolicyEditor>>()
+defineExpose({ validate: () => personalEditor.value?.validate() ?? null })
 const fields = [
   { key: 'base', label: '底薪折算' },
   { key: 'performance', label: '绩效折算' },

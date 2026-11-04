@@ -109,9 +109,14 @@ const reasonRequired = computed(() => leaveType.value !== 'NONE' && exceptions.v
 const exceptions = ref<AttendanceExceptionPeriod[]>([])
 const missingCheckinsOverride = ref<number | undefined>()
 const missingVisitsOverride = ref<number | undefined>()
+const actualCheckinsOverride = ref<number | undefined>()
+const actualVisitsOverride = ref<number | undefined>()
+const expectedCheckinsOverride = ref<number | undefined>()
+const expectedVisitsOverride = ref<number | undefined>()
 const assessmentReason = ref('')
 const hasAssessmentOverride = computed(
-  () => missingCheckinsOverride.value != null || missingVisitsOverride.value != null,
+  () => [missingCheckinsOverride.value, missingVisitsOverride.value, actualCheckinsOverride.value,
+    actualVisitsOverride.value, expectedCheckinsOverride.value, expectedVisitsOverride.value].some(v => v != null),
 )
 function assessmentPayload() {
   return hasAssessmentOverride.value
@@ -120,6 +125,10 @@ function assessmentPayload() {
           missingCheckins: missingCheckinsOverride.value ?? null,
           missingVisits: missingVisitsOverride.value ?? null,
           reason: assessmentReason.value.trim(),
+          ...(actualCheckinsOverride.value == null ? {} : { actualCheckins: actualCheckinsOverride.value }),
+          ...(actualVisitsOverride.value == null ? {} : { actualVisits: actualVisitsOverride.value }),
+          ...(expectedCheckinsOverride.value == null ? {} : { expectedCheckins: expectedCheckinsOverride.value }),
+          ...(expectedVisitsOverride.value == null ? {} : { expectedVisits: expectedVisitsOverride.value }),
         },
       }
     : {}
@@ -313,6 +322,10 @@ function edit(row: AttendanceRow) {
   reason.value = row.reason
   missingCheckinsOverride.value = row.assessmentOverride?.missingCheckins ?? undefined
   missingVisitsOverride.value = row.assessmentOverride?.missingVisits ?? undefined
+  actualCheckinsOverride.value = row.assessmentOverride?.actualCheckins ?? undefined
+  actualVisitsOverride.value = row.assessmentOverride?.actualVisits ?? undefined
+  expectedCheckinsOverride.value = row.assessmentOverride?.expectedCheckins ?? undefined
+  expectedVisitsOverride.value = row.assessmentOverride?.expectedVisits ?? undefined
   assessmentReason.value = row.assessmentOverride?.reason ?? ''
   exceptions.value = (row.exceptions || []).map((period) => ({ ...period }))
   exceptionExpanded.value = false
@@ -345,11 +358,12 @@ async function save() {
     return
   }
   if (
-    [missingCheckinsOverride.value, missingVisitsOverride.value].some(
+    [missingCheckinsOverride.value, missingVisitsOverride.value, actualCheckinsOverride.value,
+      actualVisitsOverride.value, expectedCheckinsOverride.value, expectedVisitsOverride.value].some(
       (value) => value != null && (!Number.isInteger(value) || value < 0 || value > 100000),
     )
   ) {
-    editorError.value = '核定缺失次数须为0至100000之间的整数'
+    editorError.value = '核定次数须为0至100000之间的整数'
     return
   }
   if (hasAssessmentOverride.value && !assessmentReason.value.trim()) {
@@ -756,8 +770,15 @@ onMounted(() => {
               </div>
             </section>
             <section class="attendance-form-section">
-              <h3>缺卡与缺拜访</h3>
-              <p class="attendance-section-hint">留空沿用系统统计；填 0 表示无缺失。</p>
+              <h3>打卡与有效拜访核定</h3>
+              <p class="attendance-section-hint">应完成数与实际完成数用于业务报表，实际次数支持超额；缺卡和缺拜访次数继续用于绩效扣减，分别核定并保留依据。</p>
+              <div class="attendance-editor-days">
+                <el-form-item label="应打卡次数"><el-input-number v-model="expectedCheckinsOverride" :min="0" :max="100000" :precision="0" placeholder="使用规则目标" aria-label="应打卡次数" controls-position="right" /></el-form-item>
+                <el-form-item label="实打卡次数"><el-input-number v-model="actualCheckinsOverride" :min="0" :max="100000" :precision="0" placeholder="填写人工核定实绩" aria-label="实打卡次数" controls-position="right" /></el-form-item>
+                <el-form-item label="应有效拜访次数"><el-input-number v-model="expectedVisitsOverride" :min="0" :max="100000" :precision="0" placeholder="使用规则目标" aria-label="应有效拜访次数" controls-position="right" /></el-form-item>
+                <el-form-item label="实有效拜访次数"><el-input-number v-model="actualVisitsOverride" :min="0" :max="100000" :precision="0" placeholder="填写人工核定实绩" aria-label="实有效拜访次数" controls-position="right" /></el-form-item>
+              </div>
+              <p class="attendance-section-hint">以下缺失次数留空沿用系统统计；填0表示无缺失。实际总数不能由缺失次数反推。</p>
               <div class="attendance-editor-days">
                 <el-form-item label="核定缺卡次数">
                   <el-input-number

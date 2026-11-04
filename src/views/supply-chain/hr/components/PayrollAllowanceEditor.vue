@@ -43,7 +43,7 @@
     </div>
   </section>
   <p v-if="form.role === 'SALES'" class="field-hint">
-    销售底薪及补贴按已确认出勤折算，绩效不随出勤比例折减。
+    销售补贴按“月补贴标准÷部门整月应出勤天数×员工实际出勤天数”计算，入职当月也使用部门整月分母，按实际出勤比例折算。
   </p>
   <el-form-item label="补贴折算"
     ><el-input v-if="form.role === 'SALES'" model-value="按已确认出勤" disabled />

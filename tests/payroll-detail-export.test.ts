@@ -218,6 +218,50 @@ describe('薪酬 Excel', () => {
     expect(workbook.getWorksheet('商品组汇总')!.getCell('F2').value).toBe('待核定')
     expect(workbook.getWorksheet('商品组汇总')!.getCell('G2').value).toBe(0.3)
   })
+  it('200人全部导出与同一员工单独导出一致，提成金额、零和待核定互不覆盖', async () => {
+    const rows = Array.from({ length: 200 }, (_, index) => {
+      const row = record(`E${String(index).padStart(3, '0')}`)
+      const amount = index === 0 ? 559.1 : index === 1 ? 0 : index === 2 ? null : index + 0.3
+      row.calculation.commission = amount
+      row.calculation.grossPay = row.calculation.netPay =
+        amount == null ? null : Math.round((4750 + amount) * 100) / 100
+      row.calculation.details[0]!.accrued = row.calculation.details[0]!.released = amount
+      row.calculation.details[1]!.accrued = row.calculation.details[1]!.released = 0
+      row.calculation.issues = amount == null ? ['SO1：提成标准未配置'] : []
+      return row
+    })
+    const workbook = await buildPayrollWorkbook(rows)
+    const { Workbook } = await import('exceljs')
+    const restored = new Workbook()
+    await restored.xlsx.load(await workbook.xlsx.writeBuffer())
+    const overview = restored.getWorksheet('薪酬概览')!
+    expect(overview.rowCount).toBe(201)
+    for (const index of [0, 1, 2, 99, 199]) {
+      const single = await buildPayrollWorkbook([rows[index]!])
+      expect(overview.getRow(index + 2).values)
+        .toEqual(single.getWorksheet('薪酬概览')!.getRow(2).values)
+    }
+    expect(overview.getCell('J2').value).toBe(559.1)
+    expect(overview.getCell('J3').value).toBe(0)
+    expect(overview.getCell('J4').value).toBe('待核定')
+    expect(overview.getCell('S4').value).toBe('SO1：提成标准未配置')
+    expect(restored.getWorksheet('核对事项')!.getRow(2).values)
+      .toEqual([undefined, '2026-09', 'E002', '员工', 'SO1：提成标准未配置'])
+    expect(rows[0]!.calculation.commission).toBe(559.1)
+    expect(rows[2]!.calculation.commission).toBeNull()
+  })
+  it('提成为空但快照没有原因时明确标记数据缺口，不把未知原因写成规则未配置', async () => {
+    const row = record('A')
+    row.calculation.commission = null
+    row.calculation.issues = []
+    row.calculation.details = []
+    const workbook = await buildPayrollWorkbook([row])
+    expect(workbook.getWorksheet('薪酬概览')!.getCell('J2').value).toBe('待核定')
+    expect(workbook.getWorksheet('薪酬概览')!.getCell('S2').value)
+      .toBe('提成金额为空，当前工资单未记录核对原因')
+    expect(workbook.getWorksheet('核对事项')!.getCell('D2').value)
+      .toBe('提成金额为空，当前工资单未记录核对原因')
+  })
   it('城市总导出综合系数，单项无系数不会误报待核定', async () => {
     const row = record('M')
     row.calculation.performance = 2400

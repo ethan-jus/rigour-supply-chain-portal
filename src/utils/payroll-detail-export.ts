@@ -5,18 +5,33 @@ import {
   commissionCountExplanation,
   payrollAppliedRules,
 } from '@/utils/payroll-commission-detail'
-import type { PayrollRecord } from '@/api/core/payroll'
+import type { PayrollRecord, PayrollPerformanceExport } from '@/api/core/payroll'
+import { appendPayrollPerformance } from '@/utils/payroll-performance-export'
 import { payrollPaid, payrollRemaining, payrollStatusLabel } from '@/utils/payroll-workflow'
 import { payrollSalaryItems } from '@/utils/payroll-salary-items'
 import { loadPayrollProductUnits, payrollUnitName } from '@/utils/payroll-dictionaries'
 import { appendPayrollPaymentEvidence } from '@/utils/payroll-payment-export'
 import { businessDateTime } from '@/utils/business-date'
 
+function exportReviewIssues(row: PayrollRecord): string[] {
+  const issues = [...row.calculation.issues]
+  if (row.calculation.commission == null && !issues.length) {
+    const pending = row.calculation.details.filter((line) => line.released == null)
+    issues.push(...pending.map((line) =>
+      `${line.orderNo} / ${line.productName}：${line.message || '提成金额尚未核定'}`,
+    ))
+    if (!issues.length) issues.push('提成金额为空，当前工资单未记录核对原因')
+  }
+  return [...new Set(issues)]
+}
+
 /** Export persisted server evidence for the complete authorized result, never browser calculations. */
-export async function buildPayrollWorkbook(records: PayrollRecord[]) {
+export async function buildPayrollWorkbook(records: PayrollRecord[], performance?: PayrollPerformanceExport[]) {
   await loadPayrollProductUnits()
-  const { Workbook } = await import('exceljs')
+  const excel = await import('exceljs')
+  const { Workbook } = excel.default || excel
   const workbook = new Workbook()
+  if (performance) appendPayrollPerformance(workbook, records, performance)
   const identity = (row: PayrollRecord) => [row.month, row.employeeCode, row.employeeName]
   const headers = ['月份', '员工编号', '姓名']
   const sheet = (
@@ -43,8 +58,8 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
       }
     })
     page.views = [{ state: 'frozen', ySplit: 1 }]
-    page.columns.forEach((column) => {
-      column.width = 22
+    page.columns.forEach((column, index) => {
+      column.width = [...headers, ...columns][index] === '核对说明' ? 64 : 22
     })
     page.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '1:1' }
     page.autoFilter = {
@@ -70,9 +85,11 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
       '已登记发放（元）',
       '待发金额（元）',
       '发放凭证',
+      '核对说明',
     ],
     records.map((row) => {
       const c = row.calculation
+      const issues = exportReviewIssues(row)
       return [
         ...identity(row),
         row.departmentName,
@@ -91,6 +108,9 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
         c.netPay == null ? null : payrollRemaining(row),
         row.payments?.some(p => p.attachments?.length)
           ? '见发放凭证页' : '-',
+        issues.length
+          ? issues[0] + (issues.length > 1 ? `；另有${issues.length - 1}项，详见核对事项` : '')
+          : '—',
       ]
     }),
   )
@@ -314,6 +334,13 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
       '回款目标（元）',
       '整单付清业绩（元）',
       '回款达标绩效（折算前）（元）',
+      '核定应打卡次数',
+      '核定实打卡次数',
+      '核定应有效拜访次数',
+      '核定实有效拜访次数',
+      '核定缺卡次数',
+      '核定缺拜访次数',
+      '次数核定依据',
     ],
     records.flatMap((row) => {
       const p = row.calculation.performanceDetail
@@ -328,6 +355,13 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
               p.collectionTarget,
               p.collections,
               p.collectionPay,
+              p.assessmentOverride?.expectedCheckins,
+              p.assessmentOverride?.actualCheckins,
+              p.assessmentOverride?.expectedVisits,
+              p.assessmentOverride?.actualVisits,
+              p.assessmentOverride?.missingCheckins,
+              p.assessmentOverride?.missingVisits,
+              p.assessmentOverride?.reason,
             ],
           ]
         : []
@@ -365,14 +399,16 @@ export async function buildPayrollWorkbook(records: PayrollRecord[]) {
   sheet(
     '核对事项',
     ['说明'],
-    records.flatMap((row) => row.calculation.issues.map((issue) => [...identity(row), issue])),
+    records.flatMap((row) => exportReviewIssues(row).map((issue) => [...identity(row), issue])),
   )
   await appendPayrollPaymentEvidence(workbook, records)
   return workbook
 }
 
-export async function exportPayrollRecords(records: PayrollRecord[], filename: string) {
-  const workbook = await buildPayrollWorkbook(records)
+export async function exportPayrollRecords(records: PayrollRecord[], filename: string, performance?: PayrollPerformanceExport[]) {
+  // 每次下载刷新当前租户单位名称，业务字典改名或新增单位后不沿用旧导出缓存。
+  await loadPayrollProductUnits(true)
+  const workbook = await buildPayrollWorkbook(records, performance)
   const bytes = new Uint8Array(await workbook.xlsx.writeBuffer())
   const url = URL.createObjectURL(
     new Blob([bytes], {
