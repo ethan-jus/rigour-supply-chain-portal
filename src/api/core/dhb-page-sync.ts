@@ -58,7 +58,7 @@ export function latestDhbPageSyncJob(connectorId: string, scope: DhbPageScope) {
     timeout: 15000,
   })
 }
-/** 客户采用服务端增量游标；其他对象仍须显式提供范围。 */
+/** 客户采用服务端增量游标；供应商、仓库、采购单明确核对全部来源，其他对象提供时间范围。 */
 /** 订单包同步由服务端按 SALES_ORDER → RECEIPT → PAYMENT 依赖顺序编排并游标增量。 */
 export function syncDhbPage(command: PageSyncCommand) {
   return apiClient.post<DhbSyncOrchestrationResult>('/integration/dhb/page-sync', command, {

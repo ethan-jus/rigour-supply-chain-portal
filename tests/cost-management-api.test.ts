@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import axios, { AxiosHeaders } from 'axios'
 import { apiClient } from '@/api/core/client'
+import { getLedgerSources } from '@/api/core/cost-ledger'
 import {
   changeCostStatus,
   getCosts,
@@ -38,6 +39,13 @@ const command: CostCommand = {
   reason: '',
 }
 describe('cost service contracts', () => {
+  it('单据选择明确传递普通查询开关，避免旧服务绑定缺失的布尔参数失败', async () => {
+    await getLedgerSources({ orderTypeCode: 'SALES_ORDER', begin: 0 })
+    expect(apiClient.get).toHaveBeenLastCalledWith('/orders/logistics-costs/ledger/sources', {
+      stayOnUnauthorized: true,
+      params: { orderTypeCode: 'SALES_ORDER', begin: 0, exact: false, historical: false },
+    })
+  })
   it('报销员工引用传递城市及费用日期，未筛选调用保持兼容', async () => {
     vi.mocked(apiClient.get).mockResolvedValue([])
     const query = { cityCode: '4201', cityName: '武汉市', costDate: '2026-10-22' }

@@ -1,7 +1,7 @@
 <template>
   <div class="erp-basic-data-page supply-page supply-page--business-main">
-    <div class="page-heading">
-      <div class="list-heading-title">
+    <div class="page-heading" :class="{ 'supplier-toolbar': pageKind === 'supplier' }">
+      <div v-if="pageKind !== 'supplier'" class="list-heading-title">
         <SupplyPageTitle>{{ pageConfig.title }}</SupplyPageTitle>
         <SupplyPageHelp>{{ pageConfig.description }}</SupplyPageHelp>
       </div>
@@ -184,7 +184,7 @@
             <el-input
               v-model="filters.code"
               clearable
-              placeholder="后端自动生成的编号"
+              :placeholder="`输入${pageConfig.shortTitle}编码`"
               style="width: 180px"
             />
           </el-form-item>
@@ -479,7 +479,9 @@
       <el-skeleton v-else :rows="8" animated />
     </el-drawer>
 
+    <ErpSupplierProfileEditor v-if="pageKind === 'supplier'" v-model="editorVisible" :supplier-id="editingId" @saved="loadRows" />
     <el-dialog
+      v-if="pageKind !== 'supplier'"
       v-model="editorVisible"
       :title="editingId ? `编辑${pageConfig.shortTitle}` : `新增${pageConfig.shortTitle}`"
       width="min(760px, 92vw)"
@@ -570,27 +572,17 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col v-if="pageKind === 'warehouse' || pageKind === 'supplier'" :span="12">
+          <el-col v-if="pageKind === 'warehouse'" :span="12">
             <el-form-item label="联系人">
               <el-input v-model="form.contactName" clearable />
             </el-form-item>
           </el-col>
-          <el-col v-if="pageKind === 'warehouse' || pageKind === 'supplier'" :span="12">
+          <el-col v-if="pageKind === 'warehouse'" :span="12">
             <el-form-item label="联系电话">
               <el-input v-model="form.contactPhone" clearable />
             </el-form-item>
           </el-col>
-          <el-col v-if="pageKind === 'supplier'" :span="12">
-            <el-form-item label="开户银行">
-              <el-input v-model="form.bankName" clearable />
-            </el-form-item>
-          </el-col>
-          <el-col v-if="pageKind === 'supplier'" :span="12">
-            <el-form-item label="银行账号">
-              <el-input v-model="form.bankAccountNo" clearable />
-            </el-form-item>
-          </el-col>
-          <el-col v-if="pageKind === 'warehouse' || pageKind === 'supplier'" :span="24">
+          <el-col v-if="pageKind === 'warehouse'" :span="24">
             <el-form-item label="地址">
               <el-input v-model="form.address" clearable />
             </el-form-item>
@@ -670,6 +662,7 @@ import {
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
+import ErpSupplierProfileEditor from '@/components/erp/ErpSupplierProfileEditor.vue'
 import ProductCategorySelect from '@/components/supply/ProductCategorySelect.vue'
 import { loadAllErpProductCategories } from '@/utils/product-categories'
 import { getAllCrmCustomerAreas, type CrmDictionaryView } from '@/api/core/crm'
@@ -1013,7 +1006,7 @@ async function deleteRow(row: BasicRow) {
   }
   try {
     await ElMessageBox.confirm(
-      `确认删除${pageConfig.value.shortTitle}「${rowName(row)}」？后端会按规则做逻辑删除。`,
+      `确认删除${pageConfig.value.shortTitle}「${rowName(row)}」？`,
       `删除${pageConfig.value.shortTitle}`,
       {
         confirmButtonText: '删除',
@@ -1510,6 +1503,8 @@ function errorMessage(reason: unknown, fallback: string) {
 </script>
 
 <style scoped lang="scss">
+.erp-basic-data-page .page-heading.supplier-toolbar { justify-content:flex-end; }
+
 .erp-basic-data-page {
   min-height: 0;
 }

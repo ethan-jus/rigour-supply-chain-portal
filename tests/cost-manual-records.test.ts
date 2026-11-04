@@ -113,8 +113,8 @@ describe('manual source documents', () => {
   it.each([
     ['cost/purchases', '商品进货记录'],
     ['cost/losses', '商品损耗记录'],
-    ['cost/logistics', '物流运费记录'],
-    ['cost/warehouse-rentals', '仓库租赁费用'],
+    ['cost/logistics', '物流运输记录'],
+    ['cost/warehouse-rentals', '仓储费用'],
     ['cost/office-rentals', '办公室租赁费用'],
     ['cost/marketing', '营销推广费用'],
     ['hr/expenses', '员工报销台账'],
@@ -248,7 +248,7 @@ describe('manual source documents', () => {
       try {
         await w
           .findAll('button')
-          .find((button) => button.text() === '新增物流运费记录')!
+          .find((button) => button.text() === '新增物流运输记录')!
           .trigger('click')
         await flushPromises()
         const vm = w.vm as unknown as { form: CostCommand }
@@ -475,7 +475,7 @@ describe('manual source documents', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增物流运费记录')!
+        .find((b) => b.text() === '新增物流运输记录')!
         .trigger('click')
       await flushPromises()
       const mode = w.findAllComponents({ name: 'ElRadioGroup' })[0]!
@@ -541,7 +541,7 @@ describe('manual source documents', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增物流运费记录')!
+        .find((b) => b.text() === '新增物流运输记录')!
         .trigger('click')
       await flushPromises()
       const mode = w.findAllComponents({ name: 'ElRadioGroup' })[0]!
@@ -634,7 +634,7 @@ describe('explicit logistics business roles', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增物流运费记录')!
+        .find((b) => b.text() === '新增物流运输记录')!
         .trigger('click')
       w.findAllComponents(DictSelect)
         .find((c) => c.props('code') === 'COST_LOGISTICS_LEG')!
@@ -725,7 +725,7 @@ describe('explicit logistics business roles', () => {
       try {
         await w
           .findAll('button')
-          .find((b) => b.text() === '新增物流运费记录')!
+          .find((b) => b.text() === '新增物流运输记录')!
           .trigger('click')
         await flushPromises()
         const type = w
@@ -783,7 +783,7 @@ describe('explicit logistics business roles', () => {
     try {
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增物流运费记录')!
+        .find((b) => b.text() === '新增物流运输记录')!
         .trigger('click')
       await flushPromises()
       const mode = w.findAllComponents({ name: 'ElRadioGroup' })[0]!
@@ -879,7 +879,7 @@ describe('explicit logistics business roles', () => {
       )
       await w
         .findAll('button')
-        .find((b) => b.text() === '新增物流运费记录')!
+        .find((b) => b.text() === '新增物流运输记录')!
         .trigger('click')
       await flushPromises()
       expect((w.vm as unknown as { form: CostCommand }).form.logistics).toMatchObject({

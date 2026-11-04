@@ -109,7 +109,7 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
         : page.routeKey === 'supply.hr.attendance'
           ? () => import('@/views/supply-chain/hr/HrAttendanceView.vue')
           : page.routeKey in costPermissions
-            ? () => import('@/views/supply-chain/cost/CostManagementView.vue')
+            ? () => import('@/views/supply-chain/cost/CostManagementEntry.vue')
             : payrollRuleRouteKeys.has(page.routeKey)
               ? page.routeKey === 'supply.hr.city-managers'
                 ? () => import('@/views/supply-chain/hr/PayrollRuleView.vue')
@@ -122,10 +122,14 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
                     ? () => import('@/views/supply-chain/erp/ErpProductSpecificationView.vue')
                     : erpProductPriceRouteKeys.has(page.routeKey)
                       ? () => import('@/views/supply-chain/erp/ErpProductCustomerTypePriceView.vue')
+                      : page.routeKey === 'supply.erp.suppliers.profiles'
+                        ? () => import('@/views/supply-chain/erp/ErpSupplierManagementView.vue')
                       : erpBasicDataRouteKeys.has(page.routeKey)
                         ? () => import('@/views/supply-chain/erp/ErpBasicDataManagementView.vue')
                         : erpInventoryBalanceRouteKeys.has(page.routeKey)
                           ? () => import('@/views/supply-chain/erp/ErpInventoryBalanceView.vue')
+                          : page.routeKey === 'supply.erp.procurement.orders'
+                            ? () => import('@/views/supply-chain/erp/ErpProcurementManagementView.vue')
                           : erpDocumentRouteKeys.has(page.routeKey)
                             ? () => import('@/views/supply-chain/erp/ErpDocumentManagementView.vue')
                             : crmCustomerManagementRouteKeys.has(page.routeKey)

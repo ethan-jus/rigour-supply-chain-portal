@@ -1,13 +1,13 @@
 <template>
-  <section class="attachment-editor" :aria-label="expense ? '报销票据' : '损耗照片与凭证'">
-    <h3 v-if="!expense" class="cost-section-title">损耗照片与凭证</h3>
+  <section class="attachment-editor" :aria-label="title || (expense ? '报销票据' : '损耗照片与凭证')">
+    <h3 v-if="!expense" class="cost-section-title">{{ title || '损耗照片与凭证' }}</h3>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <div class="attachment-actions">
       <el-button
         :disabled="disabled || loading || selecting || !!loadError"
         @click="input?.click()"
       >
-        {{ expense ? '添加费用票据' : '添加照片或凭证' }}
+        {{ title ? '添加附件' : expense ? '添加费用票据' : '添加照片或凭证' }}
       </el-button>
       <input
         ref="input"
@@ -15,7 +15,7 @@
         type="file"
         multiple
         accept="image/png,image/jpeg,application/pdf"
-        :aria-label="expense ? '选择报销票据' : '选择损耗照片或凭证'"
+        :aria-label="title ? '选择相关附件' : expense ? '选择报销票据' : '选择损耗照片或凭证'"
         :disabled="disabled || loading || selecting"
         @change="choose"
       />
@@ -75,7 +75,7 @@ import {
 import { errorMessage } from '@/api/core/error'
 import { appendCostAttachmentFiles, type CostAttachmentDraft } from './cost-attachment-draft'
 
-const props = defineProps<{ category: CostCategory; row: CostRecord | null; disabled: boolean }>()
+const props = defineProps<{ category: CostCategory; row: CostRecord | null; disabled: boolean; title?: string }>()
 const emit = defineEmits<{ busy: [value: boolean] }>()
 const selecting = ref(false)
 const drafts = defineModel<CostAttachmentDraft[]>({ required: true })

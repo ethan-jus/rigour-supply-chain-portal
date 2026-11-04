@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { constantRoutes } from '@/router/routes'
 import { validateNavigation } from '@/utils/route-registry'
+import { consoleEntries } from '@/utils/console-navigation'
 import { SUPPLY_DOMAIN_MENU_KEYS, SUPPLY_DOMAIN_PAGES } from '@/views/supply-chain/domain/catalog'
 import type { NavigationNode } from '@/types/management'
 
@@ -27,6 +28,20 @@ function menuNode(routeKey: string): NavigationNode {
 }
 
 describe('数据库导航注册表', () => {
+  it('商品进货记录不进入菜单和入口搜索，历史引用仍保留原有授权路径', () => {
+    const purchase = node('supply.cost.purchases', '/supply-chain/cost/purchases')
+    const loss = node('supply.cost.losses', '/supply-chain/cost/losses')
+    const result = validateNavigation([{
+      ...menuNode('supply.cost.menu'),
+      children: [purchase, loss],
+    }])
+
+    expect(result[0].children[0]).toMatchObject({ routePath: purchase.routePath, visible: false })
+    expect(result[0].children[1]).toEqual(loss)
+    expect(consoleEntries(result).map((entry) => entry.path)).toEqual([loss.routePath])
+    expect(purchase.visible).toBe(true)
+  })
+
   it('共享DEV新增未编译菜单不阻断现有页面，也不授予新页面访问路径', () => {
     const employees = node('supply.hr.employees', '/supply-chain/hr/employees')
     const payroll = {

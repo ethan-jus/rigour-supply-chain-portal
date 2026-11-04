@@ -7,18 +7,34 @@ export interface ProcurementOrderSummary {
   sourceSystemCode: string | null
   sourceDocumentNo: string | null
   supplierId: string
+  supplierCode?: string | null
   supplierName: string
   targetWarehouseId: string
+  targetWarehouseCode?: string | null
   targetWarehouseName: string
   statusCode: string
   expectedArrivalTime: string | null
+  purchaseDate?: string | null
+  confirmationStatusCode?: string | null
+  freightAmount?: number | null
+  freightBearerCode?: string | null
+  contractNo?: string | null
+  contractFileKey?: string | null
+  receiverName?: string | null
+  receiverPhone?: string | null
+  receivingAddress?: string | null
   totalQuantity: number
+  quantityByUnit?: Record<string, number>
+  createdBy?: string | null
   totalAmount: number
   lineCount: number
   revision: number
   updatedTime: string
 }
 
+export interface ProcurementOrderPage extends ErpInternalPage<ProcurementOrderSummary> {
+  totals?: { quantityByUnit: Record<string, number>; purchaseAmount: number }
+}
 export interface ProcurementOrderLine {
   id: string
   lineNo: number
@@ -32,6 +48,11 @@ export interface ProcurementOrderLine {
   unitPrice: number
   lineAmount: number
   receivedQuantity: number
+  receivedBaseQuantity?: number | null
+  baseUnitCode?: string | null
+  conversionRate?: number | null
+  specification?: string | null
+  receiptProgressVerified?: boolean
   remark: string | null
 }
 
@@ -44,24 +65,50 @@ export interface ProcurementOrderDetail extends ProcurementOrderSummary {
 }
 
 export interface ProcurementOrderLineCommand {
-  productId: string | number
-  productVariantId: string | number
+  productId?: string | number
+  productVariantId?: string | number
+  productCode?: string
+  variantCode?: string
+  unitCode?: string
   quantity: number
   unitPrice: number
   remark?: string | null
 }
-
 export interface ProcurementOrderCommand {
   submit?: boolean | null
-  supplierId: string | number
-  targetWarehouseId: string | number
+  supplierId?: string | number
+  targetWarehouseId?: string | number
+  supplierCode?: string
+  targetWarehouseCode?: string
+  purchaseDate?: string
   expectedArrivalTime?: string | null
+  receiverName?: string
+  receiverPhone?: string
+  receivingAddress?: string
+  freightAmount?: number | null
+  freightBearerCode?: string
+  contractNo?: string | null
+  contractFileKey?: string | null
   lines: ProcurementOrderLineCommand[]
   remark?: string | null
   revision?: number | null
 }
+export interface ProcurementProduct {
+  productCode: string
+  variantCode: string
+  productName: string
+  specification: string | null
+  defaultUnitCode: string
+  baseUnitCode: string
+  middleUnitCode: string | null
+  baseToMiddleRate: number | null
+  bigUnitCode: string | null
+  baseToBigRate: number | null
+  purchasePrice: number | null
+}
 
 export interface ProcurementStockInLineCommand {
+  unitCode?: string
   procurementOrderLineId: string | number
   quantity: number
   remark?: string | null
@@ -239,6 +286,11 @@ export interface TransferStockInCommand {
 }
 
 export interface ProcurementOrderQuery {
+  supplierCode?: string
+  targetWarehouseCode?: string
+  confirmationStatusCode?: string
+  purchaseDateFrom?: string
+  purchaseDateTo?: string
   begin: number
   step: number
   procurementNo?: string
@@ -291,39 +343,121 @@ const ERP_BASE_PATH = '/erp'
 const options = { stayOnUnauthorized: true }
 
 export const getProcurementOrders = (params: ProcurementOrderQuery) =>
-  apiClient.get<ErpInternalPage<ProcurementOrderSummary>>(`${ERP_BASE_PATH}/procurement-orders`, { params, ...options })
+  apiClient.get<ProcurementOrderPage>(`${ERP_BASE_PATH}/procurement-orders`, {
+    params,
+    ...options,
+  })
 export const getProcurementOrder = (id: string | number) =>
-  apiClient.get<ProcurementOrderDetail>(`${ERP_BASE_PATH}/procurement-orders/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<ProcurementOrderDetail>(
+    `${ERP_BASE_PATH}/procurement-orders/${encodeURIComponent(String(id))}`,
+    options,
+  )
 export const createProcurementOrder = (command: ProcurementOrderCommand) =>
   apiClient.post<ProcurementOrderDetail>(`${ERP_BASE_PATH}/procurement-orders`, command, options)
 export const updateProcurementOrder = (id: string | number, command: ProcurementOrderCommand) =>
-  apiClient.put<ProcurementOrderDetail>(`${ERP_BASE_PATH}/procurement-orders/${encodeURIComponent(String(id))}`, command, options)
+  apiClient.put<ProcurementOrderDetail>(
+    `${ERP_BASE_PATH}/procurement-orders/${encodeURIComponent(String(id))}`,
+    command,
+    options,
+  )
 export const deleteProcurementOrder = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ERP_BASE_PATH}/procurement-orders/${encodeURIComponent(String(id))}`, { params: { revision }, ...options })
+  apiClient.delete<void>(`${ERP_BASE_PATH}/procurement-orders/${encodeURIComponent(String(id))}`, {
+    params: { revision },
+    ...options,
+  })
 
 export const getStockInOrders = (params: StockInOrderQuery) =>
-  apiClient.get<ErpInternalPage<StockInOrderSummary>>(`${ERP_BASE_PATH}/stock-in-orders`, { params, ...options })
+  apiClient.get<ErpInternalPage<StockInOrderSummary>>(`${ERP_BASE_PATH}/stock-in-orders`, {
+    params,
+    ...options,
+  })
 export const getStockInOrder = (id: string | number) =>
-  apiClient.get<StockInOrderDetail>(`${ERP_BASE_PATH}/stock-in-orders/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<StockInOrderDetail>(
+    `${ERP_BASE_PATH}/stock-in-orders/${encodeURIComponent(String(id))}`,
+    options,
+  )
 export const confirmProcurementStockIn = (command: ProcurementStockInCommand) =>
-  apiClient.post<StockInOrderDetail>(`${ERP_BASE_PATH}/stock-in-orders/procurement-confirmations`, command, options)
+  apiClient.post<StockInOrderDetail>(
+    `${ERP_BASE_PATH}/stock-in-orders/procurement-confirmations`,
+    command,
+    options,
+  )
 
 export const getStockOutOrders = (params: StockOutOrderQuery) =>
-  apiClient.get<ErpInternalPage<StockOutOrderSummary>>(`${ERP_BASE_PATH}/stock-out-orders`, { params, ...options })
+  apiClient.get<ErpInternalPage<StockOutOrderSummary>>(`${ERP_BASE_PATH}/stock-out-orders`, {
+    params,
+    ...options,
+  })
 export const getStockOutOrder = (id: string | number) =>
-  apiClient.get<StockOutOrderDetail>(`${ERP_BASE_PATH}/stock-out-orders/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<StockOutOrderDetail>(
+    `${ERP_BASE_PATH}/stock-out-orders/${encodeURIComponent(String(id))}`,
+    options,
+  )
 
 export const getTransferOrders = (params: TransferOrderQuery) =>
-  apiClient.get<ErpInternalPage<TransferOrderSummary>>(`${ERP_BASE_PATH}/transfer-orders`, { params, ...options })
+  apiClient.get<ErpInternalPage<TransferOrderSummary>>(`${ERP_BASE_PATH}/transfer-orders`, {
+    params,
+    ...options,
+  })
 export const getTransferOrder = (id: string | number) =>
-  apiClient.get<TransferOrderDetail>(`${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<TransferOrderDetail>(
+    `${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}`,
+    options,
+  )
 export const createTransferOrder = (command: TransferOrderCommand) =>
   apiClient.post<TransferOrderDetail>(`${ERP_BASE_PATH}/transfer-orders`, command, options)
 export const updateTransferOrder = (id: string | number, command: TransferOrderCommand) =>
-  apiClient.put<TransferOrderDetail>(`${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}`, command, options)
+  apiClient.put<TransferOrderDetail>(
+    `${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}`,
+    command,
+    options,
+  )
 export const deleteTransferOrder = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}`, { params: { revision }, ...options })
+  apiClient.delete<void>(`${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}`, {
+    params: { revision },
+    ...options,
+  })
 export const confirmTransferStockOut = (id: string | number, command: TransferStockOutCommand) =>
-  apiClient.post<TransferOrderDetail>(`${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}/stock-out-confirmations`, command, options)
+  apiClient.post<TransferOrderDetail>(
+    `${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}/stock-out-confirmations`,
+    command,
+    options,
+  )
 export const confirmTransferStockIn = (id: string | number, command: TransferStockInCommand) =>
-  apiClient.post<TransferOrderDetail>(`${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}/stock-in-confirmations`, command, options)
+  apiClient.post<TransferOrderDetail>(
+    `${ERP_BASE_PATH}/transfer-orders/${encodeURIComponent(String(id))}/stock-in-confirmations`,
+    command,
+    options,
+  )
+
+export const getProcurementProducts = (params: {
+  begin: number
+  step: number
+  productName?: string
+  productCode?: string
+  variantCode?: string
+}) =>
+  apiClient.get<ErpInternalPage<ProcurementProduct>>(
+    `${ERP_BASE_PATH}/procurement-orders/products`,
+    { params, ...options },
+  )
+export const confirmProcurementOrder = (id: string, revision: number) =>
+  apiClient.post<ProcurementOrderDetail>(
+    `${ERP_BASE_PATH}/procurement-orders/${encodeURIComponent(id)}/confirmation`,
+    { revision },
+    options,
+  )
+export const uploadProcurementContract = (file: File, id?: string) => {
+  const data = new FormData()
+  data.append('file', file)
+  return apiClient.post<string>(
+    `${ERP_BASE_PATH}/procurement-orders/${id ? `${encodeURIComponent(id)}/contract` : 'contracts'}`,
+    data,
+    { ...options, headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+}
+export const getProcurementContractUrl = (id: string) =>
+  apiClient.get<string>(
+    `${ERP_BASE_PATH}/procurement-orders/${encodeURIComponent(id)}/contract-url`,
+    options,
+  )
