@@ -1,5 +1,5 @@
 <template>
-  <div class="store-map-view" :aria-busy="dataLoading || mapLoading">
+  <div ref="mapView" class="store-map-view" :aria-busy="dataLoading || mapLoading">
     <div class="map-toolbar">
       <span class="map-counts" aria-live="polite">
         <span class="map-level">{{ levelLabels[mapLevel] }}</span>
@@ -14,8 +14,23 @@
         <span v-if="dataLoading" class="map-updating">正在更新…</span>
         <span v-if="boundaryError" class="map-updating">{{ boundaryError }}</span>
       </span>
-      <el-button text :disabled="dataLoading" @click="overview">显示全部匹配门店</el-button>
+      <div class="map-actions">
+        <el-button text :disabled="dataLoading" @click="overview">显示全部匹配门店</el-button>
+        <el-button
+          class="map-fullscreen-button"
+          :aria-pressed="fullscreen"
+          :title="fullscreen ? '退出全屏（Esc）' : '全屏查看地图'"
+          :loading="fullscreenPending"
+          @click="toggleFullscreen"
+        >
+          <el-icon aria-hidden="true"
+            ><ScaleToOriginal v-if="fullscreen" /><FullScreen v-else
+          /></el-icon>
+          <span>{{ fullscreen ? '退出全屏' : '全屏' }}</span>
+        </el-button>
+      </div>
     </div>
+    <el-alert v-if="fullscreenError" :title="fullscreenError" type="warning" :closable="false" />
     <el-alert
       v-if="conversionFailed"
       title="部分门店坐标转换失败，暂未显示这些位置，请重试。"
@@ -93,7 +108,7 @@
         <el-button class="map-card-close" text aria-label="关闭门店信息" @click="clearSelection"
           >关闭</el-button
         >
-        <button class="map-store-name" @click="emit('detail', focused)">{{ focused.name }}</button>
+        <button class="map-store-name" @click="openDetail(focused)">{{ focused.name }}</button>
         <div class="map-tags">
           <el-tag size="small" :type="storeWorkBlocked(focused) ? 'warning' : 'info'">{{
             props.businessStatusLabels?.[focused.businessStatus] ??
@@ -134,7 +149,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { LocationFilled } from '@element-plus/icons-vue'
+import { FullScreen, LocationFilled, ScaleToOriginal } from '@element-plus/icons-vue'
 import {
   crmStoreApi,
   type StoreQuery,
@@ -163,6 +178,10 @@ const props = defineProps<{
   businessStatusLabels?: Record<string, string>
 }>()
 const emit = defineEmits<{ detail: [row: StoreRow] }>()
+const mapView = ref<HTMLElement | null>(null)
+const fullscreen = ref(false),
+  fullscreenPending = ref(false),
+  fullscreenError = ref('')
 const container = ref<HTMLElement | null>(null)
 const result = ref<StoreMapResult | null>(null)
 const mapLevel = computed(() => result.value?.level ?? 'STORE')
@@ -201,6 +220,29 @@ const storefrontPath =
   'M4 11v9h16v-9M3 10l2-6h14l2 6M3 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-6h6v6'
 const personPath = 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M5 21v-2a7 7 0 0 1 14 0v2'
 const checkPath = 'm7 12 3 3 7-7'
+function syncFullscreen() {
+  fullscreen.value = document.fullscreenElement === mapView.value
+}
+async function toggleFullscreen() {
+  if (!mapView.value || fullscreenPending.value) return
+  fullscreenError.value = ''
+  fullscreenPending.value = true
+  try {
+    if (document.fullscreenElement === mapView.value) await document.exitFullscreen()
+    else await mapView.value.requestFullscreen()
+  } catch {
+    fullscreenError.value = '无法切换地图全屏，请重试或使用支持全屏的浏览器。'
+  } finally {
+    fullscreenPending.value = false
+  }
+}
+async function openDetail(row: StoreRow) {
+  if (document.fullscreenElement === mapView.value) {
+    await toggleFullscreen()
+    if (document.fullscreenElement === mapView.value) return
+  }
+  emit('detail', row)
+}
 async function updateDistrictLayer(data: StoreMapResult) {
   const current = ++districtGeneration
   if (!sdk || !map) return
@@ -410,7 +452,7 @@ async function renderPoints() {
     button.title = selected.name
     button.setAttribute('aria-label', `打开${selected.name}详情`)
     button.setAttribute('aria-pressed', 'true')
-    button.onclick = () => emit('detail', selected)
+    button.onclick = () => void openDetail(selected)
     overlays.push(
       new sdk.Marker({
         position: selectedPosition,
@@ -535,9 +577,15 @@ watch(
     else clearSelection()
   },
 )
-onMounted(() => void refresh(true, true))
+onMounted(() => {
+  document.addEventListener('fullscreenchange', syncFullscreen)
+  void refresh(true, true)
+})
 onBeforeUnmount(() => {
   disposed = true
+  document.removeEventListener('fullscreenchange', syncFullscreen)
+  if (document.fullscreenElement === mapView.value)
+    void document.exitFullscreen().catch(() => undefined)
   districtGeneration++
   if (districtLayer) map?.remove([districtLayer])
   cancelAnimationFrame(labelFrame)
@@ -563,6 +611,32 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   min-width: 0;
+}
+.store-map-view:fullscreen {
+  width: 100%;
+  height: 100%;
+  background: var(--el-bg-color);
+}
+.map-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.map-actions .el-button + .el-button {
+  margin-left: 0;
+}
+.map-fullscreen-button .el-icon {
+  margin-right: 6px;
+}
+.map-fullscreen-button:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .map-fullscreen-button {
+    min-height: 44px;
+  }
 }
 .map-toolbar {
   flex: none;

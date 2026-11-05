@@ -241,6 +241,7 @@ function shortName(node: NavigationNode) {
         erp: 'ERP',
         sales: '销售',
         hr: '人事',
+        cost: '成本',
         integration: '同步',
         setting: '设置',
       } as Record<string, string>
@@ -285,13 +286,13 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
 
 .crm-nav-group + .crm-nav-group,
 .settings-nav-group + .settings-nav-group {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid $color-border-light;
 }
 .crm-nav-group h2,
 .settings-nav-group h2 {
-  margin: 4px 12px 8px;
+  margin: 4px 8px 6px;
   color: $color-text-secondary;
   font-size: 12px;
   font-weight: 600;
@@ -299,7 +300,7 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   letter-spacing: 0.04em;
 }
 .secondary-nav--crm .secondary-nav__heading {
-  padding: 12px 12px 12px 24px;
+  padding: 8px 8px 8px 12px;
 }
 .secondary-nav--crm .secondary-nav__heading strong {
   font-size: $font-size-md;
@@ -308,12 +309,12 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
 }
 .console-navigation {
   display: grid;
-  grid-template-columns: 76px 220px;
+  grid-template-columns: $sidebar-collapsed-width ($sidebar-width - $sidebar-collapsed-width);
   min-height: 0;
   height: 100dvh;
 }
 .console-navigation.is-collapsed {
-  grid-template-columns: 76px;
+  grid-template-columns: $sidebar-collapsed-width;
 }
 .module-rail {
   background: #152a40;
@@ -325,32 +326,32 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
 .module-rail__logo {
   display: grid;
   place-items: center;
-  height: 70px;
+  height: $topbar-height;
   flex-shrink: 0;
 }
 .module-rail__logo img {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
 }
 .module-rail__items {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
-  padding: 18px 0 12px;
+  padding: 8px 0;
 }
 .module-link {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 8px;
-  min-height: 70px;
-  padding: 10px 5px;
+  gap: 5px;
+  min-height: 60px;
+  padding: 6px 4px;
   flex-shrink: 0;
   border: 0;
   border-left: 3px solid transparent;
@@ -406,11 +407,11 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   color: $color-text-regular;
 }
 .secondary-nav__brand {
-  height: 70px;
+  height: $topbar-height;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 12px;
   font-size: 16px;
   font-weight: 600;
   white-space: nowrap;
@@ -421,7 +422,7 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px 10px;
+  padding: 8px 8px 8px 12px;
   gap: 6px;
   font-size: 16px;
 }
@@ -448,7 +449,7 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   height: 18px;
 }
 .secondary-nav__body {
-  padding: 0 12px 20px;
+  padding: 0 6px 12px;
   flex: 1;
   overflow: auto;
   scrollbar-width: thin;
@@ -457,10 +458,10 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
 }
 .secondary-link {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  min-height: 40px;
-  padding: 8px 12px;
+  min-height: 36px;
+  padding: 6px 8px;
   border-left: 3px solid transparent;
   border-radius: 6px;
   text-decoration: none;
@@ -483,12 +484,12 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   background: $color-bg-muted;
 }
 .secondary-group {
-  padding: 20px 0 10px;
-  margin-top: 8px;
+  padding: 12px 0 8px;
+  margin-top: 4px;
   border-bottom: 1px solid $color-border-light;
 }
 .secondary-group h2 {
-  margin: 0 14px 12px;
+  margin: 0 10px 6px;
   font-size: 12px;
   font-weight: 500;
   color: $color-text-secondary;
@@ -508,11 +509,11 @@ a:focus-visible {
 }
 @media (max-height: 800px) {
   .module-rail__items {
-    gap: 3px;
-    padding-top: 8px;
+    gap: 2px;
+    padding-top: 6px;
   }
   .module-link {
-    min-height: 57px;
+    min-height: 52px;
     gap: 5px;
   }
   .secondary-group {
@@ -523,18 +524,18 @@ a:focus-visible {
   .secondary-nav {
     position: fixed;
     top: 0;
-    left: 64px;
+    left: $sidebar-collapsed-width;
     bottom: 0;
-    width: 220px;
+    width: $sidebar-width - $sidebar-collapsed-width;
     z-index: 25;
     box-shadow: 8px 0 24px #17304a22;
   }
   .console-navigation,
   .console-navigation.is-collapsed {
-    grid-template-columns: 64px;
+    grid-template-columns: $sidebar-collapsed-width;
   }
   .module-rail {
-    width: 64px;
+    width: $sidebar-collapsed-width;
   }
 }
 </style>

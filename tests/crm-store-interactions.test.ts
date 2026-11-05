@@ -1089,6 +1089,86 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     expect(page.find('.store-table').exists()).toBe(true)
   })
 })
+describe('地图全屏', () => {
+  let activeElement: Element | null
+  const originalFullscreen = Object.getOwnPropertyDescriptor(document, 'fullscreenElement')
+  const originalExit = Object.getOwnPropertyDescriptor(document, 'exitFullscreen')
+  const exitFullscreen = vi.fn(async () => {
+    activeElement = null
+    document.dispatchEvent(new Event('fullscreenchange'))
+  })
+  beforeEach(() => {
+    activeElement = null
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => activeElement,
+    })
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: exitFullscreen,
+    })
+  })
+  afterEach(() => {
+    for (const [key, descriptor] of [
+      ['fullscreenElement', originalFullscreen],
+      ['exitFullscreen', originalExit],
+    ] as const) {
+      if (descriptor) Object.defineProperty(document, key, descriptor)
+      else Reflect.deleteProperty(document, key)
+    }
+  })
+  async function mountMap() {
+    wrapper = mount(CrmStoreMap, {
+      attachTo: document.body,
+      props: { query: { view: 'PUBLIC', size: 20, city: '330100' }, focusRow: sampleStore },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    const element = wrapper.element as HTMLElement
+    element.requestFullscreen = vi.fn(async () => {
+      activeElement = element
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+    return wrapper
+  }
+  it('进入全屏保留选中门店和地图，浏览器 Esc 退出后按钮同步恢复', async () => {
+    const page = await mountMap()
+    const requests = vi.mocked(crmStoreApi.map).mock.calls.length
+    await page.get('.map-fullscreen-button').trigger('click')
+    await flushPromises()
+    expect(activeElement).toBe(page.element)
+    expect(page.get('.map-fullscreen-button').text()).toBe('退出全屏')
+    expect(page.get('.map-fullscreen-button').attributes('aria-pressed')).toBe('true')
+    expect(page.get('.map-store-name').text()).toBe(sampleStore.name)
+    expect(map.destroy).not.toHaveBeenCalled()
+    expect(crmStoreApi.map).toHaveBeenCalledTimes(requests)
+    await exitFullscreen()
+    await flushPromises()
+    expect(page.get('.map-fullscreen-button').text()).toBe('全屏')
+    expect(page.get('.map-fullscreen-button').attributes('aria-pressed')).toBe('false')
+  })
+  it('全屏中的详情入口先退出全屏，再交给页面打开详情', async () => {
+    const page = await mountMap()
+    await page.get('.map-fullscreen-button').trigger('click')
+    await flushPromises()
+    await page.get('.map-store-name').trigger('click')
+    await flushPromises()
+    expect(exitFullscreen).toHaveBeenCalledOnce()
+    expect(activeElement).toBeNull()
+    expect(page.emitted('detail')).toEqual([[sampleStore]])
+  })
+  it('浏览器拒绝全屏时保留普通地图，并显示可恢复的错误提示', async () => {
+    const page = await mountMap()
+    vi.mocked((page.element as HTMLElement).requestFullscreen).mockRejectedValue(
+      new Error('Denied'),
+    )
+    await page.get('.map-fullscreen-button').trigger('click')
+    await flushPromises()
+    expect(page.get('.map-fullscreen-button').text()).toBe('全屏')
+    expect(page.text()).toContain('无法切换地图全屏')
+    expect(page.get('.map-store-name').text()).toBe(sampleStore.name)
+  })
+})
 describe('地图坐标系', () => {
   it('WGS84只转换展示坐标，GCJ02直接绘制，坐标不明和缺失不落点', async () => {
     vi.mocked(sdk.convertFrom).mockImplementation((_points, _type, callback) =>

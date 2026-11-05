@@ -98,12 +98,12 @@ async function savePassword() {
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
 .account {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  display: flex; align-items: center; gap: 8px; padding: 4px 8px;
   border: 0; border-radius: 8px; background: transparent; color: $color-text-primary;
   font: inherit; cursor: pointer;
   &:hover { background: $color-bg-muted; }
   &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
-  &__avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #e9f1ff; color: $color-primary; }
+  &__avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #e9f1ff; color: $color-primary; }
   &__avatar svg { width: 22px; height: 22px; }
   &__name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: $font-size-sm; font-weight: 500; }
   &__arrow { width: 12px; height: 12px; color: $color-text-secondary; }

@@ -311,7 +311,7 @@ onMounted(() => {
 
 .console {
   display: grid;
-  grid-template-columns: 296px minmax(0, 1fr);
+  grid-template-columns: $sidebar-width minmax(0, 1fr);
   min-height: 100vh;
   background: $color-bg-base;
 }
@@ -360,13 +360,13 @@ onMounted(() => {
   display: flex;
   min-width: 104px;
   max-width: 220px;
-  height: 38px;
+  height: 32px;
   flex: 0 0 auto;
   gap: 7px;
   align-items: center;
   padding: 0 11px 0 13px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 6px;
   color: $color-text-secondary;
   background: transparent;
   cursor: pointer;
@@ -418,8 +418,8 @@ onMounted(() => {
   position: relative;
   z-index: 1;
   display: inline-grid;
-  width: 19px;
-  height: 19px;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
   padding: 0;
   border: 0;
@@ -474,12 +474,10 @@ onMounted(() => {
 }
 
 .console--collapsed {
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: $sidebar-collapsed-width minmax(0, 1fr);
 }
 .console--supply-chain .topbar {
-  height: 70px;
-  flex-basis: 70px;
-  padding: 0 28px;
+  padding: 0 16px;
 }
 .console--home .topbar {
   justify-content: space-between;
@@ -508,7 +506,7 @@ onMounted(() => {
 @media (max-width: 1100px) {
   .console,
   .console--collapsed {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: $sidebar-collapsed-width minmax(0, 1fr);
   }
   .console--supply-chain .topbar {
     padding: 0 10px;

@@ -139,9 +139,9 @@ watch(
   width: 100%;
   box-sizing: border-box;
   align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 8px 12px;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 8px;
   color: $color-text-regular;
   font: inherit;
   font-size: var(--app-menu-font-size);
@@ -178,16 +178,16 @@ watch(
 
 .nav-branch--depth-1,
 .nav-item--depth-1 {
-  min-height: 38px;
-  padding: 8px 12px;
+  min-height: 36px;
+  padding: 6px 8px;
 }
 
 .nav-branch--depth-2,
 .nav-item--depth-2,
 .nav-branch--depth-3,
 .nav-item--depth-3 {
-  min-height: 38px;
-  padding: 8px 12px;
+  min-height: 36px;
+  padding: 6px 8px;
   font-size: var(--app-menu-font-size);
 }
 
@@ -218,7 +218,7 @@ watch(
 }
 
 .nav-children {
-  margin: 4px 0 8px 20px;
+  margin: 2px 0 4px 14px;
   padding-left: 4px;
   border-left: 1px solid $color-border-base;
 }
