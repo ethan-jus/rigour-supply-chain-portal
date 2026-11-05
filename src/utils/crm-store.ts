@@ -18,12 +18,15 @@ export { GEO_REGIONS } from './admin-divisions'
 const municipalities = new Set(['110000', '120000', '310000', '500000'])
 
 /** Precompute labels once; the nationwide catalog must not be traversed during option rendering. */
-export function storeLeadAreaOptions(areas: AdminArea[]) {
+export function storeLeadAreaOptions(areas: AdminArea[], includeParents = false) {
   const index = new Map(areas.map((area) => [area.code, area]))
   const parents = new Set(areas.map((area) => area.parentCode))
   return areas
     .filter(
-      (area) => area.level === 'COUNTY' || (area.level === 'PREFECTURE' && !parents.has(area.code)),
+      (area) =>
+        includeParents ||
+        area.level === 'COUNTY' ||
+        (area.level === 'PREFECTURE' && !parents.has(area.code)),
     )
     .map((area) => {
       const names: string[] = []
@@ -115,3 +118,13 @@ export function remainingTime(time: string | null, now = Date.now()): string {
   const hours = Math.ceil(minutes / 60)
   return hours <= 48 ? `${hours}小时` : `${Math.ceil(hours / 24)}天`
 }
+
+// Fallback labels only keep existing records legible while the dictionary is loading.
+export const STORE_BUSINESS_STATUS_LABELS: Record<string, string> = {
+  UNKNOWN: '待核实',
+  OPEN: '营业中',
+  TEMP_CLOSED: '暂时停业',
+  CLOSED: '已停业',
+}
+export const storeWorkBlocked = (store: Pick<StoreRow, 'businessStatus'>) =>
+  ['TEMP_CLOSED', 'CLOSED'].includes(store.businessStatus)

@@ -51,7 +51,7 @@ const crmStorePermissions: Record<string, string> = {
   'supply.crm.stores.public': 'crm:pool:public-read',
   'supply.crm.stores.cooperated': 'crm:store:cooperation-read',
   'supply.crm.stores.leads': 'crm:lead:read',
-  'supply.crm.stores.library': 'crm:store:manage',
+  'supply.crm.stores.library': 'crm:store:library-read',
   'supply.crm.stores.analysis': 'crm:coverage:read',
 }
 

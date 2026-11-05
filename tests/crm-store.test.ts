@@ -103,7 +103,7 @@ describe('新CRM菜单的真实页面和独立权限', () => {
       public: 'crm:pool:public-read',
       cooperated: 'crm:store:cooperation-read',
       leads: 'crm:lead:read',
-      library: 'crm:store:manage',
+      library: 'crm:store:library-read',
       analysis: 'crm:coverage:read',
     }
     for (const [page, permission] of Object.entries(expected)) {

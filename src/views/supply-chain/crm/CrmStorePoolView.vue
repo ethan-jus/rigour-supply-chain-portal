@@ -27,7 +27,10 @@
         <el-button v-if="view === 'ALL' && can('crm:store:manage')" @click="initializePolicy"
           >启用认领规则</el-button
         >
-        <el-button v-if="can('crm:lead:create')" :icon="Plus" @click="openCreate"
+        <el-button
+          v-if="['PUBLIC', 'ALL'].includes(view) && can('crm:lead:create')"
+          :icon="Plus"
+          @click="openCreate"
           >新增门店</el-button
         >
         <el-popover
@@ -44,7 +47,9 @@
           <el-checkbox-group v-model="columns" class="column-options"
             ><el-checkbox
               v-for="column in optionalColumns.filter(
-                (column) => column.key !== 'claimStatus' || view === 'PUBLIC',
+                (column) =>
+                  (column.key !== 'claimStatus' || view === 'PUBLIC') &&
+                  (view !== 'COOPERATED' || !['tags', 'activity'].includes(column.key)),
               )"
               :key="column.key"
               :value="column.key"
@@ -62,7 +67,14 @@
       </div>
     </header>
     <p v-if="view === 'ALL'" class="workspace-purpose">
-      公司门店总账 · 统一维护公海、私海及合作门店；合作历史独立保留。未迁移的历史客户档案暂不计入。
+      公司门店总账 ·
+      包含公海、私海和停业门店，合作历史独立保留。停业档案仍参与查重，历史客户档案暂不迁移。
+    </p>
+    <p v-else-if="view === 'PUBLIC'" class="workspace-purpose">
+      可认领的公司门店；暂时停业、已停业及归档门店不进入作业公海。
+    </p>
+    <p v-else-if="view === 'COOPERATED'" class="workspace-purpose">
+      按成交历史展示合作门店，经营状态和当前负责人独立记录；停业不删除合作历史。
     </p>
     <p v-else-if="view === 'MINE'" class="workspace-purpose">
       {{
@@ -123,8 +135,21 @@
           placeholder="全部客户池"
           clearable
         >
-          <el-option label="公海 · 无负责人" value="PUBLIC" />
+          <el-option label="无负责人" value="PUBLIC" />
           <el-option label="私海 · 已归属" value="PRIVATE" />
+        </el-select>
+        <el-select
+          v-model="filters.businessStatus"
+          aria-label="经营状态筛选"
+          placeholder="全部经营状态"
+          clearable
+        >
+          <el-option
+            v-for="(label, code) in businessStatusLabels"
+            :key="code"
+            :label="label"
+            :value="code"
+          />
         </el-select>
         <el-select
           v-if="view === 'ALL'"
@@ -161,6 +186,7 @@
           <el-option label="暂缓回收" value="HELD" />
         </el-select>
         <el-select
+          v-if="view !== 'COOPERATED'"
           v-model="filters.cooperation"
           aria-label="合作历史"
           placeholder="全部合作历史"
@@ -244,13 +270,68 @@
           empty-text="当前授权范围和筛选条件下暂无门店"
           height="100%"
         >
-          <el-table-column label="门店名称" width="280" :fixed="compactViewport ? false : 'left'">
+          <el-table-column
+            label="门店名称"
+            :width="view === 'MINE' || view === 'COOPERATED' ? 240 : 280"
+            :fixed="compactViewport ? false : 'left'"
+          >
             <template #default="{ row }">
               <button class="store-name" :title="row.name" @click="openDetail(row as StoreRow)">
                 {{ row.name }}
               </button>
+              <div v-if="view === 'MINE' && shown('tags')" class="store-tags name-tags">
+                <el-tag
+                  size="small"
+                  :type="row.cooperationStatus === 'COOPERATED' ? 'success' : 'info'"
+                  >{{ row.cooperationStatus === 'COOPERATED' ? '历史合作' : '未合作' }}</el-tag
+                >
+                <el-tag
+                  size="small"
+                  :type="['A', 'B'].includes(row.customerTier) ? 'primary' : 'info'"
+                  >{{
+                    row.customerTier === 'UNRATED' ? '未评级' : `价值 ${row.customerTier}`
+                  }}</el-tag
+                >
+              </div>
             </template>
           </el-table-column>
+          <el-table-column v-if="view === 'COOPERATED'" label="客户价值" width="100">
+            <template #default="{ row }"
+              ><el-tooltip :content="tierDescription(row as StoreRow)"
+                ><el-tag
+                  size="small"
+                  :type="['A', 'B'].includes(row.customerTier) ? 'primary' : 'info'"
+                  >{{
+                    row.customerTier === 'UNRATED' ? '未评级' : `价值 ${row.customerTier}`
+                  }}</el-tag
+                ></el-tooltip
+              ></template
+            >
+          </el-table-column>
+          <el-table-column v-if="view === 'COOPERATED'" label="交易活跃度" width="112"
+            ><template #default="{ row }"
+              ><el-tag
+                size="small"
+                effect="plain"
+                :type="row.activityStatus === 'ACTIVE' ? 'success' : 'info'"
+                >{{ activityLabels[row.activityStatus] ?? '待核实' }}</el-tag
+              ></template
+            ></el-table-column
+          >
+          <el-table-column v-if="view === 'COOPERATED'" label="首次合作" width="116"
+            ><template #default="{ row }">{{
+              date(row.firstCooperatedAt)
+            }}</template></el-table-column
+          >
+          <el-table-column
+            v-if="view === 'MINE' || view === 'COOPERATED'"
+            label="所在地区"
+            min-width="128"
+            ><template #default="{ row }"
+              ><span>{{ row.cityName || row.provinceName || '—' }}</span
+              ><span class="secondary-line">{{ row.countyName || '—' }}</span></template
+            ></el-table-column
+          >
           <el-table-column v-if="shown('poi')" label="POI" width="150">
             <template #default="{ row }">
               <button
@@ -281,7 +362,11 @@
           <el-table-column v-if="shown('county')" label="区县" width="116" show-overflow-tooltip>
             <template #default="{ row }">{{ row.countyName || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="shown('address')" label="地址" min-width="300">
+          <el-table-column
+            v-if="shown('address')"
+            label="地址"
+            :min-width="['MINE', 'COOPERATED'].includes(view) ? 220 : 300"
+          >
             <template #default="{ row }">
               <button
                 v-if="storeMapUrl(row as StoreRow)"
@@ -300,7 +385,11 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column v-if="shown('tags')" label="门店标签" width="174">
+          <el-table-column
+            v-if="shown('tags') && view !== 'MINE' && view !== 'COOPERATED'"
+            label="门店标签"
+            width="174"
+          >
             <template #default="{ row }">
               <div class="store-tags">
                 <el-tag
@@ -322,12 +411,30 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column v-if="view === 'ALL' || view === 'COOPERATED'" label="客户池" width="96">
-            <template #default="{ row }">{{
-              row.poolType === 'PUBLIC' ? '公海' : '私海'
-            }}</template>
+          <el-table-column label="经营状态" width="108">
+            <template #default="{ row }"
+              ><el-tooltip
+                :content="row.businessStatusReason || '经营情况待现场或电话核实'"
+                :disabled="!row.businessStatusReason"
+                ><el-tag
+                  size="small"
+                  :type="businessStatusType(row.businessStatus)"
+                  effect="light"
+                  >{{
+                    businessStatusLabels[row.businessStatus] ?? row.businessStatus ?? '待核实'
+                  }}</el-tag
+                ></el-tooltip
+              ></template
+            >
           </el-table-column>
-          <el-table-column v-if="view !== 'PUBLIC'" label="负责人" min-width="130">
+          <el-table-column v-if="view === 'ALL' || view === 'COOPERATED'" label="客户池" width="96">
+            <template #default="{ row }">{{ poolLabel(row as StoreRow) }}</template>
+          </el-table-column>
+          <el-table-column
+            v-if="view !== 'PUBLIC' && (view !== 'MINE' || team)"
+            label="负责人"
+            min-width="130"
+          >
             <template #default="{ row }">{{ ownerLabel(row as StoreRow) }}</template>
           </el-table-column>
           <el-table-column v-if="view === 'ALL'" label="档案状态" width="100">
@@ -341,27 +448,42 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="view === 'MINE'" label="保护期限" min-width="160"
-            ><template #default="{ row }"
-              ><span>{{ phaseLabels[row.phase] ?? '—' }}</span
+          <el-table-column v-if="view === 'MINE'" label="跟进阶段" width="112"
+            ><template #default="{ row }">{{
+              phaseLabels[row.phase] ?? '—'
+            }}</template></el-table-column
+          >
+          <el-table-column v-if="view === 'MINE'" label="保护期限" min-width="168">
+            <template #default="{ row }"
+              ><strong :class="{ urgent: !row.holdReason && nearDeadline(row.deadlineAt) }">{{
+                row.holdReason ? '暂缓回收 · 核验中' : remainingTime(row.deadlineAt, now)
+              }}</strong
               ><span
                 class="secondary-line"
-                :class="{ urgent: !row.holdReason && nearDeadline(row.deadlineAt) }"
-                :title="row.holdReason ? holdLabels[row.holdReason] : dateTime(row.deadlineAt)"
-                >{{
-                  row.holdReason ? '暂缓回收 · 核验中' : remainingTime(row.deadlineAt, now)
-                }}</span
+                :title="row.holdReason ? holdLabels[row.holdReason] : undefined"
+                >{{ dateTime(row.deadlineAt) }}</span
               ></template
-            ></el-table-column
+            >
+          </el-table-column>
+          <el-table-column
+            v-if="shown('lastVisit')"
+            :label="view === 'MINE' ? '最近有效拜访' : '最近拜访'"
+            :width="view === 'MINE' ? 154 : 132"
           >
-          <el-table-column v-if="shown('lastVisit')" label="最近拜访" width="132"
-            ><template #default="{ row }">{{ date(row.lastVisitAt) }}</template></el-table-column
-          >
+            <template #default="{ row }"
+              ><span>{{ date(row.lastVisitAt) }}</span
+              ><span v-if="view === 'MINE'" class="secondary-line">{{
+                row.validVisitCount == null
+                  ? '有效次数待核实'
+                  : `累计有效 ${row.validVisitCount} 次`
+              }}</span></template
+            >
+          </el-table-column>
           <el-table-column v-if="shown('lastOrder')" label="最近成交" width="132"
             ><template #default="{ row }">{{ date(row.lastOrderAt) }}</template></el-table-column
           >
           <el-table-column
-            v-if="shown('activity') || view === 'COOPERATED'"
+            v-if="shown('activity') && view !== 'COOPERATED'"
             label="交易活跃度"
             width="120"
             ><template #default="{ row }">{{
@@ -399,14 +521,19 @@
             ></el-table-column
           >
           <el-table-column
-            v-if="view === 'ALL' || view === 'MINE' || can('crm:pool:claim')"
+            v-if="
+              (view === 'ALL' && can('crm:store:manage')) ||
+              view === 'MINE' ||
+              (view === 'PUBLIC' && can('crm:pool:claim')) ||
+              (view === 'COOPERATED' && canOpenCooperationActions)
+            "
             label="操作"
-            :width="view === 'MINE' ? 132 : 90"
+            :width="view === 'PUBLIC' ? 90 : 180"
             :fixed="compactViewport ? false : 'right'"
             ><template #default="{ row }"
               ><div class="row-actions">
                 <el-tooltip
-                  v-if="view !== 'ALL' && row.poolType === 'PUBLIC' && can('crm:pool:claim')"
+                  v-if="view === 'PUBLIC' && row.poolType === 'PUBLIC' && can('crm:pool:claim')"
                   :content="row.claimBlockedReason || '认领门店'"
                   :disabled="!row.claimBlockedReason"
                 >
@@ -430,14 +557,47 @@
                   </span>
                 </el-tooltip>
                 <el-button
-                  v-if="view === 'ALL'"
+                  v-if="view === 'ALL' && can('crm:store:manage')"
                   link
                   type="primary"
-                  @click="openDetail(row as StoreRow)"
+                  @click="openEdit(row as StoreRow)"
                   >维护</el-button
                 >
+                <el-button
+                  v-if="canChangeStatus(row as StoreRow)"
+                  link
+                  type="primary"
+                  @click="statusEditing = row as StoreRow"
+                  >经营状态</el-button
+                >
+                <template v-if="view === 'COOPERATED'">
+                  <el-button
+                    v-if="isOwnStore(row as StoreRow) && can('crm:pool:private-read')"
+                    link
+                    type="primary"
+                    @click="navigateStore('MINE', row.id)"
+                    >去跟进</el-button
+                  >
+                  <el-button
+                    v-else-if="canGoPublic(row as StoreRow)"
+                    link
+                    type="primary"
+                    @click="navigateStore('PUBLIC', row.id)"
+                    >去公海</el-button
+                  >
+                  <el-button
+                    v-if="can('crm:store:library-read')"
+                    link
+                    @click="navigateStore('ALL', row.id)"
+                    >商家档案</el-button
+                  >
+                </template>
                 <template v-if="view === 'MINE'">
-                  <el-button link type="primary" @click="openDetail(row as StoreRow)"
+                  <el-button
+                    v-if="isOwnStore(row as StoreRow)"
+                    link
+                    type="primary"
+                    @click="openDetail(row as StoreRow)"
                     >跟进</el-button
                   >
                   <el-button
@@ -455,6 +615,7 @@
       <CrmStoreMap
         v-else-if="mapQuery && context"
         :query="mapQuery"
+        :business-status-labels="businessStatusLabels"
         :focus-row="mapFocusRow"
         @detail="openDetail"
       />
@@ -479,41 +640,157 @@
 
     <div v-if="view === 'LEADS'" class="store-table-surface">
       <div class="lead-toolbar">
-        <el-radio-group v-model="reviewMode" @change="loadLeads"
+        <el-radio-group v-model="reviewMode" @change="searchLeads"
           ><el-radio-button :value="false">我的提报</el-radio-button
           ><el-radio-button v-if="can('crm:lead:review')" :value="true"
             >待我审核</el-radio-button
           ></el-radio-group
-        ><span class="muted">显示最近100条；手动新增审核通过后进入公海</span>
+        ><span class="muted">手动提报通过后进入公海，退回后可修改重提</span>
       </div>
-      <el-table v-loading="loading" :data="leads" height="100%" empty-text="暂无门店提报"
-        ><el-table-column prop="name" label="门店名称" min-width="200" /><el-table-column
-          prop="address"
-          label="地址"
-          min-width="240"
-        /><el-table-column label="审核状态" width="120"
-          ><template #default="{ row }">{{
-            leadLabels[row.status] ?? row.status
-          }}</template></el-table-column
-        ><el-table-column label="提交时间" width="180"
-          ><template #default="{ row }">{{ dateTime(row.submittedAt) }}</template></el-table-column
-        ><el-table-column prop="reviewReason" label="审核意见" min-width="180" /><el-table-column
-          v-if="reviewMode"
-          label="操作"
-          width="170"
-          ><template #default="{ row }"
-            ><el-button link type="primary" @click="reviewLead(row as StoreLead, true)"
-              >通过</el-button
-            ><el-button link type="danger" @click="reviewLead(row as StoreLead, false)"
-              >驳回</el-button
-            ></template
-          ></el-table-column
-        ></el-table
+      <OrderRegisterFilterCard
+        class="lead-filters"
+        :loading="loading"
+        @search="searchLeads"
+        @reset="resetLeads"
       >
+        <template #primary>
+          <el-input
+            v-model="leadFilters.keyword"
+            maxlength="100"
+            aria-label="提报门店名称或地址"
+            placeholder="搜索提报门店名称或地址"
+            clearable
+            :prefix-icon="Search"
+          />
+          <el-select
+            v-if="!reviewMode"
+            v-model="leadFilters.status"
+            aria-label="提报审核状态"
+            placeholder="全部审核状态"
+            clearable
+          >
+            <el-option label="待审核" value="PENDING_REVIEW" /><el-option
+              label="已通过"
+              value="APPROVED"
+            /><el-option label="已退回" value="REJECTED" />
+          </el-select>
+        </template>
+      </OrderRegisterFilterCard>
+      <div class="store-table-viewport">
+        <el-table
+          v-loading="loading"
+          :data="leads"
+          height="100%"
+          class="store-table"
+          scrollbar-always-on
+          empty-text="暂无门店提报"
+        >
+          <el-table-column label="门店名称" width="240" :fixed="compactViewport ? false : 'left'"
+            ><template #default="{ row }"
+              ><button class="store-name" @click="viewLead(row as StoreLead)">{{ row.name }}</button
+              ><span class="secondary-line">{{ typeName(row.storeTypeCode) }}</span></template
+            ></el-table-column
+          >
+          <el-table-column label="地区 / 地址" min-width="280"
+            ><template #default="{ row }"
+              ><span>{{ leadAreaLabels.get(row.areaCode) ?? row.areaCode }}</span
+              ><span class="secondary-line">{{ row.address }}</span></template
+            ></el-table-column
+          >
+          <el-table-column label="来源" width="96"
+            ><template #default>手动提报</template></el-table-column
+          >
+          <el-table-column label="审核状态" width="112"
+            ><template #default="{ row }"
+              ><el-tag
+                size="small"
+                :type="
+                  row.status === 'APPROVED'
+                    ? 'success'
+                    : row.status === 'REJECTED'
+                      ? 'warning'
+                      : 'info'
+                "
+                >{{ leadLabels[row.status] ?? row.status }}</el-tag
+              ></template
+            ></el-table-column
+          >
+          <el-table-column v-if="reviewMode" label="提报人" min-width="120"
+            ><template #default="{ row }">{{
+              auditActorLabel(row.submitterUserId)
+            }}</template></el-table-column
+          >
+          <el-table-column label="提交时间" width="166"
+            ><template #default="{ row }">{{
+              dateTime(row.submittedAt)
+            }}</template></el-table-column
+          >
+          <el-table-column label="审核时间" width="166"
+            ><template #default="{ row }">{{ dateTime(row.reviewedAt) }}</template></el-table-column
+          >
+          <el-table-column
+            prop="reviewReason"
+            label="审核意见"
+            min-width="200"
+            show-overflow-tooltip
+          />
+          <el-table-column label="入库结果" min-width="120"
+            ><template #default="{ row }"
+              ><el-button
+                v-if="row.resultStoreId && canViewResult"
+                link
+                type="primary"
+                :loading="resultLoading === row.id"
+                @click="viewLeadResult(row as StoreLead)"
+                >查看门店</el-button
+              ><span v-else>{{ row.resultStoreId ? '已入库' : '—' }}</span></template
+            ></el-table-column
+          >
+          <el-table-column
+            v-if="reviewMode || can('crm:lead:create')"
+            label="操作"
+            width="140"
+            :fixed="compactViewport ? false : 'right'"
+            ><template #default="{ row }"
+              ><div class="row-actions">
+                <template v-if="reviewMode && can('crm:lead:review')"
+                  ><el-button link type="primary" @click="reviewLead(row as StoreLead, true)"
+                    >审核</el-button
+                  ><el-button link @click="reviewLead(row as StoreLead, false)"
+                    >退回</el-button
+                  ></template
+                ><el-button
+                  v-else-if="row.status === 'REJECTED' && can('crm:lead:create')"
+                  link
+                  type="primary"
+                  @click="openResubmit(row as StoreLead)"
+                  >修改重提</el-button
+                ><span v-else class="cell-missing">—</span>
+              </div></template
+            ></el-table-column
+          >
+        </el-table>
+      </div>
+      <footer class="table-footer">
+        <el-pagination
+          v-model:current-page="leadPage"
+          v-model:page-size="leadPageSize"
+          :total="leadTotal"
+          :page-sizes="[20, 50, 100]"
+          :disabled="loading"
+          layout="total, sizes, ->, prev, pager, next"
+          @size-change="searchLeads"
+          @current-change="loadLeads"
+        />
+      </footer>
     </div>
 
     <div v-if="view === 'COVERAGE'" v-loading="loading" class="coverage-surface">
-      <p>统计范围：{{ context?.scopeLabel }}。覆盖率以当前筛选范围内已入库的有效门店为分母。</p>
+      <p>
+        统计范围：{{
+          context?.scopeLabel
+        }}。覆盖率以当前筛选范围内已入库且未确认停业的有效门店为分母。
+      </p>
       <el-descriptions v-if="coverage" :column="3" border
         ><el-descriptions-item label="有效门店">{{ coverage.total }}</el-descriptions-item
         ><el-descriptions-item label="公海 / 私海"
@@ -549,7 +826,7 @@
     >
       <div v-if="selected" v-loading="detailLoading" class="store-detail">
         <div class="detail-tags">
-          <el-tag>{{ selected.poolType === 'PUBLIC' ? '公海' : '私海' }}</el-tag
+          <el-tag>{{ poolLabel(selected) }}</el-tag
           ><el-tag type="success">{{
             selected.cooperationStatus === 'COOPERATED' ? '历史合作' : '未合作'
           }}</el-tag
@@ -584,10 +861,22 @@
               <dd>{{ dateTime(selected.lastOrderAt) }}</dd>
             </div>
           </dl>
-          <p v-if="isOwnStore(selected) && can('crm:store:visit-write')" class="work-entry-note">
+          <p
+            v-if="
+              isOwnStore(selected) && can('crm:store:visit-write') && !storeWorkBlocked(selected)
+            "
+            class="work-entry-note"
+          >
             到店拜访请从销售工作台「CRM 私海」进入，继续采集定位、照片和录音证据。
           </p>
         </section>
+        <el-alert
+          v-if="storeWorkBlocked(selected)"
+          :title="`${businessStatusLabels[selected.businessStatus]}：暂停新拜访和开单。${selected.businessStatusReason || '请联系负责人核实经营情况。'}`"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
         <el-alert
           v-if="selected.holdReason"
           :title="holdLabels[selected.holdReason] ?? '归属正在核验，暂缓回收'"
@@ -630,12 +919,16 @@
                   >{{ selected.primaryPoi }} · 复制</el-button
                 ><span v-else>未关联</span></el-descriptions-item
               ><el-descriptions-item label="公司门店 ID">{{ selected.id }}</el-descriptions-item
-              ><el-descriptions-item label="档案状态">{{
+              ><el-descriptions-item label="经营状态">{{
+                businessStatusLabels[selected.businessStatus] ?? selected.businessStatus
+              }}</el-descriptions-item>
+              <el-descriptions-item label="状态核实依据">{{
+                selected.businessStatusReason || '未记录'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="档案状态">{{
                 recordStatusLabels[selected.recordStatus] ?? selected.recordStatus
               }}</el-descriptions-item
-              ><el-descriptions-item label="客户池">{{
-                selected.poolType === 'PUBLIC' ? '公海' : '私海'
-              }}</el-descriptions-item
+              ><el-descriptions-item label="客户池">{{ poolLabel(selected) }}</el-descriptions-item
               ><el-descriptions-item label="负责人">{{ ownerLabel(selected) }}</el-descriptions-item
               ><el-descriptions-item label="创建人">{{
                 actor(selected.createdBy)
@@ -738,9 +1031,14 @@
       </div>
       <template #footer
         ><div v-if="selected" class="drawer-actions">
-          <el-button v-if="can('crm:store:manage')" @click="openEdit">编辑资料</el-button
+          <el-button v-if="canChangeStatus(selected)" @click="statusEditing = selected"
+            >维护经营状态</el-button
+          >
+          <el-button v-if="view === 'ALL' && can('crm:store:manage')" @click="openEdit(selected)"
+            >维护资料</el-button
           ><el-button
             v-if="
+              view === 'MINE' &&
               selected.ownerEmployeeId === context?.employeeId &&
               selected.poolType === 'PRIVATE' &&
               can('crm:pool:release')
@@ -748,7 +1046,7 @@
             @click="release(selected)"
             >退回公海</el-button
           ><el-button
-            v-if="selected.poolType === 'PUBLIC' && can('crm:pool:claim')"
+            v-if="view === 'PUBLIC' && selected.poolType === 'PUBLIC' && can('crm:pool:claim')"
             type="primary"
             :disabled="!!selected.claimBlockedReason"
             :loading="pendingId === selected.id"
@@ -759,57 +1057,38 @@
       >
     </el-drawer>
 
-    <el-dialog
-      v-model="createOpen"
-      title="新增门店提报"
-      width="580px"
-      :close-on-click-modal="false"
-    >
-      <el-alert
-        title="手动新增需要审核；审核通过进入公海后，可认领开展作业。"
-        type="info"
-        :closable="false"
-      />
-      <el-form label-position="top" class="store-form" @submit.prevent="submitLead"
-        ><el-form-item label="门店名称" required
-          ><el-input v-model="form.name" maxlength="200" /></el-form-item
-        ><el-form-item label="所属区县" required
-          ><el-select-v2
-            v-model="form.areaCode"
-            :options="formAreas"
-            filterable
-            aria-label="门店所属区县"
-            placeholder="搜索省、市或区县" /></el-form-item
-        ><el-form-item label="详细地址" required
-          ><el-input v-model="form.address" maxlength="500"
-        /></el-form-item>
-        <div class="coordinate-inputs">
-          <el-form-item label="经度（GCJ02）" required
-            ><el-input-number
-              v-model="form.longitude"
-              :min="-180"
-              :max="180"
-              :precision="7"
-              :controls="false" /></el-form-item
-          ><el-form-item label="纬度（GCJ02）" required
-            ><el-input-number
-              v-model="form.latitude"
-              :min="-90"
-              :max="90"
-              :precision="7"
-              :controls="false"
-          /></el-form-item>
-        </div>
-        <el-form-item label="公开门店电话"
-          ><el-input v-model="form.publicPhone" maxlength="50" /></el-form-item
-      ></el-form>
-      <template #footer
-        ><el-button @click="createOpen = false">取消</el-button
-        ><el-button type="primary" :loading="saving" @click="submitLead"
-          >提交审核</el-button
-        ></template
-      >
-    </el-dialog>
+    <CrmStoreIntake
+      v-if="createOpen"
+      :store-types="storeTypes"
+      :statuses="businessStatuses"
+      :lead="resubmitLead ?? undefined"
+      :initial-keyword="filters.keyword"
+      :initial-area="filters.county || filters.city || filters.province"
+      @close="closeIntake"
+      @saved="onIntakeSaved"
+      @navigate="navigateStore"
+    />
+    <CrmStoreLeadReview
+      v-if="reviewing"
+      :lead="reviewing.lead"
+      :approve="reviewing.approve"
+      :read-only="reviewing.readOnly"
+      :can-view-result="canViewResult"
+      @result="viewLeadResult"
+      :areas="context?.areas ?? []"
+      :store-types="storeTypes"
+      :statuses="businessStatuses"
+      @close="reviewing = null"
+      @saved="onLeadReviewed"
+    />
+    <CrmStoreStatusEditor
+      v-if="statusEditing"
+      :store="statusEditing"
+      :statuses="businessStatuses"
+      :management="view === 'ALL'"
+      @close="statusEditing = null"
+      @saved="onStatusSaved"
+    />
     <CrmStoreEditor
       v-if="editing"
       :store="editing"
@@ -822,7 +1101,7 @@
 
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   List,
@@ -837,6 +1116,9 @@ import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard
 import CrmStoreMap from './CrmStoreMap.vue'
 import CrmVisitEvidence from './CrmVisitEvidence.vue'
 import CrmStoreEditor from './CrmStoreEditor.vue'
+import CrmStoreIntake from './CrmStoreIntake.vue'
+import CrmStoreStatusEditor from './CrmStoreStatusEditor.vue'
+import CrmStoreLeadReview from './CrmStoreLeadReview.vue'
 import {
   crmStoreApi,
   type StoreContext,
@@ -852,15 +1134,19 @@ import {
 import { resolveBizDict, type DictItemView } from '@/api/core/business-settings'
 import { storeClassificationCatalog } from '@/utils/crm-store-classification'
 import { auditActorLabel } from '@/utils/audit-actor'
+import { ApiError } from '@/api/core/error'
 import {
   GEO_REGIONS,
   remainingTime,
   storeAreaOptions,
   storeLeadAreaOptions,
   storeMapUrl,
+  STORE_BUSINESS_STATUS_LABELS,
+  storeWorkBlocked,
 } from '@/utils/crm-store'
 
-const route = useRoute()
+const route = useRoute(),
+  router = useRouter()
 const view = computed<StoreView>(
   () =>
     (({
@@ -919,6 +1205,7 @@ const filters = reactive({
   storeType: '',
   pool: '',
   recordStatus: '',
+  businessStatus: '',
   phase: '',
   protection: '',
 })
@@ -951,10 +1238,12 @@ const optionalColumns = [
 ]
 const defaultColumns = computed(() =>
   view.value === 'MINE'
-    ? ['city', 'county', 'tags', 'lastVisit', 'lastOrder', 'phone']
-    : view.value === 'ALL'
-      ? ['poi', 'type', 'province', 'city', 'county', 'address', 'tags', 'updatedBy', 'updatedAt']
-      : ['poi', 'type', 'province', 'city', 'county', 'address', 'tags'],
+    ? ['address', 'tags', 'lastVisit', 'phone']
+    : view.value === 'COOPERATED'
+      ? ['address', 'lastOrder', 'phone']
+      : view.value === 'ALL'
+        ? ['poi', 'type', 'province', 'city', 'county', 'address', 'tags', 'updatedBy', 'updatedAt']
+        : ['poi', 'type', 'province', 'city', 'county', 'address', 'tags'],
 )
 const columns = ref([...defaultColumns.value]),
   shown = (key: string) => columns.value.includes(key)
@@ -997,7 +1286,7 @@ const phaseLabels: Record<string, string> = {
 const recordStatusLabels: Record<string, string> = {
   ACTIVE: '正常',
   SUSPENDED: '已停用',
-  CLOSED: '已停业',
+  CLOSED: '已关闭档案',
   MERGED: '已合并',
 }
 const phaseGuidance: Record<string, string> = {
@@ -1008,7 +1297,7 @@ const phaseGuidance: Record<string, string> = {
 const leadLabels: Record<string, string> = {
   PENDING_REVIEW: '待审核',
   APPROVED: '已通过',
-  REJECTED: '已驳回',
+  REJECTED: '已退回',
   WITHDRAWN: '已撤回',
 }
 const eventLabels: Record<string, string> = {
@@ -1016,6 +1305,9 @@ const eventLabels: Record<string, string> = {
   SOURCE_CLASSIFICATION_APPLIED: '按来源补齐行业分类',
   SOURCE_CLASSIFICATION_REVIEW_REQUIRED: '来源分类待核验',
   PROFILE_UPDATED: '门店资料修改',
+  AMAP_ADMITTED: '高德核验入库',
+  BUSINESS_STATUS_CHANGED: '经营状态变更',
+  RESUBMITTED: '修改后重新提报',
   CLAIMED: '认领到私海',
   RELEASED: '退回公海',
   AUTO_RELEASED: '到期自动回公海',
@@ -1070,11 +1362,76 @@ const acquireLabels: Record<string, string> = {
 }
 const endReasonLabels: Record<string, string> = {
   VOLUNTARY_RETURN: '主动退回',
+  STORE_CLOSED: '门店停业结束归属',
   FIRST_VISIT_TIMEOUT: '24小时未首访或成交',
   FOLLOWUP_TIMEOUT: '7天未复访或成交',
   COOPERATION_TIMEOUT: '60天未拜访或复购',
 }
-const storeTypes = ref<DictItemView[]>([])
+const storeTypes = ref<DictItemView[]>([]),
+  businessStatuses = ref<DictItemView[]>([])
+const businessStatusLabels = computed(() => ({
+  ...STORE_BUSINESS_STATUS_LABELS,
+  ...Object.fromEntries(
+    businessStatuses.value.map((item) => [item.dictionaryItemCode, item.dictionaryItemName]),
+  ),
+}))
+const businessStatusType = (code: string) =>
+  code === 'OPEN'
+    ? 'success'
+    : code === 'TEMP_CLOSED'
+      ? 'warning'
+      : code === 'CLOSED'
+        ? 'danger'
+        : 'info'
+const poolLabel = (row: StoreRow) =>
+  row.poolType === 'PRIVATE' ? '私海' : storeWorkBlocked(row) ? '停止作业' : '公海'
+const canOpenCooperationActions = computed(() =>
+  ['crm:pool:private-read', 'crm:pool:public-read', 'crm:store:library-read'].some(can),
+)
+const canViewResult = canOpenCooperationActions
+const canGoPublic = (row: StoreRow) =>
+  row.poolType === 'PUBLIC' &&
+  row.recordStatus === 'ACTIVE' &&
+  !row.claimBlockedReason &&
+  !storeWorkBlocked(row) &&
+  can('crm:pool:public-read')
+const resultLoading = ref('')
+async function viewLeadResult(lead: StoreLead) {
+  if (!lead.resultStoreId || resultLoading.value) return
+  resultLoading.value = lead.id
+  const views: StoreView[] = []
+  if (can('crm:store:library-read')) views.push('ALL')
+  if (can('crm:pool:private-read')) views.push('MINE')
+  if (can('crm:pool:public-read')) views.push('PUBLIC')
+  try {
+    for (const target of views) {
+      try {
+        await crmStoreApi.detail(lead.resultStoreId, target)
+      } catch (e) {
+        if (e instanceof ApiError && (e.status === 403 || e.status === 404)) continue
+        throw e
+      }
+      reviewing.value = null
+      await navigateStore(target, lead.resultStoreId)
+      return
+    }
+    ElMessage.warning('门店已入库，当前归属或地区不在您的查看权限内')
+  } catch (e) {
+    ElMessage.error(message(e))
+  } finally {
+    resultLoading.value = ''
+  }
+}
+const canChangeStatus = (row: StoreRow) =>
+  row.recordStatus === 'ACTIVE' &&
+  ((view.value === 'ALL' && can('crm:store:manage')) ||
+    (view.value === 'MINE' && isOwnStore(row) && can('crm:store:status-write')))
+const leadAreaLabels = computed(
+  () =>
+    new Map(
+      storeLeadAreaOptions(context.value?.areas ?? []).map((area) => [area.value, area.label]),
+    ),
+)
 const classificationCatalog = computed(() => storeClassificationCatalog(storeTypes.value))
 const typeFilterOptions = computed(() => [
   { value: '__UNCLASSIFIED__', label: '未分类' },
@@ -1219,6 +1576,13 @@ async function reload() {
     context.value = result
     if (view.value === 'LEADS') await loadLeads()
     else await search()
+    if (typeof route.query.storeId === 'string' && isList.value) {
+      try {
+        await openDetail(route.query.storeId)
+      } catch (e) {
+        ElMessage.warning(message(e))
+      }
+    }
     const dictionaryGeneration = loadGeneration
     void resolveBizDict('CRM_STORE_TYPE')
       .then((result) => {
@@ -1226,6 +1590,13 @@ async function reload() {
       })
       .catch(() => {
         if (dictionaryGeneration === loadGeneration) storeTypes.value = []
+      })
+    void resolveBizDict('CRM_STORE_BUSINESS_STATUS')
+      .then((result) => {
+        if (dictionaryGeneration === loadGeneration) businessStatuses.value = result.items
+      })
+      .catch(() => {
+        if (dictionaryGeneration === loadGeneration) businessStatuses.value = []
       })
   } catch (e) {
     if (generation === loadGeneration) error.value = message(e)
@@ -1275,9 +1646,10 @@ const selected = ref<StoreRow | null>(null),
   ownerships = ref<StoreOwnership[]>([]),
   events = ref<StoreEvent[]>([]),
   storeVisits = ref<StoreVisit[]>([])
-async function openDetail(row: StoreRow) {
+async function openDetail(row: StoreRow | string) {
   const generation = ++detailGeneration
-  selected.value = row
+  selected.value = typeof row === 'string' ? null : row
+  const id = typeof row === 'string' ? row : row.id
   detailOpen.value = true
   detailLoading.value = true
   detailTab.value = 'profile'
@@ -1285,7 +1657,7 @@ async function openDetail(row: StoreRow) {
   events.value = []
   storeVisits.value = []
   try {
-    const result = await crmStoreApi.detail(row.id, effectiveView.value)
+    const result = await crmStoreApi.detail(id, effectiveView.value)
     if (generation === detailGeneration) selected.value = result
   } catch (e) {
     if (generation === detailGeneration) {
@@ -1360,95 +1732,126 @@ async function release(row: StoreRow) {
     if (e !== 'cancel' && e !== 'close') ElMessage.error(message(e))
   }
 }
+const leadPage = ref(1),
+  leadPageSize = ref(20),
+  leadTotal = ref(0)
+const leadFilters = reactive({ keyword: '', status: '' })
+const appliedLeadFilters = ref({ keyword: '', status: '' })
 const leads = ref<StoreLead[]>([]),
   coverage = ref<StoreCoverage | null>(null)
+function searchLeads() {
+  leadPage.value = 1
+  appliedLeadFilters.value = { ...leadFilters, keyword: leadFilters.keyword.trim() }
+  return loadLeads()
+}
+function resetLeads() {
+  Object.assign(leadFilters, { keyword: '', status: '' })
+  return searchLeads()
+}
 async function loadLeads() {
   const generation = ++loadGeneration
   loading.value = true
   error.value = ''
   try {
-    const result = await crmStoreApi.leads(reviewMode.value)
-    if (generation === loadGeneration) leads.value = result
+    const result = await crmStoreApi.leads({
+      review: reviewMode.value,
+      page: leadPage.value,
+      size: leadPageSize.value,
+      keyword: appliedLeadFilters.value.keyword || undefined,
+      status: reviewMode.value ? undefined : appliedLeadFilters.value.status || undefined,
+    })
+    if (!Array.isArray(result?.items))
+      throw new Error('提报数据加载失败：接口版本不匹配，请更新 CRM 服务后重试')
+    if (generation === loadGeneration) {
+      leads.value = result.items
+      leadTotal.value = result.total
+      if (!result.items.length && result.total && leadPage.value > 1) {
+        leadPage.value = Math.ceil(result.total / leadPageSize.value)
+        await loadLeads()
+      }
+    }
   } catch (e) {
     if (generation === loadGeneration) error.value = message(e)
   } finally {
     if (generation === loadGeneration) loading.value = false
   }
 }
-async function reviewLead(row: StoreLead, approve: boolean) {
-  try {
-    const { value } = await ElMessageBox.prompt(
-      '请填写审核依据。通过后门店进入公海，不会自动认领。',
-      approve ? '审核通过' : '审核驳回',
-      { inputValidator: (value) => !!value?.trim() || '请填写审核意见' },
-    )
-    await crmStoreApi.review(row.id, row.revision, approve, value)
-    ElMessage.success('审核完成')
-    await loadLeads()
-  } catch (e) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error(message(e))
-  }
+const reviewing = ref<{ lead: StoreLead; approve: boolean; readOnly?: boolean } | null>(null)
+function viewLead(lead: StoreLead) {
+  reviewing.value = { lead, approve: false, readOnly: true }
+}
+function reviewLead(row: StoreLead, approve: boolean) {
+  if (can('crm:lead:review')) reviewing.value = { lead: row, approve }
+}
+async function onLeadReviewed() {
+  reviewing.value = null
+  ElMessage.success('审核完成')
+  await loadLeads()
 }
 const createOpen = ref(false),
-  saving = ref(false),
-  form = reactive({
-    requestId: '',
-    name: '',
-    address: '',
-    areaCode: '',
-    longitude: undefined as number | undefined,
-    latitude: undefined as number | undefined,
-    publicPhone: '',
-  })
-const formAreas = computed(() => storeLeadAreaOptions(context.value?.areas ?? []))
-function openCreate() {
-  Object.assign(form, {
-    requestId: crypto.randomUUID(),
-    name: '',
-    address: '',
-    areaCode: '',
-    longitude: undefined,
-    latitude: undefined,
-    publicPhone: '',
-  })
+  resubmitLead = ref<StoreLead | null>(null)
+function closeIntake() {
+  createOpen.value = false
+  resubmitLead.value = null
+}
+function openResubmit(lead: StoreLead) {
+  resubmitLead.value = lead
   createOpen.value = true
 }
-async function submitLead() {
-  if (
-    !form.name.trim() ||
-    !form.address.trim() ||
-    !form.areaCode ||
-    form.longitude == null ||
-    form.latitude == null
-  ) {
-    ElMessage.warning('请补全门店名称、地址、行政地区和位置')
+function openCreate() {
+  if (!['PUBLIC', 'ALL'].includes(view.value) || !can('crm:lead:create')) return
+  resubmitLead.value = null
+  createOpen.value = true
+}
+async function onIntakeSaved() {
+  if (view.value === 'LEADS') await loadLeads()
+  else await loadRows()
+}
+async function navigateStore(target: StoreView, id?: string) {
+  createOpen.value = false
+  resubmitLead.value = null
+  const page = {
+    PUBLIC: 'public',
+    MINE: 'mine',
+    TEAM: 'mine',
+    COOPERATED: 'cooperated',
+    ALL: 'library',
+    LEADS: 'leads',
+    COVERAGE: 'analysis',
+  }[target]
+  const path = `/supply-chain/crm/stores/${page}`
+  if (route.path === path) {
+    if (id) {
+      try {
+        await openDetail(id)
+      } catch (e) {
+        ElMessage.warning(message(e))
+      }
+    }
     return
   }
-  saving.value = true
-  try {
-    await crmStoreApi.submit({
-      ...form,
-      longitude: form.longitude,
-      latitude: form.latitude,
-      publicPhone: form.publicPhone || null,
-    })
-    ElMessage.success('已提交审核')
-    createOpen.value = false
-    if (view.value === 'LEADS') await loadLeads()
-  } catch (e) {
-    ElMessage.error(message(e))
-  } finally {
-    saving.value = false
+  await router.push({ path, query: id ? { storeId: id } : {} })
+}
+const statusEditing = ref<StoreRow | null>(null)
+async function onStatusSaved() {
+  const changed = statusEditing.value
+  statusEditing.value = null
+  ElMessage.success('经营状态已更新，变更记录已保存')
+  if (changed && detailOpen.value && selected.value?.id === changed.id) {
+    if (view.value === 'MINE') detailOpen.value = false
+    else await openDetail(changed)
   }
+  await loadRows()
 }
 const editing = ref<StoreRow | null>(null)
-function openEdit() {
-  editing.value = selected.value ? { ...selected.value } : null
+function openEdit(row: StoreRow) {
+  if (view.value !== 'ALL' || !can('crm:store:manage')) return
+  editing.value = { ...row }
 }
 async function onStoreSaved() {
   const row = editing.value
   editing.value = null
-  if (row) await openDetail(row)
+  if (row && detailOpen.value && selected.value?.id === row.id) await openDetail(row)
   await loadRows()
 }
 async function initializePolicy() {
@@ -1475,6 +1878,10 @@ onActivated(() => {
 watch(
   () => route.path,
   () => {
+    createOpen.value = false
+    resubmitLead.value = null
+    statusEditing.value = null
+    reviewing.value = null
     team.value = false
     columns.value = [...defaultColumns.value]
     reviewMode.value = false
@@ -1489,6 +1896,9 @@ watch(
 
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
+.name-tags {
+  margin-top: 8px;
+}
 .workspace-purpose {
   margin: -4px 0 0;
   color: $color-text-secondary;
@@ -1819,6 +2229,10 @@ button.store-address:hover {
   color: #64748b;
   font-size: var(--app-font-size-base);
 }
+.lead-filters {
+  padding: 0 12px 12px;
+  flex: none;
+}
 .lead-toolbar {
   display: flex;
   gap: 16px;
@@ -1852,22 +2266,6 @@ button.store-address:hover {
   font-size: var(--app-font-size-base);
   background: #f8fafc;
   padding: 12px;
-}
-.store-form {
-  margin-top: 20px;
-}
-.store-form .el-select {
-  width: 100%;
-}
-.coordinate-inputs {
-  display: flex;
-  gap: 24px;
-}
-.coordinate-inputs .el-form-item {
-  flex: 1;
-}
-.coordinate-inputs .el-input-number {
-  width: 100%;
 }
 .drawer-actions {
   justify-content: flex-end;
@@ -1912,9 +2310,6 @@ button.store-address:hover {
   }
   .table-footer :deep(.el-pagination__sizes .el-select) {
     width: 100px;
-  }
-  .coordinate-inputs {
-    gap: 12px;
   }
 }
 </style>

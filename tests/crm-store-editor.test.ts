@@ -7,7 +7,7 @@ import { sampleStore, storeContext } from './fixtures/crm-stores'
 import { ApiError } from '@/api/core/error'
 
 vi.mock('@/api/core/crm-store', () => ({
-  crmStoreApi: { context: vi.fn(), poiCandidates: vi.fn(), update: vi.fn() },
+  crmStoreApi: { maintenanceContext: vi.fn(), poiCandidates: vi.fn(), update: vi.fn() },
 }))
 const poi: StorePoi = {
   id: 'BTEST001',
@@ -37,7 +37,7 @@ async function input(label: string, value: string) {
 }
 beforeEach(async () => {
   vi.clearAllMocks()
-  vi.mocked(crmStoreApi.context).mockResolvedValue(storeContext)
+  vi.mocked(crmStoreApi.maintenanceContext).mockResolvedValue(storeContext)
   vi.mocked(crmStoreApi.poiCandidates).mockResolvedValue([poi])
   vi.mocked(crmStoreApi.update).mockResolvedValue(undefined)
   wrapper = mount(CrmStoreEditor, {
@@ -56,6 +56,61 @@ afterEach(() => {
 })
 
 describe('store maintenance', () => {
+  it('discards an old query when the store name changes before the response', async () => {
+    let resolve!: (rows: StorePoi[]) => void
+    vi.mocked(crmStoreApi.poiCandidates).mockReturnValue(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    await click('从高德补全')
+    await input('维护门店名称', '另一家门店')
+    resolve([poi])
+    await flushPromises()
+    expect(document.body.textContent).not.toContain('确认填入')
+    await input('维护修改原因', '人工核实')
+    await click('保存并留痕')
+    expect(crmStoreApi.update).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '另一家门店' }),
+      '人工核实',
+      undefined,
+    )
+  })
+  it('fills supplied fields and the dictionary classification, and retains the confirmed POI when its name differs', async () => {
+    await wrapper.setProps({
+      storeTypes: [
+        {
+          dictionaryId: 1,
+          dictionaryCode: 'CRM_STORE_TYPE',
+          dictionaryItemCode: 'POI_080113',
+          dictionaryItemName: '台球厅',
+          ordinal: 1,
+          enabled: true,
+        },
+      ],
+    })
+    vi.mocked(crmStoreApi.poiCandidates).mockResolvedValue([
+      { ...poi, publicPhone: '000-00000000' },
+    ])
+    await click('从高德补全')
+    await click('确认填入')
+    expect(document.querySelector('[role="status"]')?.textContent).toContain('已填入')
+    await input('维护修改原因', '核实匹配')
+    await click('保存并留痕')
+    expect(crmStoreApi.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: poi.name,
+        address: poi.address,
+        longitude: poi.longitude,
+        latitude: poi.latitude,
+        coordinateSystem: 'GCJ02',
+        publicPhone: '000-00000000',
+        storeTypeCode: 'POI_080113',
+      }),
+      '核实匹配',
+      poi.id,
+    )
+  })
   it('shows actionable IP whitelist guidance without exposing upstream diagnostics', async () => {
     vi.mocked(crmStoreApi.poiCandidates).mockRejectedValue(
       new ApiError(
@@ -89,7 +144,7 @@ describe('store maintenance', () => {
     )
   })
   it('loads manage scope, shows the complete administrative path and saves manual edits without Amap', async () => {
-    expect(crmStoreApi.context).toHaveBeenCalledWith('ALL')
+    expect(crmStoreApi.maintenanceContext).toHaveBeenCalledWith(sampleStore.id)
     expect(document.body.textContent).toContain('浙江省 / 杭州市 / 拱墅区')
     await input('维护详细地址', '人工核实地址')
     await input('维护修改原因', '现场核实')

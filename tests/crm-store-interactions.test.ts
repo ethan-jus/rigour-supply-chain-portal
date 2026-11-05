@@ -4,8 +4,16 @@ import { defineComponent, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import ElementPlus from 'element-plus'
 import CrmStorePoolView from '@/views/supply-chain/crm/CrmStorePoolView.vue'
+import CrmStoreLeadReview from '@/views/supply-chain/crm/CrmStoreLeadReview.vue'
+import CrmStoreIntake from '@/views/supply-chain/crm/CrmStoreIntake.vue'
+import CrmStoreEditor from '@/views/supply-chain/crm/CrmStoreEditor.vue'
 import CrmStoreMap from '@/views/supply-chain/crm/CrmStoreMap.vue'
-import { crmStoreApi, type StoreRow, type StoreMapResult } from '@/api/core/crm-store'
+import {
+  crmStoreApi,
+  type StoreRow,
+  type StoreMapResult,
+  type StoreLead,
+} from '@/api/core/crm-store'
 import { loadStoreMapSdk, storeMapPositions, type StoreMapSdk } from '@/utils/crm-store-map'
 import { sampleStore, sampleStores, storeContext } from './fixtures/crm-stores'
 import { auditActorLabel } from '@/utils/audit-actor'
@@ -17,6 +25,9 @@ vi.mock('@/utils/audit-actor', () => ({
 vi.mock('@/api/core/crm-store', () => ({
   crmStoreApi: {
     context: vi.fn(),
+    maintenanceContext: vi.fn(),
+    intakeContext: vi.fn(),
+    leads: vi.fn(),
     list: vi.fn(),
     map: vi.fn(),
     mapStores: vi.fn(),
@@ -27,6 +38,7 @@ vi.mock('@/api/core/crm-store', () => ({
 }))
 vi.mock('@/api/core/business-settings', () => ({
   getEffectiveBizDict: vi.fn().mockResolvedValue({ items: [] }),
+  resolveBizDict: vi.fn().mockResolvedValue({ items: [] }),
 }))
 vi.mock('@/utils/crm-store-map', async (original) => ({
   ...(await original<typeof import('@/utils/crm-store-map')>()),
@@ -115,6 +127,9 @@ beforeEach(() => {
   districtOptions = []
   vi.mocked(loadStoreMapSdk).mockResolvedValue(sdk)
   vi.mocked(crmStoreApi.context).mockResolvedValue(storeContext)
+  vi.mocked(crmStoreApi.maintenanceContext).mockResolvedValue(storeContext)
+  vi.mocked(crmStoreApi.intakeContext).mockResolvedValue(storeContext)
+  vi.mocked(crmStoreApi.leads).mockResolvedValue({ total: 0, items: [], page: 1, size: 20 })
   vi.mocked(crmStoreApi.list).mockResolvedValue({
     total: 84,
     items: sampleStores,
@@ -149,6 +164,112 @@ async function display(mode: 'list' | 'map') {
   await flushPromises()
 }
 describe('门店列表、详情和地图的真实组件交互', () => {
+  it.each(['public', 'library', 'mine', 'cooperated', 'leads'])(
+    '新增入口仅公海和商家库显示：%s',
+    async (page) => {
+      await mountPage(page)
+      const visible = wrapper!.findAll('button').some((button) => button.text() === '新增门店')
+      expect(visible).toBe(['public', 'library'].includes(page))
+    },
+  )
+  it('本人私海可维护经营状态，停业时不再提示发起新拜访', async () => {
+    const row = {
+      ...sampleStore,
+      poolType: 'PRIVATE',
+      ownerEmployeeId: storeContext.employeeId,
+      businessStatus: 'TEMP_CLOSED',
+      businessStatusReason: '装修暂停',
+    }
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: ['crm:pool:private-read', 'crm:store:status-write', 'crm:store:visit-write'],
+    })
+    vi.mocked(crmStoreApi.list).mockResolvedValue({ total: 1, items: [row], nextCursor: null })
+    vi.mocked(crmStoreApi.detail).mockResolvedValue(row)
+    await mountPage('mine')
+    expect(wrapper!.findAll('button').some((button) => button.text() === '经营状态')).toBe(true)
+    await wrapper!
+      .findAll('button')
+      .find((button) => button.text() === row.name)!
+      .trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('暂停新拜访和开单')
+    expect(document.body.textContent).not.toContain('到店拜访请从销售工作台')
+  })
+  it('无经营状态维护权限的本人私海不展示维护按钮', async () => {
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: ['crm:pool:private-read'],
+    })
+    vi.mocked(crmStoreApi.list).mockResolvedValue({
+      total: 1,
+      items: [{ ...sampleStore, poolType: 'PRIVATE', ownerEmployeeId: storeContext.employeeId }],
+      nextCursor: null,
+    })
+    await mountPage('mine')
+    expect(wrapper!.findAll('button').some((button) => button.text() === '经营状态')).toBe(false)
+  })
+  it('商家库只读人员可以看详情，不能维护或认领', async () => {
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: ['crm:store:library-read', 'crm:pool:claim'],
+    })
+    await mountPage('library')
+    expect(wrapper!.findAll('button').some((b) => b.text() === '维护')).toBe(false)
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === sampleStore.name)!
+      .trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).not.toContain('维护资料')
+    expect(document.body.textContent).not.toContain('认领到我的客户')
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('基本资料')
+  })
+  it('维护直接打开编辑弹窗，保存后回到列表，不隐式弹出详情', async () => {
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: ['crm:store:library-read', 'crm:store:manage', 'crm:pool:claim'],
+    })
+    await mountPage('library')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '维护')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper!.findComponent(CrmStoreEditor).exists()).toBe(true)
+    expect(wrapper!.findComponent({ name: 'ElDrawer' }).props('modelValue')).toBe(false)
+    expect(document.querySelector('.store-editor-dialog')?.textContent).toContain('维护门店资料')
+    expect(document.body.textContent).not.toContain('认领到我的客户')
+    expect(crmStoreApi.detail).not.toHaveBeenCalled()
+    wrapper!.findComponent(CrmStoreEditor).vm.$emit('saved', sampleStore.id)
+    await flushPromises()
+    expect(wrapper!.findComponent(CrmStoreEditor).exists()).toBe(false)
+    expect(wrapper!.findComponent({ name: 'ElDrawer' }).props('modelValue')).toBe(false)
+    expect(crmStoreApi.detail).not.toHaveBeenCalled()
+    expect(crmStoreApi.list).toHaveBeenCalledTimes(2)
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === sampleStore.name)!
+      .trigger('click')
+    await flushPromises()
+    const detailMaintenance = [...document.querySelectorAll('.el-drawer__footer button')].find(
+      (button) => button.textContent?.trim() === '维护资料',
+    ) as HTMLButtonElement
+    detailMaintenance.click()
+    await flushPromises()
+    expect(wrapper!.findComponent(CrmStoreEditor).props('store').id).toBe(sampleStore.id)
+  })
+  it.each(['public', 'cooperated'])('认领只在公海展示：%s', async (path) => {
+    await mountPage(path)
+    expect(wrapper!.findAll('button').some((b) => b.text() === '认领')).toBe(path === 'public')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === sampleStore.name)!
+      .trigger('click')
+    await flushPromises()
+    expect(document.body.textContent!.includes('认领到我的客户')).toBe(path === 'public')
+    expect(document.body.textContent).not.toContain('维护资料')
+  })
   it('商家库展示管理范围、档案状态和维护入口，不复制公海认领列表', async () => {
     vi.mocked(crmStoreApi.context).mockResolvedValue({
       ...storeContext,
@@ -240,6 +361,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
       ...sampleStore,
       poolType: 'PRIVATE',
       phase: 'FOLLOW_UP',
+      validVisitCount: 4,
       currentOwnershipId: '10',
       ownerEmployeeId: storeContext.employeeId,
       deadlineAt: '2020-01-01T00:00:00Z',
@@ -252,8 +374,10 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     vi.mocked(crmStoreApi.list).mockResolvedValue({ total: 1, items: [row], nextCursor: null })
     vi.mocked(crmStoreApi.detail).mockResolvedValue(row)
     await mountPage('mine')
-    expect(wrapper!.text()).toContain('最近拜访')
-    expect(wrapper!.text()).toContain('最近成交')
+    expect(wrapper!.findAll('th').map((c) => c.text())).toContain('最近有效拜访')
+    expect(wrapper!.findAll('th').map((c) => c.text())).not.toContain('最近成交')
+    expect(wrapper!.findAll('th').map((c) => c.text())).not.toContain('负责人')
+    expect(wrapper!.text()).toContain('累计有效')
     expect(wrapper!.text()).toContain('暂缓回收 · 核验中')
     const phase = wrapper!
       .findAllComponents({ name: 'ElSelect' })
@@ -280,6 +404,210 @@ describe('门店列表、详情和地图的真实组件交互', () => {
       expect.objectContaining({ view: 'TEAM', phase: 'FOLLOW_UP' }),
     )
     expect(wrapper!.text()).toContain('团队客户')
+  })
+  it('合作客户展示合作事实、价值和活跃度，按归属提供跳转，不直接新增认领或维护', async () => {
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: [
+        'crm:pool:cooperated-read',
+        'crm:pool:private-read',
+        'crm:pool:public-read',
+        'crm:store:library-read',
+        'crm:store:manage',
+        'crm:pool:claim',
+        'crm:lead:create',
+      ],
+    })
+    vi.mocked(crmStoreApi.list).mockResolvedValue({
+      total: 3,
+      nextCursor: null,
+      items: [
+        {
+          ...sampleStore,
+          id: 'own',
+          poolType: 'PRIVATE',
+          ownerEmployeeId: storeContext.employeeId,
+        },
+        { ...sampleStore, id: 'public' },
+        { ...sampleStore, id: 'closed', businessStatus: 'CLOSED' },
+      ],
+    })
+    await mountPage('cooperated')
+    const headers = wrapper!.findAll('th').map((c) => c.text())
+    for (const label of [
+      '客户价值',
+      '交易活跃度',
+      '首次合作',
+      '最近成交',
+      '负责人',
+      '客户池',
+      '经营状态',
+    ])
+      expect(headers).toContain(label)
+    for (const label of ['POI', '修改时间', '保护期限']) expect(headers).not.toContain(label)
+    const actions = wrapper!.findAll('button').map((b) => b.text())
+    expect(actions.filter((label) => label === '去跟进')).toHaveLength(1)
+    expect(actions.filter((label) => label === '去公海')).toHaveLength(1)
+    expect(actions.filter((label) => label === '商家档案')).toHaveLength(3)
+    for (const label of ['新增门店', '认领', '维护', '经营状态'])
+      expect(actions).not.toContain(label)
+    expect(wrapper!.text()).toContain('2026-05-01')
+    expect(wrapper!.text()).toContain('停止作业')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '去跟进')!
+      .trigger('click')
+    await flushPromises()
+    expect(crmStoreApi.context).toHaveBeenLastCalledWith('MINE')
+    expect(crmStoreApi.detail).toHaveBeenLastCalledWith('own', 'MINE')
+  })
+  it('仅合作查询权限不显示超出授权的跳转操作', async () => {
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: ['crm:pool:cooperated-read'],
+    })
+    await mountPage('cooperated')
+    expect(wrapper!.findAll('th').map((c) => c.text())).not.toContain('操作')
+  })
+  it('门店提报按服务端分页和状态查询，点击名称只读查看完整事实，退回可修改重提', async () => {
+    const lead: StoreLead = {
+      id: 'lead-1',
+      name: '待补充台球厅',
+      areaCode: '330105',
+      address: '湖墅路1号',
+      longitude: 120.1,
+      latitude: 30.2,
+      coordinateSystem: 'GCJ02',
+      publicPhone: '057100000000',
+      storeTypeCode: 'POI_080113',
+      revision: 1,
+      status: 'REJECTED',
+      submittedAt: '2026-11-01T00:00:00Z',
+      submitterUserId: '11111111-1111-4111-8111-111111111111',
+      reviewerUserId: null,
+      reviewedAt: '2026-11-02T00:00:00Z',
+      reviewReason: '请核对门头',
+      resultStoreId: null,
+    }
+    vi.mocked(crmStoreApi.leads).mockResolvedValue({ total: 130, items: [lead], page: 1, size: 20 })
+    await mountPage('leads')
+    expect(crmStoreApi.leads).toHaveBeenCalledWith({
+      review: false,
+      page: 1,
+      size: 20,
+      keyword: undefined,
+      status: undefined,
+    })
+    const headers = wrapper!.findAll('th').map((c) => c.text())
+    for (const label of [
+      '门店名称',
+      '地区 / 地址',
+      '来源',
+      '审核状态',
+      '提交时间',
+      '审核时间',
+      '审核意见',
+      '入库结果',
+    ])
+      expect(headers).toContain(label)
+    expect(wrapper!.text()).not.toContain('最近 100 条')
+    expect(wrapper!.text()).toContain('手动提报')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === lead.name)!
+      .trigger('click')
+    await flushPromises()
+    const detail = wrapper!.findComponent(CrmStoreLeadReview)
+    expect(detail.props('readOnly')).toBe(true)
+    expect(document.body.textContent).toContain('057100000000')
+    expect(document.body.textContent).toContain('请核对门头')
+    expect(document.body.textContent).not.toContain('审核通过')
+    detail.vm.$emit('close')
+    await flushPromises()
+    const pagination = wrapper!.findComponent({ name: 'ElPagination' })
+    expect(pagination.props('total')).toBe(130)
+    pagination.vm.$emit('update:current-page', 2)
+    pagination.vm.$emit('current-change', 2)
+    await flushPromises()
+    expect(crmStoreApi.leads).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 2, size: 20 }),
+    )
+    await wrapper!.get('input[aria-label="提报门店名称或地址"]').setValue('台球')
+    wrapper!
+      .findAllComponents({ name: 'ElSelect' })
+      .find((c) => c.props('ariaLabel') === '提报审核状态')!
+      .vm.$emit('update:modelValue', 'REJECTED')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '查询')!
+      .trigger('click')
+    await flushPromises()
+    expect(crmStoreApi.leads).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 1, keyword: '台球', status: 'REJECTED' }),
+    )
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '修改重提')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper!.findComponent(CrmStoreIntake).props('lead')?.id).toBe(lead.id)
+  })
+  it('提报接口契约不匹配时保留可用空表，不让旧响应破坏页面', async () => {
+    vi.mocked(crmStoreApi.leads).mockResolvedValue(
+      [] as unknown as Awaited<ReturnType<typeof crmStoreApi.leads>>,
+    )
+    await mountPage('leads')
+    expect(wrapper!.text()).toContain('接口版本不匹配')
+    expect(wrapper!.findComponent({ name: 'ElTable' }).props('data')).toEqual([])
+    expect(wrapper!.findComponent({ name: 'ElPagination' }).props('total')).toBe(0)
+  })
+  it('待我审核固定待审范围，审核按钮先打开完整资料和查重表单', async () => {
+    const lead: StoreLead = {
+      id: 'lead-2',
+      name: '待审核台球厅',
+      areaCode: '330105',
+      address: '湖墅路2号',
+      longitude: 120.1,
+      latitude: 30.2,
+      coordinateSystem: 'GCJ02',
+      publicPhone: null,
+      storeTypeCode: 'POI_080113',
+      revision: 1,
+      status: 'PENDING_REVIEW',
+      submittedAt: '2026-11-01T00:00:00Z',
+      submitterUserId: '11111111-1111-4111-8111-111111111111',
+      reviewerUserId: null,
+      reviewedAt: null,
+      reviewReason: null,
+      resultStoreId: null,
+    }
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: ['crm:lead:read', 'crm:lead:review'],
+    })
+    vi.mocked(crmStoreApi.leads).mockResolvedValue({ total: 1, items: [lead], page: 1, size: 20 })
+    await mountPage('leads')
+    await wrapper!.get('input[type="radio"][value="true"]').setValue(true)
+    await flushPromises()
+    expect(crmStoreApi.leads).toHaveBeenLastCalledWith(
+      expect.objectContaining({ review: true, page: 1, status: undefined }),
+    )
+    expect(
+      wrapper!
+        .findAllComponents({ name: 'ElSelect' })
+        .some((c) => c.props('ariaLabel') === '提报审核状态'),
+    ).toBe(false)
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '审核')!
+      .trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('湖墅路2号')
+    expect(document.body.textContent).toContain('测试姓名')
+    expect(document.body.textContent).not.toContain('11111111-1111-4111-8111-111111111111')
+    expect(wrapper!.findAll('th').map((c) => c.text())).toContain('提报人')
+    expect(document.body.textContent).toContain('关联已有门店')
+    expect(wrapper!.findComponent(CrmStoreLeadReview).props('readOnly')).not.toBe(true)
   })
   it('省级显示名称、数量和层级，单店区域仍按地区下钻', async () => {
     const data = mapResult([sampleStore])
@@ -374,7 +702,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
       .find((b) => b.text() === '新增门店')!
       .trigger('click')
     await flushPromises()
-    expect(document.body.textContent).toContain('新增门店提报')
+    expect(document.body.textContent).toContain('新增门店')
     expect(document.querySelectorAll('[role="option"]').length - existingOptions).toBeLessThan(40)
   })
   it('公海页签再次激活时刷新数据和权限，保留筛选且首次进入不重复请求', async () => {
@@ -459,6 +787,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
       '区县',
       '地址',
       '门店标签',
+      '经营状态',
       '操作',
     ])
     expect(page.findAll('button').some((button) => button.text() === '查看')).toBe(false)

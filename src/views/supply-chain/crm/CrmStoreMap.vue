@@ -95,8 +95,17 @@
         >
         <button class="map-store-name" @click="emit('detail', focused)">{{ focused.name }}</button>
         <div class="map-tags">
+          <el-tag size="small" :type="storeWorkBlocked(focused) ? 'warning' : 'info'">{{
+            props.businessStatusLabels?.[focused.businessStatus] ??
+            STORE_BUSINESS_STATUS_LABELS[focused.businessStatus] ??
+            '待核实'
+          }}</el-tag>
           <el-tag size="small" :type="focused.poolType === 'PUBLIC' ? 'primary' : 'info'">{{
-            focused.poolType === 'PUBLIC' ? '公海' : '私海'
+            focused.poolType === 'PRIVATE'
+              ? '私海'
+              : storeWorkBlocked(focused)
+                ? '停止作业'
+                : '公海'
           }}</el-tag>
           <el-tag
             size="small"
@@ -134,7 +143,7 @@ import {
   type StoreMapPoint,
   type StorePage,
 } from '@/api/core/crm-store'
-import { storeMapUrl } from '@/utils/crm-store'
+import { storeMapUrl, storeWorkBlocked, STORE_BUSINESS_STATUS_LABELS } from '@/utils/crm-store'
 import {
   loadStoreMapSdk,
   loadStoreDistrictLayers,
@@ -148,7 +157,11 @@ import {
   type StoreMarker,
 } from '@/utils/crm-store-map'
 
-const props = defineProps<{ query: StoreQuery; focusRow: StoreRow | null }>()
+const props = defineProps<{
+  query: StoreQuery
+  focusRow: StoreRow | null
+  businessStatusLabels?: Record<string, string>
+}>()
 const emit = defineEmits<{ detail: [row: StoreRow] }>()
 const container = ref<HTMLElement | null>(null)
 const result = ref<StoreMapResult | null>(null)

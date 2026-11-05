@@ -1,130 +1,195 @@
 <template>
   <el-dialog
     :model-value="true"
-    title="完善门店资料"
-    width="720px"
+    title="维护门店资料"
+    width="min(760px, calc(100vw - 32px))"
+    align-center
+    class="store-editor-dialog"
     :close-on-click-modal="false"
-    @update:model-value="!$event && emit('close')"
+    :close-on-press-escape="!saving"
+    :show-close="!saving"
+    @update:model-value="!$event && close()"
   >
-    <el-form label-position="top" @submit.prevent>
-      <el-form-item label="门店名称" required>
-        <el-input v-model="form.name" aria-label="维护门店名称" maxlength="200" />
-      </el-form-item>
-      <el-form-item label="所属地区 · 省 / 市 / 区县" required>
-        <div class="area-search">
-          <el-select-v2
-            v-model="form.areaCode"
-            :options="areaOptions"
-            filterable
-            :loading="loadingAreas"
-            aria-label="维护所属地区"
-            placeholder="搜索省、市或区县，选择完整地区"
+    <el-form label-position="top" :disabled="saving" @submit.prevent>
+      <section class="editor-section" aria-label="门店匹配">
+        <div class="section-heading">
+          <h3>门店匹配</h3>
+          <span>按名称与地区查询，核对后填入</span>
+        </div>
+        <el-form-item label="门店名称" required>
+          <el-input
+            v-model="form.name"
+            aria-label="维护门店名称"
+            maxlength="200"
+            placeholder="输入完整门店名称，提高匹配准确度"
           />
-          <el-button
-            :loading="searching"
-            :disabled="loadingAreas || !!areaError"
-            @click="searchPoi"
-          >
-            从高德补全
-          </el-button>
-        </div>
-        <span v-if="areaError" class="error" role="alert">{{ areaError }}</span>
-      </el-form-item>
-      <section v-if="searched || searching" class="poi-results" aria-label="高德候选门店">
-        <div class="result-heading">
-          <span>核对同名门店后填入资料</span>
-          <span class="hint">最多 20 条，可修改名称缩小范围</span>
-        </div>
-        <p v-if="searchError" class="error" role="alert">{{ searchError }}</p>
-        <p v-else-if="!searching && !candidates.length" class="hint">
-          所选地区未找到可确认的门店，请核对名称和区县，也可以手动维护。
-        </p>
-        <div v-for="poi in candidates" :key="poi.id" class="poi-candidate">
-          <div class="poi-copy">
-            <strong>{{ poi.name }}</strong>
-            <span>{{ areaLabel(poi.areaCode) }} · {{ poi.address || '地址未提供' }}</span>
-            <span class="hint">{{ poi.id }} · {{ poi.publicPhone || '未提供公开电话' }}</span>
+        </el-form-item>
+        <el-form-item label="所属地区 · 省 / 市 / 区县" required>
+          <div class="area-search">
+            <el-select-v2
+              v-model="form.areaCode"
+              :options="areaOptions"
+              filterable
+              :loading="loadingAreas"
+              aria-label="维护所属地区"
+              placeholder="搜索省、市或区县，选择完整地区"
+            />
+            <el-button
+              type="primary"
+              plain
+              :loading="searching"
+              :disabled="
+                saving ||
+                loadingAreas ||
+                !!areaError ||
+                !form.name.trim() ||
+                !areaLabels.has(form.areaCode)
+              "
+              @click="searchPoi"
+            >
+              <el-icon><Search /></el-icon><span>从高德补全</span>
+            </el-button>
           </div>
-          <el-button
-            size="small"
-            :type="selectedPoi?.id === poi.id ? 'primary' : 'default'"
-            @click="applyPoi(poi)"
-            >{{ selectedPoi?.id === poi.id ? '已填入' : '确认填入' }}</el-button
-          >
+          <span v-if="areaError" class="error" role="alert">{{ areaError }}</span>
+        </el-form-item>
+        <section
+          v-if="searched || searching"
+          class="poi-results"
+          aria-label="高德候选门店"
+          :aria-busy="searching"
+        >
+          <div class="result-heading">
+            <strong>{{
+              searching
+                ? '正在查询门店…'
+                : searchError
+                  ? '查询未完成'
+                  : `找到 ${candidates.length} 家候选门店`
+            }}</strong>
+            <span v-if="!searchError && !searching" class="hint">最多展示 20 家</span>
+          </div>
+          <div v-if="searchError" class="query-error" role="alert">
+            <p>{{ searchError }}</p>
+            <span class="hint">可继续手动完善资料并保存。</span>
+            <el-button link type="primary" @click="searchPoi">重新查询</el-button>
+          </div>
+          <p v-else-if="!searching && !candidates.length" class="hint">
+            所选地区未找到门店，可调整名称或区县后重试。
+          </p>
+          <div v-for="poi in candidates" :key="poi.id" class="poi-candidate">
+            <div class="poi-copy">
+              <strong>{{ poi.name }}</strong>
+              <span>{{ areaLabel(poi.areaCode) }} · {{ poi.address || '地址未提供' }}</span>
+              <span class="hint">{{ poiTypeLabel(poi) }}</span>
+              <span class="hint">{{ poi.publicPhone || '未提供公开电话' }} · POI {{ poi.id }}</span>
+            </div>
+            <el-button
+              size="small"
+              :type="selectedPoi?.id === poi.id ? 'primary' : 'default'"
+              @click="applyPoi(poi)"
+            >
+              {{ selectedPoi?.id === poi.id ? '已填入' : '确认填入' }}
+            </el-button>
+          </div>
+        </section>
+        <div v-if="selectedPoi" class="poi-confirmed" role="status">
+          <el-icon><CircleCheck /></el-icon>
+          <div>
+            <strong>已填入「{{ selectedPoi.name }}」</strong
+            ><span>地址、坐标、类型和电话按高德返回补全，缺失字段保留原值；保存后生效。</span>
+          </div>
+          <el-button link type="primary" @click="undoPoi">撤销填入</el-button>
         </div>
       </section>
-      <p class="poi-status" aria-live="polite">
-        高德 POI：{{ selectedPoi?.id || store.primaryPoi || '未关联' }}
-        <span v-if="selectedPoi" class="hint">本次确认，保存后生效</span>
-        <el-button v-if="selectedPoi" link type="primary" @click="undoPoi">撤销填入</el-button>
-      </p>
-      <el-form-item label="详细地址" required>
-        <el-input v-model="form.address" aria-label="维护详细地址" maxlength="500" />
-      </el-form-item>
-      <div class="form-grid">
-        <el-form-item label="经度">
-          <el-input
-            v-model.number="form.longitude"
-            aria-label="维护经度"
-            :disabled="!!selectedPoi"
-          />
-        </el-form-item>
-        <el-form-item label="纬度">
-          <el-input
-            v-model.number="form.latitude"
-            aria-label="维护纬度"
-            :disabled="!!selectedPoi"
-          />
-        </el-form-item>
-        <el-form-item label="坐标系">
-          <el-select
-            v-model="form.coordinateSystem"
-            aria-label="维护坐标系"
-            :disabled="!!selectedPoi"
+      <section class="editor-section" aria-label="门店资料">
+        <div class="section-heading">
+          <h3>门店资料</h3>
+          <span class="poi-identity"
+            >POI {{ selectedPoi?.id || store.primaryPoi || '未关联' }}</span
           >
-            <el-option label="高德 GCJ-02" value="GCJ02" />
-            <el-option label="GPS WGS-84" value="WGS84" />
-          </el-select>
-        </el-form-item>
-      </div>
-      <div class="form-grid two-columns">
-        <el-form-item label="门店类型">
-          <el-cascader
-            v-model="form.storeTypeCode"
-            :options="catalog.options"
-            :props="{ emitPath: false, checkStrictly: true }"
-            filterable
-            clearable
-            aria-label="维护门店类型"
-            placeholder="选择门店行业分类"
+        </div>
+        <el-form-item label="详细地址" required>
+          <el-input
+            v-model="form.address"
+            aria-label="维护详细地址"
+            maxlength="500"
+            placeholder="街道、门牌号、楼层等"
           />
         </el-form-item>
-        <el-form-item label="公开电话">
-          <el-input v-model="form.publicPhone" aria-label="维护公开电话" maxlength="50" />
+        <div class="form-grid two-columns">
+          <el-form-item label="门店类型">
+            <el-cascader
+              v-model="form.storeTypeCode"
+              :options="catalog.options"
+              :props="{ emitPath: false, checkStrictly: true }"
+              filterable
+              clearable
+              aria-label="维护门店类型"
+              placeholder="选择门店行业分类"
+            />
+          </el-form-item>
+          <el-form-item label="公开电话">
+            <el-input
+              v-model="form.publicPhone"
+              aria-label="维护公开电话"
+              maxlength="50"
+              placeholder="门店公开联系电话"
+            />
+          </el-form-item>
+        </div>
+        <div class="form-grid">
+          <el-form-item label="经度"
+            ><el-input
+              v-model.number="form.longitude"
+              aria-label="维护经度"
+              :disabled="saving || !!selectedPoi"
+          /></el-form-item>
+          <el-form-item label="纬度"
+            ><el-input
+              v-model.number="form.latitude"
+              aria-label="维护纬度"
+              :disabled="saving || !!selectedPoi"
+          /></el-form-item>
+          <el-form-item label="坐标系">
+            <el-select
+              v-model="form.coordinateSystem"
+              aria-label="维护坐标系"
+              :disabled="saving || !!selectedPoi"
+            >
+              <el-option label="高德 GCJ-02" value="GCJ02" /><el-option
+                label="GPS WGS-84"
+                value="WGS84"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
+        <el-form-item label="修改原因" required>
+          <el-input
+            v-model="reason"
+            type="textarea"
+            aria-label="维护修改原因"
+            maxlength="500"
+            placeholder="例如：核对门头与地址，确认高德候选门店并补全资料"
+            :rows="2"
+          />
         </el-form-item>
-      </div>
-      <el-form-item label="修改原因" required>
-        <el-input
-          v-model="reason"
-          type="textarea"
-          aria-label="维护修改原因"
-          maxlength="500"
-          placeholder="说明核实依据，例如：核对门头和地址，修正所属区县"
-          :rows="2"
-        />
-      </el-form-item>
-      <p class="hint">地区变更会同步更新区域统计和数据可见范围；高德未提供的字段保留原值。</p>
+        <p v-if="saveError" class="error save-error" role="alert">{{ saveError }}</p>
+      </section>
     </el-form>
     <template #footer>
-      <el-button :disabled="saving" @click="emit('close')">取消</el-button>
-      <el-button
-        type="primary"
-        :loading="saving"
-        :disabled="loadingAreas || !!areaError"
-        @click="save"
-      >
-        保存并留痕
-      </el-button>
+      <div class="editor-footer">
+        <span class="hint">变更记录包含修改人、时间及修改前后内容</span>
+        <div>
+          <el-button :disabled="saving" @click="close">取消</el-button
+          ><el-button
+            type="primary"
+            :loading="saving"
+            :disabled="loadingAreas || !!areaError"
+            @click="save"
+            >保存并留痕</el-button
+          >
+        </div>
+      </div>
     </template>
   </el-dialog>
 </template>
@@ -132,6 +197,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { CircleCheck, Search } from '@element-plus/icons-vue'
 import { crmStoreApi, type AdminArea, type StorePoi, type StoreRow } from '@/api/core/crm-store'
 import type { DictItemView } from '@/api/core/business-settings'
 import { storeLeadAreaOptions, storePoiErrorMessage } from '@/utils/crm-store'
@@ -144,6 +210,7 @@ const reason = ref('')
 const areas = ref<AdminArea[]>([])
 const loadingAreas = ref(true),
   areaError = ref('')
+const saveError = ref('')
 const areaOptions = computed(() => storeLeadAreaOptions(areas.value))
 const areaLabels = computed(
   () => new Map(areaOptions.value.map((option) => [option.value, option.label])),
@@ -159,10 +226,18 @@ const searching = ref(false),
 let generation = 0
 const errorMessage = storePoiErrorMessage
 const areaLabel = (code: string) => areaLabels.value.get(code) ?? code
+const poiTypeLabel = (poi: StorePoi) =>
+  poi.typeCode
+    ?.split(';')
+    .map((code) => catalog.value.paths.get(`POI_${code}`))
+    .find(Boolean) || '高德未提供可匹配的分类'
+function close() {
+  if (!saving.value) emit('close')
+}
 
 onMounted(async () => {
   try {
-    areas.value = (await crmStoreApi.context('ALL')).areas
+    areas.value = (await crmStoreApi.maintenanceContext(props.store.id)).areas
   } catch (error) {
     areaError.value = errorMessage(error)
   } finally {
@@ -173,7 +248,7 @@ onBeforeUnmount(() => {
   generation++
 })
 watch(
-  () => form.areaCode,
+  () => [form.name, form.areaCode],
   () => {
     generation++
     candidates.value = []
@@ -181,7 +256,9 @@ watch(
     searched.value = false
     searching.value = false
     searchError.value = ''
+    beforePoi = null
   },
+  { flush: 'sync' },
 )
 async function searchPoi() {
   if (!form.name.trim() || !areaLabels.value.has(form.areaCode)) {
@@ -204,9 +281,10 @@ async function searchPoi() {
 }
 function applyPoi(poi: StorePoi) {
   if (poi.areaCode !== form.areaCode) return
-  if (!selectedPoi.value) beforePoi = { ...form }
-  selectedPoi.value = poi
+  const original = beforePoi ?? { ...form }
   form.name = poi.name
+  beforePoi = original
+  selectedPoi.value = poi
   if (poi.address?.trim()) form.address = poi.address
   if (poi.publicPhone?.trim()) form.publicPhone = poi.publicPhone
   form.longitude = poi.longitude
@@ -246,6 +324,7 @@ async function save() {
     ElMessage.warning('请填写成对的有效经纬度并选择坐标系')
     return
   }
+  saveError.value = ''
   saving.value = true
   try {
     await crmStoreApi.update(
@@ -261,7 +340,7 @@ async function save() {
     ElMessage.success('已保存并记录变更')
     emit('saved', form.id)
   } catch (error) {
-    ElMessage.error(errorMessage(error))
+    saveError.value = errorMessage(error)
   } finally {
     saving.value = false
   }
@@ -269,6 +348,39 @@ async function save() {
 </script>
 
 <style scoped>
+.editor-section + .editor-section {
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+.section-heading,
+.result-heading,
+.poi-candidate,
+.editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.section-heading {
+  margin-bottom: 14px;
+}
+.section-heading h3 {
+  margin: 0;
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+.section-heading > span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.editor-section :deep(.el-form-item) {
+  margin-bottom: 16px;
+}
+.editor-section :deep(.el-form-item__label) {
+  margin-bottom: 6px;
+}
 .area-search {
   display: flex;
   width: 100%;
@@ -277,6 +389,9 @@ async function save() {
 .area-search :deep(.el-select-v2) {
   flex: 1;
   min-width: 0;
+}
+.area-search .el-button {
+  flex-shrink: 0;
 }
 .form-grid {
   display: grid;
@@ -291,53 +406,84 @@ async function save() {
   width: 100%;
 }
 .poi-results {
-  border-block: 1px solid var(--el-border-color-lighter);
-  margin: 0 0 12px;
-  padding: 10px 0;
-  max-height: 240px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 12px;
+  max-height: 228px;
   overflow: auto;
-}
-.result-heading,
-.poi-candidate {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 .result-heading {
   font-size: 13px;
-  margin-bottom: 6px;
 }
 .poi-candidate {
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--el-border-color-extra-light);
 }
 .poi-candidate:last-child {
   border: 0;
+  padding-bottom: 0;
+}
+.poi-candidate .el-button {
+  flex-shrink: 0;
 }
 .poi-copy {
   display: grid;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .poi-copy strong {
   font-size: 14px;
 }
-.poi-status {
-  font-size: 12px;
+.poi-confirmed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-top: 12px;
+  border-radius: 6px;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+.poi-confirmed > div {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  font-size: 13px;
+}
+.poi-confirmed span {
   color: var(--el-text-color-regular);
-  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.poi-identity {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .hint {
   color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.6;
 }
+.query-error p,
 .error {
   color: var(--el-color-danger);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.query-error p {
+  margin: 8px 0 4px;
+}
+.query-error .el-button {
+  margin-left: 10px;
+}
+.save-error {
+  margin: 0;
+}
+.editor-footer > div {
+  display: flex;
+  flex-shrink: 0;
 }
 @media (max-width: 600px) {
   .form-grid,
@@ -345,10 +491,38 @@ async function save() {
     grid-template-columns: 1fr;
     gap: 0;
   }
-  .result-heading {
+  .section-heading,
+  .editor-footer {
     align-items: flex-start;
     flex-direction: column;
-    gap: 0;
+    gap: 6px;
   }
+  .editor-footer > div {
+    align-self: flex-end;
+  }
+  .area-search {
+    flex-wrap: wrap;
+  }
+  .area-search :deep(.el-select-v2) {
+    flex-basis: 100%;
+  }
+}
+</style>
+<style>
+.store-editor-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 40px);
+}
+.store-editor-dialog .el-dialog__body {
+  min-height: 0;
+  overflow: auto;
+}
+.store-editor-dialog .el-dialog__header {
+  padding-bottom: 16px;
+}
+.store-editor-dialog .el-dialog__footer {
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 14px;
 }
 </style>

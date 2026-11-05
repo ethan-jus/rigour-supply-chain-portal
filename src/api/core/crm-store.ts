@@ -32,6 +32,8 @@ export interface StoreRow {
   latitude: number | null
   coordinateSystem: string | null
   recordStatus: string
+  businessStatus: string
+  businessStatusReason: string | null
   poolType: string
   ownerEmployeeId: string | null
   ownerName: string | null
@@ -42,6 +44,7 @@ export interface StoreRow {
   potentialLevel: string
   lastVisitAt: string | null
   lastOrderAt: string | null
+  firstCooperatedAt: string | null
   phase: string | null
   deadlineAt: string | null
   cooldownUntil: string | null
@@ -66,6 +69,7 @@ export interface StoreQuery {
   storeType?: string
   pool?: string
   recordStatus?: string
+  businessStatus?: string
   phase?: string
   protection?: string
   cursor?: string
@@ -113,10 +117,36 @@ export interface StoreLead {
   latitude: number
   status: string
   submittedAt: string
+  submitterUserId: string
+  reviewerUserId: string | null
   reviewedAt: string | null
   reviewReason: string | null
   resultStoreId: string | null
+  publicPhone: string | null
+  storeTypeCode: string | null
+  coordinateSystem: string | null
   revision: number
+}
+export interface StoreMatch {
+  id: string
+  name: string
+  address: string
+  areaCode: string
+  provinceName: string | null
+  cityName: string | null
+  countyName: string | null
+  recordStatus: string
+  businessStatus: string
+  poolType: string
+}
+export interface StoreAdmission {
+  storeId: string
+  name: string
+}
+export interface StoreLeadReview {
+  requestId?: string
+  existingStoreId?: string
+  distinctConfirmed?: boolean
 }
 export interface StoreLeadCommand {
   requestId: string
@@ -126,6 +156,8 @@ export interface StoreLeadCommand {
   longitude: number
   latitude: number
   publicPhone: string | null
+  storeTypeCode: string
+  coordinateSystem: string
 }
 export interface StorePoi {
   id: string
@@ -192,6 +224,42 @@ export interface StoreCoverage {
 const base = '/crm/stores'
 const options = { stayOnUnauthorized: true }
 export const crmStoreApi = {
+  intakeContext: () => apiClient.get<StoreContext>(`${base}/intake/context`, options),
+  intakeLookup: (keyword: string, areaCode: string) =>
+    apiClient.get<StoreMatch[]>(`${base}/intake/lookup`, {
+      ...options,
+      params: { keyword, areaCode },
+    }),
+  reviewLookup: (keyword: string, areaCode: string) =>
+    apiClient.get<StoreMatch[]>(`${base}/leads/lookup`, {
+      ...options,
+      params: { keyword, areaCode },
+    }),
+  intakeCandidates: (keyword: string, areaCode: string) =>
+    apiClient.get<StorePoi[]>(`${base}/intake/poi-candidates`, {
+      ...options,
+      params: { keyword, areaCode },
+    }),
+  admit: (poiId: string, requestId: string) =>
+    apiClient.post<StoreAdmission>(`${base}/intake/amap`, { requestId, poiId }, options),
+  resubmit: (lead: StoreLead, proposal: StoreLeadCommand) =>
+    apiClient.put<StoreLead>(
+      `${base}/leads/${encodeURIComponent(lead.id)}`,
+      { revision: lead.revision, proposal },
+      options,
+    ),
+  businessStatus: (
+    store: StoreRow,
+    status: string,
+    reason: string,
+    management: boolean,
+    requestId: string,
+  ) =>
+    apiClient.put<void>(
+      `${base}/${encodeURIComponent(store.id)}/business-status`,
+      { requestId, revision: store.revision, status, reason, management },
+      options,
+    ),
   visits: (id: string, view: StoreView) =>
     apiClient.get<StoreVisit[]>(`${base}/${encodeURIComponent(id)}/visits`, {
       ...options,
@@ -224,14 +292,29 @@ export const crmStoreApi = {
       { revision, reason, requestId: crypto.randomUUID() },
       options,
     ),
-  leads: (review: boolean) =>
-    apiClient.get<StoreLead[]>(`${base}/leads`, { ...options, params: { review } }),
+  leads: (params: {
+    review: boolean
+    page: number
+    size: number
+    keyword?: string
+    status?: string
+  }) =>
+    apiClient.get<{ total: number; items: StoreLead[]; page: number; size: number }>(
+      `${base}/leads`,
+      { ...options, params },
+    ),
   submit: (command: StoreLeadCommand) =>
     apiClient.post<StoreLead>(`${base}/leads`, command, options),
-  review: (id: string, revision: number, approve: boolean, reason: string) =>
+  review: (
+    id: string,
+    revision: number,
+    approve: boolean,
+    reason: string,
+    review: StoreLeadReview = {},
+  ) =>
     apiClient.post<StoreLead>(
       `${base}/leads/${encodeURIComponent(id)}/review`,
-      { revision, approve, reason, requestId: crypto.randomUUID() },
+      { revision, approve, reason, ...review, requestId: review.requestId ?? crypto.randomUUID() },
       options,
     ),
   ownerships: (id: string, view: StoreView) =>
@@ -244,6 +327,8 @@ export const crmStoreApi = {
       ...options,
       params: { view },
     }),
+  maintenanceContext: (id: string) =>
+    apiClient.get<StoreContext>(`${base}/${encodeURIComponent(id)}/maintenance-context`, options),
   poiCandidates: (id: string, keyword: string, areaCode: string) =>
     apiClient.get<StorePoi[]>(`${base}/${encodeURIComponent(id)}/poi-candidates`, {
       ...options,
