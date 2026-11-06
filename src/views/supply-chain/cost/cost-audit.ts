@@ -69,6 +69,10 @@ export function costExportFields(row: CostRecord): { label: string; value: strin
 }
 const names: Record<string, string> = {
   CREATE: '新增',
+  REVOKE: '撤销确认',
+  DELETE: '删除',
+  ATTACHMENT_REMOVED: '移除附件',
+  ATTACHMENT_REPLACED: '更换附件',
   SOURCE_DIFFERENCE: '采购来源变化',
   ATTACHMENT_ADDED: '添加附件',
   UPDATE: '修改',

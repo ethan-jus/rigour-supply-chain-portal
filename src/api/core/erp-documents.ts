@@ -294,6 +294,7 @@ export interface ProcurementOrderQuery {
   begin: number
   step: number
   procurementNo?: string
+  sourceDocumentNo?: string
   supplierId?: string | number
   targetWarehouseId?: string | number
   statusCode?: string

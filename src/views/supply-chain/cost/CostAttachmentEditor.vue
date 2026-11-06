@@ -1,5 +1,8 @@
 <template>
-  <section class="attachment-editor" :aria-label="title || (expense ? '报销票据' : '损耗照片与凭证')">
+  <section
+    class="attachment-editor"
+    :aria-label="title || (expense ? '报销票据' : '损耗照片与凭证')"
+  >
     <h3 v-if="!expense" class="cost-section-title">{{ title || '损耗照片与凭证' }}</h3>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <div class="attachment-actions">
@@ -21,6 +24,14 @@
       />
       <span class="attachment-limit">PNG、JPEG、PDF；单个不超过 10 MB，最多 20 个</span>
     </div>
+    <input
+      ref="replacementInput"
+      class="file-input"
+      type="file"
+      accept="image/png,image/jpeg,application/pdf"
+      aria-label="选择替换附件"
+      @change="chooseReplacement"
+    />
     <p v-if="loading" role="status">正在读取已有附件…</p>
     <p v-if="loadError" role="alert">
       {{ loadError }}
@@ -32,24 +43,51 @@
           file.fileName
         }}</el-button>
         <span class="attachment-limit">已保存 · {{ size(file.size) }}</span>
+        <template v-if="!expense">
+          <el-button
+            link
+            type="primary"
+            :disabled="disabled || selecting"
+            @click="startReplace(file)"
+            >更换</el-button
+          >
+          <el-button
+            link
+            type="danger"
+            :disabled="disabled || selecting"
+            @click="removeExisting(file)"
+            >移除</el-button
+          >
+        </template>
       </li>
       <li v-for="item in drafts" :key="item.id">
-        <el-button link type="primary" :disabled="disabled" @click="preview(item.file)">{{
-          item.file.name
-        }}</el-button>
+        <el-button
+          link
+          type="primary"
+          :disabled="disabled"
+          @click="
+            item.removing && item.replaces ? openExisting(item.replaces.id) : preview(item.file)
+          "
+          >{{ item.file.name }}</el-button
+        >
         <span>{{
-          { pending: '待保存', uploading: '上传中…', uploaded: '已保存', failed: '上传失败' }[
-            item.status
-          ]
+          {
+            pending: item.removing ? '待移除' : item.replaces ? '待更换' : '待保存',
+            uploading: '上传中…',
+            uploaded: item.removing ? '已移除' : '已保存',
+            failed: '上传失败',
+          }[item.status]
         }}</span>
-        <span class="attachment-limit">{{ size(item.file.size) }}</span>
+        <span class="attachment-limit">{{
+          size(item.removing && item.replaces ? item.replaces.size : item.file.size)
+        }}</span>
         <el-button
           v-if="item.status !== 'uploaded'"
           link
           type="danger"
           :disabled="disabled || selecting"
           @click="remove(item.id)"
-          >移除</el-button
+          >{{ item.replaces ? '撤销修改' : '移除' }}</el-button
         >
         <span v-if="item.error" role="alert" class="attachment-error">{{ item.error }}</span>
       </li>
@@ -65,6 +103,7 @@
 <script setup lang="ts">
 import CostFilePreview from './CostFilePreview.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { randomId } from '@/utils/random-id'
 import {
   getCostAttachments,
   getCostAttachmentUrl,
@@ -75,18 +114,30 @@ import {
 import { errorMessage } from '@/api/core/error'
 import { appendCostAttachmentFiles, type CostAttachmentDraft } from './cost-attachment-draft'
 
-const props = defineProps<{ category: CostCategory; row: CostRecord | null; disabled: boolean; title?: string }>()
+const props = defineProps<{
+  category: CostCategory
+  row: CostRecord | null
+  disabled: boolean
+  title?: string
+}>()
 const emit = defineEmits<{ busy: [value: boolean] }>()
 const selecting = ref(false)
 const drafts = defineModel<CostAttachmentDraft[]>({ required: true })
 const expense = computed(() => props.category === 'expenses')
 const input = ref<HTMLInputElement>()
+const replacementInput = ref<HTMLInputElement>()
+const replacing = ref<CostAttachment | null>(null)
 const files = ref<CostAttachment[]>([]),
   loading = ref(false),
   loadError = ref(''),
   error = ref('')
 const existing = computed(() =>
-  files.value.filter((file) => !drafts.value.some((item) => item.attachment?.id === file.id)),
+  files.value.filter(
+    (file) =>
+      !drafts.value.some(
+        (item) => item.attachment?.id === file.id || item.replaces?.id === file.id,
+      ),
+  ),
 )
 const previewVisible = ref(false),
   previewName = ref(''),
@@ -133,6 +184,44 @@ async function choose(event: Event) {
     selecting.value = false
     target.value = ''
   }
+}
+function startReplace(file: CostAttachment) {
+  replacing.value = file
+  replacementInput.value?.click()
+}
+async function chooseReplacement(event: Event) {
+  const target = event.target as HTMLInputElement
+  const candidate = target.files?.[0],
+    original = replacing.value
+  if (!candidate || !original || props.disabled || selecting.value) return
+  const serial = generation
+  selecting.value = true
+  error.value = ''
+  try {
+    const checked = await appendCostAttachmentFiles([], [candidate], 0)
+    if (serial === generation && checked[0])
+      drafts.value = [...drafts.value, { ...checked[0], replaces: original }]
+  } catch (e) {
+    if (serial === generation) error.value = errorMessage(e, '文件选择失败')
+  } finally {
+    selecting.value = false
+    replacing.value = null
+    target.value = ''
+  }
+}
+function removeExisting(file: CostAttachment) {
+  if (props.disabled || selecting.value || props.row?.statusCode !== 'DRAFT') return
+  drafts.value = [
+    ...drafts.value,
+    {
+      id: randomId(),
+      file: new File([], file.fileName, { type: file.contentType }),
+      replaces: file,
+      removing: true,
+      status: 'pending',
+      error: '',
+    },
+  ]
 }
 function remove(id: string) {
   drafts.value = drafts.value.filter((file) => file.id !== id)

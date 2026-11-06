@@ -1,4 +1,5 @@
 import { buildCostWorkbook, downloadCostWorkbook } from '../../cost/cost-export'
+import { dictionaryValue } from './cost-presentation'
 
 /** 服务端导出已固定快照且重新验证权限；这里只转换文件格式，不重新请求或汇总业务数据。 */
 export function parseCostCsv(content: string): string[][] {
@@ -63,12 +64,28 @@ const columns = [
   '确认状态',
   '付款状态',
 ]
+export const costDashboardExportColumns = [...columns, '费用项目'].map((key) => ({
+  key,
+  label:
+    { '金额（元）': '单据金额（元）', 费用所属月: '费用所属月份', 城市: '费用归属' }[key] ?? key,
+}))
 
-export async function buildCostDashboardWorkbook(content: string, context = '') {
+export async function buildCostDashboardWorkbook(
+  content: string,
+  context = '',
+  selectedFields?: string[],
+) {
   const parsed = parseCostCsv(content)
   const headerIndex = parsed.findIndex((row) => required.every((label) => row.includes(label)))
   if (headerIndex < 0) throw new Error('导出字段不完整，请重新导出')
   const headers = parsed[headerIndex]!
+  const availableColumns = headers.includes('费用项目') ? [...columns, '费用项目'] : columns
+  const outputColumns = selectedFields
+    ? availableColumns.filter((key) => selectedFields.includes(key))
+    : availableColumns
+  if (!outputColumns.length) throw new Error('请至少选择一个导出字段')
+  if (selectedFields?.some((key) => !availableColumns.includes(key)))
+    throw new Error('导出字段已变化，请重新选择')
   const details = parsed.slice(headerIndex + 1)
   if (details.some((row) => row.length !== headers.length))
     throw new Error('导出明细不完整，请重新导出')
@@ -80,16 +97,16 @@ export async function buildCostDashboardWorkbook(content: string, context = '') 
     throw new Error('导出笔数与明细不一致，请重新导出')
   const get = (row: string[], label: string) => row[headers.indexOf(label)] ?? ''
   const rows = details.map((row) =>
-    columns.map((label) => {
+    outputColumns.map((label) => {
       let value = get(row, label)
       // CSV 的前缀只用于防公式注入；XLSX 明确以字符串存储，可还原业务原文。
       if (/^'[\s]*[=+@-]|^'[\t\r]/.test(value)) value = value.slice(1)
-      return value
+      return label === '费用项目' ? dictionaryValue(value) : value
     }),
   )
   const workbook = await buildCostWorkbook(
     '支出明细',
-    columns.map(
+    outputColumns.map(
       (label) =>
         ({
           '金额（元）': '单据金额（元）',
@@ -129,7 +146,11 @@ export async function buildCostDashboardWorkbook(content: string, context = '') 
   return workbook
 }
 
-export async function exportCostDashboardWorkbook(blob: Blob, context = '') {
-  const workbook = await buildCostDashboardWorkbook(await blob.text(), context)
+export async function exportCostDashboardWorkbook(
+  blob: Blob,
+  context = '',
+  selectedFields?: string[],
+) {
+  const workbook = await buildCostDashboardWorkbook(await blob.text(), context, selectedFields)
   await downloadCostWorkbook(workbook, '成本数据看板_支出明细')
 }

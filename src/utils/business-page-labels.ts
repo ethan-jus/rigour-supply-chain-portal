@@ -16,7 +16,7 @@ export const businessPageLabels: Record<string, string> = {
   '/supply-chain/hr/allowance-rules': '员工补贴规则',
   '/supply-chain/hr/target-settings': '月度经营目标',
   '/supply-chain/hr/expenses': '员工报销台账',
-  '/supply-chain/cost/purchases': '商品进货记录',
+  '/supply-chain/cost/purchases': '采购成本记录',
   '/supply-chain/cost/losses': '商品损耗记录',
   '/supply-chain/cost/logistics': '物流运输记录',
   '/supply-chain/cost/warehouse-rentals': '仓储费用',

@@ -1,12 +1,8 @@
 <template>
   <el-form label-position="top" class="ledger-editor">
     <el-alert
-      v-if="plan?.sourceSync"
-      :title="
-        plan.sourceSync.differencePending
-          ? '采购约定已变化，请核实实际费用并在变更原因中说明处理结果。'
-          : '采购约定金额仅供补录，请核实实际运输日期、承运方及实际费用。'
-      "
+      v-if="plan?.sourceSync?.differencePending"
+      title="采购约定已变化，请核对实际费用并填写变更原因。"
       type="warning"
       :closable="false"
     />
@@ -31,12 +27,12 @@
           <el-form-item label="费用归属月份" required
             ><el-date-picker v-model="plan.costMonth" type="month" value-format="YYYY-MM"
           /></el-form-item>
-          <el-form-item label="运输用途" required
+          <el-form-item label="运输类型" required
             ><CostDictSelect v-model="plan.transportPurposeCode" code="COST_TRANSPORT_PURPOSE"
           /></el-form-item>
           <el-form-item
-            v-if="['NON_SALES', 'OTHER'].includes(plan.transportPurposeCode)"
-            label="具体用途说明"
+            v-if="plan.transportPurposeCode === 'OTHER'"
+            label="其他费用用途说明"
             required
             ><el-input
               v-model="plan.nonSalesPurposeCode"
@@ -250,7 +246,7 @@
           </div>
         </div>
         <el-table :data="plan.sources" border empty-text="选择关联单据，或登记无关联单据的真实原因">
-          <el-table-column label="单据类型" min-width="150"
+          <el-table-column label="订单类型" min-width="150"
             ><template #default="{ row }">{{
               sourceTypeLabel(row.orderTypeCode)
             }}</template></el-table-column
@@ -534,6 +530,7 @@ import type { LedgerPartyReference } from '@/api/core/cost-ledger'
 import CostDictSelect from './CostDictSelect.vue'
 import CostLedgerPartyFields from './CostLedgerPartyFields.vue'
 import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
+import { logisticsOrderTypeLabel } from './cost-transport-types'
 import CostLedgerSourcePicker, { type PickedLedgerSource } from './CostLedgerSourcePicker.vue'
 import { costMoney, costLabel } from './cost-dictionaries'
 import {
@@ -576,15 +573,7 @@ const allocations = computed(
       (source.allocations || []).map((allocation, index) => ({ source, allocation, index })),
     ) || [],
 )
-const sourceTypeLabel = (value: string) =>
-  ({
-    PURCHASE_ORDER: '采购单',
-    TRANSFER_ORDER: '调拨单',
-    SALES_ORDER: '销售单',
-    OTHER_OUT: '其他出库单',
-    REQUISITION_OUT: '领用出库单',
-    NONE: '无关联单据',
-  })[value] || value
+const sourceTypeLabel = logisticsOrderTypeLabel
 function cityChanged() {
   form.value.cityName = props.cities.find((c) => c.code === form.value.cityCode)?.name || ''
   if (props.logistics) {

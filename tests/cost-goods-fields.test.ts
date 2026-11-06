@@ -277,7 +277,6 @@ describe('cost goods linked specifications and dictionary units', () => {
       select.vm.$emit('change', '2')
       await flushPromises()
       expect(goods).toMatchObject({ variantId: '2', specification: '', unit: 'BUCKET' })
-      expect(field(wrapper, '规格').text()).toContain('主档未填写规格名称，可正常保存')
       expect(select.findAllComponents({ name: 'ElOption' })[0]!.props('label')).toBe(
         '未维护规格 · 桶',
       )
@@ -300,7 +299,7 @@ describe('cost goods linked specifications and dictionary units', () => {
     expect(goods).toMatchObject({ specification: '', unit: '', variantId: null })
     expect(field(wrapper, '规格').findComponent(ReferenceSelect).exists()).toBe(true)
     expect(field(wrapper, '单位').get('input').attributes('disabled')).toBeDefined()
-    expect(field(wrapper, '规格').text()).toContain('请先选择规格')
+    expect(field(wrapper, '规格').text()).toContain('请选择商品规格')
 
     const product = field(wrapper, '商品').getComponent(ReferenceSelect)
     product.vm.$emit('update:modelValue', null)

@@ -8,7 +8,7 @@
     @open="reset"
   >
     <el-form class="source-filters" label-position="top" @submit.prevent="search">
-      <el-form-item label="单据类型"
+      <el-form-item label="订单类型"
         ><el-select v-model="query.orderTypeCode" @change="search"
           ><el-option
             v-for="t in types"
@@ -20,21 +20,13 @@
         ><el-input v-model="query.documentNo" clearable @keyup.enter="search"
       /></el-form-item>
       <el-form-item
-        :label="
-          query.orderTypeCode === 'PURCHASE_ORDER'
-            ? '供应商名称'
-            : query.orderTypeCode === 'TRANSFER_ORDER'
-              ? '收货仓名称'
-              : '客户 / 收货方名称'
-        "
+        :label="query.orderTypeCode === 'TRANSFER_ORDER' ? '收货仓名称' : '客户 / 收货方名称'"
         ><el-input v-model="query.partyName" clearable @keyup.enter="search"
       /></el-form-item>
       <el-form-item v-if="query.orderTypeCode !== 'PURCHASE_ORDER'" label="发货仓库"
         ><CostLedgerPartySelect v-model="sourceWarehouse" logistics kind="WAREHOUSE"
       /></el-form-item>
-      <el-form-item
-        v-if="['PURCHASE_ORDER', 'TRANSFER_ORDER'].includes(query.orderTypeCode)"
-        label="收货仓库"
+      <el-form-item v-if="query.orderTypeCode === 'TRANSFER_ORDER'" label="收货仓库"
         ><CostLedgerPartySelect v-model="targetWarehouse" logistics kind="WAREHOUSE"
       /></el-form-item>
       <el-form-item label="单据日期"
@@ -90,7 +82,7 @@
       >
     </el-table>
     <div class="picker-toolbar">
-      <span>切换类型、筛选和分页保留本次勾选；已在当前单据中的来源不可重复选择。</span>
+      <span>已添加的单据不可重复选择。</span>
       <div>
         <el-button :disabled="loading || offset === 0" @click="page(-1)">上一页</el-button
         ><el-button :disabled="loading || rows.length < 50" @click="page(1)">下一页</el-button>
@@ -110,6 +102,7 @@ import { getLedgerSources, type LedgerSourceQuery } from '@/api/core/cost-ledger
 import type { CostSource } from '@/api/core/cost'
 import { errorMessage } from '@/api/core/error'
 import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
+import { logisticsOrderTypes } from './cost-transport-types'
 const visible = defineModel<boolean>({ required: true })
 const props = defineProps<{ selectedKeys: string[] }>()
 export type PickedLedgerSource = CostSource & { orderTypeCode: string }
@@ -125,13 +118,8 @@ const sourceStatus = (status: string) =>
     DELIVERED: '已送达',
     SHIPPED: '已发货',
   })[status] || '可引用'
-const types = [
-  { value: 'PURCHASE_ORDER', label: '采购单' },
-  { value: 'TRANSFER_ORDER', label: '调拨单' },
-  { value: 'SALES_ORDER', label: '销售单' },
-  { value: 'OTHER_OUT', label: '其他出库单（领用 / 活动等）' },
-]
-const query = ref<LedgerSourceQuery>({ orderTypeCode: 'PURCHASE_ORDER', begin: 0 })
+const types = logisticsOrderTypes
+const query = ref<LedgerSourceQuery>({ orderTypeCode: 'TRANSFER_ORDER', begin: 0 })
 const rows = ref<PickedLedgerSource[]>([]),
   chosen = ref(new Map<string, PickedLedgerSource>())
 const loading = ref(false),

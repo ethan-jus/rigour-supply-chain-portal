@@ -103,6 +103,27 @@ const global = {
 }
 
 describe('采购订单列表', () => {
+  it('订货宝原单号独立展示与筛选，不与本系统采购单号混用', async () => {
+    api.orders.mockResolvedValue({
+      total: 1,
+      items: [
+        { ...row('1', true), sourceSystemCode: 'DINGHUOBAO', sourceDocumentNo: 'JH.20260901.0000' },
+      ],
+    })
+    const wrapper = mount(ProcurementView, {
+      global: { ...global, stubs: { ...global.stubs, ErpProcurementEditor: true } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('订货宝单号')
+    expect(wrapper.text()).toContain('JH.20260901.0000')
+    await wrapper.get('input[placeholder="输入订货宝原单号"]').setValue('JH.20260901.0000')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.orders).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sourceDocumentNo: 'JH.20260901.0000', procurementNo: undefined }),
+    )
+    wrapper.unmount()
+  })
   it('合计使用服务器筛选全集的结果，不从本页明细推算，也不把缺失合计显示为0', async () => {
     api.orders.mockResolvedValue({
       total: 38,
@@ -146,7 +167,8 @@ describe('采购订单列表', () => {
       .findAll('tr.el-table__row')[0]!
       .findAll('td')
       .map((t) => t.text())
-    expect(cells[7]).toBe('12')
+    const quantityColumn = wrapper.findAll('th').findIndex((h) => h.text() === '采购数量')
+    expect(cells[quantityColumn]).toBe('12')
     expect(cells).toContain('待确认')
     expect(cells).toContain('张三')
     wrapper.unmount()

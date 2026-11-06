@@ -122,10 +122,9 @@ export function validateNavigation(nodes: NavigationNode[]): NavigationNode[] {
       const expectedPath = node.routeKey in ROUTES ? ROUTES[node.routeKey] : '未注册'
       throw new Error(`IAM返回未注册或路径不一致的routeKey: ${node.routeKey}; routePath=${node.routePath}; expected=${expectedPath}`)
     }
-    // 商品进货台账退出菜单与入口搜索；历史费用引用仍保留已授权的直达能力。
     return [{
       ...node,
-      visible: node.visible && node.routeKey !== 'supply.cost.purchases',
+      visible: node.visible,
       children: validateNavigation(node.children),
     }]
   })

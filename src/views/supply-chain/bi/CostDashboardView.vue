@@ -1,22 +1,26 @@
 <template>
   <div ref="boardElement" class="cost-dashboard">
     <header class="cost-header">
-      <div>
-        <p class="eyebrow">数据看板 / 经营费用</p>
-        <h1>成本数据看板</h1>
+      <h1>成本数据看板</h1>
+      <div class="controls header-actions">
+        <span v-if="report" class="updated-at">更新于 {{ updatedAt }}</span>
+        <button @click="definitions = true">统计说明</button>
+        <button :disabled="loading" @click="refreshBoard">刷新</button>
+        <button @click="toggleFullscreen">{{ fullscreen ? '退出全屏' : '全屏' }}</button>
       </div>
-      <div class="controls">
-        <label
-          >期间
-          <select
-            v-model.number="filters.year"
-            aria-label="年份"
-            :disabled="!cutoff"
-            @change="globalChange"
-          >
-            <option v-for="year in years" :key="year" :value="year">{{ year }}年</option>
-          </select></label
-        ><select
+    </header>
+    <div class="cost-filter-bar controls">
+      <label
+        >期间
+        <select
+          v-model.number="filters.year"
+          aria-label="年份"
+          :disabled="!cutoff"
+          @change="globalChange"
+        >
+          <option v-for="year in years" :key="year" :value="year">{{ year }}年</option>
+        </select>
+        <select
           v-model.number="filters.month"
           aria-label="月份"
           :disabled="!cutoff"
@@ -30,30 +34,43 @@
             :disabled="filters.year === maxYear && month > maxMonth"
           >
             {{ month }}月
-          </option></select
-        ><label
-          >费用归属
-          <select v-model="filters.city" aria-label="费用归属" @change="globalChange">
-            <option :value="undefined">全部授权归属</option>
-            <option v-for="city in cities" :key="city.key" :value="city.key">
-              {{ city.label }}
-            </option>
-          </select></label
-        ><button @click="definitions = true">统计说明</button
-        ><button :disabled="loading" @click="refreshBoard">刷新</button
-        ><button @click="toggleFullscreen">{{ fullscreen ? '退出全屏' : '全屏' }}</button>
+          </option>
+        </select>
+      </label>
+      <div class="segmented period-presets" aria-label="快捷期间">
+        <button
+          :disabled="!cutoff"
+          :aria-pressed="activePeriod === 'current'"
+          :class="{ active: activePeriod === 'current' }"
+          @click="applyPeriod('current')"
+        >
+          本月
+        </button>
+        <button
+          :disabled="!cutoff"
+          :aria-pressed="activePeriod === 'previous'"
+          :class="{ active: activePeriod === 'previous' }"
+          @click="applyPeriod('previous')"
+        >
+          上月
+        </button>
+        <button
+          :disabled="!cutoff"
+          :aria-pressed="activePeriod === 'year'"
+          :class="{ active: activePeriod === 'year' }"
+          @click="applyPeriod('year')"
+        >
+          本年
+        </button>
       </div>
-    </header>
-    <nav class="cost-tabs" aria-label="分析章节">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="{ active: section === tab.key }"
-        :aria-pressed="section === tab.key"
-        @click="goSection(tab.key)"
-      >
-        {{ tab.label }}</button
-      ><label class="compare"
+      <label
+        >费用归属
+        <select v-model="filters.city" aria-label="费用归属" @change="globalChange">
+          <option :value="undefined">全部授权归属</option>
+          <option v-for="city in cities" :key="city.key" :value="city.key">{{ city.label }}</option>
+        </select>
+      </label>
+      <label class="compare"
         >对比
         <select
           v-model="filters.compare"
@@ -63,8 +80,19 @@
         >
           <option value="previous">上期</option>
           <option value="yoy">去年同期</option>
-        </select></label
+        </select>
+      </label>
+    </div>
+    <nav class="cost-tabs" aria-label="分析章节">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        :class="{ active: section === tab.key }"
+        :aria-pressed="section === tab.key"
+        @click="goSection(tab.key)"
       >
+        {{ tab.label }}
+      </button>
     </nav>
     <div v-if="report" class="scope-line">
       <span
@@ -85,208 +113,26 @@
       <div v-if="report.meta.dataState === 'STALE'" class="cost-message notice" role="alert">
         数据更新延迟，当前展示上次更新的费用数据。更新时间：{{ updatedAt }}。
       </div>
-      <div v-if="report.current.reviewCount" class="cost-message notice" role="status">
-        待核对报销 {{ report.current.reviewCount }} 笔、{{
-          money(report.current.reviewAmount || '0')
-        }}
-        元暂未计入。请在报销原单核对关联费用。
+      <div
+        v-if="section !== 'overview' && report.current.reviewCount"
+        class="cost-message notice"
+        role="status"
+      >
+        待核对来源 {{ report.current.reviewCount }} 笔，暂未计入。请在对应原单核对。
       </div>
       <template v-if="section === 'overview'">
-        <div class="section-heading">
-          <h2>经营费用总览</h2>
-          <span>含已确认薪酬、运费、场地、营销和报销；采购与损耗单列</span>
-        </div>
-        <section class="brief-hero">
-          <div>
-            <p class="eyebrow">本期已确认经营费用</p>
-            <strong class="hero-number">{{ money(report.current.amount) }}<small>元</small></strong>
-            <p class="muted">按发生日期 / 费用所属月 · {{ report.current.count }} 笔计入记录</p>
-          </div>
-          <div class="hero-compare">
-            <p class="eyebrow">{{ comparisonLabel }}</p>
-            <strong :class="deltaClass(report.delta)"
-              >{{ signed(report.delta)
-              }}<small>{{
-                report.growth == null
-                  ? report.meta.comparisonAvailable
-                    ? '零基数'
-                    : '无可比数据'
-                  : `${Number(report.growth) > 0 ? '+' : ''}${report.growth}%`
-              }}</small></strong
-            >
-            <p class="muted">
-              可比期 {{ report.meta.comparisonAvailable ? money(report.previous.amount) : '—' }} 元
-            </p>
-          </div>
-          <div class="brief-reading">
-            <p class="eyebrow">本期费用概况</p>
-            <p>{{ overviewSummary }}</p>
-            <p v-if="comparisonNotice" class="comparison-notice">{{ comparisonNotice }}</p>
-            <button class="primary" @click="goSection('analysis')">进入费用分析</button>
-          </div>
-        </section>
-        <section class="cost-panel overview-status" aria-label="费用状态及归属">
-          <div class="panel-heading"><h2>费用状态及归属</h2></div>
-          <p v-if="Number(report.current.linkedAmount || 0) > 0" class="chart-note">
-            关联原费用的报销 {{ money(report.current.linkedAmount) }} 元，已由原单计入。
-          </p>
-          <div class="support-grid">
-            <div>
-              <h3>未付款单据金额</h3>
-              <strong>{{ money(report.current.unpaid) }} 元</strong
-              ><button
-                class="text-button"
-                @click="openRecords({ payment: 'UNPAID', status: 'CONFIRMED' })"
-              >
-                查看未付款明细
-              </button>
-            </div>
-            <div>
-              <h3>待归属费用</h3>
-              <strong>{{ money(report.current.unassigned) }} 元</strong
-              ><button
-                v-if="cities.some((c) => c.key === 'UNKNOWN')"
-                class="text-button"
-                @click="openRecords({ city: 'UNKNOWN' })"
-              >
-                查看待归属明细
-              </button>
-            </div>
-          </div>
-        </section>
-        <section class="cost-areas" aria-label="六类成本">
-          <article v-for="area in costAreas" :key="area.title" class="cost-area">
-            <h3>{{ area.title }}</h3>
-            <p class="muted">{{ area.description }}</p>
-            <template v-for="category in area.categories" :key="category">
-              <button v-if="available.includes(category)" @click="openCostArea(category)">
-                <span>{{ categories[category] }}</span>
-                <strong v-if="category !== 'labor' || payrollRecorded"
-                  >{{ money(categoryAmount(category)) }} <small>元</small></strong
-                >
-                <span v-else class="muted">暂无已确认薪酬</span>
-              </button>
-              <p v-else class="muted">{{ categories[category] }}：无查看权限</p>
-            </template>
-          </article>
-        </section>
-        <div v-if="!report.current.count" class="empty">
-          当前范围没有已确认费用记录；采购与损耗分别查看。
-        </div>
-        <section v-if="available.includes('labor')" class="cost-panel payroll-costs">
-          <div class="panel-heading">
-            <div>
-              <h2>人力薪酬构成</h2>
-              <p class="muted">按工资所属月归集已确认、已发放工资的应发金额；激励包含在提成中</p>
-            </div>
-            <button @click="openCostArea('labor')">查看工资来源</button>
-          </div>
-          <p v-if="!payrollRecorded" class="empty">
-            本期暂无已确认薪酬，确认工资后按工资所属月计入。
-          </p>
-          <div v-else class="salary-components">
-            <div v-for="component in report.payrollComponents" :key="component.key">
-              <span>{{ component.label }}</span>
-              <strong>{{ money(component.amount) }} <small>元</small></strong>
-              <span v-if="component.missingCount" class="muted"
-                >{{ component.missingCount }} 笔缺少分项，金额待核对</span
-              >
-              <span v-else class="muted">{{ component.records }} 笔工资单</span>
-            </div>
-          </div>
-          <p class="chart-note">
-            商品提成明细由原工资单追溯。未付款薪酬按应发金额列示，实际待发净额请在月度薪酬查看。
-          </p>
-        </section>
-        <section class="changes-section">
-          <div class="section-heading">
-            <div>
-              <h2>重点费用变动</h2>
-              <p class="muted">费用归属与类别交叉分析 · 按变动金额排序 · TOP 3</p>
-            </div>
-            <div class="segmented">
-              <button :class="{ active: direction === 'increase' }" @click="direction = 'increase'">
-                费用增加</button
-              ><button
-                :class="{ active: direction === 'decrease' }"
-                @click="direction = 'decrease'"
-              >
-                费用减少
-              </button>
-            </div>
-          </div>
-          <div v-if="report.meta.comparisonAvailable" class="change-reconcile">
-            <span
-              >增加合计 <b class="increase">+{{ money(report.increased) }}</b></span
-            ><span
-              >减少合计 <b class="decrease">−{{ money(report.decreased) }}</b></span
-            ><span
-              >净变动额 <b>{{ signed(report.delta) }}</b></span
-            >
-          </div>
-          <div class="review-grid">
-            <button
-              v-for="(item, index) in topChanges"
-              :key="`${item.city}:${item.category}`"
-              class="review-item"
-              @click="openAnalysis({ city: item.city, category: item.category })"
-            >
-              <span class="review-index">0{{ index + 1 }}</span
-              ><span>{{ item.cityName }} · {{ categories[item.category] }}</span
-              ><strong :class="deltaClass(item.delta)"
-                >{{ signed(item.delta) }}<small>元</small></strong
-              ><span class="muted"
-                >{{ direction === 'increase' ? '增加' : '减少' }}贡献占比
-                {{ item.contribution }}%</span
-              ><span class="text-button">查看费用变动明细 →</span>
-            </button>
-          </div>
-          <p v-if="!topChanges.length" class="empty">
-            {{
-              report.meta.comparisonAvailable
-                ? '当前范围没有该方向的费用变动'
-                : '无可比数据，暂不计算费用变动'
-            }}
-          </p>
-        </section>
-        <div class="chart-grid">
-          <section class="cost-panel">
-            <div class="panel-heading">
-              <div>
-                <h2>经营费用累计趋势</h2>
-                <p class="muted">按发生日费用比较；薪酬、租赁按所属月单列</p>
-              </div>
-              <button class="text-button" @click="openRecords()">查看支出</button>
-            </div>
-            <EchartsChart :option="line(report)" :height="260" />
-            <p class="chart-note">
-              按发生日累计（不含按月费用）；本期按月费用 {{ money(report.monthlyAmount || '0') }} 元
-            </p>
-          </section>
-          <section class="cost-panel">
-            <div class="panel-heading">
-              <div>
-                <h2>经营费用结构</h2>
-                <p class="muted">费用类别金额及占比</p>
-              </div>
-            </div>
-            <CostRing
-              :groups="report.categories"
-              :total="report.current.amount"
-              category
-              @select="categoryDrill"
-            />
-            <p class="chart-note">占比基数：当前筛选范围内已确认金额；点击图形或图例下钻。</p>
-          </section>
-        </div>
-        <div class="secondary-band">
-          <b>采购与损耗</b
-          ><button v-if="available.includes('purchase')" @click="chooseScope('purchase')">
-            商品采购 <strong>{{ money(report.purchase) }}</strong> 元</button
-          ><button v-if="available.includes('loss')" @click="chooseScope('loss')">
-            商品损耗 <strong>{{ money(report.loss) }}</strong> 元</button
-          ><span class="muted">采购与损耗分别统计，不计入经营费用</span>
-        </div>
+        <CostOverview
+          :report="report"
+          :available="available"
+          :comparison-label="comparisonLabel"
+          :month="filters.month"
+          @scope="chooseScope"
+          @category="openCostArea"
+          @records="openRecords"
+          @analysis="openAnalysis"
+          @month="selectMonth"
+          @cities="openCities"
+        />
       </template>
       <template v-else-if="section === 'analysis'">
         <div class="analysis-controls">
@@ -316,6 +162,32 @@
           </button>
         </nav>
         <template v-if="perspective === 'cities'">
+          <div class="chart-grid">
+            <section class="cost-panel">
+              <div class="panel-heading">
+                <h2>归属费用金额对比</h2>
+                <span class="muted">本期 / 可比期</span>
+              </div>
+              <CostComparisonBars
+                :groups="report.cityGroups"
+                :comparable="report.meta.comparisonAvailable"
+                @select="(city) => openAnalysis({ city })"
+              />
+              <p class="chart-note">全部归属见下方矩阵；各归属金额以同一费用范围比较。</p>
+            </section>
+            <section class="cost-panel">
+              <div class="panel-heading">
+                <h2>归属费用结构</h2>
+                <span class="muted">已确认金额占比</span>
+              </div>
+              <CostRing
+                :groups="report.cityGroups"
+                :total="report.current.amount"
+                @select="(city) => openAnalysis({ city })"
+              />
+              <p class="chart-note">待归属费用保留在总额及占比中。</p>
+            </section>
+          </div>
           <section class="cost-panel">
             <div class="panel-heading">
               <div>
@@ -381,38 +253,20 @@
               </table>
             </div>
           </section>
-          <div class="chart-grid">
-            <section class="cost-panel">
-              <div class="panel-heading">
-                <h2>归属费用对比</h2>
-                <span class="muted">本期金额 TOP 8</span>
-              </div>
-              <EchartsChart
-                :option="bars(report.cityGroups, report.meta.comparisonAvailable)"
-                :height="310"
-                @chart-click="cityChartClick"
-              />
-              <p class="chart-note">全部归属见上方矩阵；各归属金额以同一费用范围比较。</p>
-            </section>
-            <section class="cost-panel">
-              <div class="panel-heading">
-                <h2>归属费用结构</h2>
-                <span class="muted">已确认金额占比</span>
-              </div>
-              <CostRing
-                :groups="report.cityGroups"
-                :total="report.current.amount"
-                @select="(city) => openAnalysis({ city })"
-              />
-              <p class="chart-note">待归属费用保留在总额及占比中。</p>
-            </section>
-          </div>
         </template>
         <template v-else-if="perspective === 'structure'">
           <div class="chart-grid structure-chart-grid">
             <section class="cost-panel">
               <div class="panel-heading">
-                <h2>{{ filters.scope === 'opex' ? '经营费用结构' : '归属费用结构' }}</h2>
+                <h2>
+                  {{
+                    filters.scope === 'opex'
+                      ? '经营费用结构'
+                      : filters.scope === 'purchase'
+                        ? '采购成本构成'
+                        : '归属费用结构'
+                  }}
+                </h2>
               </div>
               <CostRing
                 :groups="structureGroups"
@@ -481,7 +335,7 @@
               >分析维度
               <select v-model="filters.dimension" aria-label="分析维度" @change="load()">
                 <option v-for="key in topicDimensions" :key="key" :value="key">
-                  {{ dimensionNames[key] }}
+                  {{ topicDimensionName(key) }}
                 </option>
               </select></label
             ><span class="muted">维度已记录金额覆盖 {{ percent(report.dimensionCoverage) }}</span>
@@ -569,9 +423,9 @@
           <button
             v-if="report.meta.exportAllowed"
             :disabled="exportBusy || exportSubmitting"
-            @click="startExport"
+            @click="openCustomExport"
           >
-            导出全部匹配单据
+            自定义导出
           </button>
         </div>
         <div v-if="Object.keys(drill).length" class="drill-filter">
@@ -599,7 +453,7 @@
               <option value="UNKNOWN">未记录</option>
             </select></label
           ><input
-            v-model="filters.search"
+            v-model="recordSearch"
             maxlength="120"
             aria-label="搜索单据"
             placeholder="单据号、事项、员工、原始单号"
@@ -671,7 +525,7 @@
         ><button v-if="exportBusy" @click="cancelExport">取消导出</button>
       </div>
     </main>
-    <footer v-if="report">数据更新时间 {{ updatedAt }} · 统计范围以当前授权为准</footer>
+
     <div v-if="modalQuery" class="cost-modal-backdrop" @click.self="closeModal">
       <section
         class="cost-modal"
@@ -851,43 +705,55 @@
           <dd>
             费用单据更新后可点击刷新读取最新结果；数据更新延迟时显示上次更新结果及时间。费用更正在原业务单据中完成。
           </dd>
-          <dt>采购与损耗</dt>
-          <dd>采用成本台账登记金额分别统计，不重算采购订单、库存估值或利润。</dd>
+          <dt>采购成本与损耗</dt>
+          <dd>
+            采购成本包含已确认采购单货款及已确认实际运费；采购单约定运费不重复计入。货款按整单折后应付计入，未分摊到商品。损耗单独统计，采购成本不等同于当期销售成本。
+          </dd>
         </dl>
       </section>
     </div>
   </div>
+  <CostExportDialog
+    v-model="exportDialogOpen"
+    v-model:fields="exportFields"
+    :columns="costDashboardExportColumns"
+    :scope="`全部匹配单据（${records?.summary.count ?? 0} 条）`"
+    :empty="!records?.summary.count"
+    :busy="exportSubmitting"
+    :error="exportError"
+    @confirm="confirmCustomExport"
+  />
 </template>
 
 <script setup lang="ts">
 import { displayDateTime } from '@/utils/business-date'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { type CostCategory, type CostScope } from '@/api/core/bi-cost-dashboard'
 import { ElMessage } from 'element-plus'
 import EchartsChart from './components/EchartsChart.vue'
 import CostRing from './cost/CostRing.vue'
 import CostComparisonBars from './cost/CostComparisonBars.vue'
 import CostRecordsTable from './cost/CostRecordsTable.vue'
+import CostOverview from './cost/CostOverview.vue'
 import { costDialog as vCostDialog } from './cost/cost-dialog'
 import { useCostDashboard } from './cost/use-cost-dashboard'
 import { useCostDashboardExport } from './cost/use-cost-dashboard-export'
+import CostExportDialog from '../cost/CostExportDialog.vue'
+import { costDashboardExportColumns } from './cost/cost-report-export'
 import {
   bars,
+  monthlyTrend,
   categories,
   dimensionNames,
   detailDimensionValue,
   visibleDetailDimensions,
   dimensions,
   eventKey,
-  line,
   money,
   percent,
   signed,
   statusName,
   matrixTotal,
-  overviewReading,
-  payrollHasRecords,
-  comparisonCoverageNotice,
 } from './cost/cost-presentation'
 const {
   report,
@@ -897,6 +763,7 @@ const {
   section,
   perspective,
   filters,
+  recordSearch,
   drill,
   request,
   cutoff,
@@ -912,6 +779,8 @@ const {
   detailError,
   load,
   globalChange,
+  applyPeriod,
+  activePeriod,
   goSection,
   chooseScope,
   choosePerspective,
@@ -922,32 +791,8 @@ const {
   modalRecords,
   openDetail,
   clearLedgerDrill,
+  searchRecords,
 } = useCostDashboard()
-const costAreas: { title: string; description: string; categories: CostCategory[] }[] = [
-  { title: '人 · 人力', description: '底薪、绩效、提成（含激励）', categories: ['labor'] },
-  {
-    title: '货 · 商品',
-    description: '采购与损耗分列，不计入经营费用',
-    categories: ['purchase', 'loss'],
-  },
-  {
-    title: '运 · 运费',
-    description: '厂家至中心仓、中心仓至城市、城市至客户',
-    categories: ['freight'],
-  },
-  {
-    title: '场 · 场地',
-    description: '仓储、办公租赁及办公费用',
-    categories: ['warehouse', 'office', 'premises_unknown'],
-  },
-  { title: '营 · 营销', description: '推广、广告、代言等事项', categories: ['marketing'] },
-  { title: '报 · 报销', description: '差旅、住宿、打车及其他未归集报销', categories: ['expense'] },
-]
-function categoryAmount(category: CostCategory) {
-  if (category === 'purchase') return report.value?.purchase
-  if (category === 'loss') return report.value?.loss
-  return report.value?.categories.find((group) => group.key === category)?.current ?? '0.00'
-}
 function openCostArea(category: CostCategory) {
   if (category === 'purchase' || category === 'loss') {
     chooseScope(category)
@@ -975,17 +820,16 @@ async function toggleFullscreen() {
 onMounted(() => document.addEventListener('fullscreenchange', syncFullscreen))
 onBeforeUnmount(() => document.removeEventListener('fullscreenchange', syncFullscreen))
 const definitions = ref(false),
-  direction = ref('increase'),
   matrixMode = ref<'amount' | 'share' | 'delta'>('amount')
 const tabs = [
-  { key: 'overview', label: '费用总览' },
-  { key: 'analysis', label: '费用分析' },
-  { key: 'records', label: '支出明细' },
+  { key: 'overview', label: '成本总览' },
+  { key: 'analysis', label: '成本分析' },
+  { key: 'records', label: '单据明细' },
 ] as const
 const perspectives = [
   { key: 'cities', label: '归属对比' },
   { key: 'structure', label: '费用构成' },
-  { key: 'objects', label: '支出对象' },
+  { key: 'objects', label: '专题分析' },
 ] as const
 const matrixModes = [
   { key: 'amount', label: '金额' },
@@ -996,7 +840,7 @@ const scopes = computed(() =>
   (
     [
       { key: 'opex', label: '经营费用' },
-      { key: 'purchase', label: '商品采购' },
+      { key: 'purchase', label: '采购成本' },
       { key: 'loss', label: '商品损耗' },
     ] as { key: CostScope; label: string }[]
   ).filter((s) => s.key === 'opex' || available.value.includes(s.key)),
@@ -1010,23 +854,25 @@ const comparisonLabel = computed(() =>
   filters.month === 0 || filters.compare === 'yoy' ? '较去年同期' : '较上期',
 )
 const updatedAt = computed(() => displayDateTime(report.value?.meta.generatedAt))
-const topChanges = computed(
-  () => report.value?.changes.filter((c) => c.direction === direction.value).slice(0, 3) || [],
-)
 const structureGroups = computed(() =>
-  filters.scope === 'opex' ? report.value?.categories || [] : report.value?.cityGroups || [],
+  filters.scope === 'opex'
+    ? report.value?.categories || []
+    : filters.scope === 'purchase'
+      ? report.value?.objects || []
+      : report.value?.cityGroups || [],
 )
 const topicCategories = computed(() =>
   available.value.filter((c) => filters.scope === (c === 'purchase' || c === 'loss' ? c : 'opex')),
 )
-const topicDimensions = computed(() => (filters.category ? dimensions[filters.category] : []))
-const payrollRecorded = computed(() => !!report.value && payrollHasRecords(report.value))
-const overviewSummary = computed(() =>
-  report.value ? overviewReading(report.value, comparisonLabel.value) : '',
+const topicDimensions = computed(() =>
+  report.value && report.value.category === filters.category && report.value.dimensions.length
+    ? report.value.dimensions.map((item) => item.key)
+    : filters.category
+      ? dimensions[filters.category]
+      : [],
 )
-const comparisonNotice = computed(() =>
-  report.value ? comparisonCoverageNotice(report.value) : '',
-)
+const topicDimensionName = (key: string) =>
+  report.value?.dimensions.find((item) => item.key === key)?.label || dimensionNames[key] || key
 
 function deltaClass(value: string | null) {
   return Number(value) > 0 ? 'increase' : Number(value) < 0 ? 'decrease' : ''
@@ -1036,40 +882,29 @@ function categoryDrill(key: string) {
 }
 function structureDrill(key: string) {
   if (filters.scope === 'opex') categoryDrill(key)
+  else if (filters.scope === 'purchase')
+    void openAnalysis({ category: 'purchase', dimension: 'component', dimensionKey: key })
   else void openAnalysis({ city: key })
-}
-function cityChartClick(event: unknown) {
-  const city = eventKey(event)
-  if (city) void openAnalysis({ city })
 }
 function objectChartClick(event: unknown) {
   const dimensionKey = eventKey(event)
   if (dimensionKey) void openAnalysis({ dimensionKey })
 }
-const monthChart = computed(() =>
-  bars(
-    (report.value?.months || []).map((m) => ({
-      key: `${m.year}-${m.month}`,
-      label: `${m.month}月${m.cutoff.slice(8) !== new Date(m.year, m.month, 0).getDate().toString() ? `\n截至${Number(m.cutoff.slice(8))}日` : ''}`,
-      current: m.current,
-      previous: m.previous,
-      delta: null,
-      growth: null,
-      share: null,
-      count: 0,
-      missing: false,
-    })),
-    !!report.value?.months.some((m) => m.previous !== null),
-    12,
-  ),
-)
+const monthChart = computed(() => monthlyTrend(report.value?.months || []))
 function monthChartClick(event: unknown) {
   const key = eventKey(event)
   if (!key) return
+  selectMonth(key)
+}
+function selectMonth(key: string) {
   const [year, month] = key.split('-').map(Number)
   filters.year = year
   filters.month = month
   globalChange()
+}
+function openCities() {
+  perspective.value = 'cities'
+  goSection('analysis')
 }
 function cell(city: string, category: string) {
   return report.value?.matrix.find((c) => c.city === city && c.category === category)
@@ -1140,10 +975,6 @@ function changeSide(side: 'current' | 'previous') {
   filters.page = 1
   void load()
 }
-function searchRecords() {
-  filters.page = 1
-  void load()
-}
 function page(step: number) {
   filters.page = (filters.page || 1) + step
   void load()
@@ -1165,5 +996,19 @@ const {
   cancelExport,
   downloadExport,
 } = useCostDashboardExport(request, cities)
+const exportDialogOpen = ref(false),
+  exportFields = ref<string[]>([])
+function openCustomExport() {
+  exportFields.value = costDashboardExportColumns.map((column) => column.key)
+  exportError.value = ''
+  exportDialogOpen.value = true
+}
+async function confirmCustomExport() {
+  await startExport(exportFields.value)
+  if (!exportError.value) exportDialogOpen.value = false
+}
+watch(request, () => {
+  exportDialogOpen.value = false
+})
 </script>
 <style lang="scss" src="./cost/cost-dashboard.scss"></style>

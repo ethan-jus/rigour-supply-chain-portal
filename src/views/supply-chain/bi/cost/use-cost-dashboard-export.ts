@@ -36,8 +36,14 @@ export function useCostDashboardExport(
   let exportTimer: ReturnType<typeof setTimeout> | undefined,
     disposed = false,
     exportGeneration = 0
-  async function startExport() {
+  let exportFields: string[] | undefined
+  async function startExport(fields?: string[]) {
     if (exportBusy.value || exportSubmitting.value) return
+    if (fields && !fields.length) {
+      exportError.value = '请至少选择一个导出字段'
+      return
+    }
+    const selectedFields = fields ? [...fields] : undefined
     const generation = ++exportGeneration
     exportSubmitting.value = true
     exportError.value = ''
@@ -51,7 +57,7 @@ export function useCostDashboardExport(
       query.category
         ? categories[query.category]
         : query.scope === 'purchase'
-          ? '商品采购'
+          ? '采购成本'
           : query.scope === 'loss'
             ? '商品损耗'
             : '经营费用',
@@ -69,6 +75,7 @@ export function useCostDashboardExport(
       }
       exportTask.value = task
       exportContext.value = context
+      exportFields = selectedFields
       pollExport(generation)
     } catch (e) {
       if (!disposed && generation === exportGeneration)
@@ -117,7 +124,7 @@ export function useCostDashboardExport(
       if (disposed || generation !== exportGeneration) return
       const { exportCostDashboardWorkbook } = await import('./cost-report-export')
       if (!disposed && generation === exportGeneration)
-        await exportCostDashboardWorkbook(blob, exportContext.value)
+        await exportCostDashboardWorkbook(blob, exportContext.value, exportFields)
     } catch (e) {
       if (!disposed && generation === exportGeneration)
         exportError.value = errorMessage(e, '下载失败，请重新导出')
@@ -132,6 +139,7 @@ export function useCostDashboardExport(
     exportTask.value = null
     exportError.value = ''
     exportContext.value = ''
+    exportFields = undefined
     exportSubmitting.value = false
     exportDownloading.value = false
     if (task && ['PENDING', 'RUNNING'].includes(task.status))

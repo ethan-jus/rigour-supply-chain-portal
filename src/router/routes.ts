@@ -100,7 +100,9 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
     .map((part) => part.replace(/(^|-)([a-z])/g, (_, __, letter) => letter.toUpperCase()))
     .join('')}`,
   component:
-    page.routeKey in crmStorePermissions
+    page.routeKey === 'supply.cost.purchases'
+      ? () => import('@/views/supply-chain/cost/ProcurementCostRecordsView.vue')
+      : page.routeKey in crmStorePermissions
       ? () => import('@/views/supply-chain/crm/CrmStorePoolView.vue')
       : page.routeKey === 'supply.hr.payroll-schemes'
       ? () => import('@/views/supply-chain/hr/PayrollSchemeView.vue')

@@ -28,7 +28,7 @@ function menuNode(routeKey: string): NavigationNode {
 }
 
 describe('数据库导航注册表', () => {
-  it('商品进货记录不进入菜单和入口搜索，历史引用仍保留原有授权路径', () => {
+  it('采购成本记录使用原有授权路径进入菜单和入口搜索', () => {
     const purchase = node('supply.cost.purchases', '/supply-chain/cost/purchases')
     const loss = node('supply.cost.losses', '/supply-chain/cost/losses')
     const result = validateNavigation([{
@@ -36,9 +36,9 @@ describe('数据库导航注册表', () => {
       children: [purchase, loss],
     }])
 
-    expect(result[0].children[0]).toMatchObject({ routePath: purchase.routePath, visible: false })
+    expect(result[0].children[0]).toMatchObject({ routePath: purchase.routePath, visible: true })
     expect(result[0].children[1]).toEqual(loss)
-    expect(consoleEntries(result).map((entry) => entry.path)).toEqual([loss.routePath])
+    expect(consoleEntries(result).map((entry) => entry.path)).toEqual([purchase.routePath, loss.routePath])
     expect(purchase.visible).toBe(true)
   })
 

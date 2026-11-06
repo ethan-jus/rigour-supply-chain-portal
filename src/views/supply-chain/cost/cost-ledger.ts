@@ -160,13 +160,13 @@ export function createLedgerCommand(logistics: boolean): CostCommand {
     ledger: logistics
       ? {
           schemaVersion: 2,
-          transportPurposeCode: 'PURCHASE',
+          transportPurposeCode: 'DELIVERY',
           deliveryModeCode: 'THIRD_PARTY',
           carrierCode: null,
           costMonth: date.slice(0, 7),
           trackingNo: '',
           transportMethodCode: null,
-          sender: { ...newParty(), partyTypeCode: 'SUPPLIER' },
+          sender: newParty(),
           receivingPoints: [newParty()],
           feeItems: [newLogisticsFee()],
           sources: [],

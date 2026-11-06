@@ -284,6 +284,18 @@ describe('cost Excel export', () => {
     expect(workbook.getWorksheet('支出明细')!.columnCount).toBe(9)
     expect(workbook.getWorksheet('支出明细')!.getCell('G2').value).toBe(60.1)
   })
+  it('exports only requested dashboard fields while preserving numbers and source validation', async () => {
+    const workbook = await buildCostDashboardWorkbook(csv(data), '', ['金额（元）', '单据号'])
+    const sheet = workbook.getWorksheet('支出明细')!
+    expect(sheet.getRow(1).values).toEqual([undefined, '单据号', '单据金额（元）'])
+    expect(sheet.getRow(2).values).toEqual([undefined, '0000123', 60.1])
+    expect(sheet.columnCount).toBe(2)
+    await expect(buildCostDashboardWorkbook(csv(data), '', [])).rejects.toThrow('至少选择')
+    await expect(buildCostDashboardWorkbook(csv(data), '', ['来源ID'])).rejects.toThrow()
+    await expect(
+      buildCostDashboardWorkbook(csv(data.slice(0, -1)), '', ['单据号']),
+    ).rejects.toThrow('笔数')
+  })
   it('rejects incomplete or mismatched exports instead of downloading a partial report', async () => {
     expect(() => parseCostCsv('"broken')).toThrow('不完整')
     await expect(buildCostDashboardWorkbook(csv(data.slice(0, -1)))).rejects.toThrow('笔数')

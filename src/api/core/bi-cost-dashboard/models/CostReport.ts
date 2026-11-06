@@ -10,7 +10,19 @@ import type { CostRecord } from './CostRecord'
 import type { CostPoint } from './CostPoint'
 import type { CostMonth } from './CostMonth'
 
+export interface CostScopeSummary {
+  scope: CostScope
+  label: string
+  current: CostMetric
+  previous: CostMetric
+  comparisonAvailable: boolean
+  delta: string | null
+  growth: string | null
+  components: CostGroup[]
+}
+
 export interface CostReport {
+  scopeSummaries?: CostScopeSummary[]
   monthlyAmount?: string
   previousMonthlyAmount?: string
   payrollComponents: {

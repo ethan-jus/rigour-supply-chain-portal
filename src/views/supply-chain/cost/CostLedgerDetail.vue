@@ -2,14 +2,8 @@
   <div class="ledger-detail">
     <el-alert
       v-if="plan?.sourceSync?.differencePending"
-      title="采购约定已变化，实际费用已保留。请编辑核实并填写处理原因。"
+      title="采购约定已变化，请核对实际费用并填写变更原因。"
       type="warning"
-      :closable="false"
-    />
-    <el-alert
-      v-else-if="plan?.sourceSync && !plan.sourceSync.manuallyChanged"
-      title="此记录来自采购约定，请补齐承运信息，核实运输日期与实际费用后确认。"
-      type="info"
       :closable="false"
     />
     <div class="detail-banner">
@@ -33,8 +27,8 @@
         <h3>{{ logistics ? '运输信息' : '仓储信息' }}</h3>
         <dl>
           <template v-if="plan"
-            ><dt>运输用途</dt>
-            <dd>{{ costLabel('COST_TRANSPORT_PURPOSE', plan.transportPurposeCode) }}</dd>
+            ><dt>运输类型</dt>
+            <dd>{{ transportTypeLabel(plan.transportPurposeCode) }}</dd>
             <dt>承运方式</dt>
             <dd>{{ costLabel('COST_DELIVERY_MODE', plan.deliveryModeCode) }}</dd>
             <dt>物流公司</dt>
@@ -245,6 +239,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { transportTypeLabel, logisticsOrderTypeLabel } from './cost-transport-types'
 import { computed, ref, watch } from 'vue'
 import { getLedgerParties } from '@/api/core/cost-ledger'
 import type { CostCategory, CostRecord } from '@/api/core/cost'
@@ -283,17 +278,7 @@ const sourceRows = computed(
   () =>
     plan.value?.sources.flatMap((s) => {
       const base = {
-        type:
-          (
-            {
-              PURCHASE_ORDER: '采购单',
-              TRANSFER_ORDER: '调拨单',
-              SALES_ORDER: '销售单',
-              OTHER_OUT: '其他出库单',
-              REQUISITION_OUT: '领用出库单',
-              NONE: '无单据',
-            } as Record<string, string>
-          )[s.orderTypeCode] || s.orderTypeCode,
+        type: logisticsOrderTypeLabel(s.orderTypeCode),
         code: s.orderCode || '—',
         role: s.linkRoleCode === 'TRACE' ? '仅业务追溯' : '成本归属',
         reason: s.noSourceReason || '',

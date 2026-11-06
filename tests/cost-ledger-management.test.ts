@@ -17,7 +17,9 @@ const api = vi.hoisted(() => ({
   transition: vi.fn(),
   parties: vi.fn(),
   export: vi.fn(),
+  selectedExport: vi.fn(),
   workbook: vi.fn(),
+  dictionaries: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => state.route,
@@ -40,10 +42,11 @@ vi.mock('@/api/core/cost', () => ({
 vi.mock('@/api/core/cost-ledger', () => ({
   getLedgerParties: api.parties,
   getLedgerExport: api.export,
+  getSelectedLogisticsExport: api.selectedExport,
 }))
 vi.mock('@/views/supply-chain/cost/cost-export', () => ({ exportCostRows: api.workbook }))
 vi.mock('@/utils/business-dictionary', () => ({
-  loadBusinessDictionaries: vi.fn().mockResolvedValue(undefined),
+  loadBusinessDictionaries: api.dictionaries,
   businessDictionaryOptions: () => [],
   businessDictionaryLabel: (_module: string, _code: string, value: string) => value || '—',
 }))
@@ -127,10 +130,24 @@ async function open() {
   })
   await flushPromises()
 }
+async function exportNow() {
+  await button('自定义导出').trigger('click')
+  await flushPromises()
+  await button('开始导出').trigger('click')
+  await flushPromises()
+}
+async function selectRows(ids: string[]) {
+  for (const row of wrapper.findAll('.ledger-table .el-table__body-wrapper tbody tr')) {
+    if (ids.some((id) => row.text().includes(id)))
+      await row.get('input[type="checkbox"]').setValue(true)
+  }
+  await flushPromises()
+}
 beforeEach(() => {
   vi.resetAllMocks()
   state.route = reactive({ path: '/supply-chain/cost/logistics', query: {} })
   api.cities.mockResolvedValue([{ code: 'WH', name: '武汉' }])
+  api.dictionaries.mockResolvedValue(undefined)
   api.employees.mockResolvedValue([])
   api.parties.mockResolvedValue([])
   api.list.mockResolvedValue({ ...empty(), total: 1, items: [record()], confirmedAmount: 1200 })
@@ -147,6 +164,59 @@ afterEach(() => {
 })
 
 describe('精简成本台账页面业务流程', () => {
+  it('仓储费用同样支持选中记录及自选字段，重新打开默认恢复全部字段', async () => {
+    state.route.path = '/supply-chain/cost/warehouse-rentals'
+    api.list.mockResolvedValue({ ...empty(), total: 2, items: [record('WH-1'), record('WH-2')] })
+    api.export.mockResolvedValue({ ...empty(), total: 2, items: [record('WH-1'), record('WH-2')] })
+    await open()
+    await selectRows(['WH-2'])
+    await button('自定义导出').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.export-scope').text()).toContain('已勾选的 1 条记录')
+    const fields = wrapper.findAll('.export-fields input[type="checkbox"]')
+    expect(fields).toHaveLength(8)
+    for (const [i, field] of fields.entries()) if (i !== 0 && i !== 4) await field.setValue(false)
+    await button('开始导出').trigger('click')
+    await flushPromises()
+    expect(api.workbook).toHaveBeenLastCalledWith(
+      '仓储费用',
+      ['费用单号', '本单费用总额（元）'],
+      [['WH-2', 300]],
+    )
+    expect(api.selectedExport).not.toHaveBeenCalled()
+    await button('自定义导出').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.export-fields input:checked')).toHaveLength(8)
+  })
+  it('字典和档案目录迟到时列表与汇总先展示，目录完成前不能新增或编辑', async () => {
+    const city = deferred<{ code: string; name: string }[]>()
+    const dictionary = deferred<void>()
+    api.cities.mockReturnValueOnce(city.promise)
+    api.dictionaries.mockReturnValueOnce(dictionary.promise)
+    await open()
+    expect(api.list).toHaveBeenCalledTimes(1)
+    expect(api.employees).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('.metric.primary').text()).toContain('1,200.00')
+    expect(wrapper.text()).toContain('LC-1')
+    expect(button('新增运输记录').attributes('disabled')).toBeDefined()
+    expect(button('编辑').attributes('disabled')).toBeDefined()
+    city.resolve([{ code: 'WH', name: '武汉' }])
+    dictionary.resolve()
+    await flushPromises()
+    expect(button('新增运输记录').attributes('disabled')).toBeUndefined()
+    expect(button('编辑').attributes('disabled')).toBeUndefined()
+    expect(api.list).toHaveBeenCalledTimes(1)
+  })
+  it('目录失败不丢弃列表金额，也不能打开缺少档案的编辑表单', async () => {
+    api.employees.mockRejectedValueOnce(new Error('员工目录暂不可用'))
+    await open()
+    expect(wrapper.text()).toContain('员工目录暂不可用')
+    expect(wrapper.get('.metric.primary').text()).toContain('1,200.00')
+    expect(button('新增运输记录').attributes('disabled')).toBeDefined()
+    await button('查看').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.detail-probe').text()).toBe('LC-1')
+  })
   it('实际列出两个收货方，并保留编辑、确认、作废和记录入口', async () => {
     await open()
     expect(wrapper.findAll('.recipient-names > div').map((n) => n.text())).toEqual([
@@ -155,7 +225,7 @@ describe('精简成本台账页面业务流程', () => {
     ])
     expect(wrapper.text()).not.toContain('2个收货点')
     expect(wrapper.get('.metric.primary').text()).toContain('1,200.00')
-    for (const name of ['查看', '编辑', '确认', '作废', '记录']) expect(button(name)).toBeDefined()
+    for (const name of ['查看', '编辑', '确认', '作废']) expect(button(name)).toBeDefined()
   })
   it('列表失败时金额保持未知，不能展示为零费用', async () => {
     api.list.mockRejectedValueOnce(new Error('费用服务暂不可用'))
@@ -164,7 +234,63 @@ describe('精简成本台账页面业务流程', () => {
     expect(wrapper.get('.metrics').text()).not.toContain('0.00')
     expect(wrapper.get('.metric.primary strong').text()).toBe('—')
   })
-  it.each(['查看', '编辑', '记录'])('%s请求迟到时不能串入仓储页面', async (action) => {
+  it('仓库缺业务归属时阻止保存并保留内容；补齐后重试重新读取档案', async () => {
+    await open()
+    await button('编辑').trigger('click')
+    await flushPromises()
+    const form = wrapper.findComponent({ name: 'CostLedgerEditor' }).props('modelValue')
+    form.ledger.sender = { ...newParty('WH'), partyTypeCode: 'WAREHOUSE', partyCode: 'WH1' }
+    form.remark = '到仓前联系收货人'
+    api.parties.mockResolvedValue([{ code: 'WH1', name: '武汉仓', cityCode: null }])
+    await button('保存').trigger('click')
+    await flushPromises()
+    expect(api.save).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('武汉仓（WH1）”未维护业务归属地区')
+    const link = wrapper.get('a[href="#/supply-chain/erp/inventory/warehouses"]')
+    expect(link.attributes('target')).toBe('_blank')
+    expect(form.remark).toBe('到仓前联系收货人')
+    api.parties.mockResolvedValue([{ code: 'WH1', name: '武汉仓', cityCode: 'WH' }])
+    api.save.mockResolvedValue(record('LC-1'))
+    await button('保存').trigger('click')
+    await flushPromises()
+    expect(api.parties).toHaveBeenCalledTimes(2)
+    expect(api.save).toHaveBeenCalledWith(
+      'logistics',
+      'LC-1',
+      expect.objectContaining({ remark: '到仓前联系收货人' }),
+    )
+  })
+  it('仓库引用加载失败时保留表单并停止保存，不能当成已维护', async () => {
+    await open()
+    await button('编辑').trigger('click')
+    await flushPromises()
+    const form = wrapper.findComponent({ name: 'CostLedgerEditor' }).props('modelValue')
+    form.ledger.receivingPoints[0].partyTypeCode = 'WAREHOUSE'
+    form.ledger.receivingPoints[0].partyCode = 'WH1'
+    api.parties.mockRejectedValueOnce(new Error('仓库服务暂不可用'))
+    await button('保存').trigger('click')
+    await flushPromises()
+    expect(api.save).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('仓库服务暂不可用')
+    expect(wrapper.find('.editor-probe').exists()).toBe(true)
+  })
+  it('保存前仓库校验返回时已切换页面，不提交旧单据', async () => {
+    await open()
+    await button('编辑').trigger('click')
+    await flushPromises()
+    const form = wrapper.findComponent({ name: 'CostLedgerEditor' }).props('modelValue')
+    form.ledger.sender = { ...newParty('WH'), partyTypeCode: 'WAREHOUSE', partyCode: 'WH1' }
+    const pending = deferred<{ code: string; name: string; cityCode: string }[]>()
+    api.parties.mockReturnValueOnce(pending.promise)
+    await button('保存').trigger('click')
+    state.route.path = '/supply-chain/cost/warehouse-rentals'
+    api.list.mockResolvedValue(empty())
+    await flushPromises()
+    pending.resolve([{ code: 'WH1', name: '武汉仓', cityCode: 'WH' }])
+    await flushPromises()
+    expect(api.save).not.toHaveBeenCalled()
+  })
+  it.each(['查看', '编辑'])('%s请求迟到时不能串入仓储页面', async (action) => {
     const pending = deferred<CostRecord>()
     const logs = deferred<never[]>()
     await open()
@@ -188,7 +314,11 @@ describe('精简成本台账页面业务流程', () => {
       .mockResolvedValueOnce({ ...empty(), total: 201, begin: 200, items: [rows[200]!] })
     await open()
     await wrapper.get('.filters input').setValue('ORIGINAL')
-    await button('导出').trigger('click')
+    await button('查询').trigger('click')
+    await flushPromises()
+    await button('自定义导出').trigger('click')
+    await flushPromises()
+    await button('开始导出').trigger('click')
     await wrapper.get('.filters input').setValue('CHANGED')
     first.resolve({ ...empty(), total: 201, items: rows.slice(0, 200) })
     await flushPromises()
@@ -202,12 +332,95 @@ describe('精简成本台账页面业务流程', () => {
   })
   it('服务返回数量超过总数时停止导出，不生成口径不一致的文件', async () => {
     api.export.mockResolvedValue({ ...empty(), total: 1, items: [record('LC-1'), record('LC-2')] })
-    const error = vi.spyOn(ElMessage, 'error')
     await open()
-    await button('导出').trigger('click')
-    await flushPromises()
+    await exportNow()
     expect(api.workbook).not.toHaveBeenCalled()
-    expect(error).toHaveBeenCalledWith('导出期间数据已变化，请重新导出')
+    expect(wrapper.text()).toContain('导出期间数据已变化，请重新导出')
+  })
+  it('未勾选时导出当前筛选的全部数据，而不是仅当前页', async () => {
+    api.export.mockResolvedValue({ ...empty(), total: 2, items: [record('LC-1'), record('LC-2')] })
+    await open()
+    await exportNow()
+    expect(api.selectedExport).not.toHaveBeenCalled()
+    expect(api.export).toHaveBeenCalledWith(true, expect.objectContaining({ begin: 0, step: 200 }))
+    expect(api.workbook.mock.calls[0]![2].map((r: string[]) => r[0])).toEqual(['LC-1', 'LC-2'])
+  })
+  it('勾选后只取所选数据并读取服务端最新金额，不能走全量导出接口', async () => {
+    api.list.mockResolvedValue({ ...empty(), total: 2, items: [record('LC-1'), record('LC-2')] })
+    const latest = record('LC-2')
+    latest.data.amount = 456
+    api.selectedExport.mockResolvedValue([latest])
+    await open()
+    await selectRows(['LC-2'])
+    expect(wrapper.get('.selection-toolbar').text()).toContain('已勾选 1 条')
+    await exportNow()
+    expect(api.selectedExport).toHaveBeenCalledWith(['LC-2'])
+    expect(api.export).not.toHaveBeenCalled()
+    expect(api.workbook.mock.calls[0]![2]).toHaveLength(1)
+    expect(api.workbook.mock.calls[0]![2][0][0]).toBe('LC-2')
+    expect(api.workbook.mock.calls[0]![2][0][8]).toBe(456)
+  })
+  it('跨页保留勾选，重新查询时清除勾选', async () => {
+    api.list
+      .mockResolvedValueOnce({ ...empty(), total: 40, items: [record('LC-1')] })
+      .mockResolvedValue({ ...empty(), total: 40, items: [record('LC-2')] })
+    api.selectedExport.mockResolvedValue([record('LC-1'), record('LC-2')])
+    await open()
+    await selectRows(['LC-1'])
+    await wrapper.get('.btn-next').trigger('click')
+    await flushPromises()
+    await selectRows(['LC-2'])
+    expect(wrapper.get('.selection-toolbar').text()).toContain('已勾选 2 条')
+    await exportNow()
+    expect(api.selectedExport).toHaveBeenCalledWith(['LC-1', 'LC-2'])
+    await button('查询').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.selection-toolbar').exists()).toBe(false)
+  })
+  it('自定义字段只导出所勾表头，不能导出空字段文件', async () => {
+    api.export.mockResolvedValue({ ...empty(), total: 1, items: [record()] })
+    await open()
+    await button('自定义导出').trigger('click')
+    await flushPromises()
+    const fields = wrapper.findComponent({ name: 'ElCheckboxGroup' })
+    fields.vm.$emit('update:modelValue', [])
+    await flushPromises()
+    expect(button('开始导出').attributes('disabled')).toBeDefined()
+    expect(api.export).not.toHaveBeenCalled()
+    fields.vm.$emit('update:modelValue', ['documentNo', 'amount'])
+    await flushPromises()
+    await button('开始导出').trigger('click')
+    await flushPromises()
+    expect(api.workbook).toHaveBeenCalledWith(
+      '物流运输记录',
+      ['费用单号', '本单我方费用（元）'],
+      [['LC-1', 300]],
+    )
+  })
+  it('部分所选数据缺失时停止下载，不能退回导出全部', async () => {
+    api.selectedExport.mockResolvedValue([])
+    await open()
+    await selectRows(['LC-1'])
+    await exportNow()
+    expect(wrapper.text()).toContain('所选记录已变化')
+    expect(api.export).not.toHaveBeenCalled()
+    expect(api.workbook).not.toHaveBeenCalled()
+  })
+  it('再次打开导出默认恢复全部字段，不沿用上次只选两列的状态', async () => {
+    api.export.mockResolvedValue({ ...empty(), total: 1, items: [record()] })
+    await open()
+    await button('自定义导出').trigger('click')
+    await flushPromises()
+    wrapper
+      .findComponent({ name: 'ElCheckboxGroup' })
+      .vm.$emit('update:modelValue', ['documentNo', 'amount'])
+    await flushPromises()
+    await button('开始导出').trigger('click')
+    await flushPromises()
+    expect(api.workbook.mock.calls[0]![1]).toHaveLength(2)
+    await exportNow()
+    expect(api.workbook.mock.calls[1]![1]).toHaveLength(11)
+    expect(api.workbook.mock.calls[1]![2][0]).toHaveLength(11)
   })
   it('确认与作废继续调用对应服务并保存作废原因', async () => {
     vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
@@ -232,32 +445,35 @@ describe('精简成本台账页面业务流程', () => {
       '重复登记，作废保留原始记录',
     )
   })
-  it('修改已确认费用必须填写原因，保存后保持已确认且附件只读', async () => {
-    const confirmed = record('LC-1', 'CONFIRMED')
-    api.list.mockResolvedValue({ ...empty(), total: 1, items: [confirmed] })
-    api.detail.mockResolvedValue(confirmed)
-    api.save.mockResolvedValue({ ...confirmed, revision: 2 })
-    const success = vi.spyOn(ElMessage, 'success')
+  it('已确认只可查看和撤销，作废后才出现删除', async () => {
+    vi.spyOn(ElMessageBox, 'prompt').mockResolvedValue({ value: '业务变更' } as never)
+    api.list.mockResolvedValue({ ...empty(), total: 1, items: [record('LC-1', 'CONFIRMED')] })
     await open()
-    await button('编辑').trigger('click')
+    expect(
+      wrapper.findAll('button').filter((b) => ['编辑', '作废', '删除', '确认'].includes(b.text())),
+    ).toHaveLength(0)
+    await button('撤销').trigger('click')
     await flushPromises()
-    expect(wrapper.find('cost-attachment-editor-stub').exists()).toBe(false)
-    expect(wrapper.find('cost-attachments-stub').attributes('editable')).toBe('false')
-    const form = wrapper.findComponent({ name: 'CostLedgerEditor' }).props('modelValue')
-    form.reason = ''
-    await button('保存').trigger('click')
-    await flushPromises()
-    expect(api.save).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('请填写修改已确认费用的原因')
-    form.reason = '物流公司更正实际运费'
-    await button('保存').trigger('click')
-    await flushPromises()
-    expect(api.save).toHaveBeenCalledWith(
+    expect(api.transition).toHaveBeenLastCalledWith(
       'logistics',
-      'LC-1',
-      expect.objectContaining({ reason: '物流公司更正实际运费', revision: 2 }),
+      expect.objectContaining({ id: 'LC-1' }),
+      'revoke',
+      expect.any(String),
     )
-    expect(success).toHaveBeenCalledWith('费用已更新，保持已确认状态')
+    api.list.mockResolvedValue({ ...empty(), total: 1, items: [record('LC-1', 'VOID')] })
+    await button('查询').trigger('click')
+    await flushPromises()
+    expect(
+      wrapper.findAll('button').filter((b) => ['编辑', '作废', '确认', '撤销'].includes(b.text())),
+    ).toHaveLength(0)
+    await button('删除').trigger('click')
+    await flushPromises()
+    expect(api.transition).toHaveBeenLastCalledWith(
+      'logistics',
+      expect.objectContaining({ id: 'LC-1' }),
+      'delete',
+      expect.any(String),
+    )
   })
   it('确认弹窗等待期间切换页面，不向其他成本类别提交旧记录', async () => {
     const confirm = deferred<never>()

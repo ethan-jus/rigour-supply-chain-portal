@@ -24,6 +24,10 @@
           <section class="detail-section">
             <h3>采购信息</h3>
             <dl class="detail-fields">
+              <div v-if="order.sourceSystemCode === 'DINGHUOBAO'" class="field-wide">
+                <dt>订货宝单号</dt>
+                <dd>{{ order.sourceDocumentNo || '来源未提供' }}</dd>
+              </div>
               <div class="field-wide">
                 <dt>供应商</dt>
                 <dd>
@@ -100,13 +104,21 @@
               ><template #default="{ row }">{{ money(row.unitPrice) }}</template></el-table-column
             >
             <!-- @vue-generic {ProcurementOrderLine} --><el-table-column
-              label="金额（元）"
+              :label="order.sourceSystemCode === 'DINGHUOBAO' ? '折前小计（元）' : '金额（元）'"
               width="140"
               align="right"
               ><template #default="{ row }">{{ money(row.lineAmount) }}</template></el-table-column
             >
             <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
           </el-table>
+          <div v-if="order.sourceSystemCode === 'DINGHUOBAO'" class="purchase-amount-note">
+            <span
+              >折前商品金额 <strong>¥{{ money(grossAmount) }}</strong></span
+            >
+            <span
+              >折后货款 <strong>¥{{ money(order.totalAmount) }}</strong></span
+            >
+          </div>
         </section>
         <section class="detail-section">
           <h3>合同与费用</h3>
@@ -169,7 +181,7 @@
 <script setup lang="ts">
 import ErpRecordDrawer from './ErpRecordDrawer.vue'
 import ErpProcurementContractLink from './ErpProcurementContractLink.vue'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   getProcurementOrder,
@@ -183,6 +195,9 @@ const visible = defineModel<boolean>({ default: false }),
   props = defineProps<{ orderId?: string }>()
 const order = ref<ProcurementOrderDetail>(),
   loading = ref(false)
+const grossAmount = computed(
+  () => order.value?.lines.reduce((total, row) => total + Number(row.lineAmount || 0), 0) || 0,
+)
 let request = 0
 const money = (value: number) =>
   Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
@@ -223,6 +238,13 @@ watch(visible, (value) => {
 })
 </script>
 <style scoped>
+.purchase-amount-note {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px 24px;
+  margin-top: 12px;
+}
 .purchase-detail-content {
   min-height: 220px;
 }

@@ -9,13 +9,12 @@ import {
   matrixTotal,
   payrollHasRecords,
   comparisonCoverageNotice,
-  overviewReading,
   detailDimensionValue,
   visibleDetailDimensions,
   resolveObjectLabels,
 } from '@/views/supply-chain/bi/cost/cost-presentation'
 import type { CostReport } from '@/api/core/bi-cost-dashboard'
-import { costLabel } from '@/views/supply-chain/cost/cost-dictionaries'
+import { costLabel, loadCostDictionaries } from '@/views/supply-chain/cost/cost-dictionaries'
 const api = vi.hoisted(() => ({
   getCostReport: vi.fn(),
   getCostRecords: vi.fn(),
@@ -111,6 +110,63 @@ beforeEach(() => {
   }))
 })
 describe('成本看板正式查询交互', () => {
+  it('未提交搜索草稿不会改变明细和导出范围，查询后统一应用并可清除', async () => {
+    const { state, wrapper } = setup()
+    await flushPromises()
+    state.openRecords({ scope: 'purchase' })
+    await flushPromises()
+    api.getCostWorkspace.mockClear()
+    const visibleQuery = { ...state.request.value }
+    state.recordSearch.value = '  PO202609010693  '
+    expect(state.request.value).toEqual(visibleQuery)
+    expect(api.getCostWorkspace).not.toHaveBeenCalled()
+    state.searchRecords()
+    await flushPromises()
+    expect(api.getCostWorkspace).toHaveBeenCalledTimes(1)
+    expect(api.getCostWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: 'PO202609010693', scope: 'purchase', page: 1 }),
+      expect.any(AbortSignal),
+    )
+    expect(state.request.value.search).toBe('PO202609010693')
+    state.globalChange()
+    await flushPromises()
+    expect(state.recordSearch.value).toBe('')
+    expect(state.request.value.search).toBeUndefined()
+    wrapper.unmount()
+  })
+  it('快捷期间使用接口业务截止日，跨年上月仍保留归属及采购口径', async () => {
+    const { state, wrapper } = setup()
+    await flushPromises()
+    state.chooseScope('purchase')
+    await flushPromises()
+    const january = report()
+    january.meta.effectiveCutoff = '2026-01-16'
+    api.getCostReport.mockResolvedValue(january)
+    state.cutoff.value = january.meta.effectiveCutoff
+    state.filters.city = 'WH'
+    state.applyPeriod('previous')
+    await flushPromises()
+    expect(state.filters).toMatchObject({
+      year: 2025,
+      month: 12,
+      city: 'WH',
+      scope: 'purchase',
+      category: 'purchase',
+      dimension: 'component',
+    })
+    expect(state.activePeriod.value).toBe('previous')
+    state.applyPeriod('year')
+    await flushPromises()
+    expect(state.request.value).toMatchObject({
+      year: 2026,
+      month: 0,
+      compare: 'yoy',
+      city: 'WH',
+      scope: 'purchase',
+    })
+    expect(state.activePeriod.value).toBe('year')
+    wrapper.unmount()
+  })
   it('快递详情不提示补充不适用的差旅字段，差旅缺项及真实已填值继续可见', () => {
     const values = {
       费用类型: 'COURIER',
@@ -339,6 +395,46 @@ describe('成本看板正式查询交互', () => {
     expect(state.error.value).toContain('来源暂不可用')
     wrapper.unmount()
   })
+  it('主动刷新重新加载字典，新增分类无需重启页面或服务', async () => {
+    const { state, wrapper } = setup()
+    await flushPromises()
+    expect(loadCostDictionaries).toHaveBeenLastCalledWith(undefined, false)
+    await state.load(true)
+    expect(loadCostDictionaries).toHaveBeenLastCalledWith(undefined, true)
+    wrapper.unmount()
+  })
+  it('采购成本默认查看货款与实际运费构成，期间切换和下钻保留范围', async () => {
+    const { state, wrapper } = setup()
+    await flushPromises()
+    state.chooseScope('purchase')
+    await flushPromises()
+    expect(state.perspective.value).toBe('structure')
+    expect(state.request.value).toMatchObject({
+      scope: 'purchase',
+      category: 'purchase',
+      dimension: 'component',
+    })
+    state.globalChange()
+    await flushPromises()
+    expect(state.request.value).toMatchObject({
+      scope: 'purchase',
+      category: 'purchase',
+      dimension: 'component',
+    })
+    await state.openAnalysis({
+      category: 'purchase',
+      dimension: 'component',
+      dimensionKey: 'FREIGHT',
+    })
+    state.modalRecords('current')
+    await flushPromises()
+    expect(state.request.value).toMatchObject({
+      scope: 'purchase',
+      dimensionKey: 'FREIGHT',
+      status: 'CONFIRMED',
+    })
+    wrapper.unmount()
+  })
   it('returning from purchase analysis restores operating expense scope', async () => {
     const { state, wrapper } = setup()
     await flushPromises()
@@ -408,8 +504,6 @@ describe('已登记费用与薪酬覆盖提示', () => {
     ]
     expect(payrollHasRecords(r)).toBe(false)
     expect(comparisonCoverageNotice(r)).toContain('本期人力薪酬暂无已确认记录')
-    expect(overviewReading(r, '较上期')).toContain('已登记费用较上期减少 1,431.35 元')
-    expect(overviewReading(r, '较上期')).not.toContain('节省')
   })
   it('有金额为零的已确认工资仍是已登记，零基数或无历史不虚构差额', () => {
     const r = report()
@@ -428,9 +522,6 @@ describe('已登记费用与薪酬覆盖提示', () => {
     ]
     expect(payrollHasRecords(r)).toBe(true)
     expect(comparisonCoverageNotice(r)).toBe('')
-    expect(overviewReading(r, '较上期')).toContain('无可比记录')
-    r.current.count = 0
-    expect(overviewReading(r, '较上期')).toContain('暂无计入经营费用的已确认记录')
   })
 })
 

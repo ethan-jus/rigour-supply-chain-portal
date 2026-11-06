@@ -2,6 +2,7 @@ import {
   businessDictionaryLabel,
   businessDictionaryOptions,
   loadBusinessDictionaries,
+  refreshBusinessDictionary,
 } from '@/utils/business-dictionary'
 export const COST_DICTIONARIES = [
   'MARKETING_EXPENSE_TYPE',
@@ -14,6 +15,7 @@ export const COST_DICTIONARIES = [
   'COST_STATUS',
   'COST_PREMISES_TYPE',
   'PRODUCT_UNIT',
+  'PURCHASE_FREIGHT_BEARER',
   'COST_CARRIER',
   'COST_LOGISTICS_FEE_TYPE',
   'COST_WAREHOUSE_FEE_TYPE',
@@ -21,20 +23,38 @@ export const COST_DICTIONARIES = [
   'COST_DELIVERY_MODE',
   'COST_WAREHOUSE_ALLOCATION_METHOD',
 ] as const
-export const loadCostDictionaries = (category?: string) => {
+export const loadCostDictionaries = (category?: string, force = false) => {
   const byCategory: Record<string, string[]> = {
-    logistics: ['COST_LOGISTICS_LEG', 'COST_PAYER', 'COST_TRANSPORT_METHOD', 'COST_TRANSPORT_KIND', 'PRODUCT_UNIT', 'WAREHOUSE_TYPE', 'COST_CARRIER', 'COST_LOGISTICS_FEE_TYPE', 'COST_TRANSPORT_PURPOSE', 'COST_DELIVERY_MODE'],
+    logistics: [
+      'COST_LOGISTICS_LEG',
+      'COST_PAYER',
+      'COST_TRANSPORT_METHOD',
+      'COST_TRANSPORT_KIND',
+      'PRODUCT_UNIT',
+      'WAREHOUSE_TYPE',
+      'COST_CARRIER',
+      'COST_LOGISTICS_FEE_TYPE',
+      'COST_TRANSPORT_PURPOSE',
+      'COST_DELIVERY_MODE',
+    ],
     marketing: ['MARKETING_EXPENSE_TYPE'],
     expenses: ['REIMBURSEMENT_EXPENSE_TYPE', 'COST_LOGISTICS_LEG'],
-    'warehouse-rentals': ['COST_PREMISES_TYPE', 'COST_WAREHOUSE_FEE_TYPE', 'COST_WAREHOUSE_ALLOCATION_METHOD', 'PRODUCT_UNIT'],
+    'warehouse-rentals': [
+      'COST_PREMISES_TYPE',
+      'COST_WAREHOUSE_FEE_TYPE',
+      'COST_WAREHOUSE_ALLOCATION_METHOD',
+      'PRODUCT_UNIT',
+    ],
     'office-rentals': ['COST_PREMISES_TYPE'],
-    purchases: ['PRODUCT_UNIT'],
+    purchases: ['PRODUCT_UNIT', 'PURCHASE_FREIGHT_BEARER'],
     losses: ['PRODUCT_UNIT'],
   }
   const codes = category
     ? ['COST_STATUS', 'COST_PAYMENT_STATUS', ...(byCategory[category] || [])]
     : COST_DICTIONARIES
-  return loadBusinessDictionaries(codes.map((code) => ({ moduleCode: '', code })))
+  return force
+    ? Promise.all(codes.map((code) => refreshBusinessDictionary(code))).then(() => undefined)
+    : loadBusinessDictionaries(codes.map((code) => ({ moduleCode: '', code })))
 }
 export const costOptions = (code: string) => businessDictionaryOptions('', code)
 export const costLabel = (code: string, value: string | null | undefined) =>

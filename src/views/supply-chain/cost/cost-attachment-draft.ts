@@ -5,6 +5,8 @@ import {
   getCost,
   saveCost,
   uploadCostAttachment,
+  replaceCostAttachment,
+  removeCostAttachment,
   type CostAttachment,
   type CostCategory,
   type CostCommand,
@@ -16,12 +18,14 @@ export interface CostAttachmentDraft {
   file: File
   status: 'pending' | 'uploading' | 'uploaded' | 'failed'
   error: string
+  replaces?: CostAttachment
+  removing?: boolean
   attachment?: CostAttachment
 }
 
 /** 现场报损与员工报销需要在填单时提交证据，其余台账继续使用各自业务单据入口。 */
 export function usesEntryAttachments(category: CostCategory) {
-  return category === 'losses' || category === 'expenses'
+  return ['losses', 'expenses', 'office-rentals', 'marketing'].includes(category)
 }
 
 function readBytes(file: Blob): Promise<ArrayBuffer> {
@@ -78,7 +82,7 @@ export async function appendCostAttachmentFiles(
       }
     }
     if (duplicate) continue
-    if (existingCount + result.length >= 20)
+    if (existingCount + result.filter((item) => !item.removing).length >= 20)
       throw new Error('每条记录最多 20 个附件，请移除多余文件')
     result.push({ id: randomId(), file, status: 'pending', error: '' })
   }
@@ -149,7 +153,12 @@ export class CostAttachmentSaveSession {
       item.status = 'uploading'
       item.error = ''
       try {
-        item.attachment = await uploadCostAttachment(category, this.savedRecord, item.file)
+        if (item.removing && item.replaces)
+          await removeCostAttachment(category, this.savedRecord, item.replaces.id)
+        else
+          item.attachment = item.replaces
+            ? await replaceCostAttachment(category, this.savedRecord, item.replaces.id, item.file)
+            : await uploadCostAttachment(category, this.savedRecord, item.file)
         item.status = 'uploaded'
       } catch (error) {
         item.status = 'failed'

@@ -56,17 +56,14 @@
         maxlength="500"
       />
       <span v-if="goods.productId && !goods.variantId" class="goods-field-hint">
-        请先选择规格，单位自动带入。商品未建立规格时，可切换为手动填写。
-      </span>
-      <span v-else-if="goods.variantId && !goods.specification?.trim()" class="goods-field-hint">
-        已关联商品规格记录，主档未填写规格名称，可正常保存。
+        请选择商品规格；没有规格时可手动填写。
       </span>
     </el-form-item>
     <el-form-item label="单位" required
       ><el-input
         v-if="productMode === 'LINKED'"
         :model-value="goods.unit ? costLabel('PRODUCT_UNIT', goods.unit) : ''"
-        placeholder="选择规格后自动带入"
+        placeholder="请先选择商品规格"
         disabled
       />
       <el-select v-else v-model="goods.unit" filterable placeholder="请选择单位">
@@ -132,11 +129,9 @@
           placeholder="待补金额"
           @update:model-value="emit('update:amount', $event ?? null)"
         />
-        <span class="goods-field-hint">{{
-          amountMode === 'CALCULATED'
-            ? '单价或数量变化时自动更新，保留两位小数。'
-            : '金额未知可留空保存，确认前须补齐。'
-        }}</span>
+        <span v-if="amountMode === 'ACTUAL'" class="goods-field-hint"
+          >金额未知可留空保存，确认前须补齐。</span
+        >
       </el-form-item>
       <el-form-item v-if="suggested != null" label="计算核对">
         <span

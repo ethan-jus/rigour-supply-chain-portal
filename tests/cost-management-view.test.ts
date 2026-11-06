@@ -10,6 +10,7 @@ import {
   getCostCities,
   getCostEmployees,
   getCostWarehouses,
+  exportCosts,
   type CostPage,
 } from '@/api/core/cost'
 const state = vi.hoisted(() => ({
@@ -33,7 +34,10 @@ vi.mock('@/api/core/cost', () => ({
   getCostHistory: vi.fn(),
   saveCost: vi.fn(),
   changeCostStatus: vi.fn(),
+  exportCosts: vi.fn(),
 }))
+const exported = vi.hoisted(() => vi.fn())
+vi.mock('@/views/supply-chain/cost/cost-export', () => ({ exportCostRows: exported }))
 vi.mock('@/utils/business-dictionary', () => ({
   loadBusinessDictionaries: vi.fn().mockResolvedValue(undefined),
   businessDictionaryLabel: (_module: string, _code: string, value: string) => value,
@@ -71,13 +75,18 @@ afterEach(() => {
   wrapper?.unmount()
   document.body.innerHTML = ''
 })
-async function render(advanced = true) {
+async function render(advanced = true, exportDialog = false) {
   wrapper = mount(CostManagementView, {
     global: {
       plugins: [ElementPlus, createPinia()],
       stubs: {
         SupplyPageTitle: true,
-        ElDialog: true,
+        ElDialog: exportDialog
+          ? {
+              props: ['modelValue'],
+              template: '<section v-if="modelValue"><slot/><slot name="footer"/></section>',
+            }
+          : true,
         ElDrawer: {
           name: 'ElDrawer',
           props: ['modelValue', 'title'],
@@ -92,6 +101,105 @@ async function render(advanced = true) {
   if (more && advanced) await more.trigger('click')
 }
 describe('cost management workflow', () => {
+  it.each(['losses', 'office-rentals', 'marketing'])(
+    '%s 自定义导出自选字段及勾选范围，重新查询清除勾选',
+    async (category) => {
+      state.route.path = '/supply-chain/cost/' + category
+      const prefix =
+        'erp:cost:' +
+        (category === 'losses' ? 'loss' : category === 'marketing' ? 'marketing' : 'rental')
+      state.permissions = new Set([prefix + ':read', prefix + ':export'])
+      const items = ['C001', 'C002'].map((id) => ({
+        id,
+        documentNo: id,
+        categoryCode: category,
+        statusCode: 'CONFIRMED',
+        sources: [],
+        data: { amount: 0, costDate: '2026-11-06', title: '业务费用', paymentStatusCode: 'UNPAID' },
+      })) as unknown as import('@/api/core/cost').CostRecord[]
+      vi.mocked(getCosts).mockResolvedValue({ ...empty, total: 2, items })
+      vi.mocked(exportCosts).mockResolvedValue({ ...empty, total: 2, items })
+      await render(false, true)
+      const body = wrapper!
+        .findAll('.el-table__body-wrapper tbody tr')
+        .find((r) => r.text().includes('C002'))!
+      await body.get('input[type="checkbox"]').setValue(true)
+      const button = (name: string) => wrapper!.findAll('button').find((b) => b.text() === name)!
+      await button('自定义导出').trigger('click')
+      await flushPromises()
+      expect(wrapper!.find('.export-scope').text()).toContain('已勾选的 1 条记录')
+      const columns = wrapper!.findAll('.export-fields .el-checkbox')
+      for (const column of columns)
+        if (!['费用单号', '金额'].includes(column.text())) await column.get('input').setValue(false)
+      await button('开始导出').trigger('click')
+      await flushPromises()
+      expect(exported).toHaveBeenLastCalledWith(
+        expect.any(String),
+        ['费用单号', '金额'],
+        [['C002', 0]],
+      )
+      await wrapper!.get('.supply-list-filters__form').trigger('submit')
+      await flushPromises()
+      await button('自定义导出').trigger('click')
+      await flushPromises()
+      expect(wrapper!.find('.export-scope').text()).toContain('全部筛选结果（2 条）')
+    },
+  )
+  it.each(['losses', 'office-rentals', 'marketing'])(
+    '所有成本类别按相同状态限制操作：%s',
+    async (category) => {
+      state.route.path = '/supply-chain/cost/' + category
+      const prefix =
+        'erp:cost:' +
+        (category === 'losses' ? 'loss' : category === 'office-rentals' ? 'rental' : 'marketing')
+      state.permissions = new Set(
+        ['read', 'write', 'confirm', 'void'].map((action) => prefix + ':' + action),
+      )
+      vi.mocked(getCosts).mockResolvedValue({
+        ...empty,
+        total: 3,
+        items: ['DRAFT', 'CONFIRMED', 'VOID'].map((statusCode) => ({
+          id: statusCode,
+          documentNo: statusCode,
+          statusCode,
+          revision: 1,
+          categoryCode: 'MARKETING',
+          data: {
+            requestId: 'flow-' + statusCode,
+            revision: null,
+            typeCode: null,
+            departmentId: null,
+            ownerEmployeeCode: null,
+            logistics: null,
+            rental: null,
+            remark: '',
+            reason: '',
+            title: '费用',
+            amount: 10,
+            costDate: '2026-11-05',
+            cityCode: 'C1',
+            cityName: '武汉',
+            paymentStatusCode: 'UNPAID',
+          },
+          sources: [],
+          warehouseName: null,
+          ownerEmployeeName: null,
+          createdTime: '',
+          updatedTime: '',
+        })),
+      } as CostPage)
+      await render(false)
+      const rows = wrapper!.findAll('tr.el-table__row')
+      expect(
+        rows.map((row) => row.findAll('.cost-row-actions button').map((button) => button.text())),
+      ).toEqual([
+        ['查看', '编辑', '确认', '作废'],
+        ['查看', '撤销'],
+        ['查看', '删除'],
+      ])
+    },
+  )
+
   it.each([
     'purchases',
     'losses',

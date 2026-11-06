@@ -50,6 +50,22 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('成本报表与筛选、快照保持一致', () => {
+  it('freezes custom fields for its task and refuses an empty selection', async () => {
+    const { state, wrapper } = setup()
+    await state.startExport([])
+    expect(api.createCostExport).not.toHaveBeenCalled()
+    const fields = ['单据号', '金额（元）']
+    await state.startExport(fields)
+    fields.push('城市')
+    const blob = new Blob(['csv'])
+    api.downloadCostExport.mockResolvedValueOnce(blob)
+    await state.downloadExport()
+    expect(api.exportCostDashboardWorkbook).toHaveBeenCalledWith(blob, expect.any(String), [
+      '单据号',
+      '金额（元）',
+    ])
+    wrapper.unmount()
+  })
   it('exports the selected attribution and snapshot, retains it for paging, and clears it after refresh', async () => {
     const { state, request, wrapper } = setup()
     await state.startExport()

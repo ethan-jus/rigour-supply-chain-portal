@@ -7,6 +7,8 @@ import {
   getCostAttachments,
   saveCost,
   uploadCostAttachment,
+  replaceCostAttachment,
+  removeCostAttachment,
   type CostCommand,
   type CostRecord,
 } from '@/api/core/cost'
@@ -22,6 +24,8 @@ vi.mock('@/api/core/cost', () => ({
   getCost: vi.fn(),
   saveCost: vi.fn(),
   uploadCostAttachment: vi.fn(),
+  replaceCostAttachment: vi.fn(),
+  removeCostAttachment: vi.fn(),
   getCostAttachments: vi.fn(),
   getCostAttachmentUrl: vi.fn(),
 }))
@@ -77,16 +81,12 @@ beforeEach(() => {
 })
 describe('按业务选择填单附件', () => {
   it('仅损耗现场证据和报销票据进入本轮表单，不向全部台账添加', () => {
-    for (const category of [
-      'purchases',
-      'logistics',
-      'warehouse-rentals',
-      'office-rentals',
-      'marketing',
-    ] as const)
+    for (const category of ['purchases', 'logistics', 'warehouse-rentals'] as const)
       expect(usesEntryAttachments(category)).toBe(false)
     expect(usesEntryAttachments('losses')).toBe(true)
     expect(usesEntryAttachments('expenses')).toBe(true)
+    expect(usesEntryAttachments('office-rentals')).toBe(true)
+    expect(usesEntryAttachments('marketing')).toBe(true)
   })
   it('校验内容、大小、类型；无效批次不改变已选择的文件', async () => {
     const current = await appendCostAttachmentFiles([], [pdf()], 0)
@@ -314,5 +314,73 @@ describe('费用与附件保存闭环', () => {
       saved.id,
       expect.objectContaining({ title: '更新出差事由', revision: 4 }),
     )
+  })
+})
+
+describe('待确认费用的已存附件维护', () => {
+  it('更换和移除随保存提交，沿用同一费用并逐次刷新版本', async () => {
+    const data = command(),
+      saved = row(data),
+      original = attachment('old')
+    vi.mocked(saveCost).mockResolvedValue(saved)
+    vi.mocked(replaceCostAttachment).mockResolvedValue(attachment('new'))
+    vi.mocked(getCost).mockResolvedValueOnce(row(data, 2)).mockResolvedValueOnce(row(data, 3))
+    const drafts: CostAttachmentDraft[] = [
+      { id: 'replace', file: pdf(), status: 'pending', error: '', replaces: original },
+      {
+        id: 'remove',
+        file: pdf(),
+        status: 'pending',
+        error: '',
+        replaces: attachment('remove'),
+        removing: true,
+      },
+    ]
+    const session = new CostAttachmentSaveSession()
+    await session.save('logistics', saved.id, data, drafts, vi.fn())
+    expect(replaceCostAttachment).toHaveBeenCalledWith(
+      'logistics',
+      expect.objectContaining({ revision: 1 }),
+      'old',
+      expect.any(File),
+    )
+    expect(removeCostAttachment).toHaveBeenCalledWith(
+      'logistics',
+      expect.objectContaining({ revision: 2 }),
+      'remove',
+    )
+    expect(uploadCostAttachment).not.toHaveBeenCalled()
+    expect(drafts.map((d) => d.status)).toEqual(['uploaded', 'uploaded'])
+  })
+  it('移除只是本地待保存变更，可以撤销且不立即请求服务器', async () => {
+    const wrapper = mount(CostAttachmentEditor, {
+      props: { category: 'logistics', row: row(), disabled: false, modelValue: [] },
+      global: { plugins: [ElementPlus] },
+    })
+    vi.mocked(getCostAttachments).mockResolvedValue([attachment('old')])
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+    // Re-mount after configuring the attachment response to avoid a resolved empty initial load.
+    wrapper.unmount()
+    const active = mount(CostAttachmentEditor, {
+      props: { category: 'logistics', row: row(), disabled: false, modelValue: [] },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    await active
+      .findAll('button')
+      .find((b) => b.text() === '移除')!
+      .trigger('click')
+    expect(active.emitted('update:modelValue')?.[0]?.[0]).toEqual([
+      expect.objectContaining({ removing: true, replaces: expect.objectContaining({ id: 'old' }) }),
+    ])
+    await active.setProps({
+      modelValue: active.emitted('update:modelValue')![0]![0] as CostAttachmentDraft[],
+    })
+    expect(active.text()).toContain('待移除')
+    expect(active.text()).toContain('1 KB')
+    expect(active.text()).not.toContain('0 KB')
+    expect(removeCostAttachment).not.toHaveBeenCalled()
+    active.unmount()
   })
 })

@@ -1,6 +1,8 @@
 import type { CostCategory } from './CostCategory'
 
 export interface CostRecord {
+  itemKey?: string
+  itemName?: string
   costMonth?: string
   periodBasis?: 'MONTH' | 'DAY'
   costTreatment?: 'DIRECT' | 'LINKED' | 'REVIEW'

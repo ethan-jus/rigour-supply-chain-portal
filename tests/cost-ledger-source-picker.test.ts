@@ -1,6 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import ElementPlus, { ElCheckbox, ElDialog, ElSelect } from 'element-plus'
+import ElementPlus, { ElCheckbox, ElDialog, ElSelect, ElOption } from 'element-plus'
 import Picker from '@/views/supply-chain/cost/CostLedgerSourcePicker.vue'
 const api = vi.hoisted(() => ({ sources: vi.fn() }))
 vi.mock('@/api/core/cost-ledger', () => ({
@@ -12,7 +12,12 @@ beforeEach(() => {
   api.sources.mockImplementation(async (q: { orderTypeCode: string }) => [
     {
       id: 1,
-      documentNo: q.orderTypeCode === 'SALES_ORDER' ? 'SO202611030001' : 'PO202611030001',
+      documentNo:
+        q.orderTypeCode === 'SALES_ORDER'
+          ? 'SO202611030001'
+          : q.orderTypeCode === 'OTHER_OUT'
+            ? 'OT202611030001'
+            : 'TR202611030001',
       senderName: '武汉城市仓',
       receiverName: '星河门店',
       statusCode: 'CONFIRMED',
@@ -21,7 +26,7 @@ beforeEach(() => {
   ])
 })
 describe('物流关联单据选择', () => {
-  it('单号与供应商名称分别筛选，跨类型勾选后一次带回', async () => {
+  it('单号与收货仓名称分别筛选，跨类型勾选后一次带回', async () => {
     const w = mount(Picker, {
       props: { modelValue: true, selectedKeys: [] },
       global: {
@@ -36,9 +41,14 @@ describe('物流关联单据选择', () => {
     const dialog = w.findComponent(ElDialog)
     dialog.vm.$emit('open')
     await flushPromises()
+    expect(w.findAllComponents(ElOption).map((o) => o.props('label'))).toEqual([
+      '调拨单',
+      '销售单',
+      '其他订单',
+    ])
     const fields = w.findAll('.el-form-item')
-    await fields[1]!.get('input').setValue('PO20261103')
-    await fields[2]!.get('input').setValue('华东食品')
+    await fields[1]!.get('input').setValue('TR20261103')
+    await fields[2]!.get('input').setValue('武汉仓')
     await w
       .findAll('button')
       .find((b) => b.text() === '查询')!
@@ -46,16 +56,26 @@ describe('物流关联单据选择', () => {
     await flushPromises()
     expect(api.sources).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        documentNo: 'PO20261103',
-        partyName: '华东食品',
-        orderTypeCode: 'PURCHASE_ORDER',
+        documentNo: 'TR20261103',
+        partyName: '武汉仓',
+        orderTypeCode: 'TRANSFER_ORDER',
       }),
     )
     w.findAllComponents(ElCheckbox)
-      .find((c) => c.attributes('aria-label') === '选择PO202611030001')!
+      .find((c) => c.attributes('aria-label') === '选择TR202611030001')!
       .vm.$emit('change', true)
     await w.vm.$nextTick()
     const select = w.findComponent(ElSelect)
+    select.vm.$emit('update:modelValue', 'OTHER_OUT')
+    select.vm.$emit('change', 'OTHER_OUT')
+    await flushPromises()
+    expect(api.sources).toHaveBeenLastCalledWith(
+      expect.objectContaining({ orderTypeCode: 'OTHER_OUT' }),
+    )
+    w.findAllComponents(ElCheckbox)
+      .find((c) => c.attributes('aria-label') === '选择OT202611030001')!
+      .vm.$emit('change', true)
+    await w.vm.$nextTick()
     select.vm.$emit('update:modelValue', 'SALES_ORDER')
     select.vm.$emit('change', 'SALES_ORDER')
     await flushPromises()
@@ -69,11 +89,12 @@ describe('物流关联单据选择', () => {
       .trigger('click')
     expect(w.emitted('selected')?.[0]?.[0]).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ documentNo: 'PO202611030001', orderTypeCode: 'PURCHASE_ORDER' }),
+        expect.objectContaining({ documentNo: 'TR202611030001', orderTypeCode: 'TRANSFER_ORDER' }),
         expect.objectContaining({ documentNo: 'SO202611030001', orderTypeCode: 'SALES_ORDER' }),
+        expect.objectContaining({ documentNo: 'OT202611030001', orderTypeCode: 'OTHER_OUT' }),
       ]),
     )
-    expect(w.emitted('selected')?.[0]?.[0]).toHaveLength(2)
+    expect(w.emitted('selected')?.[0]?.[0]).toHaveLength(3)
     w.unmount()
   })
 })

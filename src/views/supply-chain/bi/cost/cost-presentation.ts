@@ -1,32 +1,42 @@
 import { costLabel } from '../../cost/cost-dictionaries'
 import type { EChartsCoreOption } from 'echarts/core'
-import type { CostCategory, CostGroup, CostRecord, CostReport } from '@/api/core/bi-cost-dashboard'
+import type {
+  CostCategory,
+  CostGroup,
+  CostMonth,
+  CostRecord,
+  CostReport,
+  CostScope,
+} from '@/api/core/bi-cost-dashboard'
 export const categories: Record<CostCategory, string> = {
   warehouse: '仓储费用',
   marketing: '营销费用',
   office: '办公费用',
-  freight: '运费',
+  freight: '物流运输费用',
   labor: '人力薪酬',
   expense: '员工报销',
   premises_unknown: '待分类场地费用',
-  purchase: '商品采购',
+  purchase: '采购成本',
   loss: '商品损耗',
 }
 export const dimensions: Record<CostCategory, string[]> = {
-  freight: ['leg', 'route', 'carrier', 'method', 'type', 'employee'],
-  warehouse: ['premises', 'contract'],
+  freight: ['leg', 'method', 'carrier', 'feeType', 'deliveryMode', 'route', 'employee'],
+  warehouse: ['feeType', 'premises', 'contract'],
   office: ['premises', 'contract', 'type', 'employee'],
   labor: ['employee', 'department'],
   marketing: ['type', 'channel', 'employee', 'payee'],
   expense: ['type', 'employee', 'department', 'trip', 'destination', 'payee'],
-  purchase: ['supplier', 'product', 'warehouse'],
+  purchase: ['component', 'supplier', 'warehouse', 'product'],
   loss: ['product', 'lossReason', 'warehouse'],
   premises_unknown: ['premises', 'contract'],
 }
 export const dimensionNames: Record<string, string> = {
-  leg: '运输环节',
-  carrier: '承运方',
+  leg: '运输类型',
+  carrier: '物流公司',
   method: '运输方式',
+  feeType: '费用项目',
+  deliveryMode: '承运方式',
+  component: '采购成本构成',
   premises: '仓库或场地',
   contract: '合同编号',
   type: '费用类型',
@@ -64,12 +74,60 @@ export const statusName = (v: string) =>
     UNPAID: '未付款',
     UNKNOWN: '未记录',
   })[v] || '未记录'
+
+export function overviewCards(report: CostReport, available: CostCategory[]) {
+  const scopes: { scope: CostScope; label: string }[] = [
+    { scope: 'opex', label: '经营费用' },
+    { scope: 'purchase', label: '采购成本' },
+    { scope: 'loss', label: '商品损耗' },
+  ]
+  return scopes
+    .filter((s) =>
+      s.scope === 'opex'
+        ? available.some((c) => !['purchase', 'loss'].includes(c))
+        : available.includes(s.scope),
+    )
+    .map((s) => {
+      const summary = report.scopeSummaries?.find((item) => item.scope === s.scope)
+      const currentScope = report.scope === s.scope
+      return {
+        ...s,
+        amount:
+          summary?.current.amount ??
+          (currentScope
+            ? report.current.amount
+            : s.scope === 'purchase'
+              ? report.purchase
+              : report.loss),
+        count: summary?.current.count ?? (currentScope ? report.current.count : undefined),
+        comparable:
+          summary?.comparisonAvailable ?? (currentScope && report.meta.comparisonAvailable),
+        delta: summary ? summary.delta : currentScope ? report.delta : null,
+        growth: summary ? summary.growth : currentScope ? report.growth : null,
+        reviewCount:
+          summary?.current.reviewCount ?? (currentScope ? report.current.reviewCount || 0 : 0),
+        components: summary?.components || [],
+      }
+    })
+}
+/** 分组键携带来源字典编码，字典新增项无需维护前端枚举。 */
+export function dictionaryValue(key: string, fallback = key): string {
+  const match = /^dict:([A-Z][A-Z0-9_]*):(.+)$/.exec(key)
+  return match ? costLabel(match[1]!, match[2]!) : fallback
+}
+export function recordItem(row: Pick<CostRecord, 'itemKey' | 'itemName'>): string {
+  return !row.itemKey || row.itemKey === 'UNKNOWN'
+    ? ''
+    : dictionaryValue(row.itemKey, row.itemName || row.itemKey)
+}
+
 /** 费用归集后的类别不改变原单费用类型的字典。 */
 export function detailDimensionValue(
   record: Pick<CostRecord, 'source' | 'category'>,
   name: string,
   value: string,
 ) {
+  if (value.startsWith('dict:')) return dictionaryValue(value)
   const dictionary =
     name === '运输环节'
       ? 'COST_LOGISTICS_LEG'
@@ -243,6 +301,59 @@ export function line(report: CostReport): EChartsCoreOption {
     ],
   }
 }
+
+/** 月份保持时间顺序；无可比数据保留缺口，不补零或跨缺口连线。 */
+export function monthlyTrend(months: CostMonth[]): EChartsCoreOption {
+  const comparable = months.some((m) => m.previous !== null)
+  return {
+    ...theme,
+    tooltip: {
+      trigger: 'axis',
+      renderMode: 'richText',
+      valueFormatter: (v: unknown) => `${money(String(v))} 元`,
+    },
+    legend: { top: 0, textStyle: { color: '#9bb0c7' }, selectedMode: false },
+    grid: { left: 8, right: 14, top: 42, bottom: 12, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: months.map((m) => `${m.month}月${m.month === 1 ? `\n${m.year}` : ''}`),
+      axisLabel: { color: '#8da4bb' },
+    },
+    yAxis: amountAxis(
+      months.flatMap((m) => [
+        Number(m.current),
+        ...(m.previous === null ? [] : [Number(m.previous)]),
+      ]),
+    ),
+    series: [
+      {
+        name: '本期',
+        type: 'bar',
+        barMaxWidth: 28,
+        itemStyle: { color: '#78a9f0', borderRadius: [3, 3, 0, 0] },
+        data: months.map((m) => ({ id: `${m.year}-${m.month}`, value: Number(m.current) })),
+      },
+      ...(comparable
+        ? [
+            {
+              name: '可比期',
+              type: 'line',
+              connectNulls: false,
+              showSymbol: true,
+              symbolSize: 5,
+              lineStyle: { type: 'dashed' },
+              itemStyle: { color: '#a9b8ca' },
+              data: months.map((m) =>
+                m.previous === null
+                  ? null
+                  : { id: `${m.year}-${m.month}`, value: Number(m.previous) },
+              ),
+            },
+          ]
+        : []),
+    ],
+  }
+}
 export function eventKey(event: unknown): string | undefined {
   return (event as { data?: { id?: string } })?.data?.id
 }
@@ -269,21 +380,24 @@ export function resolveObjectLabels(report: CostReport): CostReport {
               ? 'COST_PREMISES_TYPE'
               : 'MARKETING_EXPENSE_TYPE'
           : undefined
-  if (!dictionary) return report
   return {
     ...report,
     objects: report.objects.map((group) =>
-      group.key.startsWith('code:REIMBURSEMENT_EXPENSE_TYPE:')
-        ? {
-            ...group,
-            label: costLabel(
-              'REIMBURSEMENT_EXPENSE_TYPE',
-              group.key.slice('code:REIMBURSEMENT_EXPENSE_TYPE:'.length),
-            ),
-          }
-        : group.key.startsWith('code:')
-          ? { ...group, label: costLabel(dictionary, group.key.slice(5)) }
-          : group,
+      group.key.startsWith('dict:')
+        ? { ...group, label: dictionaryValue(group.key, group.label) }
+        : group.key.startsWith('code:REIMBURSEMENT_EXPENSE_TYPE:')
+          ? {
+              ...group,
+              label: costLabel(
+                'REIMBURSEMENT_EXPENSE_TYPE',
+                group.key.slice('code:REIMBURSEMENT_EXPENSE_TYPE:'.length),
+              ),
+            }
+          : group.key.startsWith('code:')
+            ? dictionary
+              ? { ...group, label: costLabel(dictionary, group.key.slice(5)) }
+              : group
+            : group,
     ),
   }
 }
@@ -301,19 +415,4 @@ export function comparisonCoverageNotice(report: CostReport): string {
   return absent.length
     ? `本期${absent.map((group) => group.label).join('、')}暂无已确认记录；期间差额可能受登记进度影响。`
     : ''
-}
-
-export function overviewReading(report: CostReport, comparisonLabel: string): string {
-  if (!report.current.count) return '本期暂无计入经营费用的已确认记录。'
-  const first = report.categories
-    .filter((item) => Number(item.current) > 0)
-    .reduce<CostGroup | undefined>(
-      (largest, item) =>
-        !largest || Number(item.current) > Number(largest.current) ? item : largest,
-      undefined,
-    )
-  const comparison = report.meta.comparisonAvailable
-    ? `本期已登记费用${comparisonLabel}${Number(report.delta) >= 0 ? '增加' : '减少'} ${money(report.delta?.replace('-', ''))} 元。`
-    : '当前无可比记录。'
-  return `${comparison}${first ? `${first.label}占本期 ${percent(first.share)}。` : ''}`
 }

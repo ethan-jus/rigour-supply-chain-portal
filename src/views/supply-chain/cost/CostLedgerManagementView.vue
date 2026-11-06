@@ -1,12 +1,31 @@
 <template>
   <div class="ledger-workspace">
     <section class="filter-panel">
-      <el-form class="filters" label-position="top" @submit.prevent="search">
+      <el-form class="filters" label-position="left" label-width="96px" @submit.prevent="search">
         <el-form-item label="费用单号"
-          ><el-input v-model="filters.documentNo" clearable @keyup.enter="search"
+          ><el-input
+            v-model="filters.documentNo"
+            placeholder="输入费用单号"
+            clearable
+            @keyup.enter="search"
         /></el-form-item>
         <template v-if="logistics">
-          <el-form-item label="关联单据类型"
+          <el-form-item v-if="!purchaseHistory" label="运输类型"
+            ><CostDictSelect v-model="filters.typeCode" code="COST_TRANSPORT_PURPOSE" clearable
+          /></el-form-item>
+          <el-form-item label="运输日期"
+            ><el-date-picker
+              v-model="dateRange"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              start-placeholder="开始日期"
+              end-placeholder="截止日期"
+              range-separator="至"
+          /></el-form-item>
+          <el-form-item label="单据状态"
+            ><CostDictSelect v-model="filters.statusCode" code="COST_STATUS" clearable
+          /></el-form-item>
+          <el-form-item label="订单类型"
             ><el-select v-model="filters.orderTypeCode" clearable
               ><el-option
                 v-for="t in sourceTypes"
@@ -15,12 +34,13 @@
                 :value="t.value" /></el-select
           ></el-form-item>
           <el-form-item label="关联单据编号"
-            ><el-input v-model="filters.sourceDocumentNo" clearable @keyup.enter="search"
+            ><el-input
+              v-model="filters.sourceDocumentNo"
+              placeholder="输入关联单据编号"
+              clearable
+              @keyup.enter="search"
           /></el-form-item>
-          <el-form-item label="运输用途"
-            ><CostDictSelect v-model="filters.typeCode" code="COST_TRANSPORT_PURPOSE" clearable
-          /></el-form-item>
-          <el-form-item label="物流公司"
+          <el-form-item v-if="moreFilters" label="物流公司"
             ><CostDictSelect v-model="filters.carrierCode" code="COST_CARRIER" clearable
           /></el-form-item>
         </template>
@@ -29,14 +49,15 @@
             ><CostLedgerPartySelect
               v-model="warehouseFilter"
               :logistics="false"
-              kind="WAREHOUSE" /></el-form-item
+              kind="WAREHOUSE"
+              placeholder="搜索并选择仓库" /></el-form-item
           ><el-form-item label="费用项目"
             ><CostDictSelect
               v-model="filters.ledgerFeeType"
               code="COST_WAREHOUSE_FEE_TYPE"
               clearable /></el-form-item
         ></template>
-        <el-form-item :label="logistics ? '运输日期' : '登记日期'"
+        <el-form-item v-if="!logistics" label="登记日期"
           ><el-date-picker
             v-model="dateRange"
             type="daterange"
@@ -44,17 +65,17 @@
             start-placeholder="开始日期"
             end-placeholder="截止日期"
         /></el-form-item>
-        <el-form-item label="费用归属月份"
+        <el-form-item v-if="moreFilters || !logistics" label="费用归属月份"
           ><el-date-picker
             v-model="filters.costMonth"
             type="month"
             value-format="YYYY-MM"
             clearable
         /></el-form-item>
-        <el-form-item label="单据状态"
+        <el-form-item v-if="!logistics" label="单据状态"
           ><CostDictSelect v-model="filters.statusCode" code="COST_STATUS" clearable
         /></el-form-item>
-        <el-form-item label="付款状态"
+        <el-form-item v-if="moreFilters" label="付款状态"
           ><CostDictSelect v-model="filters.paymentStatusCode" code="COST_PAYMENT_STATUS" clearable
         /></el-form-item>
         <template v-if="moreFilters"
@@ -76,9 +97,14 @@
         ></template>
       </el-form>
       <div class="filter-actions">
-        <el-button link @click="moreFilters = !moreFilters">{{
-          moreFilters ? '收起条件' : '更多条件'
-        }}</el-button>
+        <div class="filter-secondary-actions">
+          <el-button link @click="moreFilters = !moreFilters">{{
+            moreFilters ? '收起条件' : '更多条件'
+          }}</el-button>
+          <el-checkbox v-if="logistics && moreFilters" v-model="purchaseHistory" @change="search"
+            >查看历史采购运费</el-checkbox
+          >
+        </div>
         <div>
           <el-button @click="reset">重置</el-button
           ><el-button type="primary" :loading="loading" @click="search">查询</el-button>
@@ -86,6 +112,13 @@
       </div>
     </section>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
+    <el-alert v-if="referenceError" :title="referenceError" type="error" :closable="false" />
+    <el-alert
+      v-if="logistics && purchaseHistory"
+      title="历史采购运费仅支持查看、作废及查询操作记录。"
+      type="info"
+      :closable="false"
+    />
     <section class="list-panel">
       <div class="list-toolbar">
         <div>
@@ -97,12 +130,12 @@
             v-if="can(permission + ':export')"
             :loading="exporting"
             :disabled="loading || !listReady"
-            @click="exportRows"
-            >导出</el-button
+            @click="openExport"
+            >自定义导出</el-button
           ><el-button
             v-if="can(permission + ':write')"
             type="primary"
-            :disabled="loading || saving"
+            :disabled="loading || saving || !referencesReady"
             @click="edit()"
             >新增{{ logistics ? '运输记录' : '仓储费用' }}</el-button
           >
@@ -131,16 +164,34 @@
           }}</strong>
         </div>
       </div>
+      <div v-if="selectedRows.length" class="selection-toolbar" aria-live="polite">
+        <span
+          >已勾选 <strong>{{ selectedRows.length }}</strong> 条</span
+        >
+        <el-button link type="primary" :disabled="exporting" @click="clearSelection"
+          >取消勾选</el-button
+        >
+      </div>
       <el-table
+        ref="tableRef"
         v-loading="loading"
         :data="result.items"
         border
         row-key="id"
         class="ledger-table"
         :empty-text="error ? '费用列表暂不可用，请重试' : '暂无符合条件的记录'"
-        max-height="max(280px, calc(100vh - 470px))"
+        max-height="max(320px, calc(100vh - 390px))"
+        @selection-change="selectionChanged"
       >
-        <el-table-column label="费用单号" fixed="left" width="235"
+        <el-table-column
+          v-if="can(permission + ':export')"
+          type="selection"
+          fixed="left"
+          width="44"
+          reserve-selection
+          :selectable="() => !exporting"
+        />
+        <el-table-column label="费用单号" fixed="left" width="236" show-overflow-tooltip
           ><template #default="{ row }"
             ><el-button link type="primary" class="code-link" @click="view(row as CostRecord)">{{
               row.documentNo
@@ -157,37 +208,41 @@
           ></el-table-column
         >
         <template v-if="logistics"
-          ><el-table-column label="运输用途" width="135"
+          ><el-table-column label="运输类型" width="122"
             ><template #default="{ row }">{{
               purpose(row as CostRecord)
             }}</template></el-table-column
-          ><el-table-column label="运输日期" width="130"
+          ><el-table-column label="运输日期" width="112"
             ><template #default="{ row }"
               ><span class="nowrap">{{ row.data.costDate }}</span></template
             ></el-table-column
-          ><el-table-column label="发货方" min-width="240" show-overflow-tooltip
+          ><el-table-column label="我方费用（元）" width="148" align="right"
+            ><template #default="{ row }"
+              ><strong>{{ costMoney(row.data.amount) }}</strong></template
+            ></el-table-column
+          ><el-table-column label="发货方" min-width="180" show-overflow-tooltip
             ><template #default="{ row }">{{
               senderName(row as CostRecord)
             }}</template></el-table-column
           >
-          <el-table-column label="收货方" min-width="270"
+          <el-table-column label="收货方" min-width="210"
             ><template #default="{ row }"
               ><div class="recipient-names">
                 <div v-for="(name, i) in receiverNames(row as CostRecord)" :key="i">{{ name }}</div>
               </div></template
             ></el-table-column
           >
-          <el-table-column label="物流公司" width="150"
+          <el-table-column label="物流公司" width="140" show-overflow-tooltip
             ><template #default="{ row }">{{
               carrier(row as CostRecord)
             }}</template></el-table-column
-          ><el-table-column label="运单号" min-width="210" show-overflow-tooltip
+          ><el-table-column label="运单号" min-width="180" show-overflow-tooltip
             ><template #default="{ row }"
               ><span class="nowrap">{{
                 row.data.ledger?.trackingNo || row.data.logistics?.trackingNo || '—'
               }}</span></template
             ></el-table-column
-          ><el-table-column label="关联单据" min-width="240"
+          ><el-table-column label="关联单据" min-width="200"
             ><template #default="{ row }"
               ><div v-for="code in sourceCodes(row as CostRecord)" :key="code" class="nowrap">
                 {{ code }}
@@ -196,41 +251,44 @@
           >
         </template>
         <template v-else
-          ><el-table-column label="仓库" min-width="230" show-overflow-tooltip
+          ><el-table-column label="仓库" min-width="132" show-overflow-tooltip
             ><template #default="{ row }">{{
               row.warehouseName ||
               row.data.warehouseLedger?.warehouseCode ||
               row.data.rental?.premisesName ||
               '—'
             }}</template></el-table-column
-          ><el-table-column label="服务期间" min-width="240"
-            ><template #default="{ row }">{{
-              servicePeriod(row as CostRecord)
-            }}</template></el-table-column
-          ><el-table-column label="费用项目" min-width="200"
+          ><el-table-column label="服务期间" width="132"
+            ><template #default="{ row }"
+              ><div class="service-period">
+                <span
+                  v-for="(date, i) in servicePeriod(row as CostRecord).split(' 至 ')"
+                  :key="i"
+                  >{{ i ? `至 ${date}` : date }}</span
+                >
+              </div></template
+            ></el-table-column
+          ><el-table-column label="费用项目" width="88"
             ><template #default="{ row }"
               ><div v-for="name in warehouseFeeNames(row as CostRecord)" :key="name">
                 {{ name }}
               </div></template
             ></el-table-column
-          ><el-table-column label="登记日期" width="130"
+          ><el-table-column label="登记日期" width="104"
             ><template #default="{ row }">{{ row.data.costDate }}</template></el-table-column
           ></template
         >
-        <el-table-column
-          :label="logistics ? '本单我方费用（元）' : '本单费用总额（元）'"
-          width="195"
-          align="right"
+        <el-table-column v-if="!logistics" label="本单费用总额（元）" width="140" align="right"
           ><template #default="{ row }"
             ><strong>{{ costMoney(row.data.amount) }}</strong></template
           ></el-table-column
         >
-        <el-table-column v-if="!logistics" label="筛选期归属费用（元）" width="205" align="right"
+        <el-table-column v-if="!logistics" label="筛选期归属费用（元）" width="150" align="right"
           ><template #default="{ row }">{{
             costMoney(row.periodAmount === undefined ? row.data.amount : row.periodAmount)
           }}</template></el-table-column
         >
-        <el-table-column label="单据状态" width="125"
+        <el-table-column label="单据状态" fixed="right" width="100" align="center"
           ><template #default="{ row }"
             ><el-tag
               :type="
@@ -243,42 +301,51 @@
               >{{ costLabel('COST_STATUS', row.statusCode) }}</el-tag
             ></template
           ></el-table-column
-        ><el-table-column label="创建人" width="150"
+        ><el-table-column label="创建人" fixed="right" width="90" show-overflow-tooltip
           ><template #default="{ row }">{{
             displayRecordActor(row.createdBy)
           }}</template></el-table-column
         >
-        <el-table-column label="操作" fixed="right" width="285"
+        <el-table-column label="操作" fixed="right" width="208"
           ><template #default="{ row }"
             ><el-button link type="primary" @click="view(row as CostRecord)">查看</el-button
             ><el-button
-              v-if="row.statusCode !== 'VOID' && can(permission + ':write')"
+              v-if="!purchaseHistory && row.statusCode === 'DRAFT' && can(permission + ':write')"
               link
               type="primary"
+              :disabled="!referencesReady"
               @click="edit(row as CostRecord)"
               >编辑</el-button
             ><el-button
-              v-if="row.statusCode === 'DRAFT' && can(permission + ':confirm')"
+              v-if="!purchaseHistory && row.statusCode === 'DRAFT' && can(permission + ':confirm')"
               link
               type="primary"
               @click="act(row as CostRecord, 'confirm')"
               >确认</el-button
             ><el-button
-              v-if="row.statusCode !== 'VOID' && can(permission + ':void')"
+              v-if="row.statusCode === 'DRAFT' && can(permission + ':void')"
               link
               type="danger"
               @click="act(row as CostRecord, 'void')"
               >作废</el-button
-            ><el-button link @click="history(row as CostRecord)">记录</el-button></template
+            ><el-button
+              v-if="row.statusCode === 'CONFIRMED' && can(permission + ':confirm')"
+              link
+              type="primary"
+              @click="act(row as CostRecord, 'revoke')"
+              >撤销</el-button
+            ><el-button
+              v-if="row.statusCode === 'VOID' && can(permission + ':void')"
+              link
+              type="danger"
+              @click="act(row as CostRecord, 'delete')"
+              >删除</el-button
+            ></template
           ></el-table-column
         >
       </el-table>
       <div class="pagination">
-        <span class="muted">{{
-          logistics
-            ? '运输单金额按筛选结果去重合计；订单承担金额在详情分摊中查看。'
-            : '归属费用按所选月份统计，押金不计入费用。'
-        }}</span
+        <span v-if="!logistics" class="muted">归属费用按所选月份统计，押金不计入费用。</span
         ><el-pagination
           v-model:current-page="page"
           v-model:page-size="step"
@@ -289,6 +356,20 @@
         />
       </div>
     </section>
+    <CostExportDialog
+      v-model="exportOpen"
+      v-model:fields="exportFields"
+      :columns="exportColumns"
+      :scope="
+        exportIds.length
+          ? `已勾选的 ${exportIds.length} 条记录`
+          : `全部筛选结果（${exportTotal} 条）`
+      "
+      :busy="exporting"
+      :error="exportError"
+      :empty="!exportIds.length && !exportTotal"
+      @confirm="exportRows"
+    />
     <el-dialog
       v-model="editorOpen"
       :title="`${editing ? '编辑' : '新增'}${logistics ? '物流运输记录' : '仓储费用'}`"
@@ -299,10 +380,20 @@
       :before-close="beforeClose"
       destroy-on-close
     >
-      <el-alert v-if="saveError" :title="saveError" type="error" :closable="false" />
+      <el-alert v-if="saveError" :title="saveError" type="error" :closable="false">
+        <template v-if="warehouseMaintenanceNeeded" #default>
+          <el-link
+            href="#/supply-chain/erp/inventory/warehouses"
+            target="_blank"
+            rel="noopener"
+            type="primary"
+            >打开仓库信息维护</el-link
+          >
+        </template>
+      </el-alert>
       <el-alert
         v-if="editing && !editing.data.ledger && !editing.data.warehouseLedger"
-        title="请补齐历史记录缺少的收发、费用归属信息；原始内容仍保留在操作记录中。"
+        title="请补齐收发信息和费用归属。"
         type="info"
         :closable="false"
       />
@@ -315,12 +406,7 @@
         :confirmed="editing?.statusCode === 'CONFIRMED'"
       />
       <section class="attachment-panel">
-        <template v-if="editing?.statusCode === 'CONFIRMED'">
-          <p class="hint">已确认费用的附件仅可查看。</p>
-          <CostAttachments :category="category" :row="editing" :editable="false" />
-        </template>
         <CostAttachmentEditor
-          v-else
           v-model="files"
           title="相关附件"
           :category="category"
@@ -352,6 +438,7 @@
       class="cost-ledger-dialog"
       destroy-on-close
       ><CostLedgerDetail v-if="detail" :row="detail" :category="category" /><template #footer
+        ><el-button v-if="detail" @click="history(detail)">操作记录</el-button
         ><el-button @click="detailOpen = false">关闭</el-button></template
       ></el-dialog
     >
@@ -392,7 +479,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
 import {
   getCosts,
   getCost,
@@ -408,7 +495,11 @@ import {
   type CostAudit,
   type CostCommand,
 } from '@/api/core/cost'
-import { getLedgerParties, getLedgerExport } from '@/api/core/cost-ledger'
+import {
+  getLedgerParties,
+  getLedgerExport,
+  getSelectedLogisticsExport,
+} from '@/api/core/cost-ledger'
 import { errorMessage } from '@/api/core/error'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
@@ -425,7 +516,10 @@ import {
 } from './cost-ledger'
 import { costLabel, costOptions, costMoney, loadCostDictionaries } from './cost-dictionaries'
 import { auditLabel } from './cost-audit'
+import { logisticsOrderTypes, transportTypeLabel } from './cost-transport-types'
 import { exportCostRows } from './cost-export'
+import CostExportDialog from './CostExportDialog.vue'
+import { collectCostExportRows, selectedCostColumns } from './custom-cost-export'
 import { CostAttachmentSaveSession, type CostAttachmentDraft } from './cost-attachment-draft'
 import CostDictSelect from './CostDictSelect.vue'
 import CostCitySelect from './CostCitySelect.vue'
@@ -433,7 +527,6 @@ import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
 import CostLedgerEditor from './CostLedgerEditor.vue'
 import CostLedgerDetail from './CostLedgerDetail.vue'
 import CostAttachmentEditor from './CostAttachmentEditor.vue'
-import CostAttachments from './CostAttachments.vue'
 const route = useRoute(),
   { can } = useSupplyPermissions()
 const logistics = computed(() => route.path.endsWith('/logistics'))
@@ -446,6 +539,16 @@ const result = ref<CostPage>(empty()),
   filters = ref<Partial<CostQuery>>({}),
   dateRange = ref<string[]>([]),
   warehouseFilter = ref<string | null>(null)
+const tableRef = ref<TableInstance>(),
+  selectedRows = ref<CostRecord[]>([]),
+  exportOpen = ref(false),
+  exportIds = ref<string[]>([]),
+  exportTotal = ref(0),
+  exportFields = ref<string[]>([]),
+  exportError = ref('')
+let exportQuery: CostQuery | null = null
+let appliedQuery: CostQuery | null = null
+let exportGeneration = 0
 const cityFilter = computed({
   get: () => filters.value.cityCode || '',
   set: (value: string) => {
@@ -453,8 +556,11 @@ const cityFilter = computed({
   },
 })
 const page = ref(1),
+  purchaseHistory = ref(false),
   step = ref(20),
   loading = ref(false),
+  referencesReady = ref(false),
+  referenceError = ref(''),
   exporting = ref(false),
   error = ref(''),
   moreFilters = ref(false)
@@ -465,6 +571,7 @@ const editorOpen = ref(false),
   form = ref(createLedgerCommand(true)),
   saving = ref(false),
   saveError = ref(''),
+  warehouseMaintenanceNeeded = ref(false),
   files = ref<CostAttachmentDraft[]>([]),
   uploadBusy = ref(false)
 const detail = ref<CostRecord | null>(null),
@@ -487,12 +594,7 @@ const summaryMoney = (value: number | null | undefined) =>
   listReady.value && !loading.value && value != null ? `¥${costMoney(value)}` : '—'
 const summaryCount = (value: number | null | undefined, unit: string) =>
   listReady.value && !loading.value && value != null ? `${value} ${unit}` : '—'
-const sourceTypes = [
-  { value: 'PURCHASE_ORDER', label: '采购单' },
-  { value: 'TRANSFER_ORDER', label: '调拨单' },
-  { value: 'SALES_ORDER', label: '销售单' },
-  { value: 'OTHER_OUT', label: '其他出库单' },
-]
+const sourceTypes = logisticsOrderTypes
 const editorTotal = computed(() =>
   form.value.ledger
     ? form.value.ledger.feeItems.some((f) => f.ourAmount == null)
@@ -515,10 +617,7 @@ const carrier = (row: CostRecord) =>
         : '待补承运方'
     : row.data.logistics?.carrierName || '—'
 const purpose = (row: CostRecord) =>
-  costLabel(
-    row.data.ledger ? 'COST_TRANSPORT_PURPOSE' : 'COST_LOGISTICS_LEG',
-    row.data.ledger?.transportPurposeCode || row.data.logistics?.legCode,
-  )
+  transportTypeLabel(row.data.ledger?.transportPurposeCode || row.data.logistics?.legCode)
 const sourceCodes = (row: CostRecord) =>
   row.data.ledger
     ? row.data.ledger.sources.map((s) => s.orderCode || '无关联单据')
@@ -550,6 +649,7 @@ function servicePeriod(row: CostRecord) {
 function query(begin = (page.value - 1) * step.value, size = step.value): CostQuery {
   return {
     ...filters.value,
+    typeCode: logistics.value && purchaseHistory.value ? 'PURCHASE' : filters.value.typeCode,
     begin,
     step: size,
     dateFrom: dateRange.value?.[0],
@@ -563,9 +663,11 @@ async function load() {
   listReady.value = false
   error.value = ''
   try {
-    const data = await getCosts(category.value, query())
+    const conditions = query()
+    const data = await getCosts(category.value, conditions)
     if (current === generation) {
       result.value = data
+      appliedQuery = { ...conditions }
       listReady.value = true
     }
   } catch (e) {
@@ -578,10 +680,19 @@ async function load() {
   }
 }
 function search() {
+  clearSelection()
   page.value = 1
   void load()
 }
+function clearSelection() {
+  tableRef.value?.clearSelection()
+  selectedRows.value = []
+}
+function selectionChanged(rows: CostRecord[]) {
+  selectedRows.value = rows
+}
 function reset() {
+  purchaseHistory.value = false
   filters.value = {}
   dateRange.value = []
   warehouseFilter.value = null
@@ -590,11 +701,20 @@ function reset() {
 let initialization = 0
 async function init() {
   const current = ++initialization
-  let listStarted = false
+  ++exportGeneration
+  exportOpen.value = false
+  exportIds.value = []
+  exportFields.value = []
+  exportQuery = null
+  clearSelection()
   ++generation
   ++interaction
   listReady.value = false
   loading.value = true
+  referencesReady.value = false
+  referenceError.value = ''
+  cities.value = []
+  employees.value = []
   const selectedCategory = category.value
   const selectedPermission = permission.value
   editorOpen.value = false
@@ -603,28 +723,32 @@ async function init() {
   result.value = empty()
   filters.value = {}
   page.value = 1
+  purchaseHistory.value = false
   dateRange.value = []
   warehouseFilter.value = null
-  try {
-    await loadCostDictionaries(selectedCategory)
-    if (current !== initialization) return
-    const [catalog, people] = await Promise.all([
-      getCostCities(selectedPermission + ':read'),
-      getCostEmployees(selectedCategory),
-    ])
-    if (current !== initialization) return
-    cities.value = catalog
-    employees.value = people
-    listStarted = true
-    await load()
-    if (current !== initialization) return
-    const id = route.query.sourceId || route.query.costId || route.query.id
-    if (typeof id === 'string') await view({ id } as CostRecord)
-  } catch (e) {
-    if (current === initialization) error.value = errorMessage(e, '费用目录加载失败')
-  } finally {
-    if (current === initialization && !listStarted) loading.value = false
-  }
+  // 列表不依赖编辑目录；并行加载，目录迟到或失败不阻断已授权的列表和汇总。
+  await Promise.all([
+    load(),
+    (async () => {
+      try {
+        const [, catalog, people] = await Promise.all([
+          loadCostDictionaries(selectedCategory),
+          getCostCities(selectedPermission + ':read'),
+          getCostEmployees(selectedCategory),
+        ])
+        if (current !== initialization) return
+        cities.value = catalog
+        employees.value = people
+        referencesReady.value = true
+      } catch (e) {
+        if (current === initialization)
+          referenceError.value = errorMessage(e, '费用目录加载失败，请刷新后重试')
+      }
+    })(),
+  ])
+  if (current !== initialization) return
+  const id = route.query.sourceId || route.query.costId || route.query.id
+  if (typeof id === 'string') await view({ id } as CostRecord)
 }
 watch(category, () => void init(), { immediate: true })
 watch(
@@ -646,12 +770,15 @@ async function view(row: CostRecord) {
   }
 }
 async function edit(row?: CostRecord) {
+  if (!referencesReady.value) return
   const token = ++interaction,
     selectedCategory = category.value,
     isLogistics = logistics.value
   try {
     const current = row ? await getCost(selectedCategory, row.id) : null
     if (token !== interaction || selectedCategory !== category.value) return
+    if (current && current.statusCode !== 'DRAFT')
+      throw new Error('只有待确认费用可编辑，已确认费用请先撤销')
     const draft =
       current?.data.ledger || current?.data.warehouseLedger
         ? structuredClone(current.data)
@@ -668,9 +795,12 @@ async function edit(row?: CostRecord) {
       if (draft.ledger) draft.ledger.receivingPoints[0]!.cityCode = draft.cityCode
     }
     if (token !== interaction || selectedCategory !== category.value) return
+    if (draft.ledger?.transportPurposeCode === 'NON_SALES')
+      draft.ledger.transportPurposeCode = 'OTHER'
     editing.value = current
     files.value = []
     saveError.value = ''
+    warehouseMaintenanceNeeded.value = false
     saveSession = new CostAttachmentSaveSession()
     form.value = draft
     if (draft.warehouseLedger) draft.warehouseLedger.feeItems.forEach(previewWarehouseFee)
@@ -694,7 +824,7 @@ async function convertLegacy(row: CostRecord, draft: CostCommand, isLogistics: b
   if (isLogistics) {
     const p = draft.ledger!,
       l = old.logistics
-    p.transportPurposeCode = l?.legCode || 'OTHER'
+    p.transportPurposeCode = l?.legCode === 'NON_SALES' ? 'OTHER' : l?.legCode || 'OTHER'
     p.costMonth = old.costMonth || old.costDate.slice(0, 7)
     p.trackingNo = l?.trackingNo || ''
     p.carrierCode =
@@ -769,15 +899,19 @@ function validateForm() {
   if (!form.value.costDate) throw new Error('请选择日期')
   if (!form.value.paymentStatusCode) throw new Error('请选择付款状态')
   if (form.value.warehouseLedger) form.value.warehouseLedger.feeItems.forEach(previewWarehouseFee)
-  if (editing.value?.statusCode === 'CONFIRMED' && !form.value.reason.trim())
-    throw new Error('请填写修改已确认费用的原因')
   form.value.amount = editorTotal.value
 }
 async function save() {
   if (saving.value || uploadBusy.value) return
+  const token = interaction,
+    selectedCategory = category.value,
+    draft = form.value
   saveError.value = ''
+  warehouseMaintenanceNeeded.value = false
   saving.value = true
   try {
+    await checkWarehouseRegions()
+    if (token !== interaction || selectedCategory !== category.value || draft !== form.value) return
     validateForm()
     const saved = await saveSession.save(
       category.value,
@@ -791,27 +925,59 @@ async function save() {
     )
     initialSignature = JSON.stringify(form.value)
     editorOpen.value = false
-    ElMessage.success(
-      saved.statusCode === 'CONFIRMED' ? '费用已更新，保持已确认状态' : '费用已保存，待确认',
-    )
+    ElMessage.success('费用已保存，待确认')
     await load()
     if (detail.value?.id === saved.id) detail.value = saved
   } catch (e) {
-    saveError.value = errorMessage(e, '费用保存失败，请核对填写内容')
+    if (token === interaction && selectedCategory === category.value && draft === form.value)
+      saveError.value = errorMessage(e, '费用保存失败，请核对填写内容')
   } finally {
     saving.value = false
   }
 }
-async function act(row: CostRecord, action: 'confirm' | 'void') {
+async function checkWarehouseRegions() {
+  const draft = form.value,
+    isLogistics = logistics.value
+  const codes = new Set(
+    draft.ledger
+      ? [draft.ledger.sender, ...draft.ledger.receivingPoints]
+          .filter((p) => p.partyTypeCode === 'WAREHOUSE' && p.partyCode)
+          .map((p) => p.partyCode!)
+      : draft.warehouseLedger?.warehouseCode
+        ? [draft.warehouseLedger.warehouseCode]
+        : [],
+  )
+  for (const code of codes) {
+    // 每次保存重新读取主档，业务在另一页面补齐后无需重建本单。
+    const rows = await getLedgerParties(isLogistics, 'WAREHOUSE', { code })
+    if (draft !== form.value) return
+    const row = rows.find((r) => r.code === code)
+    if (!row) throw new Error(`仓库“${code}”不存在、已停用或无权限，请重新选择`)
+    if (!row.cityCode?.trim()) {
+      warehouseMaintenanceNeeded.value = true
+      throw new Error(
+        `仓库“${row.name}（${code}）”未维护业务归属地区，请到仓库信息补齐后重新保存；所在地区不能替代业务归属地区`,
+      )
+    }
+    if (!cities.value.some((c) => c.code === row.cityCode)) {
+      warehouseMaintenanceNeeded.value = true
+      throw new Error(
+        `仓库“${row.name}（${code}）”的业务归属地区不在可用费用城市中，请核对仓库业务归属地区和城市权限`,
+      )
+    }
+  }
+}
+async function act(row: CostRecord, action: 'confirm' | 'void' | 'revoke' | 'delete') {
   const current = ++interaction,
     selectedCategory = category.value
   try {
     let reason = ''
-    if (action === 'void') {
+    if (action !== 'confirm') {
+      const label = { void: '作废', revoke: '撤销', delete: '删除' }[action]
       const input = await ElMessageBox.prompt(
-        '请填写作废原因，原始记录和附件将保留。',
-        '作废费用',
-        { inputValidator: (value) => !!value?.trim() || '请填写作废原因' },
+        `请填写${label}原因，操作记录和附件将保留。`,
+        `${label}费用`,
+        { inputValidator: (value) => !!value?.trim() || `请填写${label}原因` },
       )
       reason = input.value.trim()
     } else
@@ -823,7 +989,14 @@ async function act(row: CostRecord, action: 'confirm' | 'void') {
     if (current !== interaction || selectedCategory !== category.value) return
     await changeCostStatus(selectedCategory, row, action, reason)
     if (current !== interaction || selectedCategory !== category.value) return
-    ElMessage.success(action === 'confirm' ? '费用已确认' : '费用已作废')
+    ElMessage.success(
+      {
+        confirm: '费用已确认',
+        void: '费用已作废',
+        revoke: '已撤销，费用回到待确认',
+        delete: '费用已删除',
+      }[action],
+    )
     await load()
   } catch (e) {
     if (current === interaction && e !== 'cancel' && e !== 'close')
@@ -878,86 +1051,125 @@ onBeforeUnmount(() => {
   ++initialization
   ++generation
   ++interaction
+  ++exportGeneration
 })
+type LogisticsExportKey =
+  | 'documentNo'
+  | 'type'
+  | 'date'
+  | 'sender'
+  | 'receivers'
+  | 'carrier'
+  | 'tracking'
+  | 'sources'
+  | 'amount'
+  | 'status'
+  | 'creator'
+  | 'warehouse'
+  | 'servicePeriod'
+  | 'feeNames'
+  | 'periodAmount'
+const exportColumns = computed<{ key: LogisticsExportKey; label: string }[]>(() =>
+  logistics.value
+    ? [
+        { key: 'documentNo', label: '费用单号' },
+        { key: 'type', label: '运输类型' },
+        { key: 'date', label: '运输日期' },
+        { key: 'sender', label: '发货方' },
+        { key: 'receivers', label: '收货方' },
+        { key: 'carrier', label: '物流公司' },
+        { key: 'tracking', label: '运单号' },
+        { key: 'sources', label: '关联单据' },
+        { key: 'amount', label: '本单我方费用（元）' },
+        { key: 'status', label: '单据状态' },
+        { key: 'creator', label: '创建人' },
+      ]
+    : [
+        { key: 'documentNo', label: '费用单号' },
+        { key: 'warehouse', label: '仓库' },
+        { key: 'servicePeriod', label: '服务期间' },
+        { key: 'feeNames', label: '费用项目' },
+        { key: 'amount', label: '本单费用总额（元）' },
+        { key: 'periodAmount', label: '筛选期归属费用（元）' },
+        { key: 'status', label: '单据状态' },
+        { key: 'creator', label: '创建人' },
+      ],
+)
+function openExport() {
+  if (loading.value || !listReady.value || !can(permission.value + ':export')) return
+  exportIds.value = [...new Set(selectedRows.value.map((row) => row.id))]
+  exportTotal.value = result.value.total
+  exportQuery = { ...appliedQuery, begin: 0, step: 200 }
+  exportFields.value = exportColumns.value.map((column) => column.key)
+  exportError.value = ''
+  exportOpen.value = true
+}
 async function exportRows() {
+  if (exporting.value || !can(permission.value + ':export')) return
   exporting.value = true
+  exportError.value = ''
+  const generation = exportGeneration
   const isLogistics = logistics.value,
     exportTitle = title.value,
-    conditions = query(0, 200)
+    conditions = { ...exportQuery },
+    selectedIds = [...exportIds.value]
   try {
-    const rows: CostRecord[] = [],
-      ids = new Set<string>()
-    let expected: number | null = null
-    for (let begin = 0; ; begin += 200) {
-      const data = await getLedgerExport(isLogistics, { ...conditions, begin })
-      if (expected == null) expected = data.total
-      if (expected !== data.total) throw new Error('导出期间数据已变化，请重新导出')
-      for (const row of data.items) {
-        if (ids.has(row.id)) throw new Error('导出期间数据已变化，请重新导出')
-        ids.add(row.id)
-        rows.push(row)
+    const columns = selectedCostColumns(exportColumns.value, exportFields.value)
+    let rows: CostRecord[]
+    if (isLogistics && selectedIds.length) {
+      rows = []
+      for (let begin = 0; begin < selectedIds.length; begin += 200) {
+        const chunk = selectedIds.slice(begin, begin + 200)
+        const data = await getSelectedLogisticsExport(chunk)
+        if (generation !== exportGeneration) return
+        const found = new Map(data.map((row) => [row.id, row]))
+        if (
+          found.size !== chunk.length ||
+          data.length !== chunk.length ||
+          chunk.some((id) => !found.has(id))
+        )
+          throw new Error('所选记录已变化，请刷新后重新勾选')
+        rows.push(...chunk.map((id) => found.get(id)!))
       }
-      if (rows.length > expected) throw new Error('导出期间数据已变化，请重新导出')
-      if (rows.length === expected) break
-      if (!data.items.length || rows.length >= 20000)
-        throw new Error('导出结果过多或已变化，请缩小筛选范围')
+    } else {
+      const collected = await collectCostExportRows({
+        fetchPage: (begin, step) => getLedgerExport(isLogistics, { ...conditions, begin, step }),
+        key: (row) => row.id,
+        selected: selectedIds,
+        limit: 20000,
+        current: () => generation === exportGeneration,
+      })
+      if (!collected) return
+      rows = collected
     }
-    const headers = isLogistics
-      ? [
-          '费用单号',
-          '运输用途',
-          '运输日期',
-          '发货方',
-          '收货方',
-          '物流公司',
-          '运单号',
-          '关联单据',
-          '本单我方费用（元）',
-          '单据状态',
-          '创建人',
-        ]
-      : [
-          '费用单号',
-          '仓库',
-          '服务期间',
-          '费用项目',
-          '本单费用总额（元）',
-          '筛选期归属费用（元）',
-          '单据状态',
-          '创建人',
-        ]
+    if (generation !== exportGeneration) return
     await exportCostRows(
       exportTitle,
-      headers,
-      rows.map((r) =>
-        isLogistics
-          ? [
-              r.documentNo,
-              purpose(r),
-              r.data.costDate,
-              senderName(r),
-              receiverNames(r).join('\n'),
-              carrier(r),
-              r.data.ledger?.trackingNo || r.data.logistics?.trackingNo || '',
-              sourceCodes(r).join('\n'),
-              r.data.amount,
-              costLabel('COST_STATUS', r.statusCode),
-              displayRecordActor(r.createdBy),
-            ]
-          : [
-              r.documentNo,
-              r.warehouseName,
-              servicePeriod(r),
-              warehouseFeeNames(r).join('\n'),
-              r.data.amount,
-              r.periodAmount === undefined ? r.data.amount : r.periodAmount,
-              costLabel('COST_STATUS', r.statusCode),
-              displayRecordActor(r.createdBy),
-            ],
-      ),
+      columns.map((c) => c.label),
+      rows.map((r) => {
+        const values = {
+          documentNo: r.documentNo,
+          type: purpose(r),
+          date: r.data.costDate,
+          sender: senderName(r),
+          receivers: receiverNames(r).join('\n'),
+          carrier: carrier(r),
+          tracking: r.data.ledger?.trackingNo || r.data.logistics?.trackingNo || '',
+          sources: sourceCodes(r).join('\n'),
+          amount: r.data.amount,
+          status: costLabel('COST_STATUS', r.statusCode),
+          creator: displayRecordActor(r.createdBy),
+          warehouse: r.warehouseName,
+          servicePeriod: servicePeriod(r),
+          feeNames: warehouseFeeNames(r).join('\n'),
+          periodAmount: r.periodAmount === undefined ? r.data.amount : r.periodAmount,
+        }
+        return columns.map((c) => values[c.key])
+      }),
     )
+    if (generation === exportGeneration) exportOpen.value = false
   } catch (e) {
-    ElMessage.error(errorMessage(e, '导出失败'))
+    if (generation === exportGeneration) exportError.value = errorMessage(e, '导出失败')
   } finally {
     exporting.value = false
   }
@@ -970,7 +1182,7 @@ async function exportRows() {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 .filter-panel,
 .list-panel {
@@ -980,16 +1192,25 @@ async function exportRows() {
   overflow: hidden;
 }
 .filter-panel {
-  padding: 20px 22px;
+  padding: 16px 18px 12px;
 }
 .filters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0 24px;
+  gap: 0 20px;
 }
 .filters :deep(.el-form-item) {
-  margin-bottom: 14px;
+  min-width: 0;
+  margin-bottom: 12px;
 }
+.filters :deep(.el-form-item__label) {
+  padding-right: 12px;
+  white-space: nowrap;
+}
+.filters :deep(.el-form-item__content) {
+  min-width: 0;
+}
+.filters :deep(.el-input),
 .filters :deep(.el-select),
 .filters :deep(.el-date-editor) {
   width: 100%;
@@ -1002,8 +1223,41 @@ async function exportRows() {
   align-items: center;
   gap: 16px;
 }
+.filter-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.filter-actions {
+  border-top: 1px solid #edf0f5;
+  padding-top: 10px;
+}
+.list-toolbar > div:last-child,
+.filter-actions > div:last-child {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.ledger-table :deep(.el-table-fixed-column--right .cell) {
+  white-space: nowrap;
+}
+.ledger-table :deep(.el-button + .el-button) {
+  margin-left: 10px;
+}
+.selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #f0f5ff;
+  color: #46617f;
+  padding: 8px 18px;
+  border-top: 1px solid #e4ebf5;
+}
+.selection-toolbar strong {
+  color: #2862ec;
+}
 .list-toolbar {
-  padding: 18px 22px;
+  padding: 14px 18px;
   border-bottom: 1px solid #e1e7f0;
 }
 .list-toolbar strong {
@@ -1019,15 +1273,15 @@ async function exportRows() {
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  padding: 20px 22px;
+  gap: 12px;
+  padding: 14px 18px;
 }
 .metric {
   border: 1px solid #dce3ed;
-  border-top: 4px solid #8396af;
+  border-top: 3px solid #8396af;
   background: #f7f9fc;
   border-radius: 8px;
-  padding: 16px 19px;
+  padding: 10px 14px;
   min-width: 0;
 }
 .metric span {
@@ -1036,9 +1290,9 @@ async function exportRows() {
 }
 .metric strong {
   display: block;
-  font-size: 27px;
+  font-size: 24px;
   line-height: 1.4;
-  margin-top: 10px;
+  margin-top: 4px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -1060,7 +1314,12 @@ async function exportRows() {
   border-top-color: #b66c19;
 }
 .pagination {
-  padding: 17px 22px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding: 12px 18px;
+}
+.pagination > .muted {
+  margin-right: auto;
 }
 .source-warning {
   color: var(--el-color-warning);
@@ -1069,6 +1328,10 @@ async function exportRows() {
 .muted {
   font-size: 13px;
   color: #718198;
+}
+.service-period > span {
+  display: block;
+  white-space: nowrap;
 }
 .recipient-names {
   display: grid;
@@ -1087,7 +1350,7 @@ async function exportRows() {
   word-break: normal;
 }
 .ledger-table :deep(.el-table__cell) {
-  padding: 12px 0;
+  padding: 10px 0;
 }
 .editor-footer {
   display: flex;
@@ -1118,22 +1381,26 @@ async function exportRows() {
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+@media (max-width: 1400px) {
   .filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 650px) {
   .filters,
-  .metrics {
-    grid-template-columns: 1fr;
-  }
+  .metrics,
   .ledger-workspace {
     padding: 10px;
   }
   .pagination,
-  .list-toolbar {
+  .list-toolbar,
+  .filter-actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .filter-secondary-actions {
+    flex-wrap: wrap;
   }
 }
 </style>

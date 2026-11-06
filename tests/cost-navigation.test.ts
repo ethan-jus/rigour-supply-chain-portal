@@ -20,8 +20,8 @@ const costs = [
 ].map((path) => node(`cost/${path}`))
 const paths = (groups: ReturnType<typeof costNavigationSections>) =>
   groups.flatMap((group) => group.nodes.map((item) => item.routePath))
-describe('成本管理仅显示所属五项台账', () => {
-  it('不展示商品进货记录，保留其他五项成本功能', () => {
+describe('成本管理显示已授权成本台账', () => {
+  it('展示自动采购成本记录和其他五项成本功能', () => {
     const result = costNavigationSections([
       ...costs,
       node('hr/payroll'),
@@ -36,7 +36,7 @@ describe('成本管理仅显示所属五项台账', () => {
       '营销推广',
     ])
     expect(paths(result)).toEqual(
-      costs.map((item) => item.routePath).filter((path) => path !== '/supply-chain/cost/purchases'),
+      costs.map((item) => item.routePath),
     )
   })
   it('营销角色只有营销入口，不补造人事与老板权限', () => {

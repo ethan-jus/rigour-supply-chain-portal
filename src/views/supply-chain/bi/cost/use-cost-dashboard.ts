@@ -43,6 +43,7 @@ export function useCostDashboard() {
     modalQuery = ref<CostQuery | null>(null),
     modalError = ref(''),
     modalLoading = ref(false)
+  const recordSearch = ref('')
   const detail = ref<CostDetail | null>(null),
     detailOpen = ref(false),
     detailError = ref(''),
@@ -64,6 +65,7 @@ export function useCostDashboard() {
   function clearDrill() {
     drill.value = {}
     filters.search = undefined
+    recordSearch.value = ''
     filters.periodSide = 'current'
     filters.page = 1
     filters.category = undefined
@@ -91,10 +93,12 @@ export function useCostDashboard() {
     report.value = null
     records.value = null
     try {
+      const dictionaryReady = loadCostDictionaries(undefined, resetSnapshot)
       const q = { ...request.value }
       // 明细页由一次在线授权同时返回汇总和分页，避免重复权限和快照读取。
       const workspace = section.value === 'records' ? await getCostWorkspace(q, signal) : null
       const result = workspace?.report ?? (await getCostReport(q, signal))
+      await dictionaryReady
       if (serial !== generation) return
       snapshot.value = result.meta.snapshotId
       cutoff.value = result.meta.effectiveCutoff
@@ -127,8 +131,30 @@ export function useCostDashboard() {
       filters.month = Number(cutoff.value.slice(5, 7))
     if (section.value === 'overview') filters.scope = 'opex'
     if (perspective.value === 'objects') setDefaultTopic()
+    else if (filters.scope === 'purchase' && section.value === 'analysis') {
+      filters.category = 'purchase'
+      filters.dimension = 'component'
+    }
     // 改筛选沿用当前完整批次；手动刷新及重新进入页面才重新核对来源。
     void load()
+  }
+  const activePeriod = computed(() => {
+    const year = Number(cutoff.value.slice(0, 4)),
+      month = Number(cutoff.value.slice(5, 7))
+    if (filters.year === year && filters.month === 0) return 'year'
+    if (filters.year === year && filters.month === month) return 'current'
+    const previousYear = month === 1 ? year - 1 : year,
+      previousMonth = month === 1 ? 12 : month - 1
+    return filters.year === previousYear && filters.month === previousMonth ? 'previous' : undefined
+  })
+  function applyPeriod(preset: 'current' | 'previous' | 'year') {
+    if (!cutoff.value) return
+    const year = Number(cutoff.value.slice(0, 4)),
+      month = Number(cutoff.value.slice(5, 7))
+    filters.year = preset === 'previous' && month === 1 ? year - 1 : year
+    filters.month =
+      preset === 'year' ? 0 : preset === 'previous' ? (month === 1 ? 12 : month - 1) : month
+    globalChange()
   }
   function setDefaultTopic() {
     filters.category = available.value.find(
@@ -141,6 +167,10 @@ export function useCostDashboard() {
     clearDrill()
     if (value === 'overview') filters.scope = 'opex'
     if (value === 'analysis' && perspective.value === 'objects') setDefaultTopic()
+    else if (value === 'analysis' && filters.scope === 'purchase') {
+      filters.category = 'purchase'
+      filters.dimension = 'component'
+    }
     void load()
   }
   function chooseScope(scope: CostScope) {
@@ -148,7 +178,11 @@ export function useCostDashboard() {
     clearDrill()
     if (section.value !== 'records') {
       section.value = 'analysis'
-      perspective.value = 'cities'
+      perspective.value = scope === 'purchase' ? 'structure' : 'cities'
+    }
+    if (scope === 'purchase') {
+      filters.category = 'purchase'
+      filters.dimension = 'component'
     }
     void load()
   }
@@ -156,6 +190,10 @@ export function useCostDashboard() {
     perspective.value = value
     clearDrill()
     if (value === 'objects') setDefaultTopic()
+    else if (filters.scope === 'purchase') {
+      filters.category = 'purchase'
+      filters.dimension = 'component'
+    }
     void load()
   }
   function topicChange() {
@@ -212,6 +250,7 @@ export function useCostDashboard() {
     filters.dimension = undefined
     filters.dimensionKey = undefined
     filters.search = undefined
+    recordSearch.value = ''
     filters.status = 'CONFIRMED'
     filters.payment = extra.payment || 'ALL'
     filters.missingAmount = extra.missingAmount || false
@@ -247,19 +286,18 @@ export function useCostDashboard() {
   function clearLedgerDrill() {
     drill.value = {}
     filters.search = undefined
+    recordSearch.value = ''
+    filters.page = 1
+    void load()
+  }
+  function searchRecords() {
+    // 输入草稿不改变已显示的结果及导出范围，提交查询后统一应用。
+    filters.search = recordSearch.value.trim() || undefined
     filters.page = 1
     void load()
   }
   onMounted(() => {
     void load()
-    void loadCostDictionaries()
-      .then(() => {
-        if (report.value) report.value = resolveObjectLabels(report.value)
-        if (modalReport.value) modalReport.value = resolveObjectLabels(modalReport.value)
-      })
-      .catch(() => {
-        /* 字典不可用时保留源编码，不伪造业务名称。 */
-      })
   })
   let deactivated = false
   onDeactivated(() => {
@@ -291,6 +329,7 @@ export function useCostDashboard() {
     section,
     perspective,
     filters,
+    recordSearch,
     drill,
     request,
     cutoff,
@@ -306,6 +345,8 @@ export function useCostDashboard() {
     detailError,
     load,
     globalChange,
+    applyPeriod,
+    activePeriod,
     goSection,
     chooseScope,
     choosePerspective,
@@ -316,5 +357,6 @@ export function useCostDashboard() {
     modalRecords,
     openDetail,
     clearLedgerDrill,
+    searchRecords,
   }
 }

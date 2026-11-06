@@ -31,8 +31,10 @@ describe('成本看板支出明细', () => {
     expect(wrapper.get('table').attributes('aria-label')).toBe('费用支出明细表')
     expect(wrapper.text()).not.toMatch(/成本处理|统计处理|不重复汇总|计入汇总|LINKED|REVIEW/)
     expect(wrapper.findAll('thead th').map((h) => h.text())).toEqual([
-      '单据号 / 事项',
+      '单据号',
+      '费用事项',
       '费用类别',
+      '费用项目',
       '费用归属',
       '费用日期',
       '金额（元）',
@@ -44,24 +46,26 @@ describe('成本看板支出明细', () => {
     for (const [index, payment] of ['已付款', '未付款'].entries()) {
       const cells = rendered[index]!.findAll('td')
       expect(cells[0]!.text()).toContain(rows[index]!.documentNo)
-      expect(cells[3]!.text()).toBe('2026-09（所属月）')
-      expect(cells[4]!.text()).toBe('1,234.50')
-      expect(cells[5]!.text()).toBe('已确认')
-      expect(cells[6]!.text()).toBe(payment)
+      expect(cells[0]!.text()).not.toContain(rows[index]!.title)
+      expect(cells[1]!.text()).toBe(rows[index]!.title)
+      expect(cells[5]!.text()).toBe('2026-09（所属月）')
+      expect(cells[6]!.text()).toBe('1,234.50')
+      expect(cells[7]!.text()).toBe('已确认')
+      expect(cells[8]!.text()).toBe(payment)
     }
     await rendered[1]!.get('button').trigger('click')
     expect(wrapper.emitted('detail')).toEqual([[rows[1]]])
     wrapper.unmount()
   })
 
-  it('发生日不被当作所属月，空结果保留完整八列表格', () => {
+  it('发生日不被当作所属月，空结果保留完整十列表格', () => {
     const wrapper = mount(CostRecordsTable, {
       props: { rows: [{ ...row('UNPAID', 'D'), periodBasis: 'DAY' }] },
     })
-    expect(wrapper.findAll('tbody td')[3]!.text()).toBe('2026-09-30')
+    expect(wrapper.findAll('tbody td')[5]!.text()).toBe('2026-09-30')
     wrapper.unmount()
     const empty = mount(CostRecordsTable, { props: { rows: [] } })
-    expect(empty.get('tbody td').attributes('colspan')).toBe('8')
+    expect(empty.get('tbody td').attributes('colspan')).toBe('10')
     expect(empty.text()).toContain('当前筛选范围没有匹配记录')
     empty.unmount()
   })

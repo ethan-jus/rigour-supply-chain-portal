@@ -4,7 +4,6 @@
       <div class="cost-heading-context">
         <div class="list-heading-title">
           <SupplyPageTitle>{{ title }}</SupplyPageTitle>
-          <SupplyPageHelp>{{ description }}</SupplyPageHelp>
         </div>
         <SupplyFilterTabs
           v-if="category === 'logistics'"
@@ -224,8 +223,8 @@
             :disabled="loading || !page.items.length"
             :loading="exporting"
             v-if="can(permission + (category === 'expenses' ? ':read' : ':export'))"
-            @click="exportPage"
-            >导出</el-button
+            @click="openExport"
+            >自定义导出</el-button
           >
           <el-button :loading="loading" @click="load">刷新</el-button>
         </div>
@@ -270,8 +269,14 @@
           </div>
         </div>
       </div>
+      <div v-if="selectedExportRows.length" class="supply-list-actions">
+        <span>已勾选 {{ selectedExportRows.length }} 条</span>
+        <el-button link :disabled="exporting" @click="clearExportSelection">取消勾选</el-button>
+      </div>
       <div class="cost-table-viewport">
         <el-table
+          ref="exportTable"
+          @selection-change="selectedExportRows = $event"
           v-loading="loading"
           :data="page.items"
           row-key="id"
@@ -293,6 +298,14 @@
               >
             </el-empty></template
           >
+          <el-table-column
+            v-if="can(permission + (category === 'expenses' ? ':read' : ':export'))"
+            type="selection"
+            reserve-selection
+            fixed="left"
+            width="44"
+            :selectable="() => !exporting"
+          />
           <el-table-column label="费用单号" min-width="165" fixed="left" show-overflow-tooltip
             ><template #default="{ row }"
               ><el-button
@@ -525,7 +538,11 @@
                 <el-button link type="primary" @click="showDetail(row as CostRecord)"
                   >查看</el-button
                 ><el-button
-                  v-if="row.statusCode !== 'VOID' && can(permission + ':write')"
+                  v-if="
+                    (category === 'expenses'
+                      ? row.statusCode !== 'VOID'
+                      : row.statusCode === 'DRAFT') && can(permission + ':write')
+                  "
                   link
                   type="primary"
                   @click="edit(row as CostRecord)"
@@ -539,13 +556,44 @@
                   @click="transition(row as CostRecord, 'confirm')"
                   >确认</el-button
                 ><el-button
-                  v-if="row.statusCode !== 'VOID' && can(permission + ':void')"
+                  v-if="
+                    (category === 'expenses'
+                      ? row.statusCode !== 'VOID'
+                      : row.statusCode === 'DRAFT') && can(permission + ':void')
+                  "
                   link
                   type="danger"
                   :disabled="saving"
                   @click="transition(row as CostRecord, 'void')"
                   >作废</el-button
-                ><el-button link @click="showHistory(row as CostRecord)">记录</el-button>
+                ><el-button
+                  v-if="category === 'expenses'"
+                  link
+                  @click="showHistory(row as CostRecord)"
+                  >记录</el-button
+                >
+                <el-button
+                  v-if="
+                    category !== 'expenses' &&
+                    row.statusCode === 'CONFIRMED' &&
+                    can(permission + ':confirm')
+                  "
+                  link
+                  type="primary"
+                  @click="transition(row as CostRecord, 'revoke')"
+                  >撤销</el-button
+                >
+                <el-button
+                  v-if="
+                    category !== 'expenses' &&
+                    row.statusCode === 'VOID' &&
+                    can(permission + ':void')
+                  "
+                  link
+                  type="danger"
+                  @click="transition(row as CostRecord, 'delete')"
+                  >删除</el-button
+                >
               </div></template
             ></el-table-column
           >
@@ -630,19 +678,7 @@
               ></el-radio-group
             ></el-form-item
           >
-          <el-alert
-            v-if="form.logistics.entryMode === 'LINKED'"
-            title="供应商、客户及仓库由所选单据带入。需要自行选择或填写运输双方时，请切换“直接登记”或“手工补录单据”。"
-            type="info"
-            :closable="false"
-          />
           <template v-if="form.logistics.entryMode !== 'LINKED'">
-            <el-alert
-              v-if="form.logistics.entryMode !== 'NONE'"
-              title="请按原单填写单号、日期及运输双方信息。"
-              type="info"
-              :closable="false"
-            />
             <CostLogisticsParties
               :key="
                 form.logistics.legCode +
@@ -729,11 +765,7 @@
             />
           </el-form-item>
           <template v-if="requiresDeliveryWarehouse && form.logistics.entryMode === 'LINKED'">
-            <el-alert
-              title="所选销售订单尚未关联仓库，请补充本次实际发货城市仓。仅记录在费用中，不修改原订单。"
-              type="info"
-              :closable="false"
-            />
+            <el-alert title="请补充本次实际发货城市仓。" type="info" :closable="false" />
             <el-form-item label="本次发货城市仓" required>
               <CostReferenceSelect
                 v-model="form.logistics.sourceWarehouseId"
@@ -961,12 +993,18 @@
           ><CostDictSelect v-model="form.paymentStatusCode" code="COST_PAYMENT_STATUS"
         /></el-form-item>
         <el-form-item label="备注"
-          ><el-input
-            v-model="form.remark"
-            type="textarea"
-            maxlength="1000"
-            show-word-limit /></el-form-item
-        ><el-form-item :label="editingId ? '变更原因' : '补充登记说明'" :required="editingConfirmed"
+          ><el-input v-model="form.remark" type="textarea" maxlength="1000" show-word-limit
+        /></el-form-item>
+        <CostAttachmentEditor
+          v-if="category === 'office-rentals' || category === 'marketing'"
+          v-model="pendingAttachments"
+          title="相关附件"
+          :category="category"
+          :row="editorAttachmentRow"
+          :disabled="saving"
+          @busy="attachmentBusy = $event"
+        />
+        <el-form-item :label="editingId ? '变更原因' : '补充登记说明'" :required="editingConfirmed"
           ><el-input v-model="form.reason" type="textarea" maxlength="500"
         /></el-form-item> </el-form
       ><template #footer
@@ -1027,7 +1065,6 @@
             <dd>{{ responsibleName(detail) }}</dd>
           </div>
         </dl>
-        <el-alert v-if="detail.procurementReference" :title="'货款来源于已确认采购单 ' + detail.procurementReference.orderCode + '，需到采购订单查看原始记录。'" type="info" :closable="false" />
         <CostRelatedSource v-if="detail.data.expense?.relatedCost" :data="detail.data" />
         <template v-if="detail.data.logistics">
           <h3>{{ logisticsRoles(detail.data.logistics.legCode).title }}</h3>
@@ -1056,7 +1093,9 @@
             v-if="!detail.procurementReference"
             :category="category"
             :row="detail"
-            :editable="!detail.procurementReference && can(permission + ':write')"
+            :editable="
+              category === 'expenses' && !detail.procurementReference && can(permission + ':write')
+            "
             @changed="refreshDetail"
           />
         </section>
@@ -1064,7 +1103,13 @@
       <template #footer>
         <div v-if="detail" class="heading-actions">
           <el-button
-            v-if="!detail.procurementReference && detail.statusCode !== 'VOID' && can(permission + ':write')"
+            v-if="
+              !detail.procurementReference &&
+              (category === 'expenses'
+                ? detail.statusCode !== 'VOID'
+                : detail.statusCode === 'DRAFT') &&
+              can(permission + ':write')
+            "
             :disabled="saving"
             @click="editDetail"
             >编辑费用</el-button
@@ -1078,11 +1123,34 @@
             >核对并确认</el-button
           >
           <el-button
-            v-if="!detail.procurementReference && detail.statusCode !== 'VOID' && can(permission + ':void')"
+            v-if="
+              !detail.procurementReference &&
+              (category === 'expenses'
+                ? detail.statusCode !== 'VOID'
+                : detail.statusCode === 'DRAFT') &&
+              can(permission + ':void')
+            "
             :disabled="saving"
             @click="transition(detail, 'void')"
             >作废</el-button
           >
+          <el-button
+            v-if="
+              category !== 'expenses' &&
+              detail.statusCode === 'CONFIRMED' &&
+              can(permission + ':confirm')
+            "
+            @click="transition(detail, 'revoke')"
+            >撤销</el-button
+          >
+          <el-button
+            v-if="
+              category !== 'expenses' && detail.statusCode === 'VOID' && can(permission + ':void')
+            "
+            @click="transition(detail, 'delete')"
+            >删除</el-button
+          >
+          <el-button @click="showHistory(detail)">操作记录</el-button>
           <el-button @click="detailVisible = false">关闭</el-button>
         </div>
       </template>
@@ -1123,16 +1191,27 @@
       ></el-drawer
     >
   </div>
+  <CostExportDialog
+    v-model="exportOpen"
+    v-model:fields="exportFields"
+    :columns="exportColumns"
+    :scope="
+      exportIds.length ? `已勾选的 ${exportIds.length} 条记录` : `全部筛选结果（${exportTotal} 条）`
+    "
+    :busy="exporting"
+    :error="exportError"
+    :empty="!exportIds.length && !exportTotal"
+    @confirm="exportPage"
+  />
 </template>
 <script setup lang="ts">
-import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayBusinessLabel as costLabel } from '@/utils/business-display'
 import { displayCell, displayAmount as costMoney } from '@/utils/business-display'
 import { businessPageLabels } from '@/utils/business-page-labels'
 import { randomId } from '@/utils/random-id'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
 import SupplyFilterTabs from '@/components/supply/SupplyFilterTabs.vue'
@@ -1188,6 +1267,8 @@ import { costSourceLabel } from './cost-source'
 import CostDictSelect from './CostDictSelect.vue'
 import { loadCostDictionaries } from './cost-dictionaries'
 import { exportCostRows } from './cost-export'
+import CostExportDialog from './CostExportDialog.vue'
+import { collectCostExportRows, selectedCostColumns } from './custom-cost-export'
 import {
   auditLabel,
   parseSnapshot,
@@ -1224,15 +1305,6 @@ const titles: Record<CostCategory, string> = {
   expenses: businessPageLabels['/supply-chain/hr/expenses']!,
 }
 const title = computed(() => titles[category.value])
-const description = computed(() =>
-  category.value === 'logistics'
-    ? '选择本系统单据，或手工补录订货宝单据，再登记运费。确认表示记录已核对。'
-    : isGoods.value
-      ? '手工记录进货或损耗；已有商品和采购单可关联，确认不改变库存。'
-      : isRental.value
-        ? '按场地与费用月份登记租赁费，押金单列，不自动分摊。'
-        : '手工登记、核对并保留记录。',
-)
 const permission = computed(() =>
   category.value === 'expenses'
     ? 'hr:expense'
@@ -1454,7 +1526,7 @@ const detailSections = computed(() => {
   return [
     { title: '业务摘要', fields: ordered },
     { title: '来源资料', fields: fields.filter((field) => isSource(field.label)) },
-    { title: '系统留痕', fields: fields.filter((field) => isAudit(field.label)) },
+    { title: '登记信息', fields: fields.filter((field) => isAudit(field.label)) },
   ].filter((section) => section.fields.length)
 })
 const initialEditorValue = ref('')
@@ -1499,7 +1571,10 @@ function beforeUnload(event: BeforeUnloadEvent) {
   }
 }
 window.addEventListener('beforeunload', beforeUnload)
-onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload)
+  ++requestVersion
+})
 function blank(): CostCommand {
   return {
     requestId: randomId(),
@@ -1626,6 +1701,8 @@ function search() {
     ElMessage.warning('截止日期不能早于开始日期')
     return
   }
+  clearExportSelection()
+  exportOpen.value = false
   appliedFilters.value = Object.fromEntries(
     Object.entries(filters.value)
       .map(([key, value]) => [key, value?.trim()])
@@ -1689,6 +1766,10 @@ function employeeLabel(e: CostEmployee) {
 }
 const previousLeg = ref('PURCHASE')
 function edit(row?: CostRecord) {
+  if (category.value !== 'expenses' && row && row.statusCode !== 'DRAFT') {
+    ElMessage.warning('只有待确认费用可编辑，已确认费用请先撤销')
+    return
+  }
   resetAttachments(row || null)
   editingEmployeeName.value = row?.ownerEmployeeName || ''
   editingWarehouseName.value = row?.warehouseName || ''
@@ -1978,7 +2059,7 @@ async function save() {
     saving.value = false
   }
 }
-async function transition(row: CostRecord, action: 'confirm' | 'void') {
+async function transition(row: CostRecord, action: 'confirm' | 'void' | 'revoke' | 'delete') {
   if (saving.value) return
   if (action === 'confirm' && row.data.amount == null) {
     ElMessage.warning('请先补齐金额再确认')
@@ -1989,14 +2070,18 @@ async function transition(row: CostRecord, action: 'confirm' | 'void') {
     ElMessage.warning('请先编辑补齐：' + gaps.join('、'))
     return
   }
-  const required = action === 'void' || Number(row.data.amount) === 0
+  const required = action !== 'confirm' || Number(row.data.amount) === 0
   let reason: string
   try {
     const answer = await ElMessageBox.prompt(
-      action === 'void'
-        ? '作废后不再计入有效登记金额，请填写原因。'
+      action !== 'confirm'
+        ? {
+            void: '作废后不再计入有效登记金额，请填写原因。',
+            revoke: '撤销后回到待确认，确认金额不再计入成本，请填写原因。',
+            delete: '仅删除已作废单据，操作记录和附件保留，请填写原因。',
+          }[action]
         : `请确认费用信息：${row.documentNo}，${row.data.cityName}，${row.data.costMonth || row.data.costDate}，${costMoney(row.data.amount)} 元。`,
-      action === 'void' ? '作废费用' : '确认费用',
+      { confirm: '确认费用', void: '作废费用', revoke: '撤销确认', delete: '删除费用' }[action],
       {
         inputPlaceholder: required ? '必填：操作原因' : '操作说明（可选）',
         inputValidator: (value) => !required || !!value?.trim() || '请填写操作原因',
@@ -2011,7 +2096,10 @@ async function transition(row: CostRecord, action: 'confirm' | 'void') {
   saving.value = true
   try {
     const updated = await changeCostStatus(category.value, row, action, reason)
-    if (detail.value?.id === row.id) detail.value = updated
+    if (detail.value?.id === row.id) {
+      if (action === 'delete') detailVisible.value = false
+      else detail.value = updated
+    }
     ElMessage.success('操作成功')
     await load()
   } catch (e) {
@@ -2047,43 +2135,66 @@ async function showHistory(row: CostRecord) {
     historyLoading.value = false
   }
 }
-const exporting = ref(false)
+const exporting = ref(false),
+  exportOpen = ref(false),
+  exportError = ref(''),
+  exportFields = ref<string[]>([]),
+  exportIds = ref<string[]>([]),
+  exportTotal = ref(0),
+  selectedExportRows = ref<CostRecord[]>([]),
+  exportTable = ref<TableInstance>()
+const exportColumns = computed(() =>
+  costExportHeaders(category.value).map((key) => ({ key, label: key })),
+)
+let exportQuery: Omit<CostQuery, 'begin' | 'step'> = {},
+  exportVersion = 0
+function clearExportSelection() {
+  exportTable.value?.clearSelection()
+  selectedExportRows.value = []
+}
+function openExport() {
+  if (
+    loading.value ||
+    !can(permission.value + (category.value === 'expenses' ? ':read' : ':export'))
+  )
+    return
+  exportIds.value = [...new Set(selectedExportRows.value.map((row) => row.id))]
+  exportQuery = { ...appliedFilters.value }
+  exportVersion = requestVersion
+  exportTotal.value = page.value.total
+  exportFields.value = exportColumns.value.map((column) => column.key)
+  exportError.value = ''
+  exportOpen.value = true
+}
 async function exportPage() {
+  if (exporting.value) return
   const selected = category.value,
     name = title.value,
-    query = { ...appliedFilters.value }
+    query = { ...exportQuery },
+    version = exportVersion
   exporting.value = true
+  exportError.value = ''
   try {
-    const rows: CostRecord[] = []
-    let begin = 0
-    let expectedTotal: number | undefined
-    const ids = new Set<string>()
-    while (true) {
-      const result = await exportCosts(selected, { ...query, begin, step: 200 })
-      if (selected !== category.value) return
-      if ((expectedTotal != null && expectedTotal !== result.total) || result.total > 50000)
-        throw new Error('筛选结果发生变化或超过五万条，请缩小范围后重新导出')
-      expectedTotal = result.total
-      for (const row of result.items) {
-        if (ids.has(row.id)) throw new Error('导出期间记录发生变化，请重试')
-        ids.add(row.id)
-      }
-      rows.push(...result.items)
-      begin += result.items.length
-      if (begin >= result.total) break
-      if (!result.items.length || begin >= 50000)
-        throw new Error('导出范围过大或结果发生变化，请缩小筛选范围后重试')
-    }
-    if (selected !== category.value) return
+    const columns = selectedCostColumns(exportColumns.value, exportFields.value)
+    const rows = await collectCostExportRows({
+      fetchPage: (begin, step) => exportCosts(selected, { ...query, begin, step }),
+      key: (row) => row.id,
+      selected: [...exportIds.value],
+      current: () => selected === category.value && version === requestVersion,
+    })
+    if (!rows) return
     const fields = rows.map(costExportFields)
-    const headers = costExportHeaders(selected)
     await exportCostRows(
       name,
-      headers,
-      fields.map((f) => headers.map((h) => f.find((v) => v.label === h)?.value ?? '')),
+      columns.map((column) => column.label),
+      fields.map((row) =>
+        columns.map((column) => row.find((v) => v.label === column.key)?.value ?? ''),
+      ),
     )
+    if (selected === category.value && version === requestVersion) exportOpen.value = false
   } catch (e) {
-    ElMessage.error(errorMessage(e, '导出失败'))
+    if (selected === category.value && version === requestVersion)
+      exportError.value = errorMessage(e, '导出失败')
   } finally {
     exporting.value = false
   }

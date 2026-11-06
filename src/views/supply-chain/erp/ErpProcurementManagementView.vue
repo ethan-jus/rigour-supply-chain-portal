@@ -6,6 +6,9 @@
           <el-form-item label="采购单号"
             ><el-input v-model="filters.procurementNo" clearable placeholder="输入采购单号"
           /></el-form-item>
+          <el-form-item label="订货宝单号"
+            ><el-input v-model="filters.sourceDocumentNo" clearable placeholder="输入订货宝原单号"
+          /></el-form-item>
           <el-form-item label="供应商"
             ><el-select
               v-model="filters.supplierCode"
@@ -119,6 +122,11 @@
             }}</el-tag></template
           >
         </el-table-column>
+        <el-table-column label="订货宝单号" width="190" show-overflow-tooltip
+          ><template #default="{ row }">{{
+            row.sourceSystemCode === 'DINGHUOBAO' ? row.sourceDocumentNo || '来源未提供' : '—'
+          }}</template></el-table-column
+        >
         <el-table-column prop="supplierName" label="供应商" min-width="180" show-overflow-tooltip />
         <el-table-column prop="purchaseDate" label="采购日期" width="108" />
         <!-- @vue-generic {ProcurementOrderSummary} -->
@@ -228,6 +236,7 @@ import ErpProcurementEditor from '@/components/erp/ErpProcurementEditor.vue'
 const { can } = useSupplyPermissions()
 const filters = reactive({
   procurementNo: '',
+  sourceDocumentNo: '',
   supplierCode: '',
   targetWarehouseCode: '',
   confirmationStatusCode: '',
@@ -261,6 +270,7 @@ async function load() {
       begin: (page.value - 1) * size.value,
       step: size.value,
       procurementNo: filters.procurementNo.trim() || undefined,
+      sourceDocumentNo: filters.sourceDocumentNo.trim() || undefined,
       supplierCode: filters.supplierCode || undefined,
       targetWarehouseCode: filters.targetWarehouseCode || undefined,
       confirmationStatusCode: filters.confirmationStatusCode || undefined,
@@ -295,6 +305,7 @@ function search() {
 function reset() {
   Object.assign(filters, {
     procurementNo: '',
+    sourceDocumentNo: '',
     supplierCode: '',
     targetWarehouseCode: '',
     confirmationStatusCode: '',

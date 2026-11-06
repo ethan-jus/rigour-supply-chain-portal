@@ -101,7 +101,7 @@ async function mountView() {
       stubs: {
         SupplyPageTitle: true,
         ElDialog: { template: '<div><slot/><slot name="footer"/></div>' },
-        ElDrawer: { template: '<div><slot/></div>' },
+        ElDrawer: { template: '<div><slot/><slot name="footer"/></div>' },
         CostAttachments: true,
       },
     },
@@ -111,7 +111,7 @@ async function mountView() {
 }
 describe('manual source documents', () => {
   it.each([
-    ['cost/purchases', '商品进货记录'],
+    ['cost/purchases', '采购成本记录'],
     ['cost/losses', '商品损耗记录'],
     ['cost/logistics', '物流运输记录'],
     ['cost/warehouse-rentals', '仓储费用'],
@@ -328,7 +328,7 @@ describe('manual source documents', () => {
       const vm = w.vm as unknown as { form: CostCommand }
       vm.form = {
         ...vm.form,
-        title: '商品进货记录',
+        title: '采购成本记录',
         cityCode: 'C1',
         cityName: '武汉',
         costDate: '2026-10-19',
@@ -455,8 +455,8 @@ describe('manual source documents', () => {
     ['purchases', ['商品与供应商', '进货信息', '来源与补充']],
     ['losses', ['损耗对象', '损耗情况', '来源与补充', '损耗照片与凭证']],
     ['warehouse-rentals', ['仓库信息', '本次租金']],
-    ['office-rentals', ['办公室信息', '本次租金']],
-    ['marketing', ['营销事项', '金额与负责人', '投放与合作信息']],
+    ['office-rentals', ['办公室信息', '本次租金', '相关附件']],
+    ['marketing', ['营销事项', '金额与负责人', '投放与合作信息', '相关附件']],
   ])('orders the %s editor around its own business object', async (category, headings) => {
     state.route.path = '/supply-chain/cost/' + category
     const w = await mountView()
@@ -1060,7 +1060,7 @@ describe('historical cost detail snapshots', () => {
       expect(w.text()).toContain('2026-10-19 14:02:28')
       await w
         .findAll('button')
-        .find((button) => button.text() === '记录')!
+        .find((button) => button.text() === '操作记录')!
         .trigger('click')
       await flushPromises()
       expect(w.findAll('.el-timeline-item__timestamp').map((item) => item.text())).toEqual([

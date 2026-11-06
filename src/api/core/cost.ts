@@ -170,7 +170,7 @@ export interface CostCommand {
   reason: string
 }
 export interface CostRecord {
-  procurementReference?: { orderId: number; orderCode: string; lineId: number } | null
+  procurementReference?: { orderId: number; orderCode: string; lineId: number | null } | null
   periodAmount?: number | null
   id: string
   documentNo: string
@@ -348,13 +348,16 @@ export async function saveCost(
 export async function changeCostStatus(
   category: CostCategory,
   row: CostRecord,
-  action: 'confirm' | 'void',
+  action: 'confirm' | 'void' | 'revoke' | 'delete',
   reason: string,
 ) {
   const path = `${base(category)}/${encodeURIComponent(row.id)}/${action}`
   const command = { revision: row.revision, reason }
-  if (category === 'expenses')
+  if (category === 'expenses') {
+    if (action === 'revoke' || action === 'delete')
+      throw new Error('员工报销不适用成本单据状态操作')
     return fromExpense(await apiClient.post<ExpenseRecord>(path, command, options))
+  }
   return apiClient.post<CostRecord>(path, command, options)
 }
 export const getCostHistory = (category: CostCategory, id: string) =>
@@ -483,6 +486,7 @@ export const getCostAttachments = (category: CostCategory, id: string) =>
     `${base(category)}/${encodeURIComponent(id)}/attachments`,
     options,
   )
+const attachmentUploadOptions = { ...options, headers: { 'Content-Type': 'multipart/form-data' } }
 export const uploadCostAttachment = (category: CostCategory, row: CostRecord, file: File) => {
   const form = new FormData()
   form.append('file', file)
@@ -490,7 +494,7 @@ export const uploadCostAttachment = (category: CostCategory, row: CostRecord, fi
   return apiClient.post<CostAttachment>(
     `${base(category)}/${encodeURIComponent(row.id)}/attachments`,
     form,
-    { ...options, headers: { 'Content-Type': 'multipart/form-data' } },
+    attachmentUploadOptions,
   )
 }
 export const getCostAttachmentUrl = (category: CostCategory, id: string, file: string) =>
@@ -504,3 +508,25 @@ export const getCostCustomers = (cityCode: string, keyword: string, begin = 0) =
     params: { cityCode, keyword, begin },
     ...options,
   })
+
+export const removeCostAttachment = (category: CostCategory, row: CostRecord, id: string) =>
+  apiClient.post<void>(
+    `${base(category)}/${encodeURIComponent(row.id)}/attachments/${encodeURIComponent(id)}/remove`,
+    null,
+    { ...options, params: { revision: row.revision } },
+  )
+export const replaceCostAttachment = (
+  category: CostCategory,
+  row: CostRecord,
+  id: string,
+  file: File,
+) => {
+  const data = new FormData()
+  data.append('revision', String(row.revision))
+  data.append('file', file)
+  return apiClient.post<CostAttachment>(
+    `${base(category)}/${encodeURIComponent(row.id)}/attachments/${encodeURIComponent(id)}/replacement`,
+    data,
+    attachmentUploadOptions,
+  )
+}

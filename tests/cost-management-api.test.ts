@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import axios, { AxiosHeaders } from 'axios'
 import { apiClient } from '@/api/core/client'
-import { getLedgerSources } from '@/api/core/cost-ledger'
+import { getLedgerSources, getSelectedLogisticsExport } from '@/api/core/cost-ledger'
 import {
   changeCostStatus,
   getCosts,
   getCostEmployees,
   saveCost,
   uploadCostAttachment,
+  replaceCostAttachment,
+  removeCostAttachment,
   type CostCommand,
   type CostRecord,
 } from '@/api/core/cost'
@@ -39,6 +41,15 @@ const command: CostCommand = {
   reason: '',
 }
 describe('cost service contracts', () => {
+  it('勾选导出通过独立接口传递确切ID，不改为无筛选的全量查询', async () => {
+    await getSelectedLogisticsExport(['LC2', 'LC1'])
+    expect(apiClient.post).toHaveBeenLastCalledWith(
+      '/orders/logistics-costs/export-selected',
+      ['LC2', 'LC1'],
+      { stayOnUnauthorized: true },
+    )
+    expect(apiClient.get).not.toHaveBeenCalled()
+  })
   it('单据选择明确传递普通查询开关，避免旧服务绑定缺失的布尔参数失败', async () => {
     await getLedgerSources({ orderTypeCode: 'SALES_ORDER', begin: 0 })
     expect(apiClient.get).toHaveBeenLastCalledWith('/orders/logistics-costs/ledger/sources', {
@@ -78,12 +89,20 @@ describe('cost service contracts', () => {
     expect(result.items[0]?.updatedTime).toBe('2026-10-21T00:00:00Z')
     expect(result.items[0]?.ownerEmployeeName).toBe('测试员工')
   })
-  it.each(['marketing', 'logistics'] as const)(
-    'keeps %s attachment binary data as multipart instead of the client default JSON',
-    async (category) => {
+  it.each([
+    ['marketing', 'upload'],
+    ['logistics', 'upload'],
+    ['marketing', 'replace'],
+    ['logistics', 'replace'],
+  ] as const)(
+    'keeps %s %s attachment binary data as multipart instead of the client default JSON',
+    async (category, action) => {
       const file = new File(['cost acceptance'], 'cost.png', { type: 'image/png' })
-      await uploadCostAttachment(category, { id: 'cost/1', revision: 3 } as CostRecord, file)
-      const [, body, config] = vi.mocked(apiClient.post).mock.calls[0]
+      const row = { id: 'cost/1', revision: 3 } as CostRecord
+      if (action === 'upload') await uploadCostAttachment(category, row, file)
+      else await replaceCostAttachment(category, row, 'file/old', file)
+      const [path, body, config] = vi.mocked(apiClient.post).mock.calls[0]
+      if (action === 'replace') expect(path).toContain('/attachments/file%2Fold/replacement')
       const headers = new AxiosHeaders({
         'Content-Type': config?.headers?.['Content-Type'] ?? 'application/json',
       })
@@ -98,6 +117,14 @@ describe('cost service contracts', () => {
       await transport.post('/attachment', body, { headers })
     },
   )
+  it('附件移除携带单据版本并编码附件ID，不写入其他单据', async () => {
+    await removeCostAttachment('logistics', { id: 'cost/1', revision: 9 } as CostRecord, 'file/old')
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/orders/logistics-costs/cost%2F1/attachments/file%2Fold/remove',
+      null,
+      expect.objectContaining({ params: { revision: 9 } }),
+    )
+  })
   it('sends logistics to Order and preserves unknown cost instead of converting it to zero', async () => {
     await saveCost('logistics', null, command)
     expect(apiClient.post).toHaveBeenCalledWith(

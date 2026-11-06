@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { CostSource, CostPage, CostQuery } from './cost'
+import type { CostSource, CostPage, CostQuery, CostRecord } from './cost'
 export interface LedgerPartyReference {
   id: string
   code: string
@@ -45,3 +45,6 @@ export const getLedgerExport = (logistics: boolean, query: CostQuery) =>
     logistics ? '/orders/logistics-costs/export' : '/erp/costs/warehouse-rentals/export',
     { ...options, params: { ...query, ...(logistics ? {} : { typeCode: 'WAREHOUSE' }) } },
   )
+
+export const getSelectedLogisticsExport = (ids: string[]) =>
+  apiClient.post<CostRecord[]>('/orders/logistics-costs/export-selected', ids, options)

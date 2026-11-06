@@ -111,11 +111,22 @@ export interface ErpProductSpecificationCommand {
   revision?: number | null
 }
 
+export interface ErpWarehouseSourceReference {
+  sourceSystem: string
+  sourceObjectId: string | null
+  sourceCode: string | null
+  sourceName: string | null
+  connectorId: string | null
+}
 export interface ErpInternalWarehouseView {
+  sourceReferences?: ErpWarehouseSourceReference[]
   id: string
   warehouseCode: string
   warehouseName: string
   regionCode: string | null
+  locationAreaCode?: string | null
+  locationAreaVersion?: string | null
+  locationDisplay?: string | null
   warehouseTypeCode: string | null
   defaultFlag: boolean
   address: string | null
@@ -152,6 +163,8 @@ export interface ErpStockBalanceView {
 export interface ErpInternalWarehouseCommand {
   warehouseName: string
   regionCode?: string | null
+  locationAreaCode?: string | null
+  locationAreaVersion?: string | null
   warehouseTypeCode?: string | null
   defaultFlag?: boolean | null
   address?: string | null
@@ -233,6 +246,7 @@ export interface ErpInternalWarehouseQuery {
   begin: number
   step: number
   warehouseCode?: string
+  sourceWarehouseCode?: string
   warehouseName?: string
   regionCode?: string
   defaultFlag?: boolean
@@ -328,3 +342,10 @@ export const updateErpSupplierProfile = (id: string | number, command: ErpSuppli
   apiClient.put<ErpSupplierProfileView>(`${ERP_BASE_PATH}/supplier-profiles/${encodeURIComponent(String(id))}`, command, options)
 export const deleteErpSupplierProfile = (id: string | number, revision: number) =>
   apiClient.delete<void>(`${ERP_BASE_PATH}/supplier-profiles/${encodeURIComponent(String(id))}`, { params: { revision }, ...options })
+
+export interface WarehouseLocationCatalog {
+  version: string
+  nodes: { code: string; name: string; level: string; parentCode: string | null }[]
+}
+export const getErpWarehouseLocationCatalog = () =>
+  apiClient.get<WarehouseLocationCatalog>(`${ERP_BASE_PATH}/inventory-warehouses/location-catalog`, options)

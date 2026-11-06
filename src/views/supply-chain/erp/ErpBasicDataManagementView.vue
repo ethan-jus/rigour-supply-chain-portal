@@ -3,7 +3,9 @@
     <div class="page-heading" :class="{ 'supplier-toolbar': pageKind === 'supplier' }">
       <div v-if="pageKind !== 'supplier'" class="list-heading-title">
         <SupplyPageTitle>{{ pageConfig.title }}</SupplyPageTitle>
-        <SupplyPageHelp>{{ pageConfig.description }}</SupplyPageHelp>
+        <SupplyPageHelp v-if="pageKind !== 'warehouse'">{{
+          pageConfig.description
+        }}</SupplyPageHelp>
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton
@@ -179,13 +181,19 @@
 
     <template v-else>
       <el-card class="filter-card" shadow="never">
-        <el-form :model="filters" inline @submit.prevent="loadRows">
+        <el-form
+          :model="filters"
+          :inline="pageKind !== 'warehouse'"
+          :class="{ 'warehouse-query': pageKind === 'warehouse' }"
+          :label-width="pageKind === 'warehouse' ? '126px' : undefined"
+          @submit.prevent="loadRows"
+        >
           <el-form-item :label="`${pageConfig.shortTitle}编号`">
             <el-input
               v-model="filters.code"
               clearable
               :placeholder="`输入${pageConfig.shortTitle}编码`"
-              style="width: 180px"
+              :style="pageKind === 'warehouse' ? undefined : { width: '180px' }"
             />
           </el-form-item>
           <el-form-item :label="`${pageConfig.shortTitle}名称`">
@@ -193,7 +201,7 @@
               v-model="filters.name"
               clearable
               placeholder="按名称查询"
-              style="width: 220px"
+              :style="pageKind === 'warehouse' ? undefined : { width: '220px' }"
             />
           </el-form-item>
           <el-form-item v-if="pageKind === 'supplier'" label="联系电话">
@@ -204,7 +212,13 @@
               style="width: 180px"
             />
           </el-form-item>
-          <el-form-item v-if="pageKind === 'warehouse'" label="归属地区">
+          <el-form-item v-if="pageKind === 'warehouse'" label="订货宝仓库编号"
+            ><el-input
+              v-model="filters.sourceWarehouseCode"
+              clearable
+              placeholder="输入订货宝仓库编号"
+          /></el-form-item>
+          <el-form-item v-if="pageKind === 'warehouse'" label="业务归属地区">
             <el-tree-select
               v-model="filters.regionCode"
               :data="customerAreaTree"
@@ -214,8 +228,7 @@
               :render-after-expand="false"
               clearable
               filterable
-              placeholder="归属地区"
-              style="width: 200px"
+              placeholder="业务归属地区"
             />
           </el-form-item>
           <el-form-item v-if="pageKind === 'tag'" label="标签类型">
@@ -231,7 +244,7 @@
               v-model="filters.statusCode"
               clearable
               placeholder="全部状态"
-              style="width: 130px"
+              :style="pageKind === 'warehouse' ? undefined : { width: '130px' }"
             >
               <el-option
                 v-for="item in statusOptions"
@@ -308,7 +321,30 @@
             <!-- @vue-generic {BasicRow} -->
             <el-table-column
               v-if="pageKind === 'warehouse'"
-              label="归属地区"
+              label="订货宝仓库编号"
+              min-width="165"
+              show-overflow-tooltip
+              ><template #default="scope">{{
+                warehouseSourceCodes(scope.row)
+              }}</template></el-table-column
+            >
+            <!-- @vue-generic {BasicRow} -->
+            <el-table-column
+              v-if="pageKind === 'warehouse'"
+              label="所在地区"
+              min-width="230"
+              show-overflow-tooltip
+            >
+              <template #default="scope">{{
+                'warehouseName' in scope.row
+                  ? scope.row.locationDisplay || scope.row.locationAreaCode || '未维护'
+                  : '-'
+              }}</template>
+            </el-table-column>
+            <!-- @vue-generic {BasicRow} -->
+            <el-table-column
+              v-if="pageKind === 'warehouse'"
+              label="业务归属地区"
               min-width="150"
               show-overflow-tooltip
             >
@@ -479,7 +515,12 @@
       <el-skeleton v-else :rows="8" animated />
     </el-drawer>
 
-    <ErpSupplierProfileEditor v-if="pageKind === 'supplier'" v-model="editorVisible" :supplier-id="editingId" @saved="loadRows" />
+    <ErpSupplierProfileEditor
+      v-if="pageKind === 'supplier'"
+      v-model="editorVisible"
+      :supplier-id="editingId"
+      @saved="loadRows"
+    />
     <el-dialog
       v-if="pageKind !== 'supplier'"
       v-model="editorVisible"
@@ -521,8 +562,17 @@
               <el-input v-model="form.tagTypeCode" clearable placeholder="如 NEW/HOT/RECOMMEND" />
             </el-form-item>
           </el-col>
+          <el-col v-if="pageKind === 'warehouse'" :span="24">
+            <el-form-item label="所在地区">
+              <ErpWarehouseLocationSelect
+                v-model:code="form.locationAreaCode"
+                v-model:version="form.locationAreaVersion"
+                :display="form.locationDisplay"
+              />
+            </el-form-item>
+          </el-col>
           <el-col v-if="pageKind === 'warehouse'" :span="12">
-            <el-form-item label="归属地区">
+            <el-form-item label="业务归属地区">
               <el-tree-select
                 v-model="form.regionCode"
                 :data="customerAreaTree"
@@ -532,7 +582,7 @@
                 :render-after-expand="false"
                 clearable
                 filterable
-                placeholder="选择归属地区"
+                placeholder="选择业务归属地区"
                 style="width: 100%"
               />
             </el-form-item>
@@ -618,6 +668,7 @@ import type { DhbPageScope } from '@/api/core/dhb-page-sync'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import ErpWarehouseLocationSelect from '@/components/erp/ErpWarehouseLocationSelect.vue'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import {
   createErpInventoryWarehouse,
@@ -744,9 +795,7 @@ const statusDictionaryCode = computed(() =>
   pageKind.value === 'supplier' ? 'SUPPLIER_STATUS' : 'WAREHOUSE_STATUS',
 )
 const statusOptions = computed(() => businessDictionaryOptions('ERP', statusDictionaryCode.value))
-const warehouseTypeOptions = computed(() =>
-  businessDictionaryOptions('ERP', 'WAREHOUSE_TYPE'),
-)
+const warehouseTypeOptions = computed(() => businessDictionaryOptions('ERP', 'WAREHOUSE_TYPE'))
 /** 仓库归属地区和客户归属地区同源：出库时按客户地区匹配对应地区的仓库。 */
 const customerAreaOptions = ref<CrmDictionaryView[]>([])
 const customerAreaTree = computed(() => buildAreaTree(customerAreaOptions.value))
@@ -806,6 +855,7 @@ const leafCategoryCount = computed(
 
 const filters = reactive({
   code: '',
+  sourceWarehouseCode: '',
   name: '',
   contactPhone: '',
   regionCode: '',
@@ -820,6 +870,9 @@ const form = reactive({
   tagTypeCode: '',
   regionCode: '',
   warehouseTypeCode: '',
+  locationAreaCode: '',
+  locationAreaVersion: null as string | null,
+  locationDisplay: '',
   defaultFlag: false,
   contactName: '',
   contactPhone: '',
@@ -882,6 +935,7 @@ async function loadRows() {
       pageData.value = await getErpInventoryWarehouses({
         ...common,
         warehouseCode: empty(filters.code),
+        sourceWarehouseCode: empty(filters.sourceWarehouseCode),
         warehouseName: empty(filters.name),
         regionCode: empty(filters.regionCode),
         statusCode: empty(filters.statusCode),
@@ -927,6 +981,7 @@ function handleCategorySelectVisibleChange(visible: boolean) {
 
 function resetFilters() {
   filters.code = ''
+  filters.sourceWarehouseCode = ''
   filters.name = ''
   filters.contactPhone = ''
   filters.regionCode = ''
@@ -1078,6 +1133,8 @@ function warehouseCommand(): ErpInternalWarehouseCommand {
   return {
     warehouseName: form.name.trim(),
     regionCode: empty(form.regionCode),
+    locationAreaCode: form.locationAreaCode,
+    locationAreaVersion: form.locationAreaCode ? form.locationAreaVersion : null,
     warehouseTypeCode: empty(form.warehouseTypeCode),
     defaultFlag: form.defaultFlag,
     address: empty(form.address),
@@ -1115,6 +1172,9 @@ function fillForm(row: BasicRow) {
   if ('tagTypeCode' in row) form.tagTypeCode = row.tagTypeCode || ''
   if ('warehouseTypeCode' in row) {
     form.regionCode = row.regionCode || ''
+    form.locationAreaCode = row.locationAreaCode || ''
+    form.locationAreaVersion = row.locationAreaVersion || null
+    form.locationDisplay = row.locationDisplay || ''
     form.warehouseTypeCode = row.warehouseTypeCode || ''
     form.defaultFlag = Boolean(row.defaultFlag)
     form.contactName = row.contactName || ''
@@ -1139,6 +1199,9 @@ function resetForm() {
   form.tagTypeCode = ''
   form.regionCode = ''
   form.warehouseTypeCode = ''
+  form.locationAreaCode = ''
+  form.locationAreaVersion = null
+  form.locationDisplay = ''
   form.defaultFlag = false
   form.contactName = ''
   form.contactPhone = ''
@@ -1228,6 +1291,25 @@ function bankAccountDisplay(value: string | null | undefined) {
   return `尾号 ${normalized.slice(-4)}`
 }
 
+function warehouseSourceCodes(row: BasicRow) {
+  if (!('warehouseName' in row)) return '—'
+  const refs = (row.sourceReferences || []).filter((r) => r.sourceSystem === 'DINGHUOBAO')
+  return refs.length ? [...new Set(refs.map((r) => r.sourceCode || '来源未提供'))].join('、') : '—'
+}
+function warehouseSourceIds(row: BasicRow) {
+  if (!('warehouseName' in row)) return '—'
+  return (
+    [
+      ...new Set(
+        (row.sourceReferences || [])
+          .filter((r) => r.sourceSystem === 'DINGHUOBAO')
+          .map((r) => r.sourceObjectId)
+          .filter(Boolean),
+      ),
+    ].join('、') || '—'
+  )
+}
+
 function detailItems(row: BasicRow) {
   const base: Array<{ label: string; value: string; span?: number }> = [
     { label: `${pageConfig.value.shortTitle}编号`, value: rowCode(row) },
@@ -1246,9 +1328,15 @@ function detailItems(row: BasicRow) {
     })
   if ('warehouseTypeCode' in row)
     base.push(
+      { label: '订货宝仓库编号', value: warehouseSourceCodes(row) },
+      { label: '订货宝仓库ID', value: warehouseSourceIds(row) },
       {
-        label: '归属地区',
-        value: businessDictionaryLabel('COMMON', 'REGION', row.regionCode, '地区'),
+        label: '所在地区',
+        value: row.locationDisplay || row.locationAreaCode || '未维护',
+      },
+      {
+        label: '业务归属地区',
+        value: regionLabel(row),
       },
       {
         label: '仓库类型',
@@ -1503,7 +1591,63 @@ function errorMessage(reason: unknown, fallback: string) {
 </script>
 
 <style scoped lang="scss">
-.erp-basic-data-page .page-heading.supplier-toolbar { justify-content:flex-end; }
+.erp-basic-data-page.supply-page--business-main > .filter-card {
+  &:has(.warehouse-query) :deep(.el-card__body) {
+    padding: 16px 20px;
+  }
+
+  .warehouse-query {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 16px 24px;
+
+    :deep(.el-form-item) {
+      display: grid;
+      grid-template-columns: 126px minmax(0, 1fr);
+      align-items: center;
+      min-width: 0;
+      margin: 0;
+    }
+    :deep(.el-form-item__label) {
+      width: auto !important;
+      white-space: nowrap;
+    }
+    :deep(.el-form-item__content) {
+      min-width: 0;
+    }
+    :deep(.el-input),
+    :deep(.el-select),
+    :deep(.el-tree-select) {
+      width: 100%;
+    }
+    .filter-actions {
+      grid-template-columns: minmax(0, 1fr);
+      justify-self: end;
+      align-self: start;
+
+      :deep(.el-form-item__content) {
+        margin-left: 0 !important;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+        gap: 12px;
+      }
+      :deep(.el-button + .el-button) {
+        margin-left: 0;
+      }
+    }
+    @media (max-width: 1280px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    @media (max-width: 900px) {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+.erp-basic-data-page .page-heading.supplier-toolbar {
+  justify-content: flex-end;
+}
 
 .erp-basic-data-page {
   min-height: 0;
