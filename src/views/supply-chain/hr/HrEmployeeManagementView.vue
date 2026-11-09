@@ -14,115 +14,88 @@
         ></DepartmentSidebar
       >
       <section class="employee-results" aria-label="员工列表">
-        <header class="employee-directory-header">
-          <div class="department-context">
-            <span class="department-context-icon" aria-hidden="true"
-              ><el-icon><OfficeBuilding /></el-icon
-            ></span>
-            <div class="department-context-copy">
-              <div class="department-title">
-                <h1>{{ selectedDepartment?.departmentName || '员工档案' }}</h1>
-                <span class="employee-count">{{ loading ? '加载中…' : `${data.total} 人` }}</span>
-              </div>
-              <p>
-                {{ includeSubDepartments ? '含下级部门' : '仅当前部门'
-                }}<span>·</span>负责人姓名加粗高亮
-              </p>
-            </div>
-          </div>
-          <div class="directory-actions">
-            <DhbSalespersonSyncButton @completed="refresh" />
-            <el-button :loading="loading" :icon="Refresh" @click="refresh">刷新</el-button>
-            <el-button
-              v-if="can('hr:employee:create')"
-              type="primary"
-              :icon="Plus"
-              @click="openEditor()"
-              >新增员工</el-button
-            >
-          </div>
-        </header>
-        <SupplyListFilters
-          compact
-          class="employee-filters"
+        <OrderRegisterFilterCard
+          class="employee-filters order-register-filter--compact"
           :loading="loading"
           @search="search"
           @reset="reset"
         >
-          <el-form-item label="员工姓名"
-            ><el-input
-              v-model="employeeNameFilter"
-              clearable
-              placeholder="请输入员工姓名"
-              aria-label="员工姓名筛选"
-          /></el-form-item>
-          <el-form-item label="员工编号"
-            ><el-input
-              v-model="employeeCodeFilter"
-              clearable
-              placeholder="请输入员工编号"
-              aria-label="员工编号筛选"
-          /></el-form-item>
-          <el-form-item label="手机号"
-            ><el-input
-              v-model="mobileFilter"
-              clearable
-              placeholder="请输入手机号"
-              aria-label="员工手机号筛选"
-          /></el-form-item>
-          <el-form-item label="订货宝账号"
-            ><el-input
-              v-model="dhbAccountFilter"
-              clearable
-              placeholder="请输入订货宝账号"
-              aria-label="订货宝账号筛选"
-          /></el-form-item>
-          <el-form-item label="岗位"
-            ><el-select
-              v-model="positionCode"
-              filterable
-              clearable
-              placeholder="全部岗位"
-              aria-label="岗位"
-              ><el-option
-                v-for="p in positions"
-                :key="p.positionCode"
-                :label="p.positionName"
-                :value="p.positionCode" /></el-select
-          ></el-form-item>
-          <el-form-item label="在职状态"
-            ><el-select v-model="status" clearable placeholder="全部状态" aria-label="在职状态"
-              ><el-option label="在职" value="ACTIVE" /><el-option
-                label="离职"
-                value="LEFT" /></el-select
-          ></el-form-item>
-          <el-form-item label="是否转正"
-            ><el-select v-model="regularized" clearable placeholder="全部" aria-label="是否转正"
-              ><el-option :value="true" label="已转正" /><el-option
-                :value="false"
-                label="未转正" /></el-select
-          ></el-form-item>
-          <el-form-item label="薪酬类别"
-            ><el-select
-              v-model="payrollCategory"
-              clearable
-              placeholder="全部类别"
-              aria-label="薪酬类别"
-              ><el-option
-                v-for="role in payrollCategories"
-                :key="role.value"
-                v-bind="role" /></el-select
-          ></el-form-item>
-          <el-form-item label="职级"
-            ><el-input v-model="jobGrade" clearable placeholder="请输入职级" aria-label="职级"
-          /></el-form-item>
-          <el-form-item label="薪酬档案"
-            ><el-select v-model="payrollMissing" aria-label="薪酬档案完整性"
-              ><el-option :value="false" label="全部档案" /><el-option
-                :value="true"
-                label="待完善" /></el-select
-          ></el-form-item>
-        </SupplyListFilters>
+          <template #primary>
+            <div class="list-filter-field list-filter-field--person"
+              ><el-input
+                v-model="employeeNameFilter"
+                clearable
+                placeholder="员工姓名"
+                aria-label="员工姓名筛选"
+            /></div>
+            <div class="list-filter-field list-filter-field--text"
+              ><el-input
+                v-model="employeeCodeFilter"
+                clearable
+                placeholder="员工编号"
+                aria-label="员工编号筛选"
+            /></div>
+            <div class="list-filter-field list-filter-field--text"
+              ><el-input
+                v-model="mobileFilter"
+                clearable
+                placeholder="手机号"
+                aria-label="员工手机号筛选"
+            /></div>
+            <div class="list-filter-field list-filter-field--text"
+              ><el-input
+                v-model="dhbAccountFilter"
+                clearable
+                placeholder="订货宝账号"
+                aria-label="订货宝账号筛选"
+            /></div>
+            <div class="list-filter-field list-filter-field--select"
+              ><el-select
+                v-model="positionCode"
+                filterable
+                clearable
+                placeholder="岗位"
+                aria-label="岗位"
+                ><el-option
+                  v-for="p in positions"
+                  :key="p.positionCode"
+                  :label="p.positionName"
+                  :value="p.positionCode" /></el-select
+            ></div>
+            <div class="list-filter-field list-filter-field--select"
+              ><el-select v-model="status" clearable placeholder="在职状态" aria-label="在职状态"
+                ><el-option label="在职" value="ACTIVE" /><el-option
+                  label="离职"
+                  value="LEFT" /></el-select
+            ></div>
+            <div class="list-filter-field list-filter-field--select"
+              ><el-select v-model="regularized" clearable placeholder="是否转正" aria-label="是否转正"
+                ><el-option :value="true" label="已转正" /><el-option
+                  :value="false"
+                  label="未转正" /></el-select
+            ></div>
+            <div class="list-filter-field list-filter-field--select"
+              ><el-select
+                v-model="payrollCategory"
+                clearable
+                placeholder="薪酬类别"
+                aria-label="薪酬类别"
+                ><el-option
+                  v-for="role in payrollCategories"
+                  :key="role.value"
+                  v-bind="role" /></el-select
+            ></div>
+            <div class="list-filter-field list-filter-field--person"
+              ><el-input v-model="jobGrade" clearable placeholder="职级" aria-label="职级"
+            /></div>
+            <div class="list-filter-field list-filter-field--select"
+              ><el-select v-model="payrollMissing" aria-label="薪酬档案完整性"
+                ><el-option :value="false" label="全部薪酬档案" /><el-option
+                  :value="true"
+                  label="待完善" /></el-select
+            ></div>
+          </template>
+        </OrderRegisterFilterCard>
         <el-alert v-if="riskError" :title="riskError" type="error" :closable="false" />
         <div v-if="risks.length" class="binding-risk-banner" role="status">
           <el-icon><WarningFilled /></el-icon><strong>{{ risks.length }} 条关联待确认</strong>
@@ -130,9 +103,6 @@
           <el-button link type="primary" @click="openReviews()">查看并处理</el-button>
         </div>
         <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
-        <div class="employee-list-caption">
-          <span>员工列表</span><span class="sort-hint">{{ sortDescription }}</span>
-        </div>
         <div class="employee-table-viewport">
           <el-table
             v-loading="loading"
@@ -150,7 +120,7 @@
               prop="employeeName"
               sortable="custom"
               label="姓名"
-              min-width="170"
+              width="130"
               fixed="left"
               show-overflow-tooltip
               :formatter="displayCell"
@@ -194,7 +164,7 @@
             <el-table-column
               prop="positionName"
               label="岗位"
-              min-width="100"
+              min-width="120"
               show-overflow-tooltip
               :formatter="displayCell"
             />
@@ -229,8 +199,8 @@
             </el-table-column>
             <el-table-column label="关联状态" width="128"
               ><template #default="{ row }">
-                <el-tag v-if="row.dhbReviewCount" type="warning">已关联·待确认</el-tag>
-                <el-tag v-else-if="row.dhbStaffIds?.length" type="success">已关联</el-tag
+                <el-tag v-if="row.dhbReviewCount" type="warning" size="small">已关联·待确认</el-tag>
+                <el-tag v-else-if="row.dhbStaffIds?.length" type="success" size="small">已关联</el-tag
                 ><span v-else class="muted">未关联</span>
               </template></el-table-column
             >
@@ -263,18 +233,27 @@
             >
           </el-table>
         </div>
-        <footer class="employee-list-footer">
-          <span>在职在前 · 离职在后</span
-          ><el-pagination
+        <ListTableFooter class="employee-list-footer">
+          <template #actions>
+            <DhbSalespersonSyncButton @completed="refresh" />
+            <el-button :loading="loading" :icon="Refresh" @click="refresh">刷新</el-button>
+            <el-button
+              v-if="can('hr:employee:create')"
+              type="primary"
+              :icon="Plus"
+              @click="openEditor()"
+              >新增员工</el-button
+            >
+          </template>
+          <CompactPagination
             v-model:current-page="page"
             v-model:page-size="size"
             :total="data.total"
             :page-sizes="[20, 50, 100]"
-            layout="total,sizes,prev,pager,next"
             @current-change="load"
             @size-change="search"
           />
-        </footer>
+        </ListTableFooter>
       </section>
     </div>
     <DhbBindingReviewDrawer
@@ -574,9 +553,11 @@ import { displayCell, displayValue } from '@/utils/business-display'
 import DhbSalespersonSyncButton from '@/components/supply/DhbSalespersonSyncButton.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import SupplyListFilters from '@/components/supply/SupplyListFilters.vue'
+import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
+import ListTableFooter from '@/components/supply/ListTableFooter.vue'
+import CompactPagination from '@/components/supply/CompactPagination.vue'
 import DhbBindingReviewDrawer from './DhbBindingReviewDrawer.vue'
-import { WarningFilled, OfficeBuilding, Plus, Refresh } from '@element-plus/icons-vue'
+import { WarningFilled, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
 import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
 import HrEmployeeEditor from './HrEmployeeEditor.vue'
@@ -628,9 +609,6 @@ const riskError = ref(''),
 const sortBy = ref('entryDate'),
   sortDirection = ref<'asc' | 'desc'>('desc')
 const employeeTable = ref<TableInstance>()
-const selectedDepartment = computed(() =>
-  departments.value.find((d) => d.id === departmentId.value),
-)
 const leaderDepartments = computed(() => {
   const leaders = new Map<string, string[]>()
   for (const department of departments.value) {
@@ -640,16 +618,6 @@ const leaderDepartments = computed(() => {
     leaders.set(department.leaderEmployeeCode, names)
   }
   return leaders
-})
-const sortDescription = computed(() => {
-  const label =
-    {
-      employeeName: '姓名',
-      employeeCode: '员工编号',
-      entryDate: '入职时间',
-      createdTime: '创建时间',
-    }[sortBy.value] || '入职时间'
-  return `在职优先 · ${label}${sortDirection.value === 'asc' ? '升序' : '倒序'}`
 })
 const positions = ref<HrPositionRecord[]>([])
 const positionCode = ref(''),
@@ -682,7 +650,8 @@ async function load() {
   const request = ++requestId
   loading.value = true
   loadError.value = ''
-  data.value = { items: [], total: 0, begin: (page.value - 1) * size.value, step: size.value }
+  // 总数在请求完成前保持稳定，避免分页组件因临时 total=0 把当前页重置为第一页。
+  data.value = { ...data.value, items: [], begin: (page.value - 1) * size.value, step: size.value }
   try {
     const result = await getHrEmployees({
       begin: (page.value - 1) * size.value,
@@ -705,7 +674,7 @@ async function load() {
     if (request === requestId) data.value = result
   } catch (e) {
     if (request === requestId) {
-      data.value = { items: [], total: 0, begin: 0, step: size.value }
+      data.value = { ...data.value, items: [] }
       loadError.value = e instanceof Error ? e.message : '员工加载失败'
     }
   } finally {
@@ -937,86 +906,13 @@ onMounted(async () => {
   font-weight: 600;
   box-shadow: inset 3px 0 $color-primary;
 }
-.employee-directory-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 18px 14px;
-  flex: none;
-}
-.department-context {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.department-context-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 38px;
-  height: 38px;
-  background: #eff6ff;
-  color: $color-primary;
-  border-radius: 10px;
-  font-size: 20px;
-}
-.department-context-copy {
-  min-width: 0;
-}
-.department-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.department-title h1 {
-  margin: 0;
-  font-size: 18px;
-  line-height: 26px;
-  color: $color-text-primary;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.employee-count {
-  flex: none;
-  border-radius: 6px;
-  background: $color-bg-muted;
-  color: $color-text-secondary;
-  padding: 2px 8px;
-  font-size: var(--app-font-size-base);
-  font-variant-numeric: tabular-nums;
-}
-.department-context-copy p {
-  display: flex;
-  gap: 8px;
-  margin: 3px 0 0;
-  color: $color-text-secondary;
-  font-size: var(--app-font-size-base);
-}
-.directory-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-.directory-actions :deep(.el-button + .el-button) {
-  margin-left: 0;
-}
-.employee-page :deep(.order-register-filter) {
+.employee-filters {
   flex: none;
   border: 0;
   background: transparent;
 }
-.employee-page :deep(.order-register-filter .el-card__body) {
-  padding: 0 18px 14px;
-}
-.employee-filters {
-  padding: 0 18px;
-}
-.employee-filters :deep(.supply-list-filters__form) {
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+.employee-filters :deep(.el-card__body) {
+  padding: 12px 14px;
 }
 .employee-detail-sections {
   display: grid;
@@ -1031,23 +927,6 @@ onMounted(async () => {
 .employee-detail-section h3 {
   margin: 0 0 18px;
   font-size: 15px;
-}
-.employee-list-caption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 18px;
-  border-top: 1px solid $color-border-lighter;
-  color: $color-text-regular;
-  font-weight: 600;
-  font-size: var(--app-font-size-base);
-  flex: none;
-}
-.sort-hint {
-  color: $color-text-secondary;
-  font-size: var(--app-font-size-base);
-  font-weight: 400;
 }
 .employee-name {
   color: $color-text-primary;
@@ -1191,22 +1070,9 @@ onMounted(async () => {
   overflow: hidden;
 }
 .employee-list-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 12px 16px;
+  border: 0;
   border-top: 1px solid $color-border-lighter;
-  flex: none;
-}
-.employee-list-footer > span {
-  color: $color-text-secondary;
-  font-size: var(--app-font-size-base);
-}
-.el-pagination {
-  margin: 0;
-  flex: none;
+  border-radius: 0;
 }
 .el-alert {
   margin-bottom: 16px;
@@ -1215,22 +1081,7 @@ h3 {
   font-size: 15px;
   margin: 24px 0 12px;
 }
-@media (max-width: 1200px) {
-  .employee-directory-header {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .directory-actions {
-    margin-left: auto;
-  }
-  .employee-page :deep(.order-register-filter__line) {
-    flex-wrap: wrap;
-  }
-  .employee-page :deep(.order-register-filter__actions) {
-    margin-left: 0;
-  }
-}
-@media (max-width: 1200px) {
+@media (max-width: 900px) {
   .directory-layout :deep(.department-sidebar) {
     width: auto;
     flex: 0 0 auto;
