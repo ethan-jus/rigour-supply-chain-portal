@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import ElementPlus from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NavigationNode } from '@/types/management'
+import { useConsoleWorkspace } from '@/stores/console-workspace'
 import { useNavigationStore } from '@/stores/navigation'
 import ConsoleDashboard from '@/components/console/ConsoleDashboard.vue'
 import ConsoleSidebar from '@/components/console/ConsoleSidebar.vue'
@@ -86,9 +87,10 @@ async function render(nodes: NavigationNode[] | null = [home, order, payments, b
   const wrapper = mount(ConsoleDashboard, { global })
   wrappers.push(wrapper)
   await flushPromises()
-  return { wrapper, navigation, router, global }
+  return { wrapper, navigation, router, global, workspace: useConsoleWorkspace(pinia) }
 }
 beforeEach(() => {
+  localStorage.clear()
   Object.values(mocks).forEach((mock) => mock.mockReset())
   const fixture = meetingFixture()
   mocks.get.mockResolvedValue([])
@@ -251,6 +253,47 @@ describe('供应链工作台', () => {
     expect(search.find('.entry-search__results').exists()).toBe(false)
     expect(search.find('input').exists()).toBe(false)
   })
+  it('自动模式默认收起，悬停切换模块不跳转，移入二级菜单保持展开，离开后收起', async () => {
+    const nodes = [home, node('supply.order.menu', '订单管理', null, [order, payments])]
+    const { global, router } = await render(nodes)
+    const sidebar = mount(ConsoleSidebar, { props: { nodes }, global })
+    wrappers.push(sidebar)
+    expect(sidebar.classes()).toContain('is-collapsed')
+    expect(sidebar.classes()).toContain('is-auto')
+    await sidebar.get('button[aria-label="订单管理"]').trigger('mouseenter')
+    expect(sidebar.get('.secondary-nav').isVisible()).toBe(true)
+    expect(router.currentRoute.value.path).toBe('/supply-chain')
+    await sidebar.trigger('mouseleave')
+    await sidebar.trigger('mouseenter')
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(sidebar.get('.secondary-nav').isVisible()).toBe(true)
+    await sidebar.trigger('mouseleave')
+    await vi.waitFor(() => expect(sidebar.classes()).toContain('is-collapsed'))
+    await sidebar.get('button[aria-label="订单管理"]').trigger('focus')
+    expect(sidebar.get('.secondary-nav').isVisible()).toBe(true)
+    await sidebar.trigger('keydown', { key: 'Escape' })
+    expect(sidebar.classes()).toContain('is-collapsed')
+  })
+  it('常驻模式忽略悬停和离开，切换自动模式后收起，选中页面也会收起浮层', async () => {
+    const nodes = [home, node('supply.order.menu', '订单管理', null, [order, payments])]
+    const { global, workspace, router } = await render(nodes)
+    workspace.setNavigationMode('pinned')
+    const sidebar = mount(ConsoleSidebar, { props: { nodes }, global })
+    wrappers.push(sidebar)
+    await sidebar.get('button[aria-label="订单管理"]').trigger('mouseenter')
+    expect(sidebar.get('.secondary-nav__heading').text()).toContain('工作空间')
+    await sidebar.get('button[aria-label="订单管理"]').trigger('click')
+    await sidebar.trigger('mouseleave')
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(sidebar.get('.secondary-nav').isVisible()).toBe(true)
+    workspace.setNavigationMode('auto')
+    await flushPromises()
+    expect(sidebar.classes()).toContain('is-collapsed')
+    await sidebar.get('button[aria-label="订单管理"]').trigger('click')
+    await router.push(order.routePath!)
+    await flushPromises()
+    expect(sidebar.classes()).toContain('is-collapsed')
+  })
   it('窗口缩窄时折叠侧栏且卸载时移除监听', async () => {
     const media = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }
     vi.stubGlobal(
@@ -259,7 +302,8 @@ describe('供应链工作台', () => {
     )
     try {
       const nodes = [home, node('supply.order.menu', '订单管理', null, [order])]
-      const { global } = await render(nodes)
+      const { global, workspace } = await render(nodes)
+      workspace.setNavigationMode('pinned')
       const sidebar = mount(ConsoleSidebar, { props: { nodes }, global })
       const listener = media.addEventListener.mock.calls.at(-1)![1] as () => void
       expect(sidebar.classes()).not.toContain('is-collapsed')

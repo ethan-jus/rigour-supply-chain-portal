@@ -3,8 +3,10 @@
     <header class="dashboard-header">
       <div>
         <p class="eyebrow">BI · 人员与客户经营</p>
-        <SupplyPageTitle>{{ title }}</SupplyPageTitle>
-        <p class="scope-note">{{ description }}</p>
+        <div class="list-heading-title">
+          <SupplyPageTitle>{{ title }}</SupplyPageTitle>
+          <SupplyPageHelp v-if="description">{{ description }}</SupplyPageHelp>
+        </div>
       </div>
       <el-button :loading="initializing" :disabled="!ready" @click="publish">更新显示</el-button>
     </header>
@@ -71,6 +73,7 @@
   </main>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { getBiEffectiveScope, type BiEffectiveScope } from '@/api/core/bi-access'

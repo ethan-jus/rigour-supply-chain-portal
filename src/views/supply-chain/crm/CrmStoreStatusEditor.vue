@@ -14,6 +14,15 @@
       <el-form-item label="核实后的经营状态" required>
         <el-select v-model="status" aria-label="门店经营状态" placeholder="选择经营状态">
           <el-option
+            v-if="!options.some((item) => item.dictionaryItemCode === store.businessStatus)"
+            :value="store.businessStatus"
+            :label="
+              statuses.find((item) => item.dictionaryItemCode === store.businessStatus)
+                ?.dictionaryItemName || '当前状态待核实'
+            "
+            disabled
+          />
+          <el-option
             v-for="item in options"
             :key="item.dictionaryItemCode"
             :value="item.dictionaryItemCode"
@@ -24,7 +33,7 @@
       <p v-if="!options.length" class="error" role="alert">经营状态字典未加载，请关闭后重试。</p>
       <el-alert
         v-if="status === 'CLOSED'"
-        title="确认已停业后结束当前归属，停止认领与新作业；门店档案、拜访和成交历史保留。恢复营业由管理员核实。停业标记不计有效拜访，未完成拜访需另行处理。"
+        title="确认已停业后结束当前归属，本人进入48小时认领冷却，停止认领与新作业；门店档案、拜访和成交历史保留。恢复营业由管理员核实。停业标记不计有效拜访，未完成拜访需另行处理。"
         type="warning"
         :closable="false"
         show-icon

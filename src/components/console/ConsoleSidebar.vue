@@ -1,5 +1,14 @@
 <template>
-  <aside class="console-navigation" :class="{ 'is-collapsed': workspace.collapsed }">
+  <aside
+    ref="navigationElement"
+    class="console-navigation"
+    :class="{ 'is-collapsed': workspace.collapsed, 'is-auto': autoNavigation }"
+    @mouseenter="cancelClose"
+    @mouseleave="scheduleClose"
+    @focusin="cancelClose"
+    @focusout="leaveFocus"
+    @keydown.esc="dismissNavigation"
+  >
     <nav class="module-rail" aria-label="业务模块">
       <router-link
         v-if="home"
@@ -24,6 +33,11 @@
             :title="moduleName(node)"
             :aria-label="moduleName(node)"
             :aria-pressed="selected?.id === node.id"
+            :aria-expanded="selected?.id === node.id && !workspace.collapsed"
+            aria-controls="console-secondary-nav"
+            :data-module-id="node.id"
+            @mouseenter="previewModule(node)"
+            @focus="previewModule(node)"
             @click="selectModule(node)"
           >
             <ConsoleNavIcon :icon-key="node.iconKey" /><span>{{ shortName(node) }}</span>
@@ -37,6 +51,9 @@
             }"
             :to="node.routePath"
             :title="node.displayName"
+            :data-module-id="node.id"
+            @mouseenter="previewModule(node)"
+            @focus="previewModule(node)"
             @click="selectModule(node)"
           >
             <ConsoleNavIcon :icon-key="node.iconKey" /><span>{{ shortName(node) }}</span>
@@ -65,7 +82,13 @@
       <div class="secondary-nav__brand">供应链数字化平台</div>
       <header class="secondary-nav__heading">
         <strong>{{
-          isHome ? '工作空间' : isHr ? '人事管理' : selected ? moduleName(selected, true) : '应用菜单'
+          isHome
+            ? '工作空间'
+            : isHr
+              ? '人事管理'
+              : selected
+                ? moduleName(selected, true)
+                : '应用菜单'
         }}</strong
         ><button
           type="button"
@@ -161,6 +184,43 @@ const props = defineProps<{ nodes: NavigationNode[] }>()
 const route = useRoute()
 const workspace = useConsoleWorkspace()
 const selectedId = ref('')
+const navigationElement = ref<HTMLElement>()
+const autoNavigation = computed(() => workspace.navigationMode === 'auto')
+let closeTimer: ReturnType<typeof setTimeout> | undefined
+function cancelClose() {
+  clearTimeout(closeTimer)
+  closeTimer = undefined
+}
+function scheduleClose() {
+  cancelClose()
+  if (autoNavigation.value)
+    closeTimer = setTimeout(() => {
+      workspace.collapsed = true
+    }, 200)
+}
+function previewModule(node: NavigationNode) {
+  if (autoNavigation.value) selectModule(node)
+}
+function leaveFocus(event: FocusEvent) {
+  if (!navigationElement.value?.contains(event.relatedTarget as Node | null)) scheduleClose()
+}
+function dismissNavigation(event: KeyboardEvent) {
+  if (!autoNavigation.value) return
+  event.stopPropagation()
+  cancelClose()
+  const trigger = Array.from(
+    navigationElement.value?.querySelectorAll<HTMLElement>('[data-module-id]') || [],
+  ).find((element) => element.dataset.moduleId === selectedId.value)
+  trigger?.focus()
+  workspace.collapsed = true
+}
+function closeOutside(event: PointerEvent) {
+  if (autoNavigation.value && !navigationElement.value?.contains(event.target as Node)) {
+    cancelClose()
+    workspace.collapsed = true
+  }
+}
+watch(autoNavigation, cancelClose)
 const roots = computed(() =>
   props.nodes
     .filter((node) => node.visible && (node.routePath || consoleEntries(node.children).length))
@@ -249,6 +309,7 @@ function shortName(node: NavigationNode) {
   )
 }
 function selectModule(node: NavigationNode) {
+  cancelClose()
   selectedId.value = node.id
   workspace.collapsed = false
 }
@@ -270,7 +331,10 @@ watch(
 watch(
   () => route.path,
   () => {
-    if (window.matchMedia?.('(max-width: 1100px)').matches) workspace.collapsed = true
+    if (autoNavigation.value || window.matchMedia?.('(max-width: 1100px)').matches) {
+      cancelClose()
+      workspace.collapsed = true
+    }
   },
   { immediate: true },
 )
@@ -278,8 +342,15 @@ const compactViewport = window.matchMedia?.('(max-width: 1100px)')
 function collapseForViewport() {
   if (compactViewport?.matches) workspace.collapsed = true
 }
-onMounted(() => compactViewport?.addEventListener('change', collapseForViewport))
-onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseForViewport))
+onMounted(() => {
+  compactViewport?.addEventListener('change', collapseForViewport)
+  document.addEventListener('pointerdown', closeOutside)
+})
+onBeforeUnmount(() => {
+  cancelClose()
+  compactViewport?.removeEventListener('change', collapseForViewport)
+  document.removeEventListener('pointerdown', closeOutside)
+})
 </script>
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
@@ -313,8 +384,21 @@ onBeforeUnmount(() => compactViewport?.removeEventListener('change', collapseFor
   min-height: 0;
   height: 100dvh;
 }
-.console-navigation.is-collapsed {
+.console-navigation.is-collapsed,
+.console-navigation.is-auto {
   grid-template-columns: $sidebar-collapsed-width;
+}
+.console-navigation.is-auto .secondary-nav {
+  position: fixed;
+  top: $topbar-height;
+  bottom: 0;
+  left: $sidebar-collapsed-width;
+  width: $sidebar-width - $sidebar-collapsed-width;
+  z-index: 25;
+  box-shadow: 8px 0 24px #17304a22;
+}
+.console-navigation.is-auto .secondary-nav__brand {
+  display: none;
 }
 .module-rail {
   background: #152a40;

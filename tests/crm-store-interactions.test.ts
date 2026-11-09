@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 import CrmStorePoolView from '@/views/supply-chain/crm/CrmStorePoolView.vue'
 import CrmStoreLeadReview from '@/views/supply-chain/crm/CrmStoreLeadReview.vue'
 import CrmStoreIntake from '@/views/supply-chain/crm/CrmStoreIntake.vue'
@@ -34,6 +34,7 @@ vi.mock('@/api/core/crm-store', () => ({
     detail: vi.fn(),
     visits: vi.fn(),
     reviewVisit: vi.fn(),
+    release: vi.fn(),
   },
 }))
 vi.mock('@/api/core/business-settings', () => ({
@@ -187,7 +188,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     vi.mocked(crmStoreApi.list).mockResolvedValue({ total: 1, items: [row], nextCursor: null })
     vi.mocked(crmStoreApi.detail).mockResolvedValue(row)
     await mountPage('mine')
-    expect(wrapper!.findAll('button').some((button) => button.text() === '经营状态')).toBe(true)
+    expect(wrapper!.findAll('button').some((button) => button.text() === '经营状态')).toBe(false)
     await wrapper!
       .findAll('button')
       .find((button) => button.text() === row.name)!
@@ -195,6 +196,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     await flushPromises()
     expect(document.body.textContent).toContain('暂停新拜访和开单')
     expect(document.body.textContent).not.toContain('到店拜访请从销售工作台')
+    expect(document.body.textContent).toContain('维护经营状态')
   })
   it('无经营状态维护权限的本人私海不展示维护按钮', async () => {
     vi.mocked(crmStoreApi.context).mockResolvedValue({
@@ -225,12 +227,56 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     expect(document.body.textContent).not.toContain('认领到我的客户')
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('基本资料')
   })
+  it('我的客户只保留跟进和释放，释放要求原因并提示本人48小时冷却', async () => {
+    const row = { ...sampleStore, poolType: 'PRIVATE', ownerEmployeeId: storeContext.employeeId }
+    vi.mocked(crmStoreApi.context).mockResolvedValue({
+      ...storeContext,
+      permissions: ['crm:pool:private-read', 'crm:pool:release', 'crm:store:status-write'],
+    })
+    vi.mocked(crmStoreApi.list).mockResolvedValue({ total: 1, items: [row], nextCursor: null })
+    await mountPage('mine')
+    const actions = wrapper!
+      .find('.row-actions')
+      .findAll('button')
+      .map((button) => button.text())
+    expect(actions).toEqual(['跟进', '释放'])
+    const prompt = vi
+      .spyOn(ElMessageBox, 'prompt')
+      .mockResolvedValue({ value: '门店超出常规服务线路', action: 'confirm' } as Awaited<
+        ReturnType<typeof ElMessageBox.prompt>
+      >)
+    try {
+      await wrapper!.find('.row-actions').findAll('button')[1].trigger('click')
+      await flushPromises()
+      expect(prompt).toHaveBeenCalledWith(
+        expect.stringContaining('本人48小时'),
+        '释放到公海',
+        expect.objectContaining({
+          confirmButtonText: '确认释放',
+          inputValidator: expect.any(Function),
+        }),
+      )
+      const options = prompt.mock.calls[0][2] as {
+        inputValidator: (value: string) => boolean | string
+      }
+      expect(options.inputValidator(' ')).not.toBe(true)
+      expect(crmStoreApi.release).toHaveBeenCalledWith(row.id, row.revision, '门店超出常规服务线路')
+    } finally {
+      prompt.mockRestore()
+    }
+  })
   it('维护直接打开编辑弹窗，保存后回到列表，不隐式弹出详情', async () => {
     vi.mocked(crmStoreApi.context).mockResolvedValue({
       ...storeContext,
       permissions: ['crm:store:library-read', 'crm:store:manage', 'crm:pool:claim'],
     })
     await mountPage('library')
+    expect(
+      wrapper!
+        .find('.row-actions')
+        .findAll('button')
+        .map((button) => button.text()),
+    ).toEqual(['维护'])
     await wrapper!
       .findAll('button')
       .find((b) => b.text() === '维护')!
@@ -282,7 +328,9 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     })
     await mountPage('library')
     expect(crmStoreApi.list).toHaveBeenCalledWith(expect.objectContaining({ view: 'ALL' }))
-    expect(wrapper!.text()).toContain('公司门店总账')
+    expect(wrapper!.text()).not.toContain('公司门店总账')
+    await wrapper!.get('button[aria-label="查看页面说明"]').trigger('mouseenter')
+    await vi.waitFor(() => expect(document.body.textContent).toContain('公司门店总账'))
     expect(wrapper!.text()).toContain('已停用')
     expect(wrapper!.findAll('button').some((b) => b.text() === '维护')).toBe(true)
     expect(wrapper!.findAll('button').some((b) => b.text() === '认领')).toBe(false)
@@ -448,7 +496,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     const actions = wrapper!.findAll('button').map((b) => b.text())
     expect(actions.filter((label) => label === '去跟进')).toHaveLength(1)
     expect(actions.filter((label) => label === '去公海')).toHaveLength(1)
-    expect(actions.filter((label) => label === '商家档案')).toHaveLength(3)
+    expect(actions).not.toContain('商家档案')
     for (const label of ['新增门店', '认领', '维护', '经营状态'])
       expect(actions).not.toContain(label)
     expect(wrapper!.text()).toContain('2026-05-01')

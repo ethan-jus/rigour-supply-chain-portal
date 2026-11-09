@@ -4,8 +4,10 @@
       <DhbPageSyncButton scope="SHIPMENT" label="发货" @completed="loadRows" />
       <div>
         <span class="supply-page__eyebrow">Order · 履约中心</span>
-        <SupplyPageTitle>发货单</SupplyPageTitle>
-        <p>查看销售订单对应的客户发货、物流单号和发货商品明细。</p>
+        <div class="list-heading-title">
+          <SupplyPageTitle>发货单</SupplyPageTitle>
+          <SupplyPageHelp>查看销售订单对应的客户发货、物流单号和发货商品明细。</SupplyPageHelp>
+        </div>
       </div>
     </div>
 
@@ -270,6 +272,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'

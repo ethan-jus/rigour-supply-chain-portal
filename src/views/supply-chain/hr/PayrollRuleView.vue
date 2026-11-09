@@ -2,8 +2,10 @@
   <section class="supply-page supply-page--business-main">
     <div class="page-heading">
       <div>
-        <SupplyPageTitle>城市总管理</SupplyPageTitle>
-        <p>汇总员工档案中的管辖城市与任期；资料统一在员工档案维护。</p>
+        <div class="list-heading-title">
+          <SupplyPageTitle>城市总管理</SupplyPageTitle>
+          <SupplyPageHelp>汇总员工档案中的管辖城市与任期；资料统一在员工档案维护。</SupplyPageHelp>
+        </div>
       </div>
       <el-button v-if="can('hr:employee:read')" @click="openEmployee()">前往员工档案</el-button>
     </div>
@@ -18,6 +20,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { ref, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'

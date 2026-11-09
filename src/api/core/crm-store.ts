@@ -334,7 +334,12 @@ export const crmStoreApi = {
       ...options,
       params: { keyword, areaCode },
     }),
-  update: (row: StoreRow, reason: string, amapPoiId?: string) =>
+  update: (
+    row: StoreRow,
+    reason: string,
+    amapPoiId?: string,
+    businessStatus?: { status: string; reason: string },
+  ) =>
     apiClient.put<void>(
       `${base}/${encodeURIComponent(row.id)}`,
       {
@@ -351,6 +356,7 @@ export const crmStoreApi = {
           coordinateSystem: row.coordinateSystem,
         },
         amapPoiId,
+        businessStatus,
         reason,
       },
       options,

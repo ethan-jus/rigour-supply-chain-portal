@@ -4,7 +4,7 @@
     :class="{
       'console--supply-chain': applicationCode === 'SUPPLY_CHAIN',
       'console--business-records': /^\/supply-chain\/(hr|cost)(\/|$)/.test(route.path),
-      'console--collapsed': workspace.collapsed,
+      'console--collapsed': workspace.collapsed || workspace.navigationMode === 'auto',
       'console--home': route.path === '/supply-chain',
       'console--dashboard': ['overview', 'city-operating', 'sales'].includes(
         String(route.meta.dashboardSection),

@@ -163,13 +163,59 @@
             </el-select>
           </el-form-item>
         </div>
-        <el-form-item label="修改原因" required>
+      </section>
+      <section class="editor-section" aria-label="经营情况与变更依据">
+        <el-form-item label="经营状态">
+          <el-select
+            v-model="form.businessStatus"
+            aria-label="维护经营状态"
+            :disabled="saving || store.recordStatus !== 'ACTIVE' || !statusOptions.length"
+            placeholder="选择核实后的经营状态"
+          >
+            <el-option
+              v-for="item in statusOptions"
+              :key="item.dictionaryItemCode"
+              :value="item.dictionaryItemCode"
+              :label="item.dictionaryItemName"
+            />
+          </el-select>
+          <span v-if="!statusOptions.length" class="hint"
+            >经营状态字典未加载，可先维护其他资料。</span
+          >
+        </el-form-item>
+        <el-alert
+          v-if="statusChanged && form.businessStatus === 'CLOSED'"
+          title="已停业将结束当前归属，原归属人进入48小时认领冷却，停止认领及新作业；门店、拜访和成交历史保留。"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="status-notice"
+        />
+        <el-alert
+          v-else-if="statusChanged && form.businessStatus === 'TEMP_CLOSED'"
+          title="暂时停业保留归属和原保护期限，暂停新拜访与开单。"
+          type="info"
+          :closable="false"
+          class="status-notice"
+        />
+        <el-alert
+          v-else-if="statusChanged && store.businessStatus === 'CLOSED'"
+          title="恢复可作业状态后进入公海，不恢复历史归属；原归属人的48小时冷却继续生效。"
+          type="info"
+          :closable="false"
+          class="status-notice"
+        />
+        <el-form-item :label="statusChanged ? '修改原因 / 经营状态核实依据' : '修改原因'" required>
           <el-input
             v-model="reason"
             type="textarea"
             aria-label="维护修改原因"
             maxlength="500"
-            placeholder="例如：核对门头与地址，确认高德候选门店并补全资料"
+            :placeholder="
+              statusChanged
+                ? '说明资料变更和经营状态的核实依据，例如：现场确认已撤店，更新联系电话'
+                : '例如：核对门头与地址，确认高德候选门店并补全资料'
+            "
             :rows="2"
           />
         </el-form-item>
@@ -203,10 +249,22 @@ import type { DictItemView } from '@/api/core/business-settings'
 import { storeLeadAreaOptions, storePoiErrorMessage } from '@/utils/crm-store'
 import { storeClassificationCatalog } from '@/utils/crm-store-classification'
 
-const props = defineProps<{ store: StoreRow; storeTypes: DictItemView[] }>()
+const props = defineProps<{
+  store: StoreRow
+  storeTypes: DictItemView[]
+  statuses: DictItemView[]
+}>()
 const emit = defineEmits<{ close: []; saved: [id: string] }>()
 const form = reactive({ ...props.store })
 const reason = ref('')
+const statusChanged = computed(() => form.businessStatus !== props.store.businessStatus)
+const statusOptions = computed(() =>
+  props.statuses.filter(
+    (item) =>
+      item.enabled !== false &&
+      ['UNKNOWN', 'OPEN', 'TEMP_CLOSED', 'CLOSED'].includes(item.dictionaryItemCode),
+  ),
+)
 const areas = ref<AdminArea[]>([])
 const loadingAreas = ref(true),
   areaError = ref('')
@@ -297,11 +355,12 @@ function applyPoi(poi: StorePoi) {
   if (type) form.storeTypeCode = type.canonicalItemCode || type.dictionaryItemCode
 }
 function undoPoi() {
-  if (beforePoi) Object.assign(form, beforePoi)
+  if (beforePoi) Object.assign(form, beforePoi, { businessStatus: form.businessStatus })
   selectedPoi.value = null
   beforePoi = null
 }
 async function save() {
+  if (saving.value) return
   if (
     !form.name.trim() ||
     !form.address.trim() ||
@@ -309,6 +368,14 @@ async function save() {
     !areaLabels.value.has(form.areaCode)
   ) {
     ElMessage.warning('请填写门店名称、所属地区、详细地址和修改原因')
+    return
+  }
+  if (
+    statusChanged.value &&
+    (props.store.recordStatus !== 'ACTIVE' ||
+      !statusOptions.value.some((item) => item.dictionaryItemCode === form.businessStatus))
+  ) {
+    ElMessage.warning('请选择字典中启用的经营状态，归档门店不可修改经营状态')
     return
   }
   const longitude =
@@ -336,6 +403,9 @@ async function save() {
       },
       reason.value.trim(),
       selectedPoi.value?.id,
+      statusChanged.value
+        ? { status: form.businessStatus, reason: reason.value.trim() }
+        : undefined,
     )
     ElMessage.success('已保存并记录变更')
     emit('saved', form.id)
@@ -380,6 +450,9 @@ async function save() {
 }
 .editor-section :deep(.el-form-item__label) {
   margin-bottom: 6px;
+}
+.status-notice {
+  margin-bottom: 16px;
 }
 .area-search {
   display: flex;

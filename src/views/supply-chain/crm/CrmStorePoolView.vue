@@ -3,6 +3,25 @@
     <header class="store-heading">
       <div class="store-heading-title">
         <h1>{{ title }}</h1>
+        <SupplyPageHelp v-if="isList">
+          <template v-if="view === 'ALL'">
+            公司门店总账 ·
+            包含公海、私海和停业门店，合作历史独立保留。停业档案仍参与查重，历史客户档案暂不迁移。
+          </template>
+          <template v-else-if="view === 'PUBLIC'">
+            可认领的公司门店；暂时停业、已停业及归档门店不进入作业公海。
+          </template>
+          <template v-else-if="view === 'COOPERATED'">
+            按成交历史展示合作门店，经营状态和当前负责人独立记录；停业不删除合作历史。
+          </template>
+          <template v-else-if="view === 'MINE'">
+            {{
+              team
+                ? '查看授权团队的客户跟进与保护期限；拜访仍由当前负责人发起。'
+                : '认领后 24 小时内首访，随后 7 天内跟进；本轮成交后按 60 天维护。'
+            }}
+          </template>
+        </SupplyPageHelp>
         <span class="scope-label"
           ><el-icon><Location /></el-icon>当前范围：{{ context?.scopeLabel ?? '加载中' }}</span
         >
@@ -66,23 +85,6 @@
         </el-popover>
       </div>
     </header>
-    <p v-if="view === 'ALL'" class="workspace-purpose">
-      公司门店总账 ·
-      包含公海、私海和停业门店，合作历史独立保留。停业档案仍参与查重，历史客户档案暂不迁移。
-    </p>
-    <p v-else-if="view === 'PUBLIC'" class="workspace-purpose">
-      可认领的公司门店；暂时停业、已停业及归档门店不进入作业公海。
-    </p>
-    <p v-else-if="view === 'COOPERATED'" class="workspace-purpose">
-      按成交历史展示合作门店，经营状态和当前负责人独立记录；停业不删除合作历史。
-    </p>
-    <p v-else-if="view === 'MINE'" class="workspace-purpose">
-      {{
-        team
-          ? '查看授权团队的客户跟进与保护期限；拜访仍由当前负责人发起。'
-          : '认领后 24 小时内首访，随后 7 天内跟进；本轮成交后按 60 天维护。'
-      }}
-    </p>
 
     <el-alert
       v-if="error"
@@ -270,11 +272,7 @@
           empty-text="当前授权范围和筛选条件下暂无门店"
           height="100%"
         >
-          <el-table-column
-            label="门店名称"
-            :width="view === 'MINE' || view === 'COOPERATED' ? 240 : 280"
-            :fixed="compactViewport ? false : 'left'"
-          >
+          <el-table-column label="门店名称" width="220" :fixed="compactViewport ? false : 'left'">
             <template #default="{ row }">
               <button class="store-name" :title="row.name" @click="openDetail(row as StoreRow)">
                 {{ row.name }}
@@ -528,7 +526,7 @@
               (view === 'COOPERATED' && canOpenCooperationActions)
             "
             label="操作"
-            :width="view === 'PUBLIC' ? 90 : 180"
+            :width="view === 'MINE' ? 120 : view === 'COOPERATED' ? 100 : 80"
             :fixed="compactViewport ? false : 'right'"
             ><template #default="{ row }"
               ><div class="row-actions">
@@ -563,13 +561,6 @@
                   @click="openEdit(row as StoreRow)"
                   >维护</el-button
                 >
-                <el-button
-                  v-if="canChangeStatus(row as StoreRow)"
-                  link
-                  type="primary"
-                  @click="statusEditing = row as StoreRow"
-                  >经营状态</el-button
-                >
                 <template v-if="view === 'COOPERATED'">
                   <el-button
                     v-if="isOwnStore(row as StoreRow) && can('crm:pool:private-read')"
@@ -585,12 +576,6 @@
                     @click="navigateStore('PUBLIC', row.id)"
                     >去公海</el-button
                   >
-                  <el-button
-                    v-if="can('crm:store:library-read')"
-                    link
-                    @click="navigateStore('ALL', row.id)"
-                    >商家档案</el-button
-                  >
                 </template>
                 <template v-if="view === 'MINE'">
                   <el-button
@@ -604,7 +589,7 @@
                     v-if="isOwnStore(row as StoreRow) && can('crm:pool:release')"
                     link
                     @click="release(row as StoreRow)"
-                    >退回</el-button
+                    >释放</el-button
                   >
                 </template>
               </div></template
@@ -685,9 +670,10 @@
           scrollbar-always-on
           empty-text="暂无门店提报"
         >
-          <el-table-column label="门店名称" width="240" :fixed="compactViewport ? false : 'left'"
+          <el-table-column label="门店名称" width="220" :fixed="compactViewport ? false : 'left'"
             ><template #default="{ row }"
-              ><button class="store-name" @click="viewLead(row as StoreLead)">{{ row.name }}</button
+              ><button class="store-name" :title="row.name" @click="viewLead(row as StoreLead)">
+                {{ row.name }}</button
               ><span class="secondary-line">{{ typeName(row.storeTypeCode) }}</span></template
             ></el-table-column
           >
@@ -1044,7 +1030,7 @@
               can('crm:pool:release')
             "
             @click="release(selected)"
-            >退回公海</el-button
+            >释放到公海</el-button
           ><el-button
             v-if="view === 'PUBLIC' && selected.poolType === 'PUBLIC' && can('crm:pool:claim')"
             type="primary"
@@ -1093,6 +1079,7 @@
       v-if="editing"
       :store="editing"
       :store-types="storeTypes"
+      :statuses="businessStatuses"
       @close="editing = null"
       @saved="onStoreSaved"
     />
@@ -1100,6 +1087,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -1309,7 +1297,7 @@ const eventLabels: Record<string, string> = {
   BUSINESS_STATUS_CHANGED: '经营状态变更',
   RESUBMITTED: '修改后重新提报',
   CLAIMED: '认领到私海',
-  RELEASED: '退回公海',
+  RELEASED: '释放到公海',
   AUTO_RELEASED: '到期自动回公海',
   PROTECTION_UPDATED: '保护期限更新',
   RECOVERY_HELD: '暂缓回收',
@@ -1361,7 +1349,7 @@ const acquireLabels: Record<string, string> = {
   INITIALIZATION: '初始化',
 }
 const endReasonLabels: Record<string, string> = {
-  VOLUNTARY_RETURN: '主动退回',
+  VOLUNTARY_RETURN: '主动释放',
   STORE_CLOSED: '门店停业结束归属',
   FIRST_VISIT_TIMEOUT: '24小时未首访或成交',
   FOLLOWUP_TIMEOUT: '7天未复访或成交',
@@ -1386,9 +1374,11 @@ const businessStatusType = (code: string) =>
 const poolLabel = (row: StoreRow) =>
   row.poolType === 'PRIVATE' ? '私海' : storeWorkBlocked(row) ? '停止作业' : '公海'
 const canOpenCooperationActions = computed(() =>
-  ['crm:pool:private-read', 'crm:pool:public-read', 'crm:store:library-read'].some(can),
+  ['crm:pool:private-read', 'crm:pool:public-read'].some(can),
 )
-const canViewResult = canOpenCooperationActions
+const canViewResult = computed(
+  () => canOpenCooperationActions.value || can('crm:store:library-read'),
+)
 const canGoPublic = (row: StoreRow) =>
   row.poolType === 'PUBLIC' &&
   row.recordStatus === 'ACTIVE' &&
@@ -1424,8 +1414,9 @@ async function viewLeadResult(lead: StoreLead) {
 }
 const canChangeStatus = (row: StoreRow) =>
   row.recordStatus === 'ACTIVE' &&
-  ((view.value === 'ALL' && can('crm:store:manage')) ||
-    (view.value === 'MINE' && isOwnStore(row) && can('crm:store:status-write')))
+  view.value === 'MINE' &&
+  isOwnStore(row) &&
+  can('crm:store:status-write')
 const leadAreaLabels = computed(
   () =>
     new Map(
@@ -1720,12 +1711,18 @@ async function copy(value: string) {
 async function release(row: StoreRow) {
   try {
     const { value } = await ElMessageBox.prompt(
-      '退回后本人48小时内无法重新认领，业务历史保留。请填写原因。',
-      '退回公海',
-      { inputValidator: (value) => !!value?.trim() || '请填写原因' },
+      '释放后门店进入公海，本人48小时内无法重新认领；拜访、成交和跟进历史保留。',
+      '释放到公海',
+      {
+        inputPlaceholder: '请填写释放原因',
+        confirmButtonText: '确认释放',
+        cancelButtonText: '取消',
+        inputValidator: (value) =>
+          (!!value?.trim() && value.trim().length <= 500) || '请填写500字以内的释放原因',
+      },
     )
     await crmStoreApi.release(row.id, row.revision, value)
-    ElMessage.success('已退回公海')
+    ElMessage.success('已释放到公海，本人进入48小时认领冷却')
     detailOpen.value = false
     await search()
   } catch (e) {
@@ -1871,7 +1868,7 @@ watch(displayMode, (mode) => {
   if (mode === 'list' && context.value && isList.value) void loadRows()
 })
 onActivated(() => {
-  // 认领、退回及权限维护可能发生在其他页签，重新打开时刷新并保留当前筛选。
+  // 认领、释放及权限维护可能发生在其他页签，重新打开时刷新并保留当前筛选。
   if (activatedOnce) void reload()
   activatedOnce = true
 })
@@ -1898,12 +1895,6 @@ watch(
 @use '@/assets/styles/variables' as *;
 .name-tags {
   margin-top: 8px;
-}
-.workspace-purpose {
-  margin: -4px 0 0;
-  color: $color-text-secondary;
-  font-size: 12px;
-  line-height: 1.6;
 }
 .ownership-work {
   padding: 16px;
@@ -2085,10 +2076,12 @@ watch(
   min-width: 0;
 }
 .store-name {
+  display: block;
   width: 100%;
   min-width: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.5;
   padding: 0;
   border: 0;

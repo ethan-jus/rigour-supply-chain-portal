@@ -5,6 +5,15 @@
   <el-drawer v-model="visible" title="显示设置" size="min(440px, 100vw)" append-to-body>
     <p class="display-note">统一应用于系统页面，保存在当前浏览器。</p>
     <el-form label-position="top" class="display-form" @submit.prevent="save">
+      <el-form-item label="二级菜单">
+        <el-radio-group v-model="draft.secondaryMenuMode" aria-label="二级菜单展示模式">
+          <el-radio-button value="auto">自动收起</el-radio-button>
+          <el-radio-button value="pinned">常驻展示</el-radio-button>
+        </el-radio-group>
+        <span class="display-note"
+          >自动收起：悬停或点击一级菜单展开，离开导航区域后收起；常驻展示：保留左侧二级菜单。</span
+        >
+      </el-form-item>
       <el-form-item label="界面字体">
         <el-select v-model="draft.font" aria-label="界面字体">
           <el-option-group label="内置字体 · 无需安装">
@@ -89,6 +98,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 import { Setting } from '@element-plus/icons-vue'
+import { useConsoleWorkspace } from '@/stores/console-workspace'
 import {
   DEFAULT_DISPLAY,
   FONT_PRESETS,
@@ -98,6 +108,7 @@ import {
   readDisplay,
   saveDisplay,
 } from '@/utils/display-preferences'
+const workspace = useConsoleWorkspace()
 const builtinFonts = Object.entries(FONT_PRESETS).filter(([, font]) => font.webFamily)
 const localFonts = Object.entries(FONT_PRESETS).filter(([, font]) => font.localFamily)
 const localAvailable = reactive<Record<string, boolean | undefined>>({})
@@ -146,6 +157,7 @@ function save() {
   if (fontLoading.value || fontError.value) return
   try {
     saveDisplay(draft)
+    workspace.setNavigationMode(draft.secondaryMenuMode)
     visible.value = false
   } catch {
     error.value = '浏览器未允许保存显示设置，请检查浏览器存储权限。'

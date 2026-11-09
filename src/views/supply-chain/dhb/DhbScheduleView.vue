@@ -2,8 +2,10 @@
   <div class="sync-schedules supply-page">
     <header class="page-heading">
       <div>
-        <h1>同步定时任务</h1>
-        <p>按业务顺序依次同步订货宝相关数据，完成后按设定间隔自动执行下一轮。</p>
+        <div class="list-heading-title">
+          <h1>同步定时任务</h1>
+          <SupplyPageHelp>按业务顺序依次同步订货宝相关数据，完成后按设定间隔自动执行下一轮。</SupplyPageHelp>
+        </div>
       </div>
       <el-button :icon="Refresh" :loading="loading" :disabled="savingDhb || savingBi" @click="load"
         >刷新状态</el-button
@@ -121,6 +123,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, Document, Tickets, Right, Refresh, InfoFilled } from '@element-plus/icons-vue'
@@ -288,7 +291,7 @@ onMounted(load)
   margin-bottom: 28px;
 }
 .sync-schedules .page-heading h1 {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 30px;
   letter-spacing: -0.6px;
 }

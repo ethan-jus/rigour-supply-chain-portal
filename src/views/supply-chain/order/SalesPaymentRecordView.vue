@@ -5,8 +5,10 @@
       <DhbPageSyncButton scope="RECEIPT" label="回款" @completed="loadRows" />
       <div>
         <span class="supply-page__eyebrow">Order · 收款中心</span>
-        <SupplyPageTitle>销售回款</SupplyPageTitle>
-        <p>查看销售订单对应的回款记录、回款方式、回款人和金额。</p>
+        <div class="list-heading-title">
+          <SupplyPageTitle>销售回款</SupplyPageTitle>
+          <SupplyPageHelp>查看销售订单对应的回款记录、回款方式、回款人和金额。</SupplyPageHelp>
+        </div>
       </div>
     </div>
 
@@ -294,6 +296,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import HistoryOrderReview from '@/components/supply/HistoryOrderReview.vue'

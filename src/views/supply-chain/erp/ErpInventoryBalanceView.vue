@@ -4,8 +4,10 @@
       <DhbPageSyncButton scope="INVENTORY" label="库存" @completed="loadRows" />
       <div>
         <span class="supply-page__eyebrow">ERP · 库存管理</span>
-        <SupplyPageTitle>库存</SupplyPageTitle>
-        <p>按仓库、商品和规格查看当前库存余额；库存变动必须通过入库单、出库单或调拨单形成流水。</p>
+        <div class="list-heading-title">
+          <SupplyPageTitle>库存</SupplyPageTitle>
+          <SupplyPageHelp>按仓库、商品和规格查看当前库存余额；库存变动必须通过入库单、出库单或调拨单形成流水。</SupplyPageHelp>
+        </div>
       </div>
       <el-tag type="info" effect="plain">只读</el-tag>
     </div>
@@ -124,6 +126,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'

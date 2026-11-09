@@ -3,8 +3,10 @@
     <section class="import-heading">
       <div>
         <span class="eyebrow">外部同步 · 飞书</span>
-        <SupplyPageTitle>飞书导入中心</SupplyPageTitle>
-        <p>飞书导出文件先进入统一批次，预检通过后可直接正式导入；历史预检批次可继续执行。</p>
+        <div class="list-heading-title">
+          <SupplyPageTitle>飞书导入中心</SupplyPageTitle>
+          <SupplyPageHelp>飞书导出文件先进入统一批次，预检通过后可直接正式导入；历史预检批次可继续执行。</SupplyPageHelp>
+        </div>
       </div>
       <el-tag type="info" effect="plain">统一导入口</el-tag>
     </section>
@@ -683,6 +685,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -2122,7 +2125,6 @@ function errorMessage(reason: unknown, fallback: string) {
   line-height: 1.25;
 }
 
-.import-heading p,
 .headers-card span {
   margin: 0;
   color: #64748b;

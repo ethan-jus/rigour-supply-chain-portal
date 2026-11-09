@@ -259,6 +259,7 @@ describe('operating status and submission review', () => {
       global: { plugins: [ElementPlus] },
     })
     await flushPromises()
+    expect(document.body.textContent).not.toContain('UNKNOWN')
     wrapper.findComponent(ElSelect).vm.$emit('update:modelValue', 'CLOSED')
     await flushPromises()
     await button('确认并留痕')

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElSelect } from 'element-plus'
 import CrmStoreEditor from '@/views/supply-chain/crm/CrmStoreEditor.vue'
 import { crmStoreApi, type StorePoi } from '@/api/core/crm-store'
 import { sampleStore, storeContext } from './fixtures/crm-stores'
@@ -45,6 +45,19 @@ beforeEach(async () => {
     props: {
       store: { ...sampleStore, publicPhone: '人工电话', storeTypeCode: 'EXISTING' },
       storeTypes: [],
+      statuses: ['UNKNOWN', 'OPEN', 'TEMP_CLOSED', 'CLOSED'].map((code, ordinal) => ({
+        id: String(ordinal + 1),
+        dictionaryId: 1,
+        dictionaryCode: 'CRM_STORE_BUSINESS_STATUS',
+        dictionaryItemCode: code,
+        dictionaryItemName: code,
+        ordinal,
+        enabled: true,
+        dictionaryItemLevel: 1,
+        parentDictionaryItemCode: null,
+        remark: null,
+        revision: 1,
+      })),
     },
     global: { plugins: [ElementPlus] },
   })
@@ -73,6 +86,7 @@ describe('store maintenance', () => {
     expect(crmStoreApi.update).toHaveBeenCalledWith(
       expect.objectContaining({ name: '另一家门店' }),
       '人工核实',
+      undefined,
       undefined,
     )
   })
@@ -109,6 +123,7 @@ describe('store maintenance', () => {
       }),
       '核实匹配',
       poi.id,
+      undefined,
     )
   })
   it('shows actionable IP whitelist guidance without exposing upstream diagnostics', async () => {
@@ -141,6 +156,7 @@ describe('store maintenance', () => {
       }),
       '保留原资料',
       undefined,
+      undefined,
     )
   })
   it('loads manage scope, shows the complete administrative path and saves manual edits without Amap', async () => {
@@ -156,6 +172,7 @@ describe('store maintenance', () => {
         longitude: sampleStore.longitude,
       }),
       '现场核实',
+      undefined,
       undefined,
     )
     expect(crmStoreApi.poiCandidates).not.toHaveBeenCalled()
@@ -185,6 +202,7 @@ describe('store maintenance', () => {
       }),
       '确认高德门店',
       poi.id,
+      undefined,
     )
   })
   it('keeps manual maintenance available on provider failure and does not pretend a match succeeded', async () => {
@@ -194,6 +212,57 @@ describe('store maintenance', () => {
     expect(document.body.textContent).not.toContain('本次确认')
     await input('维护修改原因', '人工核实')
     await click('保存并留痕')
-    expect(crmStoreApi.update).toHaveBeenCalledWith(expect.anything(), '人工核实', undefined)
+    expect(crmStoreApi.update).toHaveBeenCalledWith(
+      expect.anything(),
+      '人工核实',
+      undefined,
+      undefined,
+    )
+  })
+  it('saves profile and closure in one command with evidence and an explicit cooldown notice', async () => {
+    wrapper.findAllComponents(ElSelect).at(-1)!.vm.$emit('update:modelValue', 'CLOSED')
+    await flushPromises()
+    expect(document.body.textContent).toContain('48小时认领冷却')
+    await click('保存并留痕')
+    expect(crmStoreApi.update).not.toHaveBeenCalled()
+    await input('维护详细地址', '核实后的门牌地址')
+    await input('维护修改原因', '现场确认已撤店并修正门牌')
+    await click('保存并留痕')
+    expect(crmStoreApi.update).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ address: '核实后的门牌地址' }),
+      '现场确认已撤店并修正门牌',
+      undefined,
+      { status: 'CLOSED', reason: '现场确认已撤店并修正门牌' },
+    )
+  })
+  it('keeps a pending status change when undoing POI fill, and preserves edits after a rejected save', async () => {
+    await click('从高德补全')
+    await click('确认填入')
+    wrapper.findAllComponents(ElSelect).at(-1)!.vm.$emit('update:modelValue', 'TEMP_CLOSED')
+    await click('撤销填入')
+    await input('维护修改原因', '现场确认装修暂停')
+    vi.mocked(crmStoreApi.update).mockRejectedValue(new Error('门店状态已变化，请刷新'))
+    await click('保存并留痕')
+    expect(crmStoreApi.update).toHaveBeenCalledWith(
+      expect.objectContaining({ name: sampleStore.name }),
+      '现场确认装修暂停',
+      undefined,
+      { status: 'TEMP_CLOSED', reason: '现场确认装修暂停' },
+    )
+    expect(wrapper.emitted('saved')).toBeUndefined()
+    expect(document.body.textContent).toContain('门店状态已变化，请刷新')
+    expect(document.body.textContent).toContain('保留归属和原保护期限')
+  })
+  it('disables status changes when the dictionary is absent without blocking profile maintenance', async () => {
+    await wrapper.setProps({ statuses: [] })
+    expect(wrapper.findAllComponents(ElSelect).at(-1)!.props('disabled')).toBe(true)
+    await input('维护修改原因', '手动修正资料')
+    await click('保存并留痕')
+    expect(crmStoreApi.update).toHaveBeenCalledWith(
+      expect.anything(),
+      '手动修正资料',
+      undefined,
+      undefined,
+    )
   })
 })

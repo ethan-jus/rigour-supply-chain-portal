@@ -14,6 +14,12 @@ beforeEach(() => {
   document.documentElement.removeAttribute('style')
 })
 describe('统一显示设置', () => {
+  it('旧设置默认自动收起，常驻模式保存后可恢复，非法模式回退默认', () => {
+    expect(normalizeDisplay({ font: 'serif' }).secondaryMenuMode).toBe('auto')
+    expect(normalizeDisplay({ secondaryMenuMode: 'unknown' }).secondaryMenuMode).toBe('auto')
+    saveDisplay({ ...DEFAULT_DISPLAY, secondaryMenuMode: 'pinned' })
+    expect(readDisplay().secondaryMenuMode).toBe('pinned')
+  })
   it('非法或旧存储不会导致页面失败，字号保留可读下限', () => {
     localStorage.setItem(DISPLAY_STORAGE_KEY, '{bad')
     expect(readDisplay()).toEqual(DEFAULT_DISPLAY)

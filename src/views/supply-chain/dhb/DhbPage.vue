@@ -3,10 +3,10 @@
     <section class="sync-heading">
       <div>
         <span class="eyebrow">外部同步 · 订货宝</span>
-        <SupplyPageTitle>订货宝同步中心</SupplyPageTitle>
-        <p>
-          订货宝只作为后台来源接入，数据经过映射、幂等和对账后写入我方业务表；各业务页面分别同步对应对象。
-        </p>
+        <div class="list-heading-title">
+          <SupplyPageTitle>订货宝同步中心</SupplyPageTitle>
+          <SupplyPageHelp>订货宝只作为后台来源接入，数据经过映射、幂等和对账后写入我方业务表；各业务页面分别同步对应对象。</SupplyPageHelp>
+        </div>
       </div>
       <el-tag type="info" effect="plain">运维视图</el-tag>
     </section>
@@ -303,6 +303,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
@@ -792,14 +793,6 @@ defineExpose({
   font-size: 22px;
   font-weight: 700;
   line-height: 30px;
-}
-
-.sync-heading p {
-  max-width: 900px;
-  margin: 0;
-  color: var(--supply-text-muted);
-  font-size: var(--app-font-size-base);
-  line-height: 1.55;
 }
 
 .boundary-alert {

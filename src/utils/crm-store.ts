@@ -9,7 +9,7 @@ export function storePoiErrorMessage(error: unknown): string {
       (detail) => detail.field === 'amap' && detail.reason === 'AMAP_IP_NOT_ALLOWED',
     )
   ) {
-    return '高德拒绝当前服务器 IP（10005），请将 Sales 服务出口公网 IP 加入 Web 服务 Key 的 IP 白名单。'
+    return '高德拒绝当前服务器 IP（10005），请将 Integration 集成服务出口公网 IP 加入 Web 服务 Key 的 IP 白名单。'
   }
   return error instanceof Error ? error.message : '操作失败，请稍后重试'
 }

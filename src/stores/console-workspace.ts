@@ -1,9 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { readDisplay, type DisplayPreferences } from '@/utils/display-preferences'
 
 /** Session-only UI history; never stores credentials, filters or business records. */
 export const useConsoleWorkspace = defineStore('console-workspace', () => {
-  const collapsed = ref(false)
+  const navigationMode = ref(readDisplay().secondaryMenuMode)
+  const compact = () =>
+    typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 1100px)').matches
+  const collapsed = ref(navigationMode.value === 'auto' || compact())
+  function setNavigationMode(mode: DisplayPreferences['secondaryMenuMode']) {
+    navigationMode.value = mode
+    collapsed.value = mode === 'auto' || compact()
+  }
   const recent = ref<{ path: string; visitedAt: string }[]>([])
   const session = ref('')
   function visit(path: string) {
@@ -17,8 +25,7 @@ export const useConsoleWorkspace = defineStore('console-workspace', () => {
     if (session.value === key) return
     session.value = key
     recent.value = []
-    collapsed.value =
-      typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 1100px)').matches
+    collapsed.value = navigationMode.value === 'auto' || compact()
   }
-  return { collapsed, recent, visit, setSession }
+  return { collapsed, navigationMode, setNavigationMode, recent, visit, setSession }
 })

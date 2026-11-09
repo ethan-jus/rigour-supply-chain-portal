@@ -18,8 +18,10 @@
       >
     </el-result>
     <template v-else>
-      <SupplyPageTitle tag="h2">系统设置</SupplyPageTitle>
-      <p class="description">维护供应链系统的用户、角色、菜单和业务配置。</p>
+      <div class="list-heading-title">
+        <SupplyPageTitle tag="h2">系统设置</SupplyPageTitle>
+        <SupplyPageHelp>维护供应链系统的用户、角色、菜单和业务配置。</SupplyPageHelp>
+      </div>
       <el-alert
         title="权限配置保存后立即生效"
         description="在角色管理配置菜单、按钮和数据范围；在用户管理分配角色及地区、仓库范围。"
@@ -40,6 +42,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
@@ -98,9 +101,6 @@ onMounted(async () => {
 <style scoped>
 .settings-home {
   padding: 24px;
-}
-.description {
-  color: var(--el-text-color-secondary);
 }
 .settings-grid {
   display: grid;

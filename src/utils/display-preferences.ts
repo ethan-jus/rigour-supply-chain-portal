@@ -82,6 +82,7 @@ export interface DisplayPreferences {
   menu: number
   heading: number
   rowHeight: number
+  secondaryMenuMode: 'auto' | 'pinned'
 }
 export const DEFAULT_DISPLAY: DisplayPreferences = {
   font: 'noto',
@@ -90,6 +91,7 @@ export const DEFAULT_DISPLAY: DisplayPreferences = {
   menu: 14,
   heading: 18,
   rowHeight: 40,
+  secondaryMenuMode: 'auto',
 }
 export const DISPLAY_STORAGE_KEY = 'scdp.display-preferences.v1'
 export function normalizeDisplay(value: unknown): DisplayPreferences {
@@ -108,6 +110,7 @@ export function normalizeDisplay(value: unknown): DisplayPreferences {
     menu: size('menu', 14, 18),
     heading: size('heading', 16, 24),
     rowHeight: size('rowHeight', 36, 52),
+    secondaryMenuMode: source.secondaryMenuMode === 'pinned' ? 'pinned' : 'auto',
   }
 }
 export function readDisplay(): DisplayPreferences {

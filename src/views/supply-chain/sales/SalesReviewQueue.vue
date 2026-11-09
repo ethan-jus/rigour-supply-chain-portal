@@ -8,9 +8,9 @@
     />
     <template v-else>
       <div class="review-toolbar">
-        <div>
+        <div class="list-heading-title">
           <strong>待复核拜访</strong>
-          <p>只展示已完成离店、尚未形成最终有效性结论的拜访。</p>
+          <SupplyPageHelp>只展示已完成离店、尚未形成最终有效性结论的拜访。</SupplyPageHelp>
         </div>
         <el-date-picker
           v-model="dateRange"
@@ -342,6 +342,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -702,11 +703,6 @@ watch(reviewDialog, (visible) => {
 }
 .review-toolbar strong {
   color: $color-text-primary;
-}
-.review-toolbar p {
-  margin: 5px 0 0;
-  color: $color-text-secondary;
-  font-size: var(--app-font-size-base);
 }
 .primary-cell,
 .time-cell,
