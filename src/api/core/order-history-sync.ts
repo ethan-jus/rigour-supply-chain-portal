@@ -23,3 +23,14 @@ export interface HistoryPerformance {
 }
 export const historyPerformance = (month: string) =>
   apiClient.get<HistoryPerformance>('/orders/history-sync/performance', { params: { month } })
+
+export interface SourceLifecycleEvent {
+  status: string
+  operatorName: string | null
+  operatedAt: string | null
+  sourceUpdatedAt: string | null
+  detectedAt: string
+  reason: string | null
+}
+export const orderLifecycleEvents = (orderId: string | number) =>
+  apiClient.get<SourceLifecycleEvent[]>(`/orders/history-sync/orders/${orderId}/lifecycle`)

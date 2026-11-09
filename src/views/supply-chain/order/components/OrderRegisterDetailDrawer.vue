@@ -150,11 +150,19 @@
                 {{ sourceSystemLabel(detail.sourceSystemCode) }}
               </el-descriptions-item>
               <el-descriptions-item label="来源单号">{{ detail.sourceOrderNo || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="创建人">{{ detail.createdBy || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="创建时间">{{ displayDateTime(detail.createdTime) }}</el-descriptions-item>
+              <el-descriptions-item label="创建人">{{ detail.sourceCreatorName || detail.createdBy || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="下单时间">{{ displayDateTime(detail.orderDate) }}</el-descriptions-item>
               <el-descriptions-item label="修改人">{{ detail.updatedBy || '-' }}</el-descriptions-item>
               <el-descriptions-item label="修改时间">{{ displayDateTime(detail.updatedTime) }}</el-descriptions-item>
             </el-descriptions>
+            <el-alert v-if="lifecycleError" :title="lifecycleError" type="warning" :closable="false" />
+            <el-table v-if="lifecycleEvents.length" :data="lifecycleEvents" size="small" style="margin-top: 16px">
+              <el-table-column label="状态" width="90"><template #default="{ row }">{{ orderStatusLabel(row.status) }}</template></el-table-column>
+              <el-table-column label="来源操作人" width="120"><template #default="{ row }">{{ row.operatorName || '来源未提供' }}</template></el-table-column>
+              <el-table-column label="来源操作时间" width="175"><template #default="{ row }">{{ row.operatedAt ? displayDateTime(row.operatedAt) : '来源未提供' }}</template></el-table-column>
+              <el-table-column label="系统发现时间" width="175"><template #default="{ row }">{{ displayDateTime(row.detectedAt) }}</template></el-table-column>
+              <el-table-column prop="reason" label="核对依据" min-width="220" />
+            </el-table>
           </el-tab-pane>
         </el-tabs>
       </template>
@@ -179,6 +187,7 @@ import {
   paymentRecordStatusTag,
   sourceSystemLabel,
 } from '@/utils/order-register-status'
+import { orderLifecycleEvents, type SourceLifecycleEvent } from '@/api/core/order-history-sync'
 import { getSalesOrder, type SalesOrderDetail } from '@/api/core/order-sales'
 import { getOrderRegisterPayments, type OrderRegisterPaymentItem } from '@/api/core/order-register'
 import PaymentDetailDrawer from './PaymentDetailDrawer.vue'
@@ -197,6 +206,8 @@ const loadError = ref('')
 const detail = ref<SalesOrderDetail | null>(null)
 const payments = ref<OrderRegisterPaymentItem[]>([])
 const paymentsLoading = ref(false)
+const lifecycleEvents = ref<SourceLifecycleEvent[]>([])
+const lifecycleError = ref('')
 const activeTab = ref('overview')
 const paymentDetailVisible = ref(false)
 const selectedPayment = ref<OrderRegisterPaymentItem | null>(null)
@@ -225,10 +236,14 @@ watch(
     loadError.value = ''
     detail.value = null
     payments.value = []
+    lifecycleEvents.value = []
+    lifecycleError.value = ''
     activeTab.value = props.initialTab || 'overview'
     try {
       const order = await getSalesOrder(orderId)
       detail.value = order
+      try { lifecycleEvents.value = await orderLifecycleEvents(orderId) }
+      catch { lifecycleError.value = '状态留痕加载失败，请稍后重试' }
       paymentsLoading.value = true
       try {
         const page = await getOrderRegisterPayments({
