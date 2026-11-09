@@ -2,6 +2,7 @@ import type { CostScope } from './CostScope'
 import type { CostCategory } from './CostCategory'
 
 export interface CostQuery {
+  department?: string
   year?: number
   month?: number
   compare?: 'previous' | 'yoy'

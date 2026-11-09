@@ -55,6 +55,14 @@ export interface CostEmployee {
   cityName?: string | null
 }
 export interface CostSource {
+  referenceIssue?: string | null
+  senderCityCode?: string | null
+  employeeCode?: string | null
+  employeeName?: string | null
+  departmentId?: number | null
+  departmentName?: string | null
+  contactName?: string | null
+  contactPhone?: string | null
   sourceSystem?: string | null
   originalNo?: string | null
   documentDate?: string | null

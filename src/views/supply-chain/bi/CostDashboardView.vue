@@ -133,6 +133,10 @@
           @month="selectMonth"
           @cities="openCities"
         />
+        <CostDepartmentAnalysis
+          :query="{ ...request, snapshotId: report.meta.snapshotId }"
+          @detail="openRecords"
+        />
       </template>
       <template v-else-if="section === 'analysis'">
         <div class="analysis-controls">
@@ -735,6 +739,7 @@ import CostRing from './cost/CostRing.vue'
 import CostComparisonBars from './cost/CostComparisonBars.vue'
 import CostRecordsTable from './cost/CostRecordsTable.vue'
 import CostOverview from './cost/CostOverview.vue'
+import CostDepartmentAnalysis from './cost/CostDepartmentAnalysis.vue'
 import { costDialog as vCostDialog } from './cost/cost-dialog'
 import { useCostDashboard } from './cost/use-cost-dashboard'
 import { useCostDashboardExport } from './cost/use-cost-dashboard-export'
@@ -962,6 +967,7 @@ function nestedDrill(key: string) {
 }
 const drillDescription = computed(() =>
   [
+    drill.value.department && '所选部门',
     drill.value.city && cities.value.find((c) => c.key === drill.value.city)?.label,
     drill.value.category && categories[drill.value.category],
     drill.value.dimensionKey && `${dimensionNames[drill.value.dimension || ''] || '对象'}筛选`,

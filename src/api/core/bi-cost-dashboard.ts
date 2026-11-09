@@ -25,6 +25,16 @@ export type { CostMonth } from './bi-cost-dashboard/models/CostMonth'
 export type { CostRecordSummary } from './bi-cost-dashboard/models/CostRecordSummary'
 
 const ROOT = '/analytics/supply/cost-dashboard'
+export interface CostDepartmentSummary {
+  departmentId: string
+  departmentName: string
+  purchaseGoods: string
+  purchaseFreight: string
+  logistics: string
+  people: { employeeCode: string; employeeName: string; role: string; amount: string }[]
+}
+export const getCostDepartments = (params: CostQuery, signal?: AbortSignal) =>
+  apiClient.get<CostDepartmentSummary[]>(`${ROOT}/departments`, { params, signal })
 export const getCostReport = (params: CostQuery, signal?: AbortSignal) =>
   apiClient.get<CostReport>(`${ROOT}/overview`, { params, signal })
 export const getCostRecords = (params: CostQuery, signal?: AbortSignal) =>

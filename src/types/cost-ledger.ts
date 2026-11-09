@@ -28,6 +28,7 @@ export interface LedgerAllocation {
   amount: number | null
 }
 export interface LedgerSource {
+  sourceWarehouseCode?: string | null
   orderTypeCode: string
   orderCode: string | null
   linkRoleCode: 'COST' | 'TRACE'

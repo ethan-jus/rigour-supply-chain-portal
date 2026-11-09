@@ -20,13 +20,22 @@ export const categories: Record<CostCategory, string> = {
   loss: '商品损耗',
 }
 export const dimensions: Record<CostCategory, string[]> = {
-  freight: ['leg', 'method', 'carrier', 'feeType', 'deliveryMode', 'route', 'employee'],
+  freight: [
+    'department',
+    'employee',
+    'leg',
+    'method',
+    'carrier',
+    'feeType',
+    'deliveryMode',
+    'route',
+  ],
   warehouse: ['feeType', 'premises', 'contract'],
   office: ['premises', 'contract', 'type', 'employee'],
   labor: ['employee', 'department'],
   marketing: ['type', 'channel', 'employee', 'payee'],
   expense: ['type', 'employee', 'department', 'trip', 'destination', 'payee'],
-  purchase: ['component', 'supplier', 'warehouse', 'product'],
+  purchase: ['component', 'department', 'supplier', 'warehouse', 'product'],
   loss: ['product', 'lossReason', 'warehouse'],
   premises_unknown: ['premises', 'contract'],
 }

@@ -572,6 +572,20 @@
             </el-form-item>
           </el-col>
           <el-col v-if="pageKind === 'warehouse'" :span="12">
+            <el-form-item label="采购成本归属部门"
+              ><el-select
+                v-model="form.costDepartmentId"
+                clearable
+                filterable
+                placeholder="选择仓库关联部门"
+                ><el-option
+                  v-for="d in warehouseDepartments"
+                  :key="d.id"
+                  :label="d.name"
+                  :value="d.id" /></el-select
+            ></el-form-item>
+          </el-col>
+          <el-col v-if="pageKind === 'warehouse'" :span="12">
             <el-form-item label="业务归属地区">
               <el-tree-select
                 v-model="form.regionCode"
@@ -682,6 +696,7 @@ import {
   deleteErpProductTag,
   deleteErpSupplierProfile,
   getErpInventoryWarehouse,
+  getErpWarehouseCostDepartments,
   getErpInventoryWarehouses,
   getErpProductBrand,
   getErpProductBrands,
@@ -872,6 +887,7 @@ const form = reactive({
   warehouseTypeCode: '',
   locationAreaCode: '',
   locationAreaVersion: null as string | null,
+  costDepartmentId: null as number | null,
   locationDisplay: '',
   defaultFlag: false,
   contactName: '',
@@ -885,6 +901,7 @@ const form = reactive({
 })
 
 onMounted(() => {
+  if (pageKind.value === 'warehouse') void loadWarehouseDepartments()
   if (pageKind.value === 'warehouse') void loadCustomerAreas()
   void loadBusinessDictionaries([
     { moduleCode: 'COMMON', code: 'REGION' },
@@ -895,12 +912,21 @@ onMounted(() => {
   ])
   void loadRows()
 })
+const warehouseDepartments = ref<{ id: number; name: string }[]>([])
+async function loadWarehouseDepartments() {
+  try {
+    warehouseDepartments.value = await getErpWarehouseCostDepartments()
+  } catch (e) {
+    ElMessage.error(errorMessage(e, '采购成本归属部门加载失败'))
+  }
+}
 
 function tableRowIndex(index: number): number {
   return (currentPage.value - 1) * pageSize.value + index + 1
 }
 
 watch(pageKind, () => {
+  if (pageKind.value === 'warehouse') void loadWarehouseDepartments()
   selectedCategoryId.value = null
   categoryKeyword.value = ''
   resetFilters()
@@ -1131,6 +1157,7 @@ function tagCommand(): ErpProductTagCommand {
 
 function warehouseCommand(): ErpInternalWarehouseCommand {
   return {
+    costDepartmentId: form.costDepartmentId ?? 0,
     warehouseName: form.name.trim(),
     regionCode: empty(form.regionCode),
     locationAreaCode: form.locationAreaCode,
@@ -1171,6 +1198,7 @@ function fillForm(row: BasicRow) {
   }
   if ('tagTypeCode' in row) form.tagTypeCode = row.tagTypeCode || ''
   if ('warehouseTypeCode' in row) {
+    form.costDepartmentId = row.costDepartmentId ?? null
     form.regionCode = row.regionCode || ''
     form.locationAreaCode = row.locationAreaCode || ''
     form.locationAreaVersion = row.locationAreaVersion || null
@@ -1201,6 +1229,7 @@ function resetForm() {
   form.warehouseTypeCode = ''
   form.locationAreaCode = ''
   form.locationAreaVersion = null
+  form.costDepartmentId = null
   form.locationDisplay = ''
   form.defaultFlag = false
   form.contactName = ''
@@ -1330,6 +1359,13 @@ function detailItems(row: BasicRow) {
     base.push(
       { label: '订货宝仓库编号', value: warehouseSourceCodes(row) },
       { label: '订货宝仓库ID', value: warehouseSourceIds(row) },
+      {
+        label: '采购成本归属部门',
+        value:
+          warehouseDepartments.value.find(
+            (d) => d.id === (row as ErpInternalWarehouseView).costDepartmentId,
+          )?.name || '-',
+      },
       {
         label: '所在地区',
         value: row.locationDisplay || row.locationAreaCode || '未维护',

@@ -1,530 +1,608 @@
 <template>
   <el-form label-position="top" class="ledger-editor">
-    <el-alert
-      v-if="plan?.sourceSync?.differencePending"
-      title="采购约定已变化，请核对实际费用并填写变更原因。"
-      type="warning"
-      :closable="false"
-    />
-    <section class="ledger-panel">
-      <h3>{{ logistics ? '运输信息' : '仓储信息' }}</h3>
-      <div class="field-grid">
-        <el-form-item :label="logistics ? '运输日期' : '登记日期'" required
-          ><el-date-picker v-model="form.costDate" type="date" value-format="YYYY-MM-DD"
-        /></el-form-item>
-        <el-form-item label="费用归属城市" required
-          ><el-select v-model="form.cityCode" filterable @change="cityChanged"
-            ><el-option
-              v-for="c in cities"
-              :key="c.code"
-              :label="c.name"
-              :value="c.code" /></el-select
-        ></el-form-item>
-        <el-form-item label="付款状态" required
-          ><CostDictSelect v-model="form.paymentStatusCode" code="COST_PAYMENT_STATUS"
-        /></el-form-item>
-        <template v-if="logistics">
-          <el-form-item label="费用归属月份" required
-            ><el-date-picker v-model="plan.costMonth" type="month" value-format="YYYY-MM"
-          /></el-form-item>
-          <el-form-item label="运输类型" required
-            ><CostDictSelect v-model="plan.transportPurposeCode" code="COST_TRANSPORT_PURPOSE"
-          /></el-form-item>
-          <el-form-item
-            v-if="plan.transportPurposeCode === 'OTHER'"
-            label="其他费用用途说明"
-            required
-            ><el-input
-              v-model="plan.nonSalesPurposeCode"
-              maxlength="200"
-              placeholder="活动、领用、赠送、品鉴等"
-          /></el-form-item>
-          <el-form-item label="承运方式" required
-            ><CostDictSelect v-model="plan.deliveryModeCode" code="COST_DELIVERY_MODE"
-          /></el-form-item>
-          <el-form-item v-if="plan.deliveryModeCode === 'THIRD_PARTY'" label="物流公司" required
-            ><CostDictSelect v-model="plan.carrierCode" code="COST_CARRIER"
-          /></el-form-item>
-          <el-form-item label="运单号"
-            ><el-input v-model="plan.trackingNo" maxlength="100"
-          /></el-form-item>
-          <el-form-item
-            v-if="plan.deliveryModeCode === 'THIRD_PARTY' && !plan.trackingNo"
-            label="无运单号原因"
-            ><el-input
-              v-model="plan.noTrackingReason"
-              maxlength="500"
-              placeholder="确认前须填写运单号或无单号原因"
-          /></el-form-item>
-          <el-form-item label="运输方式"
-            ><CostDictSelect
-              v-model="plan.transportMethodCode"
-              code="COST_TRANSPORT_KIND"
-              clearable
-          /></el-form-item>
-          <template v-if="plan.deliveryModeCode === 'SELF'"
-            ><el-form-item label="司机"
-              ><el-input v-model="plan.driverName" maxlength="100" /></el-form-item
-            ><el-form-item label="车牌号"
-              ><el-input v-model="plan.vehicleNo" maxlength="50" /></el-form-item
-          ></template>
-        </template>
-        <template v-else>
-          <el-form-item label="仓库" required
-            ><CostLedgerPartySelect
-              v-model="warehouse.warehouseCode"
-              :logistics="false"
-              kind="WAREHOUSE"
-              :name="warehouseName"
-              @selected="warehouseChanged"
-          /></el-form-item>
-          <el-form-item label="收费方"
-            ><CostLedgerPartySelect
-              v-model="warehouse.serviceProviderCode"
-              :logistics="false"
-              kind="SUPPLIER"
-          /></el-form-item>
-          <el-form-item v-if="!warehouse.serviceProviderCode" label="其他收费方名称"
-            ><el-input
-              v-model="form.payeeName"
-              maxlength="200"
-              placeholder="无供应商档案时填写实际收款方名称"
-          /></el-form-item>
-          <el-form-item label="合同号"
-            ><el-input v-model="warehouse.contractNo" maxlength="100"
-          /></el-form-item>
-          <el-form-item label="付款日期" :required="form.paymentStatusCode === 'PAID'"
-            ><el-date-picker v-model="warehouse.paymentDate" type="date" value-format="YYYY-MM-DD"
-          /></el-form-item>
-          <el-form-item label="押金（不计入费用）"
-            ><el-input-number
-              v-model="warehouse.depositAmount"
-              :min="0"
-              :precision="2"
-              :controls="false"
-          /></el-form-item>
-        </template>
-        <el-form-item label="费用负责人"
-          ><el-select
-            v-model="form.ownerEmployeeCode"
-            filterable
-            clearable
-            @change="employeeChanged"
-            ><el-option
-              v-for="employee in employees"
-              :key="employee.employeeCode"
-              :label="employee.employeeName"
-              :value="employee.employeeCode" /></el-select
-        ></el-form-item>
+    <section v-if="logistics" class="ledger-panel">
+      <h3><span class="required">*</span> 运输类型</h3>
+      <CostDictSelect
+        v-model="plan.transportPurposeCode"
+        code="COST_TRANSPORT_PURPOSE"
+        :disabled="carrierLocked"
+        @change="transportChanged"
+      />
+      <div v-if="plan.transportPurposeCode" class="section-toolbar">
+        <b>关联{{ sourceTypeLabel(sourceOrderType) }}</b>
+        <el-button type="primary" plain @click="picker = true">选择单据</el-button>
       </div>
     </section>
-
-    <template v-if="logistics">
-      <section class="ledger-panel">
-        <h3>发货信息</h3>
-        <CostLedgerPartyFields v-model="plan.sender" :cities="cities" />
-      </section>
-      <section class="ledger-panel">
-        <div class="section-toolbar">
-          <h3><span class="required">*</span> 收货信息</h3>
-          <el-button @click="plan.receivingPoints.push(newParty(form.cityCode))"
-            >添加收货方</el-button
-          >
-        </div>
-        <div
-          v-for="(point, i) in plan.receivingPoints"
-          :key="point.pointCode"
-          class="receiving-point"
-        >
-          <div class="section-toolbar">
-            <b>收货方 {{ i + 1 }}</b
-            ><el-button
-              v-if="plan.receivingPoints.length > 1"
-              link
-              type="danger"
-              @click="removePoint(point.pointCode)"
-              >移除</el-button
-            >
-          </div>
-          <CostLedgerPartyFields
-            v-model="plan.receivingPoints[i]!"
-            receiver
-            :cities="cities"
-            @changed="syncPoint(point)"
-          />
-        </div>
-      </section>
-      <section class="ledger-panel">
-        <div class="section-toolbar">
-          <h3><span class="required">*</span> 费用项目</h3>
-          <el-button @click="addFee">新增费用项目</el-button>
-        </div>
-        <el-table :data="plan.feeItems" border>
-          <el-table-column label="费用项目" min-width="170"
-            ><template #default="{ row }"
-              ><CostDictSelect v-model="row.feeTypeCode" code="COST_LOGISTICS_FEE_TYPE" /></template
-          ></el-table-column>
-          <el-table-column label="承担方" min-width="165"
-            ><template #default="{ row }"
-              ><el-select v-model="row.bearerCode" @change="feeChanged(row as LedgerFee)"
-                ><el-option label="我方承担" value="COMPANY" /><el-option
-                  label="供应商承担"
-                  value="SUPPLIER" /><el-option label="客户承担" value="CUSTOMER" /><el-option
-                  label="共同承担"
-                  value="SHARED" /></el-select></template
-          ></el-table-column>
-          <el-table-column label="费用总额（元）" min-width="160"
-            ><template #default="{ row }"
-              ><el-input-number
-                v-model="row.feeAmount"
-                :min="0"
-                :precision="2"
-                :controls="false"
-                placeholder="未知可空"
-                @change="feeChanged(row as LedgerFee)" /></template
-          ></el-table-column>
-          <el-table-column label="我方费用（元）" min-width="160"
-            ><template #default="{ row }"
-              ><el-input-number
-                v-model="row.ourAmount"
-                :min="0"
-                :precision="2"
-                :controls="false"
-                :disabled="row.bearerCode !== 'SHARED'" /></template
-          ></el-table-column>
-          <el-table-column label="分摊方式" min-width="160"
-            ><template #default="{ row }"
-              ><el-select v-model="row.allocationMethodCode"
-                ><el-option
-                  v-for="m in allocationMethods"
-                  :key="m.value"
-                  :label="m.label"
-                  :value="m.value" /></el-select></template
-          ></el-table-column>
-          <el-table-column label="零元原因 / 说明" min-width="230"
-            ><template #default="{ row }"
-              ><el-input
-                v-if="row.ourAmount === 0"
-                v-model="row.zeroCostReason"
-                maxlength="500"
-                placeholder="厂家包邮、货价含运费等" /><el-input
-                v-else
-                v-model="row.remark"
-                maxlength="500"
-                placeholder="费用说明" /></template
-          ></el-table-column>
-          <el-table-column label="操作" width="75"
-            ><template #default="{ row }"
-              ><el-button link type="danger" @click="removeFee(row.feeKey)"
-                >移除</el-button
-              ></template
-            ></el-table-column
-          >
-        </el-table>
-      </section>
-      <section
-        v-if="plan.feeItems.some((f) => f.allocationMethodCode === 'QUANTITY')"
-        class="ledger-panel"
-      >
-        <h3>数量分摊口径</h3>
-        <el-form-item
-          v-for="fee in plan.feeItems.filter((f) => f.allocationMethodCode === 'QUANTITY')"
-          :key="fee.feeKey"
-          :label="costLabel('COST_LOGISTICS_FEE_TYPE', fee.feeTypeCode) + ' · 统一基数单位'"
-          required
-        >
-          <CostDictSelect v-model="fee.basisUnitCode" code="PRODUCT_UNIT" />
-          <p class="help">各分摊行的数量须先换算到此单位，再填写基数。</p>
-        </el-form-item>
-      </section>
-      <section class="ledger-panel">
-        <div class="section-toolbar">
-          <h3>关联单据</h3>
-          <div>
-            <el-button @click="addNoSource">无关联单据</el-button
-            ><el-button type="primary" plain @click="picker = true">选择单据</el-button>
-          </div>
-        </div>
-        <el-table :data="plan.sources" border empty-text="选择关联单据，或登记无关联单据的真实原因">
-          <el-table-column label="订单类型" min-width="150"
-            ><template #default="{ row }">{{
-              sourceTypeLabel(row.orderTypeCode)
-            }}</template></el-table-column
-          >
-          <el-table-column label="单据编号" min-width="230"
-            ><template #default="{ row }">{{
-              row.orderCode || '无关联单据'
-            }}</template></el-table-column
-          >
-          <el-table-column label="关联用途" min-width="165"
-            ><template #default="{ row }"
-              ><el-select
-                v-model="row.linkRoleCode"
-                @change="sourceRoleChanged(row as LedgerSource)"
-                ><el-option label="成本归属" value="COST" /><el-option
-                  label="仅业务追溯"
-                  value="TRACE" /></el-select></template
-          ></el-table-column>
-          <el-table-column label="无单据原因" min-width="240"
-            ><template #default="{ row }"
-              ><el-input
-                v-if="row.orderTypeCode === 'NONE'"
-                v-model="row.noSourceReason"
-                maxlength="500"
-                placeholder="填写活动、领用或其他实际原因"
-              /><span v-else>—</span></template
-            ></el-table-column
-          >
-          <el-table-column label="操作" width="75"
-            ><template #default="{ $index }"
-              ><el-button link type="danger" @click="plan.sources.splice($index, 1)"
-                >移除</el-button
-              ></template
-            ></el-table-column
-          >
-        </el-table>
-        <div class="section-toolbar">
-          <h3>费用分摊</h3>
-          <div>
-            <el-button @click="addAllocation">添加分摊行</el-button
-            ><el-button @click="recalculate">计算分摊</el-button>
-          </div>
-        </div>
-        <el-table :data="allocations" border empty-text="请为成本归属单据添加费用分摊">
-          <el-table-column label="费用项目" min-width="170"
-            ><template #default="{ row }"
-              ><el-select v-model="row.allocation.feeKey"
-                ><el-option
-                  v-for="f in plan.feeItems"
-                  :key="f.feeKey"
-                  :label="costLabel('COST_LOGISTICS_FEE_TYPE', f.feeTypeCode)"
-                  :value="f.feeKey" /></el-select></template
-          ></el-table-column>
-          <el-table-column label="关联单据" min-width="220"
-            ><template #default="{ row }">{{
-              row.source.orderCode || '无单据费用'
-            }}</template></el-table-column
-          >
-          <el-table-column label="收货方" min-width="210"
-            ><template #default="{ row }"
-              ><el-select
-                v-model="row.allocation.receivingPointCode"
-                @change="allocationPointChanged(row.allocation)"
-                ><el-option
-                  v-for="p in plan.receivingPoints"
-                  :key="p.pointCode"
-                  :label="partyName(p)"
-                  :value="p.pointCode" /></el-select></template
-          ></el-table-column>
-          <el-table-column label="归属城市" min-width="130"
-            ><template #default="{ row }">{{
-              cities.find((c) => c.code === row.allocation.cityCode)?.name ||
-              row.allocation.cityCode ||
-              '待选择'
-            }}</template></el-table-column
-          >
-          <el-table-column label="分摊基数" min-width="150"
-            ><template #default="{ row }"
-              ><el-input-number
-                v-model="row.allocation.basis"
-                :min="0"
-                :precision="6"
-                :controls="false" /></template
-          ></el-table-column>
-          <el-table-column label="分摊金额（元）" min-width="165"
-            ><template #default="{ row }"
-              ><el-input-number
-                v-model="row.allocation.amount"
-                :min="0"
-                :precision="2"
-                :controls="false" /></template
-          ></el-table-column>
-          <el-table-column label="操作" width="75"
-            ><template #default="{ row }"
-              ><el-button link type="danger" @click="row.source.allocations.splice(row.index, 1)"
-                >移除</el-button
-              ></template
-            ></el-table-column
-          >
-        </el-table>
-        <p v-for="fee in plan.feeItems" :key="fee.feeKey" class="balance">
-          {{ costLabel('COST_LOGISTICS_FEE_TYPE', fee.feeTypeCode) }}：我方费用
-          {{ costMoney(fee.ourAmount) }}，已分摊 {{ costMoney(allocated(fee.feeKey)) }}，未分摊
-          {{
-            fee.ourAmount == null
-              ? '待补金额'
-              : costMoney(
-                  (Math.round(fee.ourAmount * 100) - Math.round(allocated(fee.feeKey) * 100)) / 100,
-                )
-          }}
-        </p>
-      </section>
-      <CostLedgerSourcePicker
-        v-model="picker"
-        :selected-keys="plan.sources.map((s) => `${s.orderTypeCode}:${s.orderCode}`)"
-        @selected="picked"
+    <template v-if="!logistics || plan.transportPurposeCode">
+      <el-alert
+        v-if="plan?.sourceSync?.differencePending"
+        title="采购约定已变化，请核对实际费用并填写变更原因。"
+        type="warning"
+        :closable="false"
       />
-    </template>
-
-    <template v-else>
       <section class="ledger-panel">
-        <div class="section-toolbar">
-          <h3><span class="required">*</span> 费用项目</h3>
-          <el-button @click="warehouse.feeItems.push(newWarehouseFee(form.costDate))"
-            >新增费用项目</el-button
-          >
-        </div>
-        <div v-for="(fee, i) in warehouse.feeItems" :key="fee.feeKey" class="warehouse-fee">
-          <div class="section-toolbar">
-            <b>费用项目 {{ i + 1 }}</b
-            ><el-button
-              v-if="warehouse.feeItems.length > 1"
-              link
-              type="danger"
-              @click="warehouse.feeItems.splice(i, 1)"
-              >移除</el-button
-            >
-          </div>
-          <div class="field-grid">
-            <el-form-item label="费用项目" required
-              ><CostDictSelect v-model="fee.feeTypeCode" code="COST_WAREHOUSE_FEE_TYPE"
-            /></el-form-item>
-            <el-form-item label="费用金额（元）"
-              ><el-input-number
-                v-model="fee.feeAmount"
-                :disabled="fee.quantity != null && fee.unitPrice != null"
-                :min="0"
-                :precision="2"
-                :controls="false"
-                placeholder="待补金额"
-                @change="previewWarehouseFee(fee)"
-            /></el-form-item>
-            <el-form-item label="费用归属方式" required
-              ><CostDictSelect
-                v-model="fee.allocationMethodCode"
-                code="COST_WAREHOUSE_ALLOCATION_METHOD"
-                @update:model-value="previewWarehouseFee(fee)"
-            /></el-form-item>
-            <el-form-item label="计费数量"
-              ><el-input-number
-                v-model="fee.quantity"
-                :min="0"
-                :precision="6"
-                :controls="false"
-                placeholder="固定费用可空"
-                @change="previewWarehouseFee(fee)"
-            /></el-form-item>
-            <el-form-item label="计费单位"
-              ><CostDictSelect v-model="fee.unitCode" code="PRODUCT_UNIT" clearable
-            /></el-form-item>
-            <el-form-item label="计费单价（元）"
-              ><el-input-number
-                v-model="fee.unitPrice"
-                :min="0"
-                :precision="6"
-                :controls="false"
-                @change="previewWarehouseFee(fee)"
+        <h3>{{ logistics ? '运输信息' : '仓储信息' }}</h3>
+        <div class="field-grid">
+          <el-form-item :label="logistics ? '运输日期' : '登记日期'" required
+            ><el-date-picker
+              v-model="form.costDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              :disabled="carrierLocked"
+          /></el-form-item>
+          <el-form-item label="费用归属城市" required
+            ><el-select v-model="form.cityCode" filterable @change="cityChanged"
+              ><el-option
+                v-for="c in cities"
+                :key="c.code"
+                :label="c.name"
+                :value="c.code" /></el-select
+          ></el-form-item>
+          <el-form-item label="付款状态" required
+            ><CostDictSelect v-model="form.paymentStatusCode" code="COST_PAYMENT_STATUS"
+          /></el-form-item>
+          <template v-if="logistics">
+            <el-form-item label="费用归属月份" required
+              ><el-date-picker v-model="plan.costMonth" type="month" value-format="YYYY-MM"
             /></el-form-item>
             <el-form-item
-              v-if="fee.allocationMethodCode === 'SINGLE_DATE'"
-              label="费用归属日期"
+              v-if="plan.transportPurposeCode === 'OTHER'"
+              label="其他费用用途说明"
               required
+              ><el-input
+                v-model="plan.nonSalesPurposeCode"
+                maxlength="200"
+                placeholder="活动、领用、赠送、品鉴等"
+            /></el-form-item>
+            <el-form-item label="承运方式" required
+              ><CostDictSelect
+                v-model="plan.deliveryModeCode"
+                code="COST_DELIVERY_MODE"
+                :disabled="carrierLocked"
+            /></el-form-item>
+            <el-form-item v-if="plan.deliveryModeCode === 'THIRD_PARTY'" label="物流公司" required
+              ><CostDictSelect
+                v-model="plan.carrierCode"
+                code="COST_CARRIER"
+                :disabled="carrierLocked"
+            /></el-form-item>
+            <el-form-item label="运单号"
+              ><el-input v-model="plan.trackingNo" maxlength="100" :disabled="carrierLocked"
+            /></el-form-item>
+            <el-form-item
+              v-if="plan.deliveryModeCode === 'THIRD_PARTY' && !plan.trackingNo"
+              label="无运单号原因"
+              ><el-input
+                v-model="plan.noTrackingReason"
+                maxlength="500"
+                placeholder="确认前须填写运单号或无单号原因"
+            /></el-form-item>
+            <el-form-item label="运输方式"
+              ><CostDictSelect
+                v-model="plan.transportMethodCode"
+                code="COST_TRANSPORT_KIND"
+                clearable
+            /></el-form-item>
+            <template v-if="plan.deliveryModeCode === 'SELF'"
+              ><el-form-item label="司机"
+                ><el-input v-model="plan.driverName" maxlength="100" /></el-form-item
+              ><el-form-item label="车牌号"
+                ><el-input v-model="plan.vehicleNo" maxlength="50" /></el-form-item
+            ></template>
+          </template>
+          <template v-else>
+            <el-form-item label="仓库" required
+              ><CostLedgerPartySelect
+                v-model="warehouse.warehouseCode"
+                :logistics="false"
+                kind="WAREHOUSE"
+                :name="warehouseName"
+                @selected="warehouseChanged"
+            /></el-form-item>
+            <el-form-item label="收费方"
+              ><CostLedgerPartySelect
+                v-model="warehouse.serviceProviderCode"
+                :logistics="false"
+                kind="SUPPLIER"
+            /></el-form-item>
+            <el-form-item v-if="!warehouse.serviceProviderCode" label="其他收费方名称"
+              ><el-input
+                v-model="form.payeeName"
+                maxlength="200"
+                placeholder="无供应商档案时填写实际收款方名称"
+            /></el-form-item>
+            <el-form-item label="合同号"
+              ><el-input v-model="warehouse.contractNo" maxlength="100"
+            /></el-form-item>
+            <el-form-item label="付款日期" :required="form.paymentStatusCode === 'PAID'"
               ><el-date-picker
-                v-model="fee.attributionDate"
+                v-model="warehouse.paymentDate"
                 type="date"
                 value-format="YYYY-MM-DD"
-                @change="previewWarehouseFee(fee)"
             /></el-form-item>
-            <template v-else
-              ><el-form-item label="服务起始日期" required
-                ><el-date-picker
-                  v-model="fee.serviceFrom"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  @change="previewWarehouseFee(fee)" /></el-form-item
-              ><el-form-item label="服务截止日期" required
-                ><el-date-picker
-                  v-model="fee.serviceTo"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  @change="previewWarehouseFee(fee)" /></el-form-item
-            ></template>
-            <el-form-item label="备注"
-              ><el-input v-model="fee.remark" maxlength="500"
+            <el-form-item label="押金（不计入费用）"
+              ><el-input-number
+                v-model="warehouse.depositAmount"
+                :min="0"
+                :precision="2"
+                :controls="false"
             /></el-form-item>
-          </div>
-          <template v-if="fee.allocationMethodCode === 'MANUAL'">
-            <el-table :data="fee.monthAllocations" border
-              ><el-table-column label="归属月份"
-                ><template #default="{ row }"
-                  ><el-date-picker
-                    v-model="row.month"
-                    type="month"
-                    value-format="YYYY-MM" /></template></el-table-column
-              ><el-table-column label="归属金额（元）"
-                ><template #default="{ row }"
-                  ><el-input-number
-                    v-model="row.amount"
-                    :min="0"
-                    :precision="2"
-                    :controls="false" /></template></el-table-column
-              ><el-table-column label="操作" width="80"
-                ><template #default="{ $index }"
-                  ><el-button link type="danger" @click="fee.monthAllocations.splice($index, 1)"
-                    >移除</el-button
-                  ></template
-                ></el-table-column
-              ></el-table
-            >
-            <el-button
-              class="add-month"
-              @click="fee.monthAllocations.push({ month: form.costDate.slice(0, 7), amount: null })"
-              >添加归属月份</el-button
-            >
           </template>
+          <el-form-item label="费用负责人"
+            ><el-select
+              v-model="form.ownerEmployeeCode"
+              filterable
+              clearable
+              @change="employeeChanged"
+              ><el-option
+                v-for="employee in employees"
+                :key="employee.employeeCode"
+                :label="employee.employeeName"
+                :value="employee.employeeCode" /></el-select
+          ></el-form-item>
         </div>
       </section>
-      <section class="ledger-panel">
-        <h3>月度归属预览</h3>
-        <el-table
-          :data="warehouseMonths(warehouse)"
-          border
-          empty-text="填写费用金额与归属规则后预览"
-          ><el-table-column prop="month" label="费用归属月份" /><el-table-column
-            label="归属费用（元）"
-            align="right"
-            ><template #default="{ row }">{{ costMoney(row.amount) }}</template></el-table-column
-          ></el-table
+
+      <template v-if="logistics">
+        <section class="ledger-panel">
+          <h3>发货信息</h3>
+          <el-form-item v-if="manualSalesWarehouse" label="发货仓库" required>
+            <CostLedgerPartySelect
+              v-model="plan.sender.partyCode"
+              logistics
+              kind="WAREHOUSE"
+              :name="plan.sender.displayName"
+              @selected="salesWarehouseChanged"
+            />
+          </el-form-item>
+          <dl v-if="salesDelivery" class="delivery-summary">
+            <template v-if="!manualSalesWarehouse"
+              ><dt>发货仓库</dt>
+              <dd>{{ partyName(plan.sender) }}</dd></template
+            >
+            <dt>地址</dt>
+            <dd>{{ plan.sender.address || '-' }}</dd>
+          </dl>
+          <CostLedgerPartyFields v-else v-model="plan.sender" :cities="cities" />
+        </section>
+        <section class="ledger-panel">
+          <div class="section-toolbar">
+            <h3><span class="required">*</span> 收货信息</h3>
+            <el-button
+              v-if="!salesDelivery"
+              @click="plan.receivingPoints.push(newParty(form.cityCode))"
+              >添加收货方</el-button
+            >
+          </div>
+          <div
+            v-for="(point, i) in plan.receivingPoints"
+            :key="point.pointCode"
+            class="receiving-point"
+          >
+            <div class="section-toolbar">
+              <b>收货方 {{ i + 1 }}</b
+              ><el-button
+                v-if="!salesDelivery && plan.receivingPoints.length > 1"
+                link
+                type="danger"
+                @click="removePoint(point.pointCode)"
+                >移除</el-button
+              >
+            </div>
+            <dl v-if="salesDelivery" class="delivery-summary">
+              <dt>客户</dt>
+              <dd>{{ partyName(point) }}</dd>
+              <dt>收货人</dt>
+              <dd>{{ point.contactName || '-' }}</dd>
+              <dt>联系方式</dt>
+              <dd>{{ point.phone || '-' }}</dd>
+              <dt>收货地址</dt>
+              <dd>{{ point.address || '-' }}</dd>
+            </dl>
+            <CostLedgerPartyFields
+              v-else
+              v-model="plan.receivingPoints[i]!"
+              receiver
+              :cities="cities"
+              @changed="syncPoint(point)"
+            />
+          </div>
+        </section>
+        <section class="ledger-panel">
+          <div class="section-toolbar">
+            <h3><span class="required">*</span> 费用项目</h3>
+            <el-button v-if="!carrierLocked" @click="addFee">新增费用项目</el-button>
+          </div>
+          <el-table :data="plan.feeItems" border>
+            <el-table-column label="费用项目" min-width="170"
+              ><template #default="{ row }"
+                ><CostDictSelect
+                  v-model="row.feeTypeCode"
+                  code="COST_LOGISTICS_FEE_TYPE" /></template
+            ></el-table-column>
+            <el-table-column label="承担方" min-width="165"
+              ><template #default="{ row }"
+                ><el-select
+                  v-model="row.bearerCode"
+                  :disabled="carrierLocked"
+                  @change="feeChanged(row as LedgerFee)"
+                  ><el-option label="我方承担" value="COMPANY" /><el-option
+                    label="供应商承担"
+                    value="SUPPLIER" /><el-option label="客户承担" value="CUSTOMER" /><el-option
+                    label="共同承担"
+                    value="SHARED" /></el-select></template
+            ></el-table-column>
+            <el-table-column label="费用总额（元）" min-width="160"
+              ><template #default="{ row }"
+                ><el-input-number
+                  v-model="row.feeAmount"
+                  :disabled="carrierLocked"
+                  :min="0"
+                  :precision="2"
+                  :controls="false"
+                  placeholder="未知可空"
+                  @change="feeChanged(row as LedgerFee)" /></template
+            ></el-table-column>
+            <el-table-column label="我方费用（元）" min-width="160"
+              ><template #default="{ row }"
+                ><el-input-number
+                  v-model="row.ourAmount"
+                  :min="0"
+                  :precision="2"
+                  :controls="false"
+                  :disabled="carrierLocked || row.bearerCode !== 'SHARED'" /></template
+            ></el-table-column>
+            <el-table-column label="分摊方式" min-width="160"
+              ><template #default="{ row }"
+                ><el-select v-model="row.allocationMethodCode"
+                  ><el-option
+                    v-for="m in allocationMethods"
+                    :key="m.value"
+                    :label="m.label"
+                    :value="m.value" /></el-select></template
+            ></el-table-column>
+            <el-table-column label="零元原因 / 说明" min-width="230"
+              ><template #default="{ row }"
+                ><el-input
+                  v-if="row.ourAmount === 0"
+                  v-model="row.zeroCostReason"
+                  maxlength="500"
+                  placeholder="厂家包邮、货价含运费等" /><el-input
+                  v-else
+                  v-model="row.remark"
+                  maxlength="500"
+                  placeholder="费用说明" /></template
+            ></el-table-column>
+            <el-table-column label="操作" width="75"
+              ><template #default="{ row }"
+                ><el-button link type="danger" @click="removeFee(row.feeKey)"
+                  >移除</el-button
+                ></template
+              ></el-table-column
+            >
+          </el-table>
+        </section>
+        <section
+          v-if="plan.feeItems.some((f) => f.allocationMethodCode === 'QUANTITY')"
+          class="ledger-panel"
         >
-        <p class="balance">
-          本单费用总额 {{ costMoney(totalFees(warehouse.feeItems)) }}；押金
-          {{ costMoney(warehouse.depositAmount ?? 0) }} 不计入费用。
-        </p>
+          <h3>数量分摊口径</h3>
+          <el-form-item
+            v-for="fee in plan.feeItems.filter((f) => f.allocationMethodCode === 'QUANTITY')"
+            :key="fee.feeKey"
+            :label="costLabel('COST_LOGISTICS_FEE_TYPE', fee.feeTypeCode) + ' · 统一基数单位'"
+            required
+          >
+            <CostDictSelect v-model="fee.basisUnitCode" code="PRODUCT_UNIT" />
+            <p class="help">各分摊行的数量须先换算到此单位，再填写基数。</p>
+          </el-form-item>
+        </section>
+        <section class="ledger-panel">
+          <div class="section-toolbar">
+            <h3>关联单据</h3>
+            <div>
+              <el-button v-if="plan.transportPurposeCode === 'OTHER'" @click="addNoSource"
+                >无关联单据</el-button
+              ><el-button
+                v-if="!salesDelivery && plan.transportPurposeCode === 'OTHER'"
+                type="primary"
+                plain
+                @click="picker = true"
+                >选择单据</el-button
+              >
+            </div>
+          </div>
+          <el-table
+            :data="plan.sources"
+            border
+            empty-text="选择关联单据，或登记无关联单据的真实原因"
+          >
+            <el-table-column label="订单类型" min-width="150"
+              ><template #default="{ row }">{{
+                sourceTypeLabel(row.orderTypeCode)
+              }}</template></el-table-column
+            >
+            <el-table-column label="单据编号" min-width="230"
+              ><template #default="{ row }">{{
+                row.orderCode || '无关联单据'
+              }}</template></el-table-column
+            >
+            <el-table-column label="关联用途" min-width="165"
+              ><template #default="{ row }"
+                ><el-select
+                  v-model="row.linkRoleCode"
+                  @change="sourceRoleChanged(row as LedgerSource)"
+                  ><el-option label="成本归属" value="COST" /><el-option
+                    label="仅业务追溯"
+                    value="TRACE" /></el-select></template
+            ></el-table-column>
+            <el-table-column label="无单据原因" min-width="240"
+              ><template #default="{ row }"
+                ><el-input
+                  v-if="row.orderTypeCode === 'NONE'"
+                  v-model="row.noSourceReason"
+                  maxlength="500"
+                  placeholder="填写活动、领用或其他实际原因"
+                /><span v-else>—</span></template
+              ></el-table-column
+            >
+            <el-table-column label="操作" width="75"
+              ><template #default="{ $index }"
+                ><el-button link type="danger" @click="plan.sources.splice($index, 1)"
+                  >移除</el-button
+                ></template
+              ></el-table-column
+            >
+          </el-table>
+          <div class="section-toolbar">
+            <h3>费用分摊</h3>
+            <div>
+              <el-button @click="addAllocation">添加分摊行</el-button
+              ><el-button @click="recalculate">计算分摊</el-button>
+            </div>
+          </div>
+          <el-table :data="allocations" border empty-text="请为成本归属单据添加费用分摊">
+            <el-table-column label="费用项目" min-width="170"
+              ><template #default="{ row }"
+                ><el-select v-model="row.allocation.feeKey"
+                  ><el-option
+                    v-for="f in plan.feeItems"
+                    :key="f.feeKey"
+                    :label="costLabel('COST_LOGISTICS_FEE_TYPE', f.feeTypeCode)"
+                    :value="f.feeKey" /></el-select></template
+            ></el-table-column>
+            <el-table-column label="关联单据" min-width="220"
+              ><template #default="{ row }">{{
+                row.source.orderCode || '无单据费用'
+              }}</template></el-table-column
+            >
+            <el-table-column label="收货方" min-width="210"
+              ><template #default="{ row }"
+                ><el-select
+                  v-model="row.allocation.receivingPointCode"
+                  @change="allocationPointChanged(row.allocation)"
+                  ><el-option
+                    v-for="p in plan.receivingPoints"
+                    :key="p.pointCode"
+                    :label="partyName(p)"
+                    :value="p.pointCode" /></el-select></template
+            ></el-table-column>
+            <el-table-column label="归属城市" min-width="130"
+              ><template #default="{ row }">{{
+                cities.find((c) => c.code === row.allocation.cityCode)?.name ||
+                row.allocation.cityCode ||
+                '待选择'
+              }}</template></el-table-column
+            >
+            <el-table-column label="分摊基数" min-width="150"
+              ><template #default="{ row }"
+                ><el-input-number
+                  v-model="row.allocation.basis"
+                  :min="0"
+                  :precision="6"
+                  :controls="false" /></template
+            ></el-table-column>
+            <el-table-column label="分摊金额（元）" min-width="165"
+              ><template #default="{ row }"
+                ><el-input-number
+                  v-model="row.allocation.amount"
+                  :min="0"
+                  :precision="2"
+                  :controls="false" /></template
+            ></el-table-column>
+            <el-table-column label="操作" width="75"
+              ><template #default="{ row }"
+                ><el-button link type="danger" @click="row.source.allocations.splice(row.index, 1)"
+                  >移除</el-button
+                ></template
+              ></el-table-column
+            >
+          </el-table>
+          <p v-for="fee in plan.feeItems" :key="fee.feeKey" class="balance">
+            {{ costLabel('COST_LOGISTICS_FEE_TYPE', fee.feeTypeCode) }}：我方费用
+            {{ costMoney(fee.ourAmount) }}，已分摊 {{ costMoney(allocated(fee.feeKey)) }}，未分摊
+            {{
+              fee.ourAmount == null
+                ? '待补金额'
+                : costMoney(
+                    (Math.round(fee.ourAmount * 100) - Math.round(allocated(fee.feeKey) * 100)) /
+                      100,
+                  )
+            }}
+          </p>
+        </section>
+        <CostLedgerSourcePicker
+          v-model="picker"
+          :order-type-code="sourceOrderType"
+          :selected-keys="plan.sources.map((s) => `${s.orderTypeCode}:${s.orderCode}`)"
+          @selected="picked"
+        />
+      </template>
+
+      <template v-else>
+        <section class="ledger-panel">
+          <div class="section-toolbar">
+            <h3><span class="required">*</span> 费用项目</h3>
+            <el-button @click="warehouse.feeItems.push(newWarehouseFee(form.costDate))"
+              >新增费用项目</el-button
+            >
+          </div>
+          <div v-for="(fee, i) in warehouse.feeItems" :key="fee.feeKey" class="warehouse-fee">
+            <div class="section-toolbar">
+              <b>费用项目 {{ i + 1 }}</b
+              ><el-button
+                v-if="warehouse.feeItems.length > 1"
+                link
+                type="danger"
+                @click="warehouse.feeItems.splice(i, 1)"
+                >移除</el-button
+              >
+            </div>
+            <div class="field-grid">
+              <el-form-item label="费用项目" required
+                ><CostDictSelect v-model="fee.feeTypeCode" code="COST_WAREHOUSE_FEE_TYPE"
+              /></el-form-item>
+              <el-form-item label="费用金额（元）"
+                ><el-input-number
+                  v-model="fee.feeAmount"
+                  :disabled="fee.quantity != null && fee.unitPrice != null"
+                  :min="0"
+                  :precision="2"
+                  :controls="false"
+                  placeholder="待补金额"
+                  @change="previewWarehouseFee(fee)"
+              /></el-form-item>
+              <el-form-item label="费用归属方式" required
+                ><CostDictSelect
+                  v-model="fee.allocationMethodCode"
+                  code="COST_WAREHOUSE_ALLOCATION_METHOD"
+                  @update:model-value="previewWarehouseFee(fee)"
+              /></el-form-item>
+              <el-form-item label="计费数量"
+                ><el-input-number
+                  v-model="fee.quantity"
+                  :min="0"
+                  :precision="6"
+                  :controls="false"
+                  placeholder="固定费用可空"
+                  @change="previewWarehouseFee(fee)"
+              /></el-form-item>
+              <el-form-item label="计费单位"
+                ><CostDictSelect v-model="fee.unitCode" code="PRODUCT_UNIT" clearable
+              /></el-form-item>
+              <el-form-item label="计费单价（元）"
+                ><el-input-number
+                  v-model="fee.unitPrice"
+                  :min="0"
+                  :precision="6"
+                  :controls="false"
+                  @change="previewWarehouseFee(fee)"
+              /></el-form-item>
+              <el-form-item
+                v-if="fee.allocationMethodCode === 'SINGLE_DATE'"
+                label="费用归属日期"
+                required
+                ><el-date-picker
+                  v-model="fee.attributionDate"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  @change="previewWarehouseFee(fee)"
+              /></el-form-item>
+              <template v-else
+                ><el-form-item label="服务起始日期" required
+                  ><el-date-picker
+                    v-model="fee.serviceFrom"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    @change="previewWarehouseFee(fee)" /></el-form-item
+                ><el-form-item label="服务截止日期" required
+                  ><el-date-picker
+                    v-model="fee.serviceTo"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    @change="previewWarehouseFee(fee)" /></el-form-item
+              ></template>
+              <el-form-item label="备注"
+                ><el-input v-model="fee.remark" maxlength="500"
+              /></el-form-item>
+            </div>
+            <template v-if="fee.allocationMethodCode === 'MANUAL'">
+              <el-table :data="fee.monthAllocations" border
+                ><el-table-column label="归属月份"
+                  ><template #default="{ row }"
+                    ><el-date-picker
+                      v-model="row.month"
+                      type="month"
+                      value-format="YYYY-MM" /></template></el-table-column
+                ><el-table-column label="归属金额（元）"
+                  ><template #default="{ row }"
+                    ><el-input-number
+                      v-model="row.amount"
+                      :min="0"
+                      :precision="2"
+                      :controls="false" /></template></el-table-column
+                ><el-table-column label="操作" width="80"
+                  ><template #default="{ $index }"
+                    ><el-button link type="danger" @click="fee.monthAllocations.splice($index, 1)"
+                      >移除</el-button
+                    ></template
+                  ></el-table-column
+                ></el-table
+              >
+              <el-button
+                class="add-month"
+                @click="
+                  fee.monthAllocations.push({ month: form.costDate.slice(0, 7), amount: null })
+                "
+                >添加归属月份</el-button
+              >
+            </template>
+          </div>
+        </section>
+        <section class="ledger-panel">
+          <h3>月度归属预览</h3>
+          <el-table
+            :data="warehouseMonths(warehouse)"
+            border
+            empty-text="填写费用金额与归属规则后预览"
+            ><el-table-column prop="month" label="费用归属月份" /><el-table-column
+              label="归属费用（元）"
+              align="right"
+              ><template #default="{ row }">{{ costMoney(row.amount) }}</template></el-table-column
+            ></el-table
+          >
+          <p class="balance">
+            本单费用总额 {{ costMoney(totalFees(warehouse.feeItems)) }}；押金
+            {{ costMoney(warehouse.depositAmount ?? 0) }} 不计入费用。
+          </p>
+        </section>
+      </template>
+      <section class="ledger-panel">
+        <h3>备注与变更说明</h3>
+        <el-form-item label="备注"
+          ><el-input
+            v-model="form.remark"
+            type="textarea"
+            :rows="2"
+            maxlength="1000"
+            show-word-limit /></el-form-item
+        ><el-form-item label="变更原因" :required="confirmed"
+          ><el-input
+            v-model="form.reason"
+            maxlength="500"
+            :placeholder="
+              confirmed
+                ? '修改已确认费用必须填写原因，保存后重新确认'
+                : '补充登记或更正说明（选填）'
+            "
+        /></el-form-item>
       </section>
     </template>
-    <section class="ledger-panel">
-      <h3>备注与变更说明</h3>
-      <el-form-item label="备注"
-        ><el-input
-          v-model="form.remark"
-          type="textarea"
-          :rows="2"
-          maxlength="1000"
-          show-word-limit /></el-form-item
-      ><el-form-item label="变更原因" :required="confirmed"
-        ><el-input
-          v-model="form.reason"
-          maxlength="500"
-          :placeholder="
-            confirmed ? '修改已确认费用必须填写原因，保存后重新确认' : '补充登记或更正说明（选填）'
-          "
-      /></el-form-item>
-    </section>
   </el-form>
 </template>
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { CostCommand, CostEmployee } from '@/api/core/cost'
 import type { LedgerPartyReference } from '@/api/core/cost-ledger'
 import CostDictSelect from './CostDictSelect.vue'
@@ -555,10 +633,52 @@ const props = defineProps<{
   employees: CostEmployee[]
   warehouseName?: string | null
   confirmed?: boolean
+  carrierLocked?: boolean
 }>()
 const plan = computed(() => form.value.ledger!)
 const warehouse = computed(() => form.value.warehouseLedger!)
 const picker = ref(false)
+const salesDelivery = computed(
+  () => props.logistics && plan.value.transportPurposeCode === 'DELIVERY',
+)
+const manualSalesWarehouse = computed(
+  () =>
+    salesDelivery.value &&
+    plan.value.sources.some(
+      (s) => s.orderTypeCode === 'SALES_ORDER' && s.linkRoleCode === 'COST',
+    ) &&
+    !plan.value.sources.some(
+      (s) =>
+        s.orderTypeCode === 'SALES_ORDER' && s.linkRoleCode === 'COST' && s.sourceWarehouseCode,
+    ),
+)
+const sourceOrderType = computed(
+  () =>
+    ({ DELIVERY: 'SALES_ORDER', TRANSFER: 'TRANSFER_ORDER', OTHER: 'OTHER_OUT' })[
+      plan.value?.transportPurposeCode
+    ] || 'OTHER_OUT',
+)
+let previousType = plan.value?.transportPurposeCode || ''
+async function transportChanged() {
+  const next = plan.value.transportPurposeCode
+  if (previousType === next) return
+  if (plan.value.sources.length || plan.value.sender.partyCode || plan.value.sender.manualName) {
+    try {
+      await ElMessageBox.confirm(
+        '切换运输类型将清空已选择的单据及收发货信息，是否继续？',
+        '切换运输类型',
+        { type: 'warning' },
+      )
+    } catch {
+      plan.value.transportPurposeCode = previousType
+      return
+    }
+  }
+  plan.value.sources = []
+  plan.value.sender = newParty()
+  plan.value.receivingPoints = [newParty()]
+  previousType = next
+}
 const allocationMethods = [
   { value: 'MANUAL', label: '手工分摊' },
   { value: 'EQUAL', label: '均分' },
@@ -602,6 +722,29 @@ function warehouseChanged(row: LedgerPartyReference | null) {
   }
   form.value.cityCode = row.cityCode
   cityChanged()
+}
+function salesWarehouseChanged(row: LedgerPartyReference | null) {
+  const pointCode = plan.value.sender.pointCode
+  if (!row) {
+    plan.value.sender = { ...newParty(), pointCode }
+    return
+  }
+  if (!row.cityCode || !props.cities.some((c) => c.code === row.cityCode)) {
+    plan.value.sender = { ...newParty(), pointCode }
+    ElMessage.warning('请先在仓库档案维护有效的业务归属地区')
+    return
+  }
+  plan.value.sender = {
+    pointCode,
+    partyTypeCode: 'WAREHOUSE',
+    partyCode: row.code,
+    displayName: row.name,
+    manualName: null,
+    contactName: row.contactName || '',
+    phone: row.phone || '',
+    address: row.address || '',
+    cityCode: row.cityCode,
+  }
 }
 function syncPoint(point: LedgerParty) {
   allocations.value
@@ -730,21 +873,60 @@ function recalculate() {
   }
 }
 function picked(rows: PickedLedgerSource[]) {
+  const issue = rows.find((row) => row.referenceIssue)?.referenceIssue
+  if (issue) {
+    ElMessage.warning(issue)
+    return
+  }
+  const expected = sourceOrderType.value
+  if (rows.some((r) => r.orderTypeCode !== expected)) {
+    ElMessage.warning('所选单据类型与运输类型不一致，请重新选择')
+    return
+  }
+  const senders = new Set(
+    [plan.value.sender.partyCode, ...rows.map((r) => r.senderCode)].filter(Boolean),
+  )
+  if (senders.size > 1) {
+    ElMessage.warning('所选单据发货仓库不同，请按实际运输分开登记')
+    return
+  }
+  if (
+    salesDelivery.value &&
+    rows.some(
+      (r) =>
+        !r.receiverCode ||
+        !r.contactName?.trim() ||
+        !r.contactPhone?.trim() ||
+        !r.destinationAddress?.trim(),
+    )
+  ) {
+    ElMessage.warning(
+      '所选销售单的客户收货资料不完整，请先维护客户档案的收货人、电话和地址后重新选择',
+    )
+    return
+  }
   for (const row of rows) {
+    if (!form.value.cityCode && props.cities.some((c) => c.code === row.cityCode)) {
+      form.value.cityCode = row.cityCode
+      cityChanged()
+    }
     if (!plan.value.sender.partyCode && !plan.value.sender.manualName && row.senderCode)
       plan.value.sender = {
         ...plan.value.sender,
         partyTypeCode: row.orderTypeCode === 'PURCHASE_ORDER' ? 'SUPPLIER' : 'WAREHOUSE',
         partyCode: row.senderCode,
         displayName: row.senderName,
-        cityCode: row.orderTypeCode === 'PURCHASE_ORDER' ? form.value.cityCode : '',
+        cityCode:
+          row.senderCityCode || (row.orderTypeCode === 'PURCHASE_ORDER' ? form.value.cityCode : ''),
         address: row.originAddress || plan.value.sender.address,
       }
     let point = row.receiverCode
       ? plan.value.receivingPoints.find(
           (p) =>
             p.partyCode === row.receiverCode &&
-            (!row.destinationAddress || p.address === row.destinationAddress),
+            p.address === (row.destinationAddress || '') &&
+            p.contactName === (row.contactName || '') &&
+            p.phone === (row.contactPhone || ''),
         )
       : undefined
     if (!point && row.receiverCode) {
@@ -761,6 +943,8 @@ function picked(rows: PickedLedgerSource[]) {
         displayName: row.receiverName,
         cityCode: row.cityCode || form.value.cityCode,
         address: row.destinationAddress || point.address,
+        contactName: row.contactName || '',
+        phone: row.contactPhone || '',
       })
     }
     if (!point && !row.receiverCode && row.receiverName) {
@@ -786,6 +970,7 @@ function picked(rows: PickedLedgerSource[]) {
     }
     point ||= plan.value.receivingPoints[0]!
     const source: LedgerSource = {
+      sourceWarehouseCode: row.senderCode || null,
       orderTypeCode: row.orderTypeCode,
       orderCode: row.documentNo,
       linkRoleCode: 'COST',
@@ -796,8 +981,22 @@ function picked(rows: PickedLedgerSource[]) {
   }
   recalculate()
 }
+defineExpose({ picked })
 </script>
 <style scoped>
+.delivery-summary {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 12px 16px;
+  margin: 0;
+}
+.delivery-summary dt {
+  color: var(--el-text-color-secondary);
+}
+.delivery-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .ledger-editor {
   padding: 2px;
 }

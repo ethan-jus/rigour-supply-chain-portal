@@ -16,6 +16,7 @@ describe('物流组合费用继承实际收货方', () => {
   it.each([false, true])('增加费用保留原订单收货点，多收货点=%s', async (multiple) => {
     const form = reactive(createLedgerCommand(true))
     const plan = form.ledger!
+    plan.transportPurposeCode = 'OTHER'
     const points = [
       { ...newParty('CQ'), pointCode: 'point-cq', manualName: '重庆门店' },
       { ...newParty('WH'), pointCode: 'point-wh', manualName: '武汉门店' },
@@ -99,6 +100,72 @@ describe('仓储费用仓库城市校验', () => {
       } finally {
         wrapper.unmount()
         warning.mockRestore()
+      }
+    },
+  )
+})
+
+describe('销售配送的发货仓库补充', () => {
+  it.each([null, 'WH1'])(
+    '原单仓库=%s 时保持收货信息联动并正确开放或锁定仓库',
+    async (sourceWarehouseCode) => {
+      const form = reactive(createLedgerCommand(true))
+      form.ledger!.transportPurposeCode = 'DELIVERY'
+      const wrapper = mount(Editor, {
+        props: {
+          modelValue: form,
+          logistics: true,
+          cities: [{ code: 'WH', name: '武汉市' }],
+          employees: [],
+        },
+        global: {
+          plugins: [ElementPlus],
+          stubs: {
+            CostDictSelect: true,
+            CostLedgerPartyFields: true,
+            CostLedgerPartySelect: true,
+            CostLedgerSourcePicker: true,
+          },
+        },
+      })
+      try {
+        ;(wrapper.vm as unknown as { picked: (rows: unknown[]) => void }).picked([
+          {
+            orderTypeCode: 'SALES_ORDER',
+            documentNo: 'SO001',
+            cityCode: 'WH',
+            senderCityCode: 'WH',
+            senderCode: sourceWarehouseCode,
+            senderName: sourceWarehouseCode ? '武汉仓' : null,
+            originAddress: '仓库地址',
+            receiverCode: 'CUS1',
+            receiverName: '星河门店',
+            contactName: '王先生',
+            contactPhone: '13800000000',
+            destinationAddress: '门店地址',
+          },
+        ])
+        await wrapper.vm.$nextTick()
+        expect(form.cityCode).toBe('WH')
+        expect(form.ledger!.sources[0]!.sourceWarehouseCode).toBe(sourceWarehouseCode)
+        expect(form.ledger!.receivingPoints[0]!.address).toBe('门店地址')
+        expect(wrapper.text()).toContain('王先生')
+        const selector = wrapper.findComponent(PartySelect)
+        expect(selector.exists()).toBe(sourceWarehouseCode === null)
+        if (sourceWarehouseCode === null) {
+          selector.vm.$emit('selected', {
+            code: 'WH2',
+            name: '城市仓',
+            cityCode: 'WH',
+            address: '城市仓地址',
+          })
+          await wrapper.vm.$nextTick()
+          expect(form.ledger!.sender.partyCode).toBe('WH2')
+          expect(form.ledger!.sender.address).toBe('城市仓地址')
+          expect(form.ledger!.receivingPoints[0]!.address).toBe('门店地址')
+        } else expect(form.ledger!.sender.partyCode).toBe('WH1')
+      } finally {
+        wrapper.unmount()
       }
     },
   )

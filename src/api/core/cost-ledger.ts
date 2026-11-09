@@ -25,6 +25,7 @@ export function getLedgerParties(
   )
 }
 export interface LedgerSourceQuery {
+  employeeName?: string
   orderTypeCode: string
   documentNo?: string
   partyName?: string
