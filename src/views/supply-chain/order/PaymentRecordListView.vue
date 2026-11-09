@@ -321,7 +321,6 @@
               <FundAttachmentThumbnails
                 :attachments="row.attachmentViews?.length ? row.attachmentViews : row.attachments"
               />
-              <el-button v-if="row.attachments?.length" link type="primary" @click="voucherTarget = row as OrderRegisterPaymentItem; voucherVisible = true">识别信息</el-button>
             </template>
           </el-table-column>
           <el-table-column label="凭证核查状态" width="125">
