@@ -126,6 +126,12 @@
           ><span class="count">{{ listReady ? result.total : '—' }} 条</span>
         </div>
         <div>
+          <template v-if="logistics && !purchaseHistory && can(permission + ':write')">
+            <el-button @click="downloadCarrierTemplate">下载导入模板</el-button>
+            <el-button :disabled="!referencesReady" @click="importOpen = true"
+              >导入货拉拉报表</el-button
+            >
+          </template>
           <el-button
             v-if="can(permission + ':export')"
             :loading="exporting"
@@ -474,6 +480,13 @@
         ></el-table
       ></el-dialog
     >
+    <CostCarrierImportDialog
+      v-if="logistics && can(permission + ':write')"
+      v-model="importOpen"
+      :cities="cities"
+      :employees="employees"
+      @generated="search"
+    />
   </div>
 </template>
 <script setup lang="ts">
@@ -501,6 +514,8 @@ import {
   getSelectedLogisticsExport,
 } from '@/api/core/cost-ledger'
 import { errorMessage } from '@/api/core/error'
+import CostCarrierImportDialog from './CostCarrierImportDialog.vue'
+import { lalamoveTemplate } from './lalamove-import'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
 import {
@@ -514,6 +529,14 @@ import {
   totalFees,
   moneyCents,
 } from './cost-ledger'
+const importOpen = ref(false)
+async function downloadCarrierTemplate() {
+  try {
+    await lalamoveTemplate()
+  } catch (e) {
+    ElMessage.error(errorMessage(e, '模板下载失败'))
+  }
+}
 import { costLabel, costOptions, costMoney, loadCostDictionaries } from './cost-dictionaries'
 import { auditLabel } from './cost-audit'
 import { logisticsOrderTypes, transportTypeLabel } from './cost-transport-types'

@@ -9,15 +9,19 @@
   >
     <el-form class="source-filters" label-position="top" @submit.prevent="search">
       <el-form-item label="订单类型"
-        ><el-select v-model="query.orderTypeCode" @change="search"
+        ><el-select v-model="query.orderTypeCode" :disabled="!!orderTypeCode" @change="search"
           ><el-option
             v-for="t in types"
             :key="t.value"
             :label="t.label"
             :value="t.value" /></el-select
       ></el-form-item>
-      <el-form-item label="单据编号"
+      <el-form-item
+        :label="query.orderTypeCode === 'SALES_ORDER' ? '销售单号／订货宝单号' : '单据编号'"
         ><el-input v-model="query.documentNo" clearable @keyup.enter="search"
+      /></el-form-item>
+      <el-form-item v-if="query.orderTypeCode === 'SALES_ORDER'" label="业务员"
+        ><el-input v-model="query.employeeName" clearable @keyup.enter="search"
       /></el-form-item>
       <el-form-item
         :label="query.orderTypeCode === 'TRANSFER_ORDER' ? '收货仓名称' : '客户 / 收货方名称'"
@@ -64,7 +68,7 @@
         ><template #default="{ row }"
           ><el-checkbox
             :model-value="chosen.has(key(row as PickedLedgerSource))"
-            :disabled="existing.has(key(row as PickedLedgerSource))"
+            :disabled="existing.has(key(row as PickedLedgerSource)) || !!row.referenceIssue"
             :aria-label="`选择${row.documentNo}`"
             @change="(value) => toggle(row as PickedLedgerSource, !!value)" /></template
       ></el-table-column>
@@ -73,6 +77,29 @@
         width="130"
         ><template #default="{ row }">{{ row.documentDate || '—' }}</template></el-table-column
       >
+      <el-table-column
+        v-if="query.orderTypeCode === 'SALES_ORDER'"
+        prop="originalNo"
+        label="订货宝销售单号"
+        min-width="190"
+      />
+      <el-table-column
+        v-if="query.orderTypeCode === 'SALES_ORDER'"
+        prop="employeeName"
+        label="业务员"
+        width="120"
+      />
+      <el-table-column
+        v-if="query.orderTypeCode === 'SALES_ORDER'"
+        prop="departmentName"
+        label="部门"
+        min-width="140"
+      />
+      <el-table-column v-if="suggestedReceiver" label="推荐依据" min-width="150"
+        ><template #default="{ row }">{{
+          recommendation(row as PickedLedgerSource) || '请人工核对'
+        }}</template></el-table-column
+      >
       <el-table-column prop="senderName" label="发货方" min-width="190" /><el-table-column
         prop="receiverName"
         label="收货方"
@@ -80,6 +107,17 @@
       /><el-table-column label="来源状态" width="130"
         ><template #default="{ row }">{{ sourceStatus(row.statusCode) }}</template></el-table-column
       >
+      <el-table-column
+        v-if="query.orderTypeCode === 'SALES_ORDER'"
+        label="关联检查"
+        min-width="240"
+      >
+        <template #default="{ row }"
+          ><span :class="{ 'reference-issue': row.referenceIssue }">{{
+            row.referenceIssue || (row.senderCode ? '可关联' : '选择后补充发货仓库')
+          }}</span></template
+        >
+      </el-table-column>
     </el-table>
     <div class="picker-toolbar">
       <span>已添加的单据不可重复选择。</span>
@@ -104,7 +142,13 @@ import { errorMessage } from '@/api/core/error'
 import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
 import { logisticsOrderTypes } from './cost-transport-types'
 const visible = defineModel<boolean>({ required: true })
-const props = defineProps<{ selectedKeys: string[] }>()
+const props = defineProps<{
+  selectedKeys: string[]
+  orderTypeCode?: string
+  suggestedDate?: string
+  suggestedOrderNo?: string
+  suggestedReceiver?: string
+}>()
 export type PickedLedgerSource = CostSource & { orderTypeCode: string }
 const emit = defineEmits<{ selected: [rows: PickedLedgerSource[]] }>()
 const sourceStatus = (status: string) =>
@@ -130,7 +174,9 @@ const sourceWarehouse = ref<string | null>(null),
   targetWarehouse = ref<string | null>(null)
 const existing = computed(() => new Set(props.selectedKeys))
 const key = (row: PickedLedgerSource) => `${row.orderTypeCode}:${row.documentNo}`
-const selectable = computed(() => rows.value.filter((r) => !existing.value.has(key(r))))
+const selectable = computed(() =>
+  rows.value.filter((r) => !existing.value.has(key(r)) && !r.referenceIssue),
+)
 const allSelected = computed(
   () => !!selectable.value.length && selectable.value.every((r) => chosen.value.has(key(r))),
 )
@@ -153,7 +199,10 @@ async function load() {
       dateFrom: dates.value?.[0],
       dateTo: dates.value?.[1],
     })
-    if (current === serial) rows.value = data.map((r) => ({ ...r, orderTypeCode: type }))
+    if (current === serial)
+      rows.value = data
+        .map((r) => ({ ...r, orderTypeCode: type }))
+        .sort((a, b) => Number(!!recommendation(b)) - Number(!!recommendation(a)))
   } catch (e) {
     if (current === serial) {
       rows.value = []
@@ -172,7 +221,7 @@ function page(direction: number) {
   void load()
 }
 function toggle(row: PickedLedgerSource, value: boolean) {
-  if (existing.value.has(key(row))) return
+  if (existing.value.has(key(row)) || row.referenceIssue) return
   if (value) chosen.value.set(key(row), row)
   else chosen.value.delete(key(row))
 }
@@ -188,11 +237,38 @@ function clearFilters() {
 }
 function reset() {
   chosen.value = new Map()
-  clearFilters()
+  if (props.orderTypeCode) query.value.orderTypeCode = props.orderTypeCode
+  query.value = { orderTypeCode: query.value.orderTypeCode, begin: 0 }
+  dates.value = []
+  sourceWarehouse.value = null
+  targetWarehouse.value = null
+  if (props.suggestedOrderNo) {
+    query.value.documentNo = props.suggestedOrderNo
+  } else if (props.suggestedDate) {
+    const date = new Date(`${props.suggestedDate}T00:00:00Z`)
+    dates.value = [
+      new Date(date.getTime() - 7 * 86400000).toISOString().slice(0, 10),
+      new Date(date.getTime() + 86400000).toISOString().slice(0, 10),
+    ]
+  }
+  search()
 }
 function confirm() {
   emit('selected', [...chosen.value.values()])
   visible.value = false
+}
+function recommendation(row: PickedLedgerSource) {
+  const normalize = (value: string) => value.replace(/[\s，,。；;\-]/g, '')
+  const raw = normalize(props.suggestedReceiver || '')
+  const matches = [
+    ['联系电话', row.contactPhone],
+    ['收货地址', row.destinationAddress],
+    ['客户名称', row.receiverName],
+    ['收货人', row.contactName],
+  ]
+    .filter(([, value]) => value && value.length >= 2 && raw.includes(normalize(value)))
+    .map(([label]) => label)
+  return matches.join('、')
 }
 </script>
 <style scoped>
@@ -200,6 +276,9 @@ function confirm() {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0 20px;
+}
+.reference-issue {
+  color: var(--el-color-warning-dark-2);
 }
 .source-filters :deep(.el-select),
 .source-filters :deep(.el-date-editor) {

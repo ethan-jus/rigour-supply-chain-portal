@@ -119,6 +119,7 @@ export interface ErpWarehouseSourceReference {
   connectorId: string | null
 }
 export interface ErpInternalWarehouseView {
+  costDepartmentId?: number | null
   sourceReferences?: ErpWarehouseSourceReference[]
   id: string
   warehouseCode: string
@@ -161,6 +162,7 @@ export interface ErpStockBalanceView {
 }
 
 export interface ErpInternalWarehouseCommand {
+  costDepartmentId?: number | null
   warehouseName: string
   regionCode?: string | null
   locationAreaCode?: string | null
@@ -275,77 +277,180 @@ const ERP_BASE_PATH = '/erp'
 const options = { stayOnUnauthorized: true }
 
 export const getErpProductCategories = (params: ErpProductCategoryQuery) =>
-  apiClient.get<ErpInternalPage<ErpProductCategoryView>>(`${ERP_BASE_PATH}/product-categories`, { params, ...options })
+  apiClient.get<ErpInternalPage<ErpProductCategoryView>>(`${ERP_BASE_PATH}/product-categories`, {
+    params,
+    ...options,
+  })
 export const getErpProductCategory = (id: string | number) =>
-  apiClient.get<ErpProductCategoryView>(`${ERP_BASE_PATH}/product-categories/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<ErpProductCategoryView>(
+    `${ERP_BASE_PATH}/product-categories/${encodeURIComponent(String(id))}`,
+    options,
+  )
 export const createErpProductCategory = (command: ErpProductCategoryCommand) =>
   apiClient.post<ErpProductCategoryView>(`${ERP_BASE_PATH}/product-categories`, command, options)
 export const updateErpProductCategory = (id: string | number, command: ErpProductCategoryCommand) =>
-  apiClient.put<ErpProductCategoryView>(`${ERP_BASE_PATH}/product-categories/${encodeURIComponent(String(id))}`, command, options)
+  apiClient.put<ErpProductCategoryView>(
+    `${ERP_BASE_PATH}/product-categories/${encodeURIComponent(String(id))}`,
+    command,
+    options,
+  )
 export const deleteErpProductCategory = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ERP_BASE_PATH}/product-categories/${encodeURIComponent(String(id))}`, { params: { revision }, ...options })
+  apiClient.delete<void>(`${ERP_BASE_PATH}/product-categories/${encodeURIComponent(String(id))}`, {
+    params: { revision },
+    ...options,
+  })
 
 export const getErpProductBrands = (params: ErpProductBrandQuery) =>
-  apiClient.get<ErpInternalPage<ErpProductBrandView>>(`${ERP_BASE_PATH}/product-brands`, { params, ...options })
+  apiClient.get<ErpInternalPage<ErpProductBrandView>>(`${ERP_BASE_PATH}/product-brands`, {
+    params,
+    ...options,
+  })
 export const getErpProductBrand = (id: string | number) =>
-  apiClient.get<ErpProductBrandView>(`${ERP_BASE_PATH}/product-brands/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<ErpProductBrandView>(
+    `${ERP_BASE_PATH}/product-brands/${encodeURIComponent(String(id))}`,
+    options,
+  )
 export const createErpProductBrand = (command: ErpProductBrandCommand) =>
   apiClient.post<ErpProductBrandView>(`${ERP_BASE_PATH}/product-brands`, command, options)
 export const updateErpProductBrand = (id: string | number, command: ErpProductBrandCommand) =>
-  apiClient.put<ErpProductBrandView>(`${ERP_BASE_PATH}/product-brands/${encodeURIComponent(String(id))}`, command, options)
+  apiClient.put<ErpProductBrandView>(
+    `${ERP_BASE_PATH}/product-brands/${encodeURIComponent(String(id))}`,
+    command,
+    options,
+  )
 export const deleteErpProductBrand = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ERP_BASE_PATH}/product-brands/${encodeURIComponent(String(id))}`, { params: { revision }, ...options })
+  apiClient.delete<void>(`${ERP_BASE_PATH}/product-brands/${encodeURIComponent(String(id))}`, {
+    params: { revision },
+    ...options,
+  })
 
 export const getErpProductTags = (params: ErpProductTagQuery) =>
-  apiClient.get<ErpInternalPage<ErpProductTagView>>(`${ERP_BASE_PATH}/product-tags`, { params, ...options })
+  apiClient.get<ErpInternalPage<ErpProductTagView>>(`${ERP_BASE_PATH}/product-tags`, {
+    params,
+    ...options,
+  })
 export const getErpProductTag = (id: string | number) =>
-  apiClient.get<ErpProductTagView>(`${ERP_BASE_PATH}/product-tags/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<ErpProductTagView>(
+    `${ERP_BASE_PATH}/product-tags/${encodeURIComponent(String(id))}`,
+    options,
+  )
 export const createErpProductTag = (command: ErpProductTagCommand) =>
   apiClient.post<ErpProductTagView>(`${ERP_BASE_PATH}/product-tags`, command, options)
 export const updateErpProductTag = (id: string | number, command: ErpProductTagCommand) =>
-  apiClient.put<ErpProductTagView>(`${ERP_BASE_PATH}/product-tags/${encodeURIComponent(String(id))}`, command, options)
+  apiClient.put<ErpProductTagView>(
+    `${ERP_BASE_PATH}/product-tags/${encodeURIComponent(String(id))}`,
+    command,
+    options,
+  )
 export const deleteErpProductTag = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ERP_BASE_PATH}/product-tags/${encodeURIComponent(String(id))}`, { params: { revision }, ...options })
+  apiClient.delete<void>(`${ERP_BASE_PATH}/product-tags/${encodeURIComponent(String(id))}`, {
+    params: { revision },
+    ...options,
+  })
 
 export const getErpProductSpecifications = (params: ErpProductSpecificationQuery) =>
-  apiClient.get<ErpInternalPage<ErpProductSpecificationView>>(`${ERP_BASE_PATH}/product-specifications`, { params, ...options })
+  apiClient.get<ErpInternalPage<ErpProductSpecificationView>>(
+    `${ERP_BASE_PATH}/product-specifications`,
+    { params, ...options },
+  )
 export const getErpProductSpecification = (id: string | number) =>
-  apiClient.get<ErpProductSpecificationView>(`${ERP_BASE_PATH}/product-specifications/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<ErpProductSpecificationView>(
+    `${ERP_BASE_PATH}/product-specifications/${encodeURIComponent(String(id))}`,
+    options,
+  )
 export const createErpProductSpecification = (command: ErpProductSpecificationCommand) =>
-  apiClient.post<ErpProductSpecificationView>(`${ERP_BASE_PATH}/product-specifications`, command, options)
-export const updateErpProductSpecification = (id: string | number, command: ErpProductSpecificationCommand) =>
-  apiClient.put<ErpProductSpecificationView>(`${ERP_BASE_PATH}/product-specifications/${encodeURIComponent(String(id))}`, command, options)
+  apiClient.post<ErpProductSpecificationView>(
+    `${ERP_BASE_PATH}/product-specifications`,
+    command,
+    options,
+  )
+export const updateErpProductSpecification = (
+  id: string | number,
+  command: ErpProductSpecificationCommand,
+) =>
+  apiClient.put<ErpProductSpecificationView>(
+    `${ERP_BASE_PATH}/product-specifications/${encodeURIComponent(String(id))}`,
+    command,
+    options,
+  )
 export const deleteErpProductSpecification = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ERP_BASE_PATH}/product-specifications/${encodeURIComponent(String(id))}`, { params: { revision }, ...options })
+  apiClient.delete<void>(
+    `${ERP_BASE_PATH}/product-specifications/${encodeURIComponent(String(id))}`,
+    { params: { revision }, ...options },
+  )
 
 export const getErpInventoryWarehouses = (params: ErpInternalWarehouseQuery) =>
-  apiClient.get<ErpInternalPage<ErpInternalWarehouseView>>(`${ERP_BASE_PATH}/inventory-warehouses`, { params, ...options })
+  apiClient.get<ErpInternalPage<ErpInternalWarehouseView>>(
+    `${ERP_BASE_PATH}/inventory-warehouses`,
+    { params, ...options },
+  )
 export const getErpInventoryWarehouse = (id: string | number) =>
-  apiClient.get<ErpInternalWarehouseView>(`${ERP_BASE_PATH}/inventory-warehouses/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<ErpInternalWarehouseView>(
+    `${ERP_BASE_PATH}/inventory-warehouses/${encodeURIComponent(String(id))}`,
+    options,
+  )
+export const getErpWarehouseCostDepartments = () =>
+  apiClient.get<{ id: number; name: string }[]>(
+    `${ERP_BASE_PATH}/inventory-warehouses/cost-departments`,
+    options,
+  )
 export const createErpInventoryWarehouse = (command: ErpInternalWarehouseCommand) =>
-  apiClient.post<ErpInternalWarehouseView>(`${ERP_BASE_PATH}/inventory-warehouses`, command, options)
-export const updateErpInventoryWarehouse = (id: string | number, command: ErpInternalWarehouseCommand) =>
-  apiClient.put<ErpInternalWarehouseView>(`${ERP_BASE_PATH}/inventory-warehouses/${encodeURIComponent(String(id))}`, command, options)
+  apiClient.post<ErpInternalWarehouseView>(
+    `${ERP_BASE_PATH}/inventory-warehouses`,
+    command,
+    options,
+  )
+export const updateErpInventoryWarehouse = (
+  id: string | number,
+  command: ErpInternalWarehouseCommand,
+) =>
+  apiClient.put<ErpInternalWarehouseView>(
+    `${ERP_BASE_PATH}/inventory-warehouses/${encodeURIComponent(String(id))}`,
+    command,
+    options,
+  )
 export const deleteErpInventoryWarehouse = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ERP_BASE_PATH}/inventory-warehouses/${encodeURIComponent(String(id))}`, { params: { revision }, ...options })
+  apiClient.delete<void>(
+    `${ERP_BASE_PATH}/inventory-warehouses/${encodeURIComponent(String(id))}`,
+    { params: { revision }, ...options },
+  )
 
 export const getErpStockBalances = (params: ErpStockBalanceQuery) =>
-  apiClient.get<ErpInternalPage<ErpStockBalanceView>>(`${ERP_BASE_PATH}/stock-balances`, { params, ...options })
+  apiClient.get<ErpInternalPage<ErpStockBalanceView>>(`${ERP_BASE_PATH}/stock-balances`, {
+    params,
+    ...options,
+  })
 
 export const getErpSupplierProfiles = (params: ErpSupplierProfileQuery) =>
-  apiClient.get<ErpInternalPage<ErpSupplierProfileView>>(`${ERP_BASE_PATH}/supplier-profiles`, { params, ...options })
+  apiClient.get<ErpInternalPage<ErpSupplierProfileView>>(`${ERP_BASE_PATH}/supplier-profiles`, {
+    params,
+    ...options,
+  })
 export const getErpSupplierProfile = (id: string | number) =>
-  apiClient.get<ErpSupplierProfileView>(`${ERP_BASE_PATH}/supplier-profiles/${encodeURIComponent(String(id))}`, options)
+  apiClient.get<ErpSupplierProfileView>(
+    `${ERP_BASE_PATH}/supplier-profiles/${encodeURIComponent(String(id))}`,
+    options,
+  )
 export const createErpSupplierProfile = (command: ErpSupplierProfileCommand) =>
   apiClient.post<ErpSupplierProfileView>(`${ERP_BASE_PATH}/supplier-profiles`, command, options)
 export const updateErpSupplierProfile = (id: string | number, command: ErpSupplierProfileCommand) =>
-  apiClient.put<ErpSupplierProfileView>(`${ERP_BASE_PATH}/supplier-profiles/${encodeURIComponent(String(id))}`, command, options)
+  apiClient.put<ErpSupplierProfileView>(
+    `${ERP_BASE_PATH}/supplier-profiles/${encodeURIComponent(String(id))}`,
+    command,
+    options,
+  )
 export const deleteErpSupplierProfile = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ERP_BASE_PATH}/supplier-profiles/${encodeURIComponent(String(id))}`, { params: { revision }, ...options })
+  apiClient.delete<void>(`${ERP_BASE_PATH}/supplier-profiles/${encodeURIComponent(String(id))}`, {
+    params: { revision },
+    ...options,
+  })
 
 export interface WarehouseLocationCatalog {
   version: string
   nodes: { code: string; name: string; level: string; parentCode: string | null }[]
 }
 export const getErpWarehouseLocationCatalog = () =>
-  apiClient.get<WarehouseLocationCatalog>(`${ERP_BASE_PATH}/inventory-warehouses/location-catalog`, options)
+  apiClient.get<WarehouseLocationCatalog>(
+    `${ERP_BASE_PATH}/inventory-warehouses/location-catalog`,
+    options,
+  )

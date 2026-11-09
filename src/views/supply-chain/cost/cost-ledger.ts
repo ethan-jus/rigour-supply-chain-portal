@@ -160,7 +160,7 @@ export function createLedgerCommand(logistics: boolean): CostCommand {
     ledger: logistics
       ? {
           schemaVersion: 2,
-          transportPurposeCode: 'DELIVERY',
+          transportPurposeCode: '',
           deliveryModeCode: 'THIRD_PARTY',
           carrierCode: null,
           costMonth: date.slice(0, 7),

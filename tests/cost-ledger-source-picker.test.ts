@@ -98,3 +98,79 @@ describe('物流关联单据选择', () => {
     w.unmount()
   })
 })
+
+describe('销售配送锁定单据类型与候选推荐', () => {
+  it('逐单显示资料问题，全选和手动勾选均不会带回不可关联的单据', async () => {
+    api.sources.mockResolvedValue([
+      { id: 1, documentNo: 'SO_VALID', statusCode: 'CONFIRMED' },
+      {
+        id: 2,
+        documentNo: 'SO_PENDING',
+        statusCode: 'CONFIRMED',
+        referenceIssue: '销售订单归属城市未配置',
+      },
+    ])
+    const w = mount(Picker, {
+      props: { modelValue: true, selectedKeys: [], orderTypeCode: 'SALES_ORDER' },
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          CostLedgerPartySelect: true,
+          ElDialog: { template: '<div><slot/><slot name="footer"/></div>' },
+        },
+      },
+    })
+    w.findComponent(ElDialog).vm.$emit('open')
+    await flushPromises()
+    const pending = w
+      .findAllComponents(ElCheckbox)
+      .find((c) => c.attributes('aria-label') === '选择SO_PENDING')!
+    expect(pending.props('disabled')).toBe(true)
+    expect(w.text()).toContain('销售订单归属城市未配置')
+    pending.vm.$emit('change', true)
+    w.findAllComponents(ElCheckbox)
+      .find((c) => c.attributes('aria-label') === '勾选本页单据')!
+      .vm.$emit('change', true)
+    await w.vm.$nextTick()
+    await w
+      .findAll('button')
+      .find((b) => b.text().startsWith('确定带回'))!
+      .trigger('click')
+    expect(w.emitted('selected')?.[0]?.[0]).toEqual([
+      expect.objectContaining({ documentNo: 'SO_VALID' }),
+    ])
+    w.unmount()
+  })
+
+  it('默认只读取销售单，类型不可更改且推荐不会自动勾选', async () => {
+    const w = mount(Picker, {
+      props: {
+        modelValue: true,
+        selectedKeys: [],
+        orderTypeCode: 'SALES_ORDER',
+        suggestedDate: '2026-11-06',
+        suggestedReceiver: '星河门店',
+      },
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          CostLedgerPartySelect: true,
+          ElDialog: { template: '<div><slot/><slot name="footer"/></div>' },
+        },
+      },
+    })
+    w.findComponent(ElDialog).vm.$emit('open')
+    await flushPromises()
+    expect(w.findComponent(ElSelect).props('disabled')).toBe(true)
+    expect(api.sources).toHaveBeenCalledTimes(1)
+    expect(api.sources).toHaveBeenLastCalledWith(
+      expect.objectContaining({ orderTypeCode: 'SALES_ORDER' }),
+    )
+    expect(w.text()).toContain('已选 0 张单据')
+    expect(w.text()).toContain('业务员')
+    expect(w.text()).toContain('订货宝销售单号')
+    expect(w.text()).toContain('客户名称')
+    expect(w.emitted('selected')).toBeUndefined()
+    w.unmount()
+  })
+})
