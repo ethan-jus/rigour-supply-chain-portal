@@ -55,7 +55,7 @@
   .order-summary__metric { padding: 10px; }
 }
 
-.order-summary--payments { --summary-columns: 6; }
+.order-summary--payments { --summary-columns: 7; }
 .order-summary__metric--checked { --metric-color: #0e7490; }
 
 /* 三个列表统一识别客户与业务员；主要金额在前，辅助指标收敛颜色。 */

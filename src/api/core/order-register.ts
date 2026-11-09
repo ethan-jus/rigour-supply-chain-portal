@@ -226,6 +226,7 @@ export interface PaymentProductAllocation {
 }
 
 export interface OrderRegisterPaymentItem {
+  paymentOwner?: { employeeCode: string | null; employeeName: string | null; evidence: string | null; departmentName: string | null; regionCode: string | null; status: 'PENDING' | 'CONFIRMED' } | null
   voucherTransactionNos?: string[]
   allocatedPaymentAmount?: number | null
   productAllocations?: PaymentProductAllocation[]
@@ -264,6 +265,7 @@ export interface OrderRegisterPaymentItem {
 }
 
 export interface OrderRegisterPaymentTotals {
+  ownerPendingAmount?: number
   quantitySum?: number
   unallocatedCount?: number
   receivedAmount: number

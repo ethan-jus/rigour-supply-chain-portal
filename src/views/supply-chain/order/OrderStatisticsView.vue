@@ -3,7 +3,7 @@
     <div class="page-heading">
       <div class="list-heading-title">
         <SupplyPageTitle>订单与回款统计</SupplyPageTitle>
-        <SupplyPageHelp>期间发生额与截至日余额分开统计；期末未回款从订单侧重建，不遗漏无收款订单。</SupplyPageHelp>
+        <SupplyPageHelp>本页按下单业务员查看订单回收情况；回款个人业绩请查看订单回款或月业绩导出。期末未回款从订单侧重建。</SupplyPageHelp>
       </div>
     </div>
 
@@ -37,12 +37,12 @@
             />
             <el-select
               v-model="filters.ownerEmployeeCode"
-              aria-label="业务员"
+              aria-label="下单业务员"
               clearable
               filterable
               remote
               reserve-keyword
-              placeholder="搜索业务员"
+              placeholder="搜索下单业务员"
               :remote-method="searchEmployees"
               :loading="employeeLoading"
               style="width: 170px"
@@ -74,7 +74,7 @@
             <el-select v-model="periodFilters.groupBy" aria-label="汇总维度" placeholder="汇总维度" style="width: 130px">
               <el-option label="按地区" value="region" />
               <el-option label="按客户" value="customer" />
-              <el-option label="按业务员" value="employee" />
+              <el-option label="按下单业务员" value="employee" />
             </el-select>
             <el-button type="primary" :loading="periodLoading" @click="loadPeriod">查询</el-button>
             <el-button @click="resetPeriod">重置</el-button>
@@ -157,12 +157,12 @@
             />
             <el-select
               v-model="filters.ownerEmployeeCode"
-              aria-label="业务员"
+              aria-label="下单业务员"
               clearable
               filterable
               remote
               reserve-keyword
-              placeholder="搜索业务员"
+              placeholder="搜索下单业务员"
               :remote-method="searchEmployees"
               :loading="employeeLoading"
               style="width: 170px"
@@ -254,7 +254,7 @@
             <el-table-column label="归属地区" width="130">
               <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
             </el-table-column>
-            <el-table-column label="业务员" width="120">
+            <el-table-column label="下单业务员" width="120">
               <template #default="{ row }">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</template>
             </el-table-column>
             <el-table-column label="下单时间" width="170">
@@ -352,7 +352,7 @@ const detailOrderId = ref<string | number | null>(null)
 
 const groupByLabel = computed(() => {
   if (periodFilters.groupBy === 'customer') return '客户'
-  if (periodFilters.groupBy === 'employee') return '业务员'
+  if (periodFilters.groupBy === 'employee') return '下单业务员'
   return '归属地区'
 })
 

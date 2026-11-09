@@ -45,10 +45,10 @@
           check-strictly
           :render-after-expand="false"
           :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
-          aria-label="部门"
+          aria-label="回款归属部门"
           clearable
           filterable
-          placeholder="选择部门"
+          placeholder="回款归属部门"
           popper-class="order-register-tree-popper"
           style="width: 160px"
         />
@@ -79,16 +79,17 @@
         <el-select
           v-model="filters.ownerEmployeeCode"
           v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
-          aria-label="业务员"
+          aria-label="回款人（业绩归属）"
           clearable
           filterable
           remote
           reserve-keyword
-          placeholder="搜索业务员"
+          placeholder="搜索回款人"
           :remote-method="searchEmployees"
           :loading="employeeLoading"
           style="width: 170px"
         >
+          <el-option label="归属待确认" value="__PENDING__" />
           <el-option
             v-for="item in employeeOptions"
             :key="item.employeeCode"
@@ -202,6 +203,10 @@
         <span class="order-summary__label">{{ allocationActive ? '已确认金额（分摊）' : '已确认金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
       </div>
+      <div class="order-summary__metric order-summary__metric--unpaid" title="已计入本期到账总额，尚未分配到个人业绩。">
+        <span class="order-summary__label">归属待确认回款</span>
+        <strong class="order-summary__value">{{ moneyText(pageData.totals.ownerPendingAmount) }}</strong>
+      </div>
     </div>
 
     <el-card class="list-card" shadow="never">
@@ -264,7 +269,10 @@
           >
             <template #default="{ row }"><strong class="order-party-name">{{ row.customerName || '-' }}</strong></template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('ownerEmployee')" label="业务员" width="110">
+          <el-table-column label="回款人（业绩归属）" width="160">
+            <template #default="{ row }"><el-tooltip v-if="row.paymentOwner?.status === 'CONFIRMED'" :content="row.paymentOwner.evidence"><strong>{{ row.paymentOwner.employeeName || row.paymentOwner.employeeCode }}</strong></el-tooltip><el-tag v-else type="warning" size="small" effect="plain">待确认</el-tag></template>
+          </el-table-column>
+          <el-table-column v-if="paymentColumns.isVisible('ownerEmployee')" label="下单业务员" width="110">
             <template #default="{ row }"><strong class="order-party-name">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</strong></template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('paidAmount')" label="收款金额" width="120" align="right" prop="paidAmount">
@@ -284,8 +292,8 @@
           <el-table-column v-if="paymentColumns.isVisible('orderAmount')" label="订单金额" width="120" align="right" prop="orderAmount">
             <template #default="{ row }">{{ moneyText(row.orderAmount) }}</template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('departmentName')" label="部门" width="130" show-overflow-tooltip>
-            <template #default="{ row }">{{ departmentLabel(row.departmentId, row.departmentName) }}</template>
+          <el-table-column v-if="paymentColumns.isVisible('departmentName')" label="回款归属部门" width="130" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.paymentOwner?.departmentName || '待确认' }}</template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('regionName')" label="归属地区" width="140">
             <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
@@ -481,8 +489,8 @@ const route = useRoute()
 const paymentColumns = useColumnSettings('order-payments', [
   { key: 'customerName', label: '客户名称', locked: true },
   { key: 'regionName', label: '归属地区' },
-  { key: 'ownerEmployee', label: '业务员' },
-  { key: 'departmentName', label: '部门' },
+  { key: 'ownerEmployee', label: '下单业务员' },
+  { key: 'departmentName', label: '回款归属部门' },
   { key: 'orderAmount', label: '订单金额' },
   { key: 'paidAmount', label: '收款金额' },
   { key: 'paymentTime', label: '收款时间' },
@@ -512,7 +520,6 @@ const {
   loadOptions,
   searchEmployees,
   areaLabel,
-  departmentLabel,
   employeeLabel,
 } = useOrderRegisterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()

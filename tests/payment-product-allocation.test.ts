@@ -94,6 +94,24 @@ function mountPage() { return mount(PaymentRecordListView, { global: { plugins: 
   OrderRegisterDetailDrawer: true, PaymentDetailDrawer: true, PaymentCheckDialog: true,
 } } }) }
 describe('回款商品分摊', () => {
+  it('回款归属缺失显示待确认，筛选按回款人传参，不冒用下单业务员', async () => {
+    const page = paymentPage()
+    Object.assign(page.items[0]!, { ownerEmployeeCode: 'ZHANG', ownerEmployeeName: '张三', paymentOwner: { status: 'PENDING', employeeCode: null } })
+    Object.assign(page.totals, { ownerPendingAmount: 10 })
+    mocks.getPayments.mockResolvedValue(page)
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.text()).toContain('回款人（业绩归属）')
+    expect(wrapper.text()).toContain('归属待确认回款')
+    expect(wrapper.text()).toContain('张三')
+    const select = wrapper.findAllComponents(ElSelect).find(v => v.props('placeholder') === '搜索回款人')!
+    select.vm.$emit('update:modelValue', '__PENDING__')
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.getPayments.mock.lastCall?.[0].ownerEmployeeCode).toBe('__PENDING__')
+    wrapper.unmount()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.routeQuery = {}
