@@ -14,7 +14,17 @@ PC 运营后台，使用 Vue 3 + TypeScript + Vite + Element Plus。
 3. **路由权限**：路由守卫在 `src/router/permissionGuard.ts`，授权上下文在 `src/stores/supply-authorization.ts`，数据库菜单在 `src/stores/navigation.ts`。
 4. **认证**：使用 IAM OIDC Authorization Code + PKCE；Access/ID Token 只保存在页面内存，禁止写入 Web Storage。
 5. **数据环境**：按任务选择本地测试、隔离数据或指定 DEV 联调。Mock 可用于开发和测试，但不能混入正式业务结果或作为真实同步成功的证据。开发模式及 `--mode desktop` 构建允许 HTTP 局域网部署；正式构建仍要求 HTTPS，并保留 PKCE、签名与权限校验。
-6. **界面设计**：按当前用户需求、适用 UI 技能和组件规范实现。`src/assets/styles/_variables.scss` 提供可复用的语义 Token，不锁定页面布局、字号、间距、列数或高度；历史截图和 QA 记录只描述当时版本，不作为后续设计的硬性前提。通用样式负责主题与必要布局，页面根据内容和视口决定密度，不通过跨页面选择器强制隐藏业务文案或覆盖控件尺寸。
+6. **界面设计**：按当前用户需求、适用 UI 技能和组件规范实现。`src/assets/styles/_variables.scss` 提供可复用的语义 Token；历史截图和 QA 记录只描述当时版本，不作为后续设计的硬性前提。通用样式负责主题与必要布局，页面根据内容和视口决定密度，不通过跨页面选择器强制隐藏业务文案或覆盖控件尺寸。列表筛选和分页遵循下方统一规范。
+
+## 列表筛选与分页规范
+
+- 新增或调整列表查询区时，复用 `src/assets/styles/_list-filters.scss`，宽度统一来自 `_variables.scss` 的 `$list-filter-widths`。每个控件外包 `list-filter-field`，按用途加修饰类，不在页面重新写同类宽度或用 `flex: 1` 拉长输入框。
+- 固定默认尺寸：名称/单号 `--text`（默认）160px；人员 `--person` 120px；普通下拉、地区、部门、分类、规格 `--select` 140px；日期范围 `--date-range` 248px；商品名称 `--product` 180px。部门下拉与“含子部门”用 `list-filter-group` 组合，复选框不占下拉宽度。
+- 查询项只显示用途明确的占位文字，保留 `aria-label`，不额外增加顶部长标签。查询、重置、展开/收起依次固定在第一行右侧，容器变窄时查询项换行，不为填满空白拉伸。
+- 日期占位和已选日期必须完整显示；多选项折叠后可查看完整内容。确有更长内容需要例外时，先说明原因并核验实际页面，不随意增加新的宽度。
+- 列表底部左侧放辅助操作，右侧放分页。同行按钮保持一致的默认尺寸；`TableColumnSettings` 在默认按钮旁传 `size="default"`。
+- 紧凑分页复用 `src/components/supply/CompactPagination.vue`：总条数、上一页、三个相邻页码及首末页/省略号、下一页、104px 每页条数选择框；不加跳转输入。参考接入：`PaymentRecordListView.vue`。
+- 验证至少覆盖收起、展开、已选值及常用桌面宽度。以上是新建/修改列表的默认约束，不通过全局 Element Plus 选择器强行改变其他录入表单。
 
 ## 工作方式与验证
 

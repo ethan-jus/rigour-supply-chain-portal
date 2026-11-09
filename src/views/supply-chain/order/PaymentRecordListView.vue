@@ -4,7 +4,7 @@
       <form aria-label="回款查询条件" @submit.prevent="search">
         <div class="payment-filter-primary">
           <div class="payment-filter-grid">
-            <div class="payment-filter-field payment-filter-field--date">
+            <div class="list-filter-field list-filter-field--date-range">
               <el-date-picker
                 v-model="pageFilters.paymentTimeRange"
                 type="daterange"
@@ -15,7 +15,7 @@
                 aria-label="付款时间"
               />
             </div>
-            <div class="payment-filter-field">
+            <div class="list-filter-field">
               <el-input
                 v-model="filters.customerName"
                 aria-label="客户名称"
@@ -24,7 +24,7 @@
                 @keyup.enter="search"
               />
             </div>
-            <div class="payment-filter-field">
+            <div class="list-filter-field list-filter-field--person">
               <el-select
                 v-model="filters.ownerEmployeeCode"
                 v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
@@ -45,7 +45,7 @@
                 />
               </el-select>
             </div>
-            <div class="payment-filter-field">
+            <div class="list-filter-field">
               <el-input
                 v-model="filters.orderNo"
                 aria-label="订单号"
@@ -56,6 +56,8 @@
             </div>
           </div>
           <div class="payment-query-actions">
+            <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
+            <el-button @click="resetFilters">重置</el-button>
             <el-button
               text
               type="primary"
@@ -63,11 +65,9 @@
               aria-controls="payment-advanced-filters"
               @click="filtersExpanded = !filtersExpanded"
             >
-              {{ filtersExpanded ? '收起筛选' : '更多筛选'
+              {{ filtersExpanded ? '收起' : '展开'
               }}<el-icon class="el-icon--right"><ArrowUp v-if="filtersExpanded" /><ArrowDown v-else /></el-icon>
             </el-button>
-            <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
-            <el-button @click="resetFilters">重置</el-button>
           </div>
         </div>
         <div
@@ -75,7 +75,7 @@
           id="payment-advanced-filters"
           class="payment-filter-grid payment-filter-grid--advanced"
         >
-          <div class="payment-filter-field payment-filter-field--date">
+          <div class="list-filter-field list-filter-field--date-range">
             <el-date-picker
               v-model="filters.orderDateRange"
               type="daterange"
@@ -86,8 +86,8 @@
               aria-label="下单时间"
             />
           </div>
-          <div class="payment-filter-field payment-filter-field--department">
-            <div class="payment-department">
+          <div class="list-filter-group">
+            <div class="list-filter-field list-filter-field--select">
               <el-tree-select
                 v-model="filters.departmentId"
                 v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
@@ -102,10 +102,11 @@
                 filterable
                 placeholder="回款归属部门"
                 popper-class="order-register-tree-popper"
-              /><el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
+              />
             </div>
+            <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
           </div>
-          <div class="payment-filter-field">
+          <div class="list-filter-field list-filter-field--select">
             <el-tree-select
               v-model="filters.regionCode"
               v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
@@ -122,7 +123,7 @@
               popper-class="order-register-tree-popper"
             />
           </div>
-          <div class="payment-filter-field">
+          <div class="list-filter-field list-filter-field--select">
             <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态">
               <el-option
                 v-for="item in paymentStatusOptions"
@@ -132,7 +133,7 @@
               />
             </el-select>
           </div>
-          <div class="payment-filter-field">
+          <div class="list-filter-field list-filter-field--select">
             <el-select
               v-model="pageFilters.confirmationStatusCode"
               aria-label="财务确认"
@@ -147,7 +148,7 @@
               />
             </el-select>
           </div>
-          <div class="payment-filter-field">
+          <div class="list-filter-field list-filter-field--select">
             <el-tree-select
               v-model="pageFilters.categoryIds"
               :data="categoryTree"
@@ -170,7 +171,7 @@
               @change="onCategoryChange"
             />
           </div>
-          <div class="payment-filter-field payment-filter-field--product">
+          <div class="list-filter-field list-filter-field--product">
             <el-select
               v-model="pageFilters.productIds"
               multiple
@@ -195,7 +196,7 @@
               />
             </el-select>
           </div>
-          <div class="payment-filter-field">
+          <div class="list-filter-field list-filter-field--select">
             <el-select
               v-model="pageFilters.productVariantIds"
               aria-label="商品规格"
@@ -220,7 +221,7 @@
               </el-option-group>
             </el-select>
           </div>
-          <div class="payment-filter-field">
+          <div class="list-filter-field">
             <el-input
               v-model="pageFilters.transactionNo"
               aria-label="交易单号"
@@ -229,7 +230,7 @@
               @keyup.enter="search"
             />
           </div>
-          <div class="payment-filter-field">
+          <div class="list-filter-field list-filter-field--person">
             <el-select
               v-model="filters.createdBy"
               v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
@@ -241,7 +242,7 @@
               <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
             </el-select>
           </div>
-          <div class="payment-filter-field">
+          <div class="list-filter-field">
             <el-input
               v-model="pageFilters.paymentNo"
               aria-label="收款编码"
@@ -512,6 +513,7 @@
           <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
           <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
           <TableColumnSettings
+            size="default"
             plain
             :columns="paymentColumns.columns"
             :visibility="paymentColumns.visibility"
@@ -519,14 +521,11 @@
             @reset="paymentColumns.reset"
           />
         </div>
-        <el-pagination
+        <CompactPagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :total="pageData.total"
           :page-sizes="[20, 50, 100, 200]"
-          layout="total, prev, pager, next, sizes"
-          :pager-count="5"
-          background
           @size-change="onPageSizeChange"
           @current-change="loadPayments"
         />
@@ -557,6 +556,7 @@ import PaymentTransactionCheckDialog from './components/PaymentTransactionCheckD
 import PaymentVoucherAuditDialog from './components/PaymentVoucherAuditDialog.vue'
 import PaymentVoucherTransactionsDialog from './components/PaymentVoucherTransactionsDialog.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
+import CompactPagination from '@/components/supply/CompactPagination.vue'
 import FundAttachmentThumbnails from '@/components/supply/FundAttachmentThumbnails.vue'
 import { displayDateTime } from '@/utils/business-date'
 import { CircleCheck, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
@@ -874,23 +874,12 @@ onMounted(() => {
 .payment-filter-primary { display: flex; align-items: flex-start; gap: 16px; }
 .payment-filter-grid { display: flex; flex: 1; flex-wrap: wrap; gap: 10px; min-width: 0; }
 .payment-filter-grid--advanced { margin-top: 10px; }
-.payment-filter-field { flex: 0 0 180px; min-width: 0; }
-.payment-filter-field--date { flex-basis: 280px; }
-.payment-filter-field--department { flex-basis: 280px; }
-.payment-filter-field--product { flex-basis: 220px; }
-.payment-filter-field :deep(.el-select), .payment-filter-field :deep(.el-input), .payment-filter-field :deep(.el-date-editor) { width: 100%; min-width: 0; box-sizing: border-box; }
-.payment-department { display: flex; align-items: center; gap: 8px; }
-.payment-department :deep(.el-select) { flex: 1; min-width: 0; }
 .payment-query-actions, .payment-tool-actions { display: flex; align-items: center; gap: 8px; }
 .payment-query-actions { flex: 0 0 auto; margin-left: auto; }
 .payment-query-actions :deep(.el-button), .payment-tool-actions :deep(.el-button) { margin-left: 0; }
 .payment-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; }
 .payment-tool-actions { flex-wrap: wrap; }
 .payment-footer :deep(.el-pagination) { margin-left: auto; }
-.payment-footer :deep(.el-pagination.is-background .el-pager li),
-.payment-footer :deep(.el-pagination.is-background .btn-prev),
-.payment-footer :deep(.el-pagination.is-background .btn-next) { border: 1px solid var(--el-border-color); border-radius: 4px; background: var(--el-bg-color); }
-.payment-footer :deep(.el-pagination.is-background .el-pager li.is-active) { color: var(--el-color-primary); border-color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
 .payment-summary-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; min-height: 30px; color: var(--el-text-color-secondary); font-size: 12px; background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-bottom: 0; border-radius: 8px 8px 0 0; }
 .payment-summary-brief { color: #047857; }
 .order-summary.payment-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 8px 12px 12px; border-radius: 0; }
@@ -901,7 +890,6 @@ onMounted(() => {
 }
 @media (max-width: 720px) {
   .payment-filter-primary { gap: 8px; }
-  .payment-filter-field { max-width: 100%; }
   .payment-query-actions { flex-wrap: wrap; width: 128px; justify-content: flex-end; }
   .payment-footer { overflow-x: auto; }
   .order-summary.payment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
