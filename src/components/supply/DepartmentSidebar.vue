@@ -1,7 +1,10 @@
 <template>
   <aside class="department-sidebar" aria-label="部门筛选">
-    <div class="department-heading"><h3>部门</h3><slot name="heading-actions" /></div>
-    <el-input v-model="keyword" placeholder="搜索部门名称" clearable aria-label="搜索部门名称" />
+    <h3 v-if="showHeading" class="department-heading">部门</h3>
+    <div class="department-search">
+      <el-input v-model="keyword" placeholder="搜索部门名称" clearable aria-label="搜索部门名称" />
+      <slot name="search-actions" />
+    </div>
     <el-tree
       ref="tree"
       :data="nodes"
@@ -25,7 +28,7 @@ export interface DepartmentChoice {
   parentId: number | null
   label: string
 }
-const props = withDefaults(defineProps<{ departments: DepartmentChoice[]; modelValue: number | null; showAll?: boolean }>(), { showAll: true })
+const props = withDefaults(defineProps<{ departments: DepartmentChoice[]; modelValue: number | null; showAll?: boolean; showHeading?: boolean }>(), { showAll: true, showHeading: true })
 const emit = defineEmits<{ 'update:modelValue': [id: number | null] }>()
 type Node = { id: number | string; label: string; children: Node[] }
 const keyword = ref(''),
@@ -61,12 +64,13 @@ function select(node: Node) {
   border-radius: 8px;
   align-self: stretch;
 }
-.department-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
-.department-heading h3 { margin: 0; }
-h3 {
+.department-heading {
   font-size: 15px;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
 }
+.department-search { display: flex; align-items: center; gap: 8px; }
+.department-search > .el-input { flex: 1; min-width: 0; }
+.department-search :deep(.el-checkbox) { flex: none; margin: 0; }
 .el-tree {
   margin-top: 16px;
 }

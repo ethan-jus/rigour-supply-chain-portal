@@ -5,14 +5,16 @@
       <DepartmentSidebar
         :departments="departmentChoices"
         :show-all="false"
+        :show-heading="false"
         :model-value="departmentId"
         @update:model-value="selectDepartment"
-        ><template #heading-actions
-          ><el-checkbox v-model="includeSubDepartments" @change="search"
-            >含子部门</el-checkbox
-          ></template
-        ></DepartmentSidebar
       >
+        <template #search-actions>
+          <el-tooltip content="含子部门" placement="top">
+            <el-checkbox v-model="includeSubDepartments" aria-label="含子部门" @change="search" />
+          </el-tooltip>
+        </template>
+      </DepartmentSidebar>
       <section class="employee-results" aria-label="员工列表">
         <OrderRegisterFilterCard
           class="employee-filters order-register-filter--compact"
