@@ -2,60 +2,72 @@
   <div class="order-register-page supply-page supply-page--business-main">
     <el-card class="filter-card payment-filters" shadow="never">
       <form aria-label="回款查询条件" @submit.prevent="search">
-        <div class="payment-filter-grid">
-          <div class="payment-filter-field payment-filter-field--wide">
-            <span class="payment-filter-label">付款时间</span>
-            <el-date-picker
-              v-model="pageFilters.paymentTimeRange"
-              type="daterange"
-              value-format="YYYY-MM-DD"
-              range-separator="至"
-              start-placeholder="付款开始日期"
-              end-placeholder="付款截止日期"
-              aria-label="付款时间"
-            />
-          </div>
-          <div class="payment-filter-field payment-filter-field--wide">
-            <span class="payment-filter-label">客户名称</span>
-            <el-input
-              v-model="filters.customerName"
-              aria-label="客户名称"
-              clearable
-              placeholder="客户名称"
-              @keyup.enter="search"
-            />
-          </div>
-          <div class="payment-filter-field">
-            <span class="payment-filter-label">回款人</span>
-            <el-select
-              v-model="filters.ownerEmployeeCode"
-              v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
-              aria-label="回款人"
-              clearable
-              filterable
-              remote
-              reserve-keyword
-              placeholder="搜索回款人"
-              :remote-method="searchEmployees"
-              :loading="employeeLoading"
-            >
-              <el-option
-                v-for="item in employeeOptions"
-                :key="item.employeeCode"
-                :label="item.employeeName"
-                :value="item.employeeCode"
+        <div class="payment-filter-primary">
+          <div class="payment-filter-grid">
+            <div class="payment-filter-field payment-filter-field--date">
+              <el-date-picker
+                v-model="pageFilters.paymentTimeRange"
+                type="daterange"
+                value-format="YYYY-MM-DD"
+                range-separator="至"
+                start-placeholder="付款开始日期"
+                end-placeholder="付款截止日期"
+                aria-label="付款时间"
               />
-            </el-select>
+            </div>
+            <div class="payment-filter-field">
+              <el-input
+                v-model="filters.customerName"
+                aria-label="客户名称"
+                clearable
+                placeholder="客户名称"
+                @keyup.enter="search"
+              />
+            </div>
+            <div class="payment-filter-field">
+              <el-select
+                v-model="filters.ownerEmployeeCode"
+                v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
+                aria-label="回款人"
+                clearable
+                filterable
+                remote
+                reserve-keyword
+                placeholder="搜索回款人"
+                :remote-method="searchEmployees"
+                :loading="employeeLoading"
+              >
+                <el-option
+                  v-for="item in employeeOptions"
+                  :key="item.employeeCode"
+                  :label="item.employeeName"
+                  :value="item.employeeCode"
+                />
+              </el-select>
+            </div>
+            <div class="payment-filter-field">
+              <el-input
+                v-model="filters.orderNo"
+                aria-label="订单号"
+                clearable
+                placeholder="订单号"
+                @keyup.enter="search"
+              />
+            </div>
           </div>
-          <div class="payment-filter-field">
-            <span class="payment-filter-label">订单号</span>
-            <el-input
-              v-model="filters.orderNo"
-              aria-label="订单号"
-              clearable
-              placeholder="订单号"
-              @keyup.enter="search"
-            />
+          <div class="payment-query-actions">
+            <el-button
+              text
+              type="primary"
+              :aria-expanded="filtersExpanded"
+              aria-controls="payment-advanced-filters"
+              @click="filtersExpanded = !filtersExpanded"
+            >
+              {{ filtersExpanded ? '收起筛选' : '更多筛选'
+              }}<el-icon class="el-icon--right"><ArrowUp v-if="filtersExpanded" /><ArrowDown v-else /></el-icon>
+            </el-button>
+            <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
+            <el-button @click="resetFilters">重置</el-button>
           </div>
         </div>
         <div
@@ -63,8 +75,7 @@
           id="payment-advanced-filters"
           class="payment-filter-grid payment-filter-grid--advanced"
         >
-          <div class="payment-filter-field payment-filter-field--wide">
-            <span class="payment-filter-label">下单时间</span>
+          <div class="payment-filter-field payment-filter-field--date">
             <el-date-picker
               v-model="filters.orderDateRange"
               type="daterange"
@@ -75,8 +86,7 @@
               aria-label="下单时间"
             />
           </div>
-          <div class="payment-filter-field payment-filter-field--wide">
-            <span class="payment-filter-label">回款部门</span>
+          <div class="payment-filter-field payment-filter-field--department">
             <div class="payment-department">
               <el-tree-select
                 v-model="filters.departmentId"
@@ -96,7 +106,6 @@
             </div>
           </div>
           <div class="payment-filter-field">
-            <span class="payment-filter-label">归属地区</span>
             <el-tree-select
               v-model="filters.regionCode"
               v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
@@ -114,7 +123,6 @@
             />
           </div>
           <div class="payment-filter-field">
-            <span class="payment-filter-label">收款状态</span>
             <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态">
               <el-option
                 v-for="item in paymentStatusOptions"
@@ -125,7 +133,6 @@
             </el-select>
           </div>
           <div class="payment-filter-field">
-            <span class="payment-filter-label">财务确认</span>
             <el-select
               v-model="pageFilters.confirmationStatusCode"
               aria-label="财务确认"
@@ -141,7 +148,6 @@
             </el-select>
           </div>
           <div class="payment-filter-field">
-            <span class="payment-filter-label">商品分类</span>
             <el-tree-select
               v-model="pageFilters.categoryIds"
               :data="categoryTree"
@@ -164,8 +170,7 @@
               @change="onCategoryChange"
             />
           </div>
-          <div class="payment-filter-field payment-filter-field--wide">
-            <span class="payment-filter-label">商品</span>
+          <div class="payment-filter-field payment-filter-field--product">
             <el-select
               v-model="pageFilters.productIds"
               multiple
@@ -190,8 +195,7 @@
               />
             </el-select>
           </div>
-          <div class="payment-filter-field payment-filter-field--wide">
-            <span class="payment-filter-label">商品规格</span>
+          <div class="payment-filter-field">
             <el-select
               v-model="pageFilters.productVariantIds"
               aria-label="商品规格"
@@ -217,7 +221,6 @@
             </el-select>
           </div>
           <div class="payment-filter-field">
-            <span class="payment-filter-label">交易单号</span>
             <el-input
               v-model="pageFilters.transactionNo"
               aria-label="交易单号"
@@ -227,7 +230,6 @@
             />
           </div>
           <div class="payment-filter-field">
-            <span class="payment-filter-label">创建人</span>
             <el-select
               v-model="filters.createdBy"
               v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
@@ -240,42 +242,12 @@
             </el-select>
           </div>
           <div class="payment-filter-field">
-            <span class="payment-filter-label">收款编码</span>
             <el-input
               v-model="pageFilters.paymentNo"
               aria-label="收款编码"
               clearable
               placeholder="收款编码"
               @keyup.enter="search"
-            />
-          </div>
-        </div>
-        <div class="payment-filter-toolbar">
-          <div class="payment-query-actions">
-            <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
-            <el-button @click="resetFilters">重置</el-button>
-            <el-button
-              text
-              type="primary"
-              :aria-expanded="filtersExpanded"
-              aria-controls="payment-advanced-filters"
-              @click="filtersExpanded = !filtersExpanded"
-            >
-              {{ filtersExpanded ? '收起筛选' : '更多筛选'
-              }}<el-icon class="el-icon--right"><ArrowUp v-if="filtersExpanded" /><ArrowDown v-else /></el-icon>
-            </el-button>
-          </div>
-          <div class="payment-tool-actions">
-            <OrderPackageSyncButton plain vouchers-only @completed="search" />
-            <el-button plain @click="auditVisible = true">回款凭证核查</el-button>
-            <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
-            <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
-            <TableColumnSettings
-              plain
-              :columns="paymentColumns.columns"
-              :visibility="paymentColumns.visibility"
-              @change="paymentColumns.setVisible"
-              @reset="paymentColumns.reset"
             />
           </div>
         </div>
@@ -533,13 +505,28 @@
           </el-table-column>
         </el-table>
       </div>
-      <div class="pagination-row">
+      <div class="pagination-row payment-footer">
+        <div class="payment-tool-actions">
+          <OrderPackageSyncButton plain vouchers-only @completed="search" />
+          <el-button plain @click="auditVisible = true">回款凭证核查</el-button>
+          <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
+          <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+          <TableColumnSettings
+            plain
+            :columns="paymentColumns.columns"
+            :visibility="paymentColumns.visibility"
+            @change="paymentColumns.setVisible"
+            @reset="paymentColumns.reset"
+          />
+        </div>
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :total="pageData.total"
           :page-sizes="[20, 50, 100, 200]"
-          layout="total, sizes, prev, pager, next, jumper"
+          layout="total, prev, pager, next, sizes"
+          :pager-count="5"
+          background
           @size-change="onPageSizeChange"
           @current-change="loadPayments"
         />
@@ -884,30 +871,39 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.payment-filter-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
-.payment-filter-grid--advanced { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--el-border-color-lighter); }
-.payment-filter-field--wide { grid-column: span 2; }
-.payment-filter-field { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.payment-filter-label { color: var(--el-text-color-secondary); font-size: 12px; }
+.payment-filter-primary { display: flex; align-items: flex-start; gap: 16px; }
+.payment-filter-grid { display: flex; flex: 1; flex-wrap: wrap; gap: 10px; min-width: 0; }
+.payment-filter-grid--advanced { margin-top: 10px; }
+.payment-filter-field { flex: 0 0 180px; min-width: 0; }
+.payment-filter-field--date { flex-basis: 280px; }
+.payment-filter-field--department { flex-basis: 280px; }
+.payment-filter-field--product { flex-basis: 220px; }
 .payment-filter-field :deep(.el-select), .payment-filter-field :deep(.el-input), .payment-filter-field :deep(.el-date-editor) { width: 100%; min-width: 0; box-sizing: border-box; }
 .payment-department { display: flex; align-items: center; gap: 8px; }
 .payment-department :deep(.el-select) { flex: 1; min-width: 0; }
-.payment-filter-toolbar, .payment-query-actions, .payment-tool-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.payment-filter-toolbar { justify-content: space-between; margin-top: 12px; gap: 12px; }
+.payment-query-actions, .payment-tool-actions { display: flex; align-items: center; gap: 8px; }
+.payment-query-actions { flex: 0 0 auto; margin-left: auto; }
 .payment-query-actions :deep(.el-button), .payment-tool-actions :deep(.el-button) { margin-left: 0; }
+.payment-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; }
+.payment-tool-actions { flex-wrap: wrap; }
+.payment-footer :deep(.el-pagination) { margin-left: auto; }
+.payment-footer :deep(.el-pagination.is-background .el-pager li),
+.payment-footer :deep(.el-pagination.is-background .btn-prev),
+.payment-footer :deep(.el-pagination.is-background .btn-next) { border: 1px solid var(--el-border-color); border-radius: 4px; background: var(--el-bg-color); }
+.payment-footer :deep(.el-pagination.is-background .el-pager li.is-active) { color: var(--el-color-primary); border-color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
 .payment-summary-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; min-height: 30px; color: var(--el-text-color-secondary); font-size: 12px; background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-bottom: 0; border-radius: 8px 8px 0 0; }
 .payment-summary-brief { color: #047857; }
 .order-summary.payment-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 8px 12px 12px; border-radius: 0; }
 .payment-summary .order-summary__metric { min-height: 64px; padding: 8px 10px; }
 .payment-summary .order-summary__value { font-size: 20px; }
 @media (max-width: 1199px) {
-  .payment-filter-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .payment-filter-grid--advanced { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .order-summary.payment-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
-  .payment-filter-grid, .payment-filter-grid--advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .payment-filter-field--wide { grid-column: span 2; }
+  .payment-filter-primary { gap: 8px; }
+  .payment-filter-field { max-width: 100%; }
+  .payment-query-actions { flex-wrap: wrap; width: 128px; justify-content: flex-end; }
+  .payment-footer { overflow-x: auto; }
   .order-summary.payment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
