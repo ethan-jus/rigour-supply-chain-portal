@@ -1,7 +1,7 @@
 <template>
   <section
     class="order-statistics"
-    :style="{ '--statistics-columns': columns, '--statistics-wrapped-columns': Math.ceil(columns / 2) }"
+    :style="{ '--statistics-columns': columns }"
   >
     <div class="order-statistics__heading">
       <span>{{ title }}<span v-if="collapsed" class="order-statistics__brief"> · {{ brief }}</span></span>
@@ -10,7 +10,7 @@
         <el-icon class="el-icon--right"><ArrowDown v-if="collapsed" /><ArrowUp v-else /></el-icon>
       </el-button>
     </div>
-    <div v-show="!collapsed" :id="bodyId" class="order-statistics__body"><slot /></div>
+    <div v-show="!collapsed" :id="bodyId" class="order-statistics__body" role="region" :aria-label="`${title}指标`" tabindex="0"><slot /></div>
   </section>
 </template>
 
@@ -39,27 +39,24 @@ const bodyId = useId()
   border-radius: 8px 8px 0 0;
 }
 .order-statistics__brief { color: #047857; }
+.order-statistics__body {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
 .order-statistics__body :deep(.order-summary) {
-  grid-template-columns: repeat(var(--statistics-columns), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--statistics-columns), minmax(max-content, 1fr));
+  min-width: max-content;
   gap: 8px;
   padding: 8px 12px 12px;
   border-radius: 0;
 }
-.order-statistics__body :deep(.order-summary__metric) { min-height: 64px; padding: 8px 10px; gap: 4px; }
-.order-statistics__body :deep(.order-summary__value) { font-size: 18px; }
+.order-statistics__body :deep(.order-summary__metric) { min-width: 112px; min-height: 64px; padding: 8px 10px; gap: 4px; }
+.order-statistics__body :deep(.order-summary__value) { font-size: 18px; white-space: nowrap; }
 /* 金额需要完整显示小数位，比例和数量可占更少宽度。 */
-.order-statistics__body :deep(.order-summary--orders) { grid-template-columns: 1.4fr 1.4fr .8fr 1.4fr .8fr 1.4fr 1.4fr .8fr; }
-.order-statistics__body :deep(.order-summary--lines) { grid-template-columns: 1.4fr 1.4fr .8fr 1.4fr .8fr .9fr 1.4fr 1.4fr .8fr; }
+.order-statistics__body :deep(.order-summary--orders) { grid-template-columns: minmax(max-content, 1.4fr) minmax(max-content, 1.4fr) minmax(max-content, .8fr) minmax(max-content, 1.4fr) minmax(max-content, .8fr) minmax(max-content, 1.4fr) minmax(max-content, 1.4fr) minmax(max-content, .8fr); }
+.order-statistics__body :deep(.order-summary--lines) { grid-template-columns: minmax(max-content, 1.4fr) minmax(max-content, 1.4fr) minmax(max-content, .8fr) minmax(max-content, 1.4fr) minmax(max-content, .8fr) minmax(max-content, .9fr) minmax(max-content, 1.4fr) minmax(max-content, 1.4fr) minmax(max-content, .8fr); }
 @container (min-width: 1500px) {
   .order-statistics__body :deep(.order-summary__value) { font-size: 20px; }
-}
-@container (max-width: 1279px) {
-  .order-statistics__body :deep(.order-summary) { grid-template-columns: repeat(var(--statistics-wrapped-columns), minmax(0, 1fr)); }
-}
-@container (max-width: 799px) {
-  .order-statistics__body :deep(.order-summary) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@container (max-width: 559px) {
-  .order-statistics__body :deep(.order-summary) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>
