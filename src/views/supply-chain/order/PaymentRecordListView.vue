@@ -1,259 +1,235 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
-    <el-card class="filter-card payment-filters" shadow="never">
-      <form aria-label="回款查询条件" @submit.prevent="search">
-        <div class="payment-filter-primary">
-          <div class="payment-filter-grid">
-            <div class="list-filter-field list-filter-field--date-range">
-              <el-date-picker
-                v-model="pageFilters.paymentTimeRange"
-                type="daterange"
-                value-format="YYYY-MM-DD"
-                range-separator="至"
-                start-placeholder="付款开始日期"
-                end-placeholder="付款截止日期"
-                aria-label="付款时间"
-              />
-            </div>
-            <div class="list-filter-field">
-              <el-input
-                v-model="filters.customerName"
-                aria-label="客户名称"
-                clearable
-                placeholder="客户名称"
-                @keyup.enter="search"
-              />
-            </div>
-            <div class="list-filter-field list-filter-field--person">
-              <el-select
-                v-model="filters.ownerEmployeeCode"
-                v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
-                aria-label="回款人"
-                clearable
-                filterable
-                remote
-                reserve-keyword
-                placeholder="搜索回款人"
-                :remote-method="searchEmployees"
-                :loading="employeeLoading"
-              >
-                <el-option
-                  v-for="item in employeeOptions"
-                  :key="item.employeeCode"
-                  :label="item.employeeName"
-                  :value="item.employeeCode"
-                />
-              </el-select>
-            </div>
-            <div class="list-filter-field">
-              <el-input
-                v-model="filters.orderNo"
-                aria-label="订单号"
-                clearable
-                placeholder="订单号"
-                @keyup.enter="search"
-              />
-            </div>
-          </div>
-          <div class="payment-query-actions">
-            <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
-            <el-button @click="resetFilters">重置</el-button>
-            <el-button
-              text
-              type="primary"
-              :aria-expanded="filtersExpanded"
-              aria-controls="payment-advanced-filters"
-              @click="filtersExpanded = !filtersExpanded"
-            >
-              {{ filtersExpanded ? '收起' : '展开'
-              }}<el-icon class="el-icon--right"><ArrowUp v-if="filtersExpanded" /><ArrowDown v-else /></el-icon>
-            </el-button>
-          </div>
+    <OrderRegisterFilterCard class="payment-filters" :loading="loading" @search="search" @reset="resetFilters">
+      <template #primary>
+        <div class="list-filter-field list-filter-field--date-range">
+          <el-date-picker
+            v-model="pageFilters.paymentTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="付款开始日期"
+            end-placeholder="付款截止日期"
+            aria-label="付款时间"
+          />
         </div>
-        <div
-          v-show="filtersExpanded"
-          id="payment-advanced-filters"
-          class="payment-filter-grid payment-filter-grid--advanced"
-        >
-          <div class="list-filter-field list-filter-field--date-range">
-            <el-date-picker
-              v-model="filters.orderDateRange"
-              type="daterange"
-              value-format="YYYY-MM-DD"
-              range-separator="至"
-              start-placeholder="下单开始日期"
-              end-placeholder="下单截止日期"
-              aria-label="下单时间"
+        <div class="list-filter-field">
+          <el-input
+            v-model="filters.customerName"
+            aria-label="客户名称"
+            clearable
+            placeholder="客户名称"
+            @keyup.enter="search"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--person">
+          <el-select
+            v-model="filters.ownerEmployeeCode"
+            v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
+            aria-label="回款人"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            placeholder="搜索回款人"
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+          >
+            <el-option
+              v-for="item in employeeOptions"
+              :key="item.employeeCode"
+              :label="item.employeeName"
+              :value="item.employeeCode"
             />
-          </div>
-          <div class="list-filter-group">
-            <div class="list-filter-field list-filter-field--select">
-              <el-tree-select
-                v-model="filters.departmentId"
-                v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
-                :data="departmentOptionsTree"
-                :props="departmentTreeProps"
-                node-key="id"
-                check-strictly
-                :render-after-expand="false"
-                :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
-                aria-label="回款归属部门"
-                clearable
-                filterable
-                placeholder="回款归属部门"
-                popper-class="order-register-tree-popper"
-              />
-            </div>
-            <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
-          </div>
+          </el-select>
+        </div>
+        <div class="list-filter-field">
+          <el-input
+            v-model="filters.orderNo"
+            aria-label="订单号"
+            clearable
+            placeholder="订单号"
+            @keyup.enter="search"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态">
+            <el-option
+              v-for="item in paymentStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--date-range">
+          <el-date-picker
+            v-model="filters.orderDateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="下单开始日期"
+            end-placeholder="下单截止日期"
+            aria-label="下单时间"
+          />
+        </div>
+        <div class="list-filter-group">
           <div class="list-filter-field list-filter-field--select">
             <el-tree-select
-              v-model="filters.regionCode"
-              v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
-              :data="areaTree"
-              :props="areaTreeProps"
-              node-key="code"
-              check-strictly
-              :render-after-expand="false"
-              :default-expanded-keys="areaTree.map((row) => row.code)"
-              aria-label="归属地区"
-              clearable
-              filterable
-              placeholder="归属地区"
-              popper-class="order-register-tree-popper"
-            />
-          </div>
-          <div class="list-filter-field list-filter-field--select">
-            <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态">
-              <el-option
-                v-for="item in paymentStatusOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </el-select>
-          </div>
-          <div class="list-filter-field list-filter-field--select">
-            <el-select
-              v-model="pageFilters.confirmationStatusCode"
-              aria-label="财务确认"
-              clearable
-              placeholder="财务确认"
-            >
-              <el-option
-                v-for="item in confirmationOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </el-select>
-          </div>
-          <div class="list-filter-field list-filter-field--select">
-            <el-tree-select
-              v-model="pageFilters.categoryIds"
-              :data="categoryTree"
-              :props="categoryTreeProps"
+              v-model="filters.departmentId"
+              v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
+              :data="departmentOptionsTree"
+              :props="departmentTreeProps"
               node-key="id"
               check-strictly
               :render-after-expand="false"
-              :loading="categoryLoading"
-              :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
-              @visible-change="onCategoryVisibleChange"
-              multiple
-              show-checkbox
-              collapse-tags
-              collapse-tags-tooltip
-              aria-label="商品分类"
+              :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
+              aria-label="回款归属部门"
               clearable
               filterable
-              placeholder="商品分类"
+              placeholder="回款归属部门"
               popper-class="order-register-tree-popper"
-              @change="onCategoryChange"
             />
           </div>
-          <div class="list-filter-field list-filter-field--product">
-            <el-select
-              v-model="pageFilters.productIds"
-              multiple
-              collapse-tags
-              collapse-tags-tooltip
-              aria-label="商品"
-              clearable
-              filterable
-              remote
-              reserve-keyword
-              :remote-method="searchProductOptions"
-              :loading="productSearching"
-              :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
-              @visible-change="(visible) => visible && searchProductOptions('')"
-              placeholder="商品名称"
-            >
-              <el-option
-                v-for="item in productOptions"
-                :key="item.id"
-                :label="item.productName"
-                :value="String(item.id)"
-              />
-            </el-select>
-          </div>
-          <div class="list-filter-field list-filter-field--select">
-            <el-select
-              v-model="pageFilters.productVariantIds"
-              aria-label="商品规格"
-              multiple
-              collapse-tags
-              collapse-tags-tooltip
-              clearable
-              filterable
-              :disabled="!pageFilters.productIds.length"
-              :loading="variantLoading"
-              :placeholder="pageFilters.productIds.length ? '商品规格' : '请先选择商品'"
-              :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'"
-              @visible-change="(visible) => visible && variantLoadFailed && loadVariants()"
-            >
-              <el-option-group v-for="group in variantGroups" :key="group.productId" :label="group.productName">
-                <el-option
-                  v-for="variant in group.variants"
-                  :key="variant.id"
-                  :value="String(variant.id)"
-                  :label="variant.specificationSnapshot || '默认规格'"
-                />
-              </el-option-group>
-            </el-select>
-          </div>
-          <div class="list-filter-field">
-            <el-input
-              v-model="pageFilters.transactionNo"
-              aria-label="交易单号"
-              clearable
-              placeholder="交易单号"
-              @keyup.enter="search"
-            />
-          </div>
-          <div class="list-filter-field list-filter-field--person">
-            <el-select
-              v-model="filters.createdBy"
-              v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
-              aria-label="创建人"
-              clearable
-              filterable
-              placeholder="创建人"
-            >
-              <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
-            </el-select>
-          </div>
-          <div class="list-filter-field">
-            <el-input
-              v-model="pageFilters.paymentNo"
-              aria-label="收款编码"
-              clearable
-              placeholder="收款编码"
-              @keyup.enter="search"
-            />
-          </div>
+          <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
         </div>
-      </form>
-    </el-card>
+        <div class="list-filter-field list-filter-field--select">
+          <el-tree-select
+            v-model="filters.regionCode"
+            v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
+            :data="areaTree"
+            :props="areaTreeProps"
+            node-key="code"
+            check-strictly
+            :render-after-expand="false"
+            :default-expanded-keys="areaTree.map((row) => row.code)"
+            aria-label="归属地区"
+            clearable
+            filterable
+            placeholder="归属地区"
+            popper-class="order-register-tree-popper"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select
+            v-model="pageFilters.confirmationStatusCode"
+            aria-label="财务确认"
+            clearable
+            placeholder="财务确认"
+          >
+            <el-option
+              v-for="item in confirmationOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-tree-select
+            v-model="pageFilters.categoryIds"
+            :data="categoryTree"
+            :props="categoryTreeProps"
+            node-key="id"
+            check-strictly
+            :render-after-expand="false"
+            :loading="categoryLoading"
+            :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
+            @visible-change="onCategoryVisibleChange"
+            multiple
+            show-checkbox
+            collapse-tags
+            collapse-tags-tooltip
+            aria-label="商品分类"
+            clearable
+            filterable
+            placeholder="商品分类"
+            popper-class="order-register-tree-popper"
+            @change="onCategoryChange"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--product">
+          <el-select
+            v-model="pageFilters.productIds"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            aria-label="商品"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="searchProductOptions"
+            :loading="productSearching"
+            :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
+            @visible-change="(visible) => visible && searchProductOptions('')"
+            placeholder="商品名称"
+          >
+            <el-option
+              v-for="item in productOptions"
+              :key="item.id"
+              :label="item.productName"
+              :value="String(item.id)"
+            />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select
+            v-model="pageFilters.productVariantIds"
+            aria-label="商品规格"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            clearable
+            filterable
+            :disabled="!pageFilters.productIds.length"
+            :loading="variantLoading"
+            :placeholder="pageFilters.productIds.length ? '商品规格' : '请先选择商品'"
+            :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'"
+            @visible-change="(visible) => visible && variantLoadFailed && loadVariants()"
+          >
+            <el-option-group v-for="group in variantGroups" :key="group.productId" :label="group.productName">
+              <el-option
+                v-for="variant in group.variants"
+                :key="variant.id"
+                :value="String(variant.id)"
+                :label="variant.specificationSnapshot || '默认规格'"
+              />
+            </el-option-group>
+          </el-select>
+        </div>
+        <div class="list-filter-field">
+          <el-input
+            v-model="pageFilters.transactionNo"
+            aria-label="交易单号"
+            clearable
+            placeholder="交易单号"
+            @keyup.enter="search"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--person">
+          <el-select
+            v-model="filters.createdBy"
+            v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
+            aria-label="创建人"
+            clearable
+            filterable
+            placeholder="创建人"
+          >
+            <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
+          </el-select>
+        </div>
+        <div class="list-filter-field">
+          <el-input
+            v-model="pageFilters.paymentNo"
+            aria-label="收款编码"
+            clearable
+            placeholder="收款编码"
+            @keyup.enter="search"
+          />
+        </div>
+      </template>
+    </OrderRegisterFilterCard>
 
     <p v-if="allocationActive" class="allocation-note">
       当前金额按筛选商品占整单订货金额的比例分摊；每笔回款仍只展示一行。展开可查看商品分摊明细。
@@ -543,6 +519,7 @@
 
 <script setup lang="ts">
 import OrderPackageSyncButton from '@/components/supply/OrderPackageSyncButton.vue'
+import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import { getPaymentAuditStates, type PaymentAuditState } from '@/api/core/payment-voucher-audit'
 import { auditStatusLabel, auditReasonLabel, voucherTimeText } from '@/utils/payment-voucher-audit'
 import { loadPaymentDictionaries, paymentDictionaryOptions, paymentConfirmationLabel } from '@/utils/order-register-status'
@@ -581,7 +558,6 @@ import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
 import { useOrderProductFilters } from '@/composables/useOrderProductFilters'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
-const filtersExpanded = ref(false)
 const summaryCollapsed = ref(false)
 const auditVisible = ref(false)
 const transactionCheckVisible = ref(false)
@@ -871,12 +847,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.payment-filter-primary { display: flex; align-items: flex-start; gap: 16px; }
-.payment-filter-grid { display: flex; flex: 1; flex-wrap: wrap; gap: 10px; min-width: 0; }
-.payment-filter-grid--advanced { margin-top: 10px; }
-.payment-query-actions, .payment-tool-actions { display: flex; align-items: center; gap: 8px; }
-.payment-query-actions { flex: 0 0 auto; margin-left: auto; }
-.payment-query-actions :deep(.el-button), .payment-tool-actions :deep(.el-button) { margin-left: 0; }
+/* 查询项同一流内自然换行，收起范围由共用组件按实际容器宽度测量。 */
+.payment-filters :deep(.order-register-filter__fields) { gap: 8px; }
+.payment-filters :deep(.order-register-filter__actions .el-button) { margin-left: 0; }
+.payment-tool-actions { display: flex; align-items: center; gap: 8px; }
+.payment-tool-actions :deep(.el-button) { margin-left: 0; }
 .payment-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; }
 .payment-tool-actions { flex-wrap: wrap; }
 .payment-footer :deep(.el-pagination) { margin-left: auto; }
@@ -889,8 +864,6 @@ onMounted(() => {
   .order-summary.payment-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
-  .payment-filter-primary { gap: 8px; }
-  .payment-query-actions { flex-wrap: wrap; width: 128px; justify-content: flex-end; }
   .payment-footer { overflow-x: auto; }
   .order-summary.payment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
