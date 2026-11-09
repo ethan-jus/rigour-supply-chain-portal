@@ -1,176 +1,286 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
-    <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="resetFilters">
-      <template #actions>
-        <OrderPackageSyncButton plain vouchers-only @completed="search" />
-        <el-button plain @click="auditVisible = true">回款凭证核查</el-button>
-        <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
-        <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
-        <TableColumnSettings
-          plain
-          :columns="paymentColumns.columns"
-          :visibility="paymentColumns.visibility"
-          @change="paymentColumns.setVisible"
-          @reset="paymentColumns.reset"
-        />
-      </template>
-      <template #primary>
-        <el-date-picker
-          v-model="pageFilters.paymentTimeRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="至"
-          start-placeholder="付款开始日期"
-          end-placeholder="付款截止日期"
-          aria-label="付款时间"
-          style="width: 250px"
-        />
-        <el-date-picker
-          v-model="filters.orderDateRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="至"
-          start-placeholder="下单开始日期"
-          end-placeholder="下单截止日期"
-          aria-label="下单时间"
-          style="width: 250px"
-        />
-        <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 160px" @keyup.enter="search" />
-        <el-tree-select
-          v-model="filters.departmentId"
-          v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
-          :data="departmentOptionsTree"
-          :props="departmentTreeProps"
-          node-key="id"
-          check-strictly
-          :render-after-expand="false"
-          :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
-          aria-label="回款归属部门"
-          clearable
-          filterable
-          placeholder="回款归属部门"
-          popper-class="order-register-tree-popper"
-          style="width: 160px"
-        />
-        <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
-        <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 170px" @keyup.enter="search" />
-        <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态" style="width: 130px">
-          <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select v-model="pageFilters.confirmationStatusCode" aria-label="财务确认" clearable placeholder="财务确认" style="width: 130px">
-          <el-option v-for="item in confirmationOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-tree-select
-          v-model="filters.regionCode"
-          v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
-          :data="areaTree"
-          :props="areaTreeProps"
-          node-key="code"
-          check-strictly
-          :render-after-expand="false"
-          :default-expanded-keys="areaTree.map((row) => row.code)"
-          aria-label="归属地区"
-          clearable
-          filterable
-          placeholder="归属地区"
-          popper-class="order-register-tree-popper"
-          style="width: 160px"
-        />
-        <el-select
-          v-model="filters.ownerEmployeeCode"
-          v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
-          aria-label="回款人（业绩归属）"
-          clearable
-          filterable
-          remote
-          reserve-keyword
-          placeholder="搜索回款人"
-          :remote-method="searchEmployees"
-          :loading="employeeLoading"
-          style="width: 170px"
+    <el-card class="filter-card payment-filters" shadow="never">
+      <form aria-label="回款查询条件" @submit.prevent="search">
+        <div class="payment-filter-grid">
+          <div class="payment-filter-field payment-filter-field--wide">
+            <span class="payment-filter-label">付款时间</span>
+            <el-date-picker
+              v-model="pageFilters.paymentTimeRange"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              range-separator="至"
+              start-placeholder="付款开始日期"
+              end-placeholder="付款截止日期"
+              aria-label="付款时间"
+            />
+          </div>
+          <div class="payment-filter-field payment-filter-field--wide">
+            <span class="payment-filter-label">客户名称</span>
+            <el-input
+              v-model="filters.customerName"
+              aria-label="客户名称"
+              clearable
+              placeholder="客户名称"
+              @keyup.enter="search"
+            />
+          </div>
+          <div class="payment-filter-field">
+            <span class="payment-filter-label">回款人</span>
+            <el-select
+              v-model="filters.ownerEmployeeCode"
+              v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
+              aria-label="回款人"
+              clearable
+              filterable
+              remote
+              reserve-keyword
+              placeholder="搜索回款人"
+              :remote-method="searchEmployees"
+              :loading="employeeLoading"
+            >
+              <el-option
+                v-for="item in employeeOptions"
+                :key="item.employeeCode"
+                :label="item.employeeName"
+                :value="item.employeeCode"
+              />
+            </el-select>
+          </div>
+          <div class="payment-filter-field">
+            <span class="payment-filter-label">订单号</span>
+            <el-input
+              v-model="filters.orderNo"
+              aria-label="订单号"
+              clearable
+              placeholder="订单号"
+              @keyup.enter="search"
+            />
+          </div>
+        </div>
+        <div
+          v-show="filtersExpanded"
+          id="payment-advanced-filters"
+          class="payment-filter-grid payment-filter-grid--advanced"
         >
-          <el-option label="归属待确认" value="__PENDING__" />
-          <el-option
-            v-for="item in employeeOptions"
-            :key="item.employeeCode"
-            :label="item.employeeName"
-            :value="item.employeeCode"
-          />
-        </el-select>
-        <el-tree-select
-          v-model="pageFilters.categoryIds"
-          :data="categoryTree"
-          :props="categoryTreeProps"
-          node-key="id"
-          check-strictly
-          :render-after-expand="false"
-          :loading="categoryLoading"
-          :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
-          @visible-change="onCategoryVisibleChange"
-          multiple
-          show-checkbox
-          collapse-tags
-          collapse-tags-tooltip
-          aria-label="商品分类"
-          clearable
-          filterable
-          placeholder="商品分类"
-          popper-class="order-register-tree-popper"
-          style="width: 180px"
-          @change="onCategoryChange"
-        />
-        <el-select
-          v-model="pageFilters.productIds"
-          multiple
-          collapse-tags
-          collapse-tags-tooltip
-          aria-label="商品"
-          clearable
-          filterable
-          remote
-          reserve-keyword
-          :remote-method="searchProductOptions"
-          :loading="productSearching"
-          :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
-          @visible-change="visible => visible && searchProductOptions('')"
-          placeholder="商品名称"
-          style="width: 220px"
-        >
-          <el-option
-            v-for="item in productOptions"
-            :key="item.id"
-            :label="item.productName"
-            :value="String(item.id)"
-          />
-        </el-select>
-        <el-select v-model="pageFilters.productVariantIds" aria-label="商品规格" multiple collapse-tags collapse-tags-tooltip clearable filterable
-          :disabled="!pageFilters.productIds.length" :loading="variantLoading"
-          :placeholder="pageFilters.productIds.length ? '商品规格' : '请先选择商品'"
-          :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'"
-          style="width: 200px" @visible-change="visible => visible && variantLoadFailed && loadVariants()">
-          <el-option-group v-for="group in variantGroups" :key="group.productId" :label="group.productName">
-            <el-option v-for="variant in group.variants" :key="variant.id" :value="String(variant.id)"
-              :label="variant.specificationSnapshot || '默认规格'" />
-          </el-option-group>
-        </el-select>
-
-      </template>
-      <template #extra>
-        <el-input v-model="pageFilters.transactionNo" aria-label="交易单号" clearable placeholder="交易单号" style="width: 170px" @keyup.enter="search" />
-        <el-select
-          v-model="filters.createdBy"
-          v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
-          aria-label="创建人"
-          clearable
-          filterable
-          placeholder="创建人"
-          style="width: 150px"
-        >
-          <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
-        </el-select>
-        <el-input v-model="pageFilters.paymentNo" aria-label="收款编码" clearable placeholder="收款编码" style="width: 160px" @keyup.enter="search" />
-      </template>
-    </OrderRegisterFilterCard>
+          <div class="payment-filter-field payment-filter-field--wide">
+            <span class="payment-filter-label">下单时间</span>
+            <el-date-picker
+              v-model="filters.orderDateRange"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              range-separator="至"
+              start-placeholder="下单开始日期"
+              end-placeholder="下单截止日期"
+              aria-label="下单时间"
+            />
+          </div>
+          <div class="payment-filter-field payment-filter-field--wide">
+            <span class="payment-filter-label">回款部门</span>
+            <div class="payment-department">
+              <el-tree-select
+                v-model="filters.departmentId"
+                v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
+                :data="departmentOptionsTree"
+                :props="departmentTreeProps"
+                node-key="id"
+                check-strictly
+                :render-after-expand="false"
+                :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
+                aria-label="回款归属部门"
+                clearable
+                filterable
+                placeholder="回款归属部门"
+                popper-class="order-register-tree-popper"
+              /><el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
+            </div>
+          </div>
+          <div class="payment-filter-field">
+            <span class="payment-filter-label">归属地区</span>
+            <el-tree-select
+              v-model="filters.regionCode"
+              v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
+              :data="areaTree"
+              :props="areaTreeProps"
+              node-key="code"
+              check-strictly
+              :render-after-expand="false"
+              :default-expanded-keys="areaTree.map((row) => row.code)"
+              aria-label="归属地区"
+              clearable
+              filterable
+              placeholder="归属地区"
+              popper-class="order-register-tree-popper"
+            />
+          </div>
+          <div class="payment-filter-field">
+            <span class="payment-filter-label">收款状态</span>
+            <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态">
+              <el-option
+                v-for="item in paymentStatusOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </div>
+          <div class="payment-filter-field">
+            <span class="payment-filter-label">财务确认</span>
+            <el-select
+              v-model="pageFilters.confirmationStatusCode"
+              aria-label="财务确认"
+              clearable
+              placeholder="财务确认"
+            >
+              <el-option
+                v-for="item in confirmationOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </div>
+          <div class="payment-filter-field">
+            <span class="payment-filter-label">商品分类</span>
+            <el-tree-select
+              v-model="pageFilters.categoryIds"
+              :data="categoryTree"
+              :props="categoryTreeProps"
+              node-key="id"
+              check-strictly
+              :render-after-expand="false"
+              :loading="categoryLoading"
+              :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
+              @visible-change="onCategoryVisibleChange"
+              multiple
+              show-checkbox
+              collapse-tags
+              collapse-tags-tooltip
+              aria-label="商品分类"
+              clearable
+              filterable
+              placeholder="商品分类"
+              popper-class="order-register-tree-popper"
+              @change="onCategoryChange"
+            />
+          </div>
+          <div class="payment-filter-field payment-filter-field--wide">
+            <span class="payment-filter-label">商品</span>
+            <el-select
+              v-model="pageFilters.productIds"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              aria-label="商品"
+              clearable
+              filterable
+              remote
+              reserve-keyword
+              :remote-method="searchProductOptions"
+              :loading="productSearching"
+              :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
+              @visible-change="(visible) => visible && searchProductOptions('')"
+              placeholder="商品名称"
+            >
+              <el-option
+                v-for="item in productOptions"
+                :key="item.id"
+                :label="item.productName"
+                :value="String(item.id)"
+              />
+            </el-select>
+          </div>
+          <div class="payment-filter-field payment-filter-field--wide">
+            <span class="payment-filter-label">商品规格</span>
+            <el-select
+              v-model="pageFilters.productVariantIds"
+              aria-label="商品规格"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              clearable
+              filterable
+              :disabled="!pageFilters.productIds.length"
+              :loading="variantLoading"
+              :placeholder="pageFilters.productIds.length ? '商品规格' : '请先选择商品'"
+              :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'"
+              @visible-change="(visible) => visible && variantLoadFailed && loadVariants()"
+            >
+              <el-option-group v-for="group in variantGroups" :key="group.productId" :label="group.productName">
+                <el-option
+                  v-for="variant in group.variants"
+                  :key="variant.id"
+                  :value="String(variant.id)"
+                  :label="variant.specificationSnapshot || '默认规格'"
+                />
+              </el-option-group>
+            </el-select>
+          </div>
+          <div class="payment-filter-field">
+            <span class="payment-filter-label">交易单号</span>
+            <el-input
+              v-model="pageFilters.transactionNo"
+              aria-label="交易单号"
+              clearable
+              placeholder="交易单号"
+              @keyup.enter="search"
+            />
+          </div>
+          <div class="payment-filter-field">
+            <span class="payment-filter-label">创建人</span>
+            <el-select
+              v-model="filters.createdBy"
+              v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
+              aria-label="创建人"
+              clearable
+              filterable
+              placeholder="创建人"
+            >
+              <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
+            </el-select>
+          </div>
+          <div class="payment-filter-field">
+            <span class="payment-filter-label">收款编码</span>
+            <el-input
+              v-model="pageFilters.paymentNo"
+              aria-label="收款编码"
+              clearable
+              placeholder="收款编码"
+              @keyup.enter="search"
+            />
+          </div>
+        </div>
+        <div class="payment-filter-toolbar">
+          <div class="payment-query-actions">
+            <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
+            <el-button @click="resetFilters">重置</el-button>
+            <el-button
+              text
+              type="primary"
+              :aria-expanded="filtersExpanded"
+              aria-controls="payment-advanced-filters"
+              @click="filtersExpanded = !filtersExpanded"
+            >
+              {{ filtersExpanded ? '收起筛选' : '更多筛选'
+              }}<el-icon class="el-icon--right"><ArrowUp v-if="filtersExpanded" /><ArrowDown v-else /></el-icon>
+            </el-button>
+          </div>
+          <div class="payment-tool-actions">
+            <OrderPackageSyncButton plain vouchers-only @completed="search" />
+            <el-button plain @click="auditVisible = true">回款凭证核查</el-button>
+            <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
+            <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+            <TableColumnSettings
+              plain
+              :columns="paymentColumns.columns"
+              :visibility="paymentColumns.visibility"
+              @change="paymentColumns.setVisible"
+              @reset="paymentColumns.reset"
+            />
+          </div>
+        </div>
+      </form>
+    </el-card>
 
     <p v-if="allocationActive" class="allocation-note">
       当前金额按筛选商品占整单订货金额的比例分摊；每笔回款仍只展示一行。展开可查看商品分摊明细。
@@ -178,7 +288,11 @@
     <el-alert v-if="pageData.totals.unallocatedCount" type="warning" :closable="false"
       :title="`${pageData.totals.unallocatedCount} 笔回款无法分摊，未计入金额统计，请检查订单明细和订货金额。`" />
     <el-alert v-if="loadFailed" title="回款加载失败，请重新查询" type="error" :closable="false" />
-    <div class="order-summary order-summary--payments" aria-label="回款统计">
+    <div class="payment-summary-heading">
+      <span>回款统计<span v-if="summaryCollapsed" class="payment-summary-brief"> · 本期到账 {{ moneyText(pageData.totals.receivedAmount) }}</span></span>
+      <el-button text size="small" :aria-expanded="!summaryCollapsed" aria-controls="payment-summary" @click="summaryCollapsed = !summaryCollapsed">{{ summaryCollapsed ? '展开统计' : '收起统计' }}<el-icon class="el-icon--right"><ArrowDown v-if="summaryCollapsed" /><ArrowUp v-else /></el-icon></el-button>
+    </div>
+    <div v-show="!summaryCollapsed" id="payment-summary" class="order-summary order-summary--payments payment-summary" aria-label="回款统计">
       <div class="order-summary__metric order-summary__metric--payable" title="筛选命中的订单去重后合计订单金额。">
         <span class="order-summary__label">{{ allocationActive ? '订单金额（分摊）' : '订单金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.relatedOrderAmount) }}</strong>
@@ -203,8 +317,8 @@
         <span class="order-summary__label">{{ allocationActive ? '已确认金额（分摊）' : '已确认金额' }}</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
       </div>
-      <div class="order-summary__metric order-summary__metric--unpaid" title="已计入本期到账总额，尚未分配到个人业绩。">
-        <span class="order-summary__label">归属待确认回款</span>
+      <div v-if="Number(pageData.totals.ownerPendingAmount) > 0" class="order-summary__metric order-summary__metric--unpaid" title="已计入本期到账总额，缺少可用业务员数据的回款。">
+        <span class="order-summary__label">回款人待补齐</span>
         <strong class="order-summary__value">{{ moneyText(pageData.totals.ownerPendingAmount) }}</strong>
       </div>
     </div>
@@ -220,7 +334,7 @@
           :default-sort="{ prop: 'paymentTime', order: 'descending' }"
           @sort-change="changeSort"
         >
-          <el-table-column type="expand" width="44" fixed="left">
+          <el-table-column type="expand" width="36" fixed="left">
             <template #default="{ row }">
               <div class="allocation-detail">
                 <p>商品分摊明细 · 按整单订货金额比例计算，分币尾差已计入。</p>
@@ -244,14 +358,7 @@
             </template>
           </el-table-column>
           <!-- @vue-generic {OrderRegisterPaymentItem} -->
-          <el-table-column type="index" label="序号" width="70" fixed="left" :index="tableRowIndex" />
-          <el-table-column prop="paymentNo" label="收款编码" width="160" fixed="left" show-overflow-tooltip>
-            <template #default="{ row }">
-              <el-link type="primary" underline="never" @click.stop="openPaymentDetail(row as OrderRegisterPaymentItem)">
-                <span class="order-no-cell">{{ row.paymentNo || '-' }}</span>
-              </el-link>
-            </template>
-          </el-table-column>
+          <el-table-column type="index" label="序号" width="52" fixed="left" :index="tableRowIndex" />
           <el-table-column label="订单号" width="160" fixed="left">
             <template #default="{ row }">
               <el-link type="primary" underline="never" @click.stop="openDetail(row)">
@@ -264,15 +371,15 @@
             prop="customerName"
             label="客户名称"
             fixed="left"
-            min-width="240"
+            width="220"
             show-overflow-tooltip
           >
             <template #default="{ row }"><strong class="order-party-name">{{ row.customerName || '-' }}</strong></template>
           </el-table-column>
-          <el-table-column label="回款人（业绩归属）" width="160">
-            <template #default="{ row }"><el-tooltip v-if="row.paymentOwner?.status === 'CONFIRMED'" :content="row.paymentOwner.evidence"><strong>{{ row.paymentOwner.employeeName || row.paymentOwner.employeeCode }}</strong></el-tooltip><el-tag v-else type="warning" size="small" effect="plain">待确认</el-tag></template>
+          <el-table-column label="回款人" width="100">
+            <template #default="{ row }"><el-tooltip v-if="row.paymentOwner?.status === 'CONFIRMED'" :content="row.paymentOwner.evidence"><strong>{{ row.paymentOwner.employeeName || row.paymentOwner.employeeCode }}</strong></el-tooltip><el-tag v-else type="warning" size="small" effect="plain">待补齐</el-tag></template>
           </el-table-column>
-          <el-table-column v-if="paymentColumns.isVisible('ownerEmployee')" label="下单业务员" width="110">
+          <el-table-column v-if="paymentColumns.isVisible('ownerEmployee')" label="业务员" width="110">
             <template #default="{ row }"><strong class="order-party-name">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</strong></template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('paidAmount')" label="收款金额" width="120" align="right" prop="paidAmount">
@@ -293,7 +400,7 @@
             <template #default="{ row }">{{ moneyText(row.orderAmount) }}</template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('departmentName')" label="回款归属部门" width="130" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.paymentOwner?.departmentName || '待确认' }}</template>
+            <template #default="{ row }">{{ row.paymentOwner?.departmentName || '—' }}</template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('regionName')" label="归属地区" width="140">
             <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
@@ -337,6 +444,13 @@
                 <el-tag :type="auditStates[row.id].statusCode === 'NORMAL' ? 'success' : auditStates[row.id].statusCode === 'ABNORMAL' ? 'danger' : 'warning'">{{ auditStatusLabel(auditStates[row.id].statusCode) }}</el-tag>
               </el-tooltip>
               <span v-else>{{ auditLoadFailed ? '加载失败' : '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="paymentNo" label="收款编码" width="160" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-link type="primary" underline="never" @click.stop="openPaymentDetail(row as OrderRegisterPaymentItem)">
+                <span class="order-no-cell">{{ row.paymentNo || '-' }}</span>
+              </el-link>
             </template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('checkedBy')" label="确认人" width="110" show-overflow-tooltip>
@@ -449,7 +563,6 @@ import { loadPaymentDictionaries, paymentDictionaryOptions, paymentConfirmationL
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import PaymentDetailDrawer from './components/PaymentDetailDrawer.vue'
 import PaymentCheckDialog from './components/PaymentCheckDialog.vue'
@@ -459,7 +572,7 @@ import PaymentVoucherTransactionsDialog from './components/PaymentVoucherTransac
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
 import FundAttachmentThumbnails from '@/components/supply/FundAttachmentThumbnails.vue'
 import { displayDateTime } from '@/utils/business-date'
-import { CircleCheck } from '@element-plus/icons-vue'
+import { CircleCheck, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import {
   moneyText,
@@ -481,6 +594,8 @@ import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
 import { useOrderProductFilters } from '@/composables/useOrderProductFilters'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
+const filtersExpanded = ref(false)
+const summaryCollapsed = ref(false)
 const auditVisible = ref(false)
 const transactionCheckVisible = ref(false)
 const voucherVisible = ref(false)
@@ -489,7 +604,7 @@ const route = useRoute()
 const paymentColumns = useColumnSettings('order-payments', [
   { key: 'customerName', label: '客户名称', locked: true },
   { key: 'regionName', label: '归属地区' },
-  { key: 'ownerEmployee', label: '下单业务员' },
+  { key: 'ownerEmployee', label: '业务员' },
   { key: 'departmentName', label: '回款归属部门' },
   { key: 'orderAmount', label: '订单金额' },
   { key: 'paidAmount', label: '收款金额' },
@@ -769,6 +884,33 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.payment-filter-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.payment-filter-grid--advanced { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--el-border-color-lighter); }
+.payment-filter-field--wide { grid-column: span 2; }
+.payment-filter-field { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.payment-filter-label { color: var(--el-text-color-secondary); font-size: 12px; }
+.payment-filter-field :deep(.el-select), .payment-filter-field :deep(.el-input), .payment-filter-field :deep(.el-date-editor) { width: 100%; min-width: 0; box-sizing: border-box; }
+.payment-department { display: flex; align-items: center; gap: 8px; }
+.payment-department :deep(.el-select) { flex: 1; min-width: 0; }
+.payment-filter-toolbar, .payment-query-actions, .payment-tool-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.payment-filter-toolbar { justify-content: space-between; margin-top: 12px; gap: 12px; }
+.payment-query-actions :deep(.el-button), .payment-tool-actions :deep(.el-button) { margin-left: 0; }
+.payment-summary-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; min-height: 30px; color: var(--el-text-color-secondary); font-size: 12px; background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-bottom: 0; border-radius: 8px 8px 0 0; }
+.payment-summary-brief { color: #047857; }
+.order-summary.payment-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 8px 12px 12px; border-radius: 0; }
+.payment-summary .order-summary__metric { min-height: 64px; padding: 8px 10px; }
+.payment-summary .order-summary__value { font-size: 20px; }
+@media (max-width: 1199px) {
+  .payment-filter-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .payment-filter-grid--advanced { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .order-summary.payment-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .payment-filter-grid, .payment-filter-grid--advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .payment-filter-field--wide { grid-column: span 2; }
+  .order-summary.payment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .allocation-note { margin: 0 0 10px; color: #64748b; font-size: var(--app-font-size-base); }
 .allocation-detail { padding: 16px 28px; background: #f8fafc; }
 .allocation-detail > p { color: #64748b; margin: 0 0 12px; font-size: var(--app-font-size-base); }

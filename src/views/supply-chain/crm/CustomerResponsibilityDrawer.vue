@@ -3,7 +3,7 @@
     <section v-loading="loading" v-if="state">
       <h2>{{ state.customerName }}</h2>
       <el-alert
-        title="客户交接按生效时间留痕，新回款按发生时的归属确认业绩。原订单及已确认回款的归属保留。立即交接可留空生效时间；补录时请填写真实交接时间。"
+        title="客户交接按生效时间留痕，新回款首次同步时按客户当前主责确定回款人。原订单及已确认回款的归属保留。立即交接可留空生效时间；补录时请填写真实交接时间。"
         type="info"
         :closable="false"
       />
