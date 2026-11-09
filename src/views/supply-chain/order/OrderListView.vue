@@ -1,124 +1,136 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
-    <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="resetFilters">
-      <template #actions>
-        <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
-        <el-button type="primary" @click="monthlyExportVisible = true">月业绩导出</el-button>
-        <TableColumnSettings
-          plain
-          :columns="orderColumns.columns"
-          :visibility="orderColumns.visibility"
-          @change="orderColumns.setVisible"
-          @reset="orderColumns.reset"
-        />
-        <OrderPackageSyncButton plain @completed="loadOrders" />
-      </template>
+    <OrderRegisterFilterCard class="order-register-filter--compact" :loading="loading" @search="search" @reset="resetFilters">
       <template #primary>
-        <el-date-picker
-          v-model="filters.orderDateRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="~"
-          start-placeholder="下单开始日期"
-          end-placeholder="下单结束日期"
-          aria-label="下单时间"
-          style="width: 280px"
-        />
-        <el-date-picker
-          v-model="pageFilters.paymentTimeRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="~"
-          start-placeholder="收款开始日期"
-          end-placeholder="收款结束日期"
-          aria-label="收款日期"
-          style="width: 280px"
-        />
-        <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 190px" @keyup.enter="search" />
-        <el-input v-model="pageFilters.dhbOrderNo" aria-label="订货宝单号" clearable placeholder="订货宝单号" style="width: 220px" @keyup.enter="search" />
-        <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 220px" @keyup.enter="search" />
-        <el-tree-select
-          v-model="filters.regionCode"
-          v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
-          :data="areaTree"
-          :props="areaTreeProps"
-          node-key="code"
-          check-strictly
-          :render-after-expand="false"
-          :default-expanded-keys="areaTree.map((row) => row.code)"
-          aria-label="归属地区"
-          clearable
-          filterable
-          placeholder="归属地区"
-          popper-class="order-register-tree-popper"
-          style="width: 180px"
-        />
-        <el-select
-          v-model="filters.ownerEmployeeCode"
-          v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
-          aria-label="业务员"
-          clearable
-          filterable
-          remote
-          reserve-keyword
-          placeholder="搜索业务员"
-          :remote-method="searchEmployees"
-          :loading="employeeLoading"
-          style="width: 140px"
-        >
-          <el-option
-            v-for="item in employeeOptions"
-            :key="item.employeeCode"
-            :label="item.employeeName"
-            :value="item.employeeCode"
+        <div class="list-filter-field list-filter-field--date-range">
+          <el-date-picker
+            v-model="filters.orderDateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="下单开始日期"
+            end-placeholder="下单结束日期"
+            aria-label="下单时间"
           />
-        </el-select>
-        <el-tree-select
-          v-model="filters.departmentId"
-          v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
-          :data="departmentOptionsTree"
-          :props="departmentTreeProps"
-          node-key="id"
-          check-strictly
-          :render-after-expand="false"
-          :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
-          aria-label="部门"
-          clearable
-          filterable
-          placeholder="选择部门"
-          popper-class="order-register-tree-popper"
-          style="width: 180px"
-        />
-        <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
-        <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况" style="width: 115px">
-          <el-option label="全部" value="" />
-          <el-option label="有优惠" value="true" />
-          <el-option label="无优惠" value="false" />
-        </el-select>
-        <el-select v-model="pageFilters.orderStatusCode" aria-label="订单状态" clearable placeholder="订单状态" style="width: 115px">
-          <el-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态" style="width: 115px">
-          <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select v-model="pageFilters.dhbLinked" aria-label="订货宝关联单" clearable placeholder="订货宝关联单" style="width: 140px">
-          <el-option label="已关联" value="true" />
-          <el-option label="未关联" value="false" />
-        </el-select>
-        <el-select v-model="pageFilters.invoiceStatusCode" aria-label="发票状态" clearable placeholder="发票状态" style="width: 115px">
-          <el-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select
-          v-model="filters.createdBy"
-          v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
-          aria-label="创建人"
-          clearable
-          filterable
-          placeholder="创建人"
-          style="width: 125px"
-        >
-          <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
-        </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--date-range">
+          <el-date-picker
+            v-model="pageFilters.paymentTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="收款开始日期"
+            end-placeholder="收款结束日期"
+            aria-label="收款日期"
+          />
+        </div>
+        <div class="list-filter-field">
+          <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" @keyup.enter="search" />
+        </div>
+        <div class="list-filter-field">
+          <el-input v-model="pageFilters.dhbOrderNo" aria-label="订货宝单号" clearable placeholder="订货宝单号" @keyup.enter="search" />
+        </div>
+        <div class="list-filter-field">
+          <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" @keyup.enter="search" />
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-tree-select
+            v-model="filters.regionCode"
+            v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
+            :data="areaTree"
+            :props="areaTreeProps"
+            node-key="code"
+            check-strictly
+            :render-after-expand="false"
+            :default-expanded-keys="areaTree.map((row) => row.code)"
+            aria-label="归属地区"
+            clearable
+            filterable
+            placeholder="归属地区"
+            popper-class="order-register-tree-popper"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--person">
+          <el-select
+            v-model="filters.ownerEmployeeCode"
+            v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
+            aria-label="业务员"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            placeholder="搜索业务员"
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+          >
+            <el-option
+              v-for="item in employeeOptions"
+              :key="item.employeeCode"
+              :label="item.employeeName"
+              :value="item.employeeCode"
+            />
+          </el-select>
+        </div>
+        <div class="list-filter-group">
+          <div class="list-filter-field list-filter-field--select">
+            <el-tree-select
+              v-model="filters.departmentId"
+              v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
+              :data="departmentOptionsTree"
+              :props="departmentTreeProps"
+              node-key="id"
+              check-strictly
+              :render-after-expand="false"
+              :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
+              aria-label="部门"
+              clearable
+              filterable
+              placeholder="选择部门"
+              popper-class="order-register-tree-popper"
+            />
+          </div>
+          <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况">
+            <el-option label="全部" value="" />
+            <el-option label="有优惠" value="true" />
+            <el-option label="无优惠" value="false" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.orderStatusCode" aria-label="订单状态" clearable placeholder="订单状态">
+            <el-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态">
+            <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.dhbLinked" aria-label="订货宝关联单" clearable placeholder="订货宝关联单">
+            <el-option label="已关联" value="true" />
+            <el-option label="未关联" value="false" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.invoiceStatusCode" aria-label="发票状态" clearable placeholder="发票状态">
+            <el-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--person">
+          <el-select
+            v-model="filters.createdBy"
+            v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
+            aria-label="创建人"
+            clearable
+            filterable
+            placeholder="创建人"
+          >
+            <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
+          </el-select>
+        </div>
       </template>
     </OrderRegisterFilterCard>
 
@@ -381,17 +393,29 @@
           </el-table-column>
         </el-table>
       </div>
-      <div class="pagination-row">
-        <el-pagination
+      <ListTableFooter>
+        <template #actions>
+          <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+          <el-button plain @click="monthlyExportVisible = true">月业绩导出</el-button>
+          <TableColumnSettings
+            size="default"
+            plain
+            :columns="orderColumns.columns"
+            :visibility="orderColumns.visibility"
+            @change="orderColumns.setVisible"
+            @reset="orderColumns.reset"
+          />
+          <OrderPackageSyncButton plain @completed="loadOrders" />
+        </template>
+        <CompactPagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :total="pageData.total"
           :page-sizes="[20, 50, 100, 200]"
-          layout="total, sizes, prev, pager, next, jumper"
           @size-change="onPageSizeChange"
           @current-change="loadOrders"
         />
-      </div>
+      </ListTableFooter>
     </el-card>
 
     <el-dialog v-model="monthlyExportVisible" title="月业绩导出" width="580px">
@@ -430,6 +454,8 @@ import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import OrderInvoiceApplyDialog from './components/OrderInvoiceApplyDialog.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
+import ListTableFooter from '@/components/supply/ListTableFooter.vue'
+import CompactPagination from '@/components/supply/CompactPagination.vue'
 import { displayDateTime } from '@/utils/business-date'
 import {
   moneyText,

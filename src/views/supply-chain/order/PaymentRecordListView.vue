@@ -1,6 +1,6 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
-    <OrderRegisterFilterCard class="payment-filters" :loading="loading" @search="search" @reset="resetFilters">
+    <OrderRegisterFilterCard class="order-register-filter--compact" :loading="loading" @search="search" @reset="resetFilters">
       <template #primary>
         <div class="list-filter-field list-filter-field--date-range">
           <el-date-picker
@@ -482,8 +482,8 @@
           </el-table-column>
         </el-table>
       </div>
-      <div class="pagination-row payment-footer">
-        <div class="payment-tool-actions">
+      <ListTableFooter>
+        <template #actions>
           <OrderPackageSyncButton plain vouchers-only @completed="search" />
           <el-button plain @click="auditVisible = true">回款凭证核查</el-button>
           <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
@@ -496,7 +496,7 @@
             @change="paymentColumns.setVisible"
             @reset="paymentColumns.reset"
           />
-        </div>
+        </template>
         <CompactPagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
@@ -505,7 +505,7 @@
           @size-change="onPageSizeChange"
           @current-change="loadPayments"
         />
-      </div>
+      </ListTableFooter>
     </el-card>
 
     <PaymentVoucherAuditDialog v-model="auditVisible" @reviewed="loadPayments" />
@@ -534,6 +534,7 @@ import PaymentVoucherAuditDialog from './components/PaymentVoucherAuditDialog.vu
 import PaymentVoucherTransactionsDialog from './components/PaymentVoucherTransactionsDialog.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
 import CompactPagination from '@/components/supply/CompactPagination.vue'
+import ListTableFooter from '@/components/supply/ListTableFooter.vue'
 import FundAttachmentThumbnails from '@/components/supply/FundAttachmentThumbnails.vue'
 import { displayDateTime } from '@/utils/business-date'
 import { CircleCheck, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
@@ -847,14 +848,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* 查询项同一流内自然换行，收起范围由共用组件按实际容器宽度测量。 */
-.payment-filters :deep(.order-register-filter__fields) { gap: 8px; }
-.payment-filters :deep(.order-register-filter__actions .el-button) { margin-left: 0; }
-.payment-tool-actions { display: flex; align-items: center; gap: 8px; }
-.payment-tool-actions :deep(.el-button) { margin-left: 0; }
-.payment-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; }
-.payment-tool-actions { flex-wrap: wrap; }
-.payment-footer :deep(.el-pagination) { margin-left: auto; }
 .payment-summary-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; min-height: 30px; color: var(--el-text-color-secondary); font-size: 12px; background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-bottom: 0; border-radius: 8px 8px 0 0; }
 .payment-summary-brief { color: #047857; }
 .order-summary.payment-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 8px 12px 12px; border-radius: 0; }
@@ -864,7 +857,6 @@ onMounted(() => {
   .order-summary.payment-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
-  .payment-footer { overflow-x: auto; }
   .order-summary.payment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

@@ -21,9 +21,9 @@ PC 运营后台，使用 Vue 3 + TypeScript + Vite + Element Plus。
 - 新增或调整列表查询区时，复用 `src/assets/styles/_list-filters.scss`，宽度统一来自 `_variables.scss` 的 `$list-filter-widths`。每个控件外包 `list-filter-field`，按用途加修饰类，不在页面重新写同类宽度或用 `flex: 1` 拉长输入框。
 - 固定默认尺寸：名称/单号 `--text`（默认）160px；人员 `--person` 120px；普通下拉、地区、部门、分类、规格 `--select` 140px；日期范围 `--date-range` 248px；商品名称 `--product` 180px。部门下拉与“含子部门”用 `list-filter-group` 组合，复选框不占下拉宽度。
 - 查询项只显示用途明确的占位文字，保留 `aria-label`，不额外增加顶部长标签。查询、重置、展开/收起依次固定在第一行右侧，容器变窄时查询项换行，不为填满空白拉伸。
-- 使用 `OrderRegisterFilterCard` 将所有查询项放在同一个可换行容器中，不固定第一行的项数，不把后续条件强制分到第二行。按容器实际宽度依次排放，放不下才换行；收起仅显示当前屏幕能容纳的第一行，展开显示全部，窗口宽度变化时自动重新计算。
+- 使用带 `order-register-filter--compact` 类的 `OrderRegisterFilterCard` 将所有查询项放在同一个可换行容器中，不固定第一行的项数，不把后续条件强制分到第二行。按容器实际宽度依次排放，放不下才换行；收起仅显示当前屏幕能容纳的第一行，展开显示全部，窗口宽度变化时自动重新计算。查询、重置、展开的间距由共用组件控制，页面不重复覆盖。
 - 日期占位和已选日期必须完整显示；多选项折叠后可查看完整内容。确有更长内容需要例外时，先说明原因并核验实际页面，不随意增加新的宽度。
-- 列表底部左侧放辅助操作，右侧放分页。同行按钮保持一致的默认尺寸；`TableColumnSettings` 在默认按钮旁传 `size="default"`。
+- 复用 `ListTableFooter`：`actions` 插槽放底部左侧的导出、月业绩导出、列设置、同步等辅助操作，默认插槽放右侧分页。同行按钮保持一致的默认尺寸；`TableColumnSettings` 在默认按钮旁传 `size="default"`。订单列表、明细和回款使用同一套底栏样式，不再各写一套。
 - 紧凑分页复用 `src/components/supply/CompactPagination.vue`：总条数、上一页、三个相邻页码及首末页/省略号、下一页、104px 每页条数选择框；不加跳转输入。参考接入：`PaymentRecordListView.vue`。
 - 验证至少覆盖收起、展开、已选值及常用桌面宽度。以上是新建/修改列表的默认约束，不通过全局 Element Plus 选择器强行改变其他录入表单。
 

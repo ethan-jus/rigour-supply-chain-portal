@@ -1,156 +1,164 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
-    <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="resetFilters">
-      <template #actions>
-        <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
-        <TableColumnSettings
-          plain
-          :columns="lineColumns.columns"
-          :visibility="lineColumns.visibility"
-          @change="lineColumns.setVisible"
-          @reset="lineColumns.reset"
-        />
-      </template>
+    <OrderRegisterFilterCard class="order-register-filter--compact" :loading="loading" @search="search" @reset="resetFilters">
       <template #primary>
-        <el-date-picker
-          v-model="filters.orderDateRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="~"
-          start-placeholder="订单开始日期"
-          end-placeholder="订单结束日期"
-          aria-label="下单时间"
-          style="width: 280px"
-        />
-        <el-date-picker
-          v-model="pageFilters.paymentTimeRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="~"
-          start-placeholder="收款开始日期"
-          end-placeholder="收款结束日期"
-          aria-label="收款日期"
-          style="width: 280px"
-        />
-        <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 190px" @keyup.enter="search" />
-        <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 190px" @keyup.enter="search" />
-        <el-tree-select
-          v-model="filters.regionCode"
-          v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
-          :data="areaTree"
-          :props="areaTreeProps"
-          node-key="code"
-          check-strictly
-          :render-after-expand="false"
-          :default-expanded-keys="areaTree.map((row) => row.code)"
-          aria-label="归属地区"
-          clearable
-          filterable
-          placeholder="归属地区"
-          popper-class="order-register-tree-popper"
-          style="width: 180px"
-        />
-        <el-select
-          v-model="filters.ownerEmployeeCode"
-          v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
-          aria-label="业务员"
-          clearable
-          filterable
-          remote
-          reserve-keyword
-          placeholder="搜索业务员"
-          :remote-method="searchEmployees"
-          :loading="employeeLoading"
-          style="width: 150px"
-        >
-          <el-option
-            v-for="item in employeeOptions"
-            :key="item.employeeCode"
-            :label="item.employeeName"
-            :value="item.employeeCode"
+        <div class="list-filter-field list-filter-field--date-range">
+          <el-date-picker
+            v-model="filters.orderDateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="订单开始日期"
+            end-placeholder="订单结束日期"
+            aria-label="下单时间"
           />
-        </el-select>
-        <el-tree-select
-          v-model="filters.departmentId"
-          v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
-          :data="departmentOptionsTree"
-          :props="departmentTreeProps"
-          node-key="id"
-          check-strictly
-          :render-after-expand="false"
-          :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
-          aria-label="部门"
-          clearable
-          filterable
-          placeholder="选择部门"
-          popper-class="order-register-tree-popper"
-          style="width: 180px"
-        />
-        <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
-        <el-tree-select
-          v-model="pageFilters.categoryIds"
-          :data="categoryTree"
-          :props="categoryTreeProps"
-          node-key="id"
-          check-strictly
-          :render-after-expand="false"
-          :loading="categoryLoading"
-          :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
-          @visible-change="onCategoryVisibleChange"
-          multiple
-          show-checkbox
-          collapse-tags
-          collapse-tags-tooltip
-          aria-label="商品分类"
-          clearable
-          filterable
-          placeholder="商品分类"
-          popper-class="order-register-tree-popper"
-          style="width: 180px"
-          @change="onCategoryChange"
-        />
-        <el-select
-          v-model="pageFilters.productIds"
-          multiple
-          collapse-tags
-          collapse-tags-tooltip
-          aria-label="商品"
-          clearable
-          filterable
-          remote
-          reserve-keyword
-          :remote-method="searchProductOptions"
-          :loading="productSearching"
-          :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
-          @visible-change="visible => visible && searchProductOptions('')"
-          placeholder="商品名称"
-          style="width: 220px"
-        >
-          <el-option
-            v-for="item in productOptions"
-            :key="item.id"
-            :label="item.productName"
-            :value="String(item.id)"
+        </div>
+        <div class="list-filter-field list-filter-field--date-range">
+          <el-date-picker
+            v-model="pageFilters.paymentTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="收款开始日期"
+            end-placeholder="收款结束日期"
+            aria-label="收款日期"
           />
-        </el-select>
-        <el-select v-model="pageFilters.productVariantIds" aria-label="商品规格" multiple collapse-tags collapse-tags-tooltip clearable filterable
-          :disabled="!pageFilters.productIds.length" :loading="variantLoading"
-          :placeholder="pageFilters.productIds.length ? '商品规格' : '请先选择商品'"
-          :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'"
-          style="width: 200px" @visible-change="visible => visible && variantLoadFailed && loadVariants()">
-          <el-option-group v-for="group in variantGroups" :key="group.productId" :label="group.productName">
-            <el-option v-for="variant in group.variants" :key="variant.id" :value="String(variant.id)"
-              :label="variant.specificationSnapshot || '默认规格'" />
-          </el-option-group>
-        </el-select>
-        <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况" style="width: 130px">
-          <el-option label="全部" value="" />
-          <el-option label="有优惠" value="true" />
-          <el-option label="无优惠" value="false" />
-        </el-select>
-        <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态" style="width: 130px">
-          <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
+        </div>
+        <div class="list-filter-field">
+          <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" @keyup.enter="search" />
+        </div>
+        <div class="list-filter-field">
+          <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" @keyup.enter="search" />
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-tree-select
+            v-model="filters.regionCode"
+            v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
+            :data="areaTree"
+            :props="areaTreeProps"
+            node-key="code"
+            check-strictly
+            :render-after-expand="false"
+            :default-expanded-keys="areaTree.map((row) => row.code)"
+            aria-label="归属地区"
+            clearable
+            filterable
+            placeholder="归属地区"
+            popper-class="order-register-tree-popper"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--person">
+          <el-select
+            v-model="filters.ownerEmployeeCode"
+            v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
+            aria-label="业务员"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            placeholder="搜索业务员"
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+          >
+            <el-option
+              v-for="item in employeeOptions"
+              :key="item.employeeCode"
+              :label="item.employeeName"
+              :value="item.employeeCode"
+            />
+          </el-select>
+        </div>
+        <div class="list-filter-group">
+          <div class="list-filter-field list-filter-field--select">
+            <el-tree-select
+              v-model="filters.departmentId"
+              v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
+              :data="departmentOptionsTree"
+              :props="departmentTreeProps"
+              node-key="id"
+              check-strictly
+              :render-after-expand="false"
+              :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
+              aria-label="部门"
+              clearable
+              filterable
+              placeholder="选择部门"
+              popper-class="order-register-tree-popper"
+            />
+          </div>
+          <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-tree-select
+            v-model="pageFilters.categoryIds"
+            :data="categoryTree"
+            :props="categoryTreeProps"
+            node-key="id"
+            check-strictly
+            :render-after-expand="false"
+            :loading="categoryLoading"
+            :no-data-text="categoryLoadFailed ? '分类加载失败，请重新展开重试' : '暂无商品分类'"
+            @visible-change="onCategoryVisibleChange"
+            multiple
+            show-checkbox
+            collapse-tags
+            collapse-tags-tooltip
+            aria-label="商品分类"
+            clearable
+            filterable
+            placeholder="商品分类"
+            popper-class="order-register-tree-popper"
+            @change="onCategoryChange"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--product">
+          <el-select
+            v-model="pageFilters.productIds"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            aria-label="商品"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="searchProductOptions"
+            :loading="productSearching"
+            :no-data-text="productLoadFailed ? '商品加载失败，请重新展开重试' : '暂无商品'"
+            @visible-change="visible => visible && searchProductOptions('')"
+            placeholder="商品名称"
+          >
+            <el-option
+              v-for="item in productOptions"
+              :key="item.id"
+              :label="item.productName"
+              :value="String(item.id)"
+            />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.productVariantIds" aria-label="商品规格" multiple collapse-tags collapse-tags-tooltip clearable filterable
+            :disabled="!pageFilters.productIds.length" :loading="variantLoading"
+            :placeholder="pageFilters.productIds.length ? '商品规格' : '请先选择商品'"
+            :no-data-text="variantLoadFailed ? '规格加载失败，请重新展开重试' : '暂无商品规格'" @visible-change="visible => visible && variantLoadFailed && loadVariants()">
+            <el-option-group v-for="group in variantGroups" :key="group.productId" :label="group.productName">
+              <el-option v-for="variant in group.variants" :key="variant.id" :value="String(variant.id)"
+                :label="variant.specificationSnapshot || '默认规格'" />
+            </el-option-group>
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况">
+            <el-option label="全部" value="" />
+            <el-option label="有优惠" value="true" />
+            <el-option label="无优惠" value="false" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态">
+            <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
       </template>
     </OrderRegisterFilterCard>
 
@@ -382,17 +390,27 @@
           </el-table-column>
         </el-table>
       </div>
-      <div class="pagination-row">
-        <el-pagination
+      <ListTableFooter>
+        <template #actions>
+          <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+          <TableColumnSettings
+            size="default"
+            plain
+            :columns="lineColumns.columns"
+            :visibility="lineColumns.visibility"
+            @change="lineColumns.setVisible"
+            @reset="lineColumns.reset"
+          />
+        </template>
+        <CompactPagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :total="pageData.total"
           :page-sizes="[20, 50, 100, 200]"
-          layout="total, sizes, prev, pager, next, jumper"
           @size-change="onPageSizeChange"
           @current-change="loadLines"
         />
-      </div>
+      </ListTableFooter>
     </el-card>
 
     <OrderRegisterDetailDrawer
@@ -411,6 +429,8 @@ import { ElMessage } from 'element-plus'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
+import ListTableFooter from '@/components/supply/ListTableFooter.vue'
+import CompactPagination from '@/components/supply/CompactPagination.vue'
 import { displayDateTime } from '@/utils/business-date'
 import { moneyText, numberText, repaymentRateText, orderPaymentStatusLabel, orderPaymentStatusTag } from '@/utils/order-register-status'
 import { businessDictionaryLabel, loadBusinessDictionaries } from '@/utils/business-dictionary'
