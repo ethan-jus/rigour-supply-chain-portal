@@ -237,40 +237,38 @@
     <el-alert v-if="pageData.totals.unallocatedCount" type="warning" :closable="false"
       :title="`${pageData.totals.unallocatedCount} 笔回款无法分摊，未计入金额统计，请检查订单明细和订货金额。`" />
     <el-alert v-if="loadFailed" title="回款加载失败，请重新查询" type="error" :closable="false" />
-    <div class="payment-summary-heading">
-      <span>回款统计<span v-if="summaryCollapsed" class="payment-summary-brief"> · 本期到账 {{ moneyText(pageData.totals.receivedAmount) }}</span></span>
-      <el-button text size="small" :aria-expanded="!summaryCollapsed" aria-controls="payment-summary" @click="summaryCollapsed = !summaryCollapsed">{{ summaryCollapsed ? '展开统计' : '收起统计' }}<el-icon class="el-icon--right"><ArrowDown v-if="summaryCollapsed" /><ArrowUp v-else /></el-icon></el-button>
-    </div>
-    <div v-show="!summaryCollapsed" id="payment-summary" class="order-summary order-summary--payments payment-summary" aria-label="回款统计">
-      <div class="order-summary__metric order-summary__metric--payable" title="筛选命中的订单去重后合计订单金额。">
-        <span class="order-summary__label">{{ allocationActive ? '订单金额（分摊）' : '订单金额' }}</span>
-        <strong class="order-summary__value">{{ moneyText(pageData.totals.relatedOrderAmount) }}</strong>
+    <OrderStatisticsPanel title="回款统计" :columns="Number(pageData.totals.ownerPendingAmount) > 0 ? 7 : 6" :brief="`本期到账 ${moneyText(pageData.totals.receivedAmount)}`">
+      <div class="order-summary order-summary--payments" aria-label="回款统计">
+        <div class="order-summary__metric order-summary__metric--payable" title="筛选命中的订单去重后合计订单金额。">
+          <span class="order-summary__label">{{ allocationActive ? '订单金额（分摊）' : '订单金额' }}</span>
+          <strong class="order-summary__value">{{ moneyText(pageData.totals.relatedOrderAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--paid" title="按筛选的到账日期汇总回款，包含订货宝待财务确认及已确认金额，排除待收款和已取消记录。">
+          <span class="order-summary__label">{{ allocationActive ? '本期到账（分摊）' : '本期到账' }}</span>
+          <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--unpaid" title="命中订单的全部有效收款及历史期初扣除后的待收余额，不受回款日期截断。">
+          <span class="order-summary__label">{{ allocationActive ? '待收金额（分摊）' : '待收金额' }}</span>
+          <strong class="order-summary__value">{{ moneyText(pageData.totals.unpaidAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--count" title="筛选命中的订单客户去重数量。">
+          <span class="order-summary__label">客户数</span>
+          <strong class="order-summary__value">{{ pageData.totals.customerCount?.toLocaleString() ?? '-' }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--count" title="当前筛选命中的订单去重后，合计符合商品分类、商品及规格条件的明细数量；同一订单多笔回款不重复计算，不按回款比例分摊数量。">
+          <span class="order-summary__label">商品数</span>
+          <strong class="order-summary__value">{{ pageData.totals.quantitySum?.toLocaleString('zh-CN', { maximumFractionDigits: 6 }) ?? '-' }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已确认收款合计。">
+          <span class="order-summary__label">{{ allocationActive ? '已确认金额（分摊）' : '已确认金额' }}</span>
+          <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
+        </div>
+        <div v-if="Number(pageData.totals.ownerPendingAmount) > 0" class="order-summary__metric order-summary__metric--unpaid" title="已计入本期到账总额，缺少可用业务员数据的回款。">
+          <span class="order-summary__label">回款人待补齐</span>
+          <strong class="order-summary__value">{{ moneyText(pageData.totals.ownerPendingAmount) }}</strong>
+        </div>
       </div>
-      <div class="order-summary__metric order-summary__metric--paid" title="按筛选的到账日期汇总回款，包含订货宝待财务确认及已确认金额，排除待收款和已取消记录。">
-        <span class="order-summary__label">{{ allocationActive ? '本期到账（分摊）' : '本期到账' }}</span>
-        <strong class="order-summary__value">{{ moneyText(pageData.totals.receivedAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--unpaid" title="命中订单的全部有效收款及历史期初扣除后的待收余额，不受回款日期截断。">
-        <span class="order-summary__label">{{ allocationActive ? '待收金额（分摊）' : '待收金额' }}</span>
-        <strong class="order-summary__value">{{ moneyText(pageData.totals.unpaidAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--count" title="筛选命中的订单客户去重数量。">
-        <span class="order-summary__label">客户数</span>
-        <strong class="order-summary__value">{{ pageData.totals.customerCount?.toLocaleString() ?? '-' }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--count" title="当前筛选命中的订单去重后，合计符合商品分类、商品及规格条件的明细数量；同一订单多笔回款不重复计算，不按回款比例分摊数量。">
-        <span class="order-summary__label">商品数</span>
-        <strong class="order-summary__value">{{ pageData.totals.quantitySum?.toLocaleString('zh-CN', { maximumFractionDigits: 6 }) ?? '-' }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--checked" title="当前筛选范围内已确认收款合计。">
-        <span class="order-summary__label">{{ allocationActive ? '已确认金额（分摊）' : '已确认金额' }}</span>
-        <strong class="order-summary__value">{{ moneyText(pageData.totals.checkedAmount) }}</strong>
-      </div>
-      <div v-if="Number(pageData.totals.ownerPendingAmount) > 0" class="order-summary__metric order-summary__metric--unpaid" title="已计入本期到账总额，缺少可用业务员数据的回款。">
-        <span class="order-summary__label">回款人待补齐</span>
-        <strong class="order-summary__value">{{ moneyText(pageData.totals.ownerPendingAmount) }}</strong>
-      </div>
-    </div>
+    </OrderStatisticsPanel>
 
     <el-card class="list-card" shadow="never">
       <div class="table-viewport">
@@ -535,9 +533,10 @@ import PaymentVoucherTransactionsDialog from './components/PaymentVoucherTransac
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
 import CompactPagination from '@/components/supply/CompactPagination.vue'
 import ListTableFooter from '@/components/supply/ListTableFooter.vue'
+import OrderStatisticsPanel from '@/components/supply/OrderStatisticsPanel.vue'
 import FundAttachmentThumbnails from '@/components/supply/FundAttachmentThumbnails.vue'
 import { displayDateTime } from '@/utils/business-date'
-import { CircleCheck, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { CircleCheck } from '@element-plus/icons-vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import {
   moneyText,
@@ -559,7 +558,6 @@ import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
 import { useOrderProductFilters } from '@/composables/useOrderProductFilters'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
-const summaryCollapsed = ref(false)
 const auditVisible = ref(false)
 const transactionCheckVisible = ref(false)
 const voucherVisible = ref(false)
@@ -848,17 +846,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.payment-summary-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; min-height: 30px; color: var(--el-text-color-secondary); font-size: 12px; background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-bottom: 0; border-radius: 8px 8px 0 0; }
-.payment-summary-brief { color: #047857; }
-.order-summary.payment-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 8px 12px 12px; border-radius: 0; }
-.payment-summary .order-summary__metric { min-height: 64px; padding: 8px 10px; }
-.payment-summary .order-summary__value { font-size: 20px; }
-@media (max-width: 1199px) {
-  .order-summary.payment-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@media (max-width: 720px) {
-  .order-summary.payment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 
 .allocation-note { margin: 0 0 10px; color: #64748b; font-size: var(--app-font-size-base); }
 .allocation-detail { padding: 16px 28px; background: #f8fafc; }

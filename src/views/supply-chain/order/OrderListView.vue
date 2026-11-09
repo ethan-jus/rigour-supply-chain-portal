@@ -136,50 +136,52 @@
 
     <el-alert v-if="totals.missingLineOrderCount" :closable="false" type="warning"
       :title="`当前筛选有 ${totals.missingLineOrderCount} 笔订单缺少明细，订货金额、优惠额及优惠率暂无法完整计算。`" />
-    <div class="order-summary" aria-label="金额统计">
-      <div class="order-summary__metric order-summary__metric--payable">
-        <span class="order-summary__label">订单金额</span>
-        <strong class="order-summary__value">{{ moneyText(totals.payableAmount) }}</strong>
+    <OrderStatisticsPanel title="订单统计" :columns="8" :brief="`订单金额 ${moneyText(totals.payableAmount)}`">
+      <div class="order-summary order-summary--orders" aria-label="金额统计">
+        <div class="order-summary__metric order-summary__metric--payable">
+          <span class="order-summary__label">订单金额</span>
+          <strong class="order-summary__value">{{ moneyText(totals.payableAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--paid">
+          <el-tooltip content="所选订单累计回款，包含订货宝待财务确认和已确认金额；已取消回款不计入。" placement="top">
+            <span class="order-summary__label">回款金额</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ moneyText(totals.paidAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--paid">
+          <el-tooltip content="当前筛选订单的累计回款÷订单金额；按收款日期筛选时取整单最近一次有效收款日期，订单金额为零时不计算。" placement="top">
+            <span class="order-summary__label">回款率</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ repaymentRateText(totals.paidAmount, totals.payableAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--unpaid">
+          <span class="order-summary__label">待收金额</span>
+          <strong class="order-summary__value">{{ moneyText(totals.unpaidAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--count">
+          <el-tooltip content="当前筛选全部下单客户，按客户ID去重；未关联客户不计入。" placement="top">
+            <span class="order-summary__label">客户数</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ totals.customerCount ?? '-' }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--ordered">
+          <el-tooltip content="当前筛选全部订单的有效明细：单价×数量合计。" placement="top">
+            <span class="order-summary__label">订货金额</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ moneyText(totals.originalAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--discount">
+          <span class="order-summary__label">优惠额</span>
+          <strong class="order-summary__value">{{ moneyText(totals.discountAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--discount">
+          <el-tooltip content="（订货金额合计－订单金额合计）÷订货金额合计；不平均各订单优惠率。订货金额为零时不计算。" placement="top">
+            <span class="order-summary__label">优惠率</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ discountRateText(totals.discountRate) }}</strong>
+        </div>
       </div>
-      <div class="order-summary__metric order-summary__metric--paid">
-        <el-tooltip content="所选订单累计回款，包含订货宝待财务确认和已确认金额；已取消回款不计入。" placement="top">
-          <span class="order-summary__label">回款金额</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ moneyText(totals.paidAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--paid">
-        <el-tooltip content="当前筛选订单的累计回款÷订单金额；按收款日期筛选时取整单最近一次有效收款日期，订单金额为零时不计算。" placement="top">
-          <span class="order-summary__label">回款率</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ repaymentRateText(totals.paidAmount, totals.payableAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--unpaid">
-        <span class="order-summary__label">待收金额</span>
-        <strong class="order-summary__value">{{ moneyText(totals.unpaidAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--count">
-        <el-tooltip content="当前筛选全部下单客户，按客户ID去重；未关联客户不计入。" placement="top">
-          <span class="order-summary__label">客户数</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ totals.customerCount ?? '-' }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--ordered">
-        <el-tooltip content="当前筛选全部订单的有效明细：单价×数量合计。" placement="top">
-          <span class="order-summary__label">订货金额</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ moneyText(totals.originalAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--discount">
-        <span class="order-summary__label">优惠额</span>
-        <strong class="order-summary__value">{{ moneyText(totals.discountAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--discount">
-        <el-tooltip content="（订货金额合计－订单金额合计）÷订货金额合计；不平均各订单优惠率。订货金额为零时不计算。" placement="top">
-          <span class="order-summary__label">优惠率</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ discountRateText(totals.discountRate) }}</strong>
-      </div>
-    </div>
+    </OrderStatisticsPanel>
 
     <el-card class="list-card" shadow="never">
       <div class="table-viewport">
@@ -455,6 +457,7 @@ import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vu
 import OrderInvoiceApplyDialog from './components/OrderInvoiceApplyDialog.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
 import ListTableFooter from '@/components/supply/ListTableFooter.vue'
+import OrderStatisticsPanel from '@/components/supply/OrderStatisticsPanel.vue'
 import CompactPagination from '@/components/supply/CompactPagination.vue'
 import { displayDateTime } from '@/utils/business-date'
 import {
