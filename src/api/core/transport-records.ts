@@ -17,6 +17,8 @@ export interface TransportDraft {
   senderAddress: string | null
   cityCode: string
   amount: number | null
+  paymentStatusCode?: string | null
+  manualBillItems?: { name: string; amount: number | null }[] | null
   ownerEmployeeCode: string | null
   remark: string
   reason: string

@@ -169,6 +169,8 @@ export function transportDraft(
         ? Number(order.facts.billAmount)
         : null
       : (row?.data.amount ?? null),
+    paymentStatusCode: row?.data.paymentStatusCode || 'UNKNOWN',
+    manualBillItems: platform ? [] : ledger?.manualBillItems?.map((item) => ({ ...item })) || [],
     ownerEmployeeCode: saved?.ownerEmployeeCode ?? row?.data.ownerEmployeeCode ?? null,
     remark: saved?.remark ?? row?.data.remark ?? '',
     reason: '',
@@ -185,4 +187,11 @@ export function allocationPreview(amount: number | null, codes: string[]) {
     code,
     amount: (Math.floor(cents / sorted.length) + (i < cents % sorted.length ? 1 : 0)) / 100,
   }))
+}
+
+/** 分项按分相加，优惠为负数；未填写的分项金额保持未知。 */
+export function manualBillTotal(items: { amount: number | null }[]): number | null {
+  if (!items.length || items.some((item) => item.amount == null || !Number.isFinite(item.amount)))
+    return null
+  return items.reduce((cents, item) => cents + Math.round(Number(item.amount) * 100), 0) / 100
 }

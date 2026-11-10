@@ -91,13 +91,13 @@
               ><span v-if="readonly || platform">{{ form.trackingNo || '-' }}</span
               ><el-input v-else v-model="form.trackingNo" maxlength="100" placeholder="填写运单号"
             /></el-form-item>
-            <el-form-item v-if="platform || form.carrierCode === 'HLL'" label="货拉拉订单号"
+            <el-form-item v-if="!readonly || platform || form.platformOrderNo" label="第三方订单号"
               ><span v-if="readonly || platform">{{ form.platformOrderNo || '-' }}</span
               ><el-input
                 v-else
                 v-model="form.platformOrderNo"
                 maxlength="80"
-                placeholder="填写货拉拉订单号"
+                placeholder="填写物流公司提供的订单号"
             /></el-form-item>
           </div>
         </section>
@@ -250,11 +250,12 @@
             @click="advancedOpen = true"
             >维护费用与分摊明细</el-button
           >
-          <div class="form-grid">
+          <div class="form-grid" :class="{ 'manual-bill-summary': !platform }">
             <el-form-item label="运输费用（元）"
-              ><span v-if="readonly || platform || advanced" class="amount">{{
-                money(form.amount)
-              }}</span
+              ><span
+                v-if="readonly || platform || advanced || form.manualBillItems?.length"
+                class="amount"
+                >{{ money(form.amount) }}</span
               ><el-input-number
                 v-else
                 v-model="form.amount"
@@ -276,11 +277,25 @@
                   :key="e.employeeCode"
                   :label="e.employeeName + (e.departmentName ? `（${e.departmentName}）` : '')"
                   :value="e.employeeCode" /></el-select></el-form-item
+            ><el-form-item v-if="!platform" label="付款状态">
+              <span v-if="readonly">{{
+                costLabel('COST_PAYMENT_STATUS', form.paymentStatusCode)
+              }}</span>
+              <el-select v-else v-model="form.paymentStatusCode" placeholder="请选择付款状态">
+                <el-option
+                  v-for="o in costOptions('COST_PAYMENT_STATUS')"
+                  :key="o.value"
+                  :label="o.label"
+                  :value="o.value"
+                />
+              </el-select> </el-form-item
             ><el-form-item label="已确认运输成本（元）"
               ><strong>{{
                 detail?.record.statusCode === 'CONFIRMED' ? money(detail.record.data.amount) : '-'
               }}</strong></el-form-item
-            ><el-form-item v-if="!readonly && !form.cityCode" label="费用归属城市"
+            ><el-form-item
+              v-if="!readonly && form.orderCodes.length && !form.cityCode"
+              label="费用归属城市"
               ><CostCitySelect
                 v-model="form.cityCode"
                 :disabled="false"
@@ -296,6 +311,88 @@
                 placeholder="填写包邮或无需我方支付的原因"
             /></el-form-item>
           </div>
+          <template v-if="!platform">
+            <div class="section-heading bill-heading">
+              <h4>
+                账单明细<span v-if="!readonly && !advanced" class="optional-label">（选填）</span>
+              </h4>
+              <el-button
+                v-if="!readonly && !advanced"
+                link
+                type="primary"
+                :disabled="(form.manualBillItems?.length || 0) >= 100"
+                @click="addBillItem"
+                >添加费用项目</el-button
+              >
+            </div>
+            <el-table v-if="form.manualBillItems?.length" :data="form.manualBillItems" border>
+              <el-table-column label="费用项目" min-width="180"
+                ><template #default="{ row }">
+                  <span v-if="readonly || advanced">{{ row.name }}</span>
+                  <el-select
+                    v-else
+                    v-model="row.name"
+                    filterable
+                    allow-create
+                    default-first-option
+                    placeholder="选择或填写费用项目"
+                    maxlength="100"
+                  >
+                    <el-option
+                      v-for="o in costOptions('COST_LOGISTICS_FEE_TYPE')"
+                      :key="o.value"
+                      :label="o.label"
+                      :value="o.label"
+                    />
+                    <el-option label="优惠" value="优惠" />
+                  </el-select> </template
+              ></el-table-column>
+              <el-table-column
+                :label="readonly || advanced ? '金额（元）' : '金额（元，优惠填负数）'"
+                min-width="230"
+                align="right"
+                ><template #default="{ row }">
+                  <span v-if="readonly || advanced">{{ money(row.amount) }}</span>
+                  <el-input-number
+                    v-else
+                    v-model="row.amount"
+                    :precision="2"
+                    :min="-999999999999"
+                    :max="999999999999"
+                    :controls="false"
+                    placeholder="填写金额"
+                  /> </template
+              ></el-table-column>
+              <el-table-column v-if="!readonly && !advanced" label="操作" width="80"
+                ><template #default="{ $index }"
+                  ><el-button link type="danger" @click="form.manualBillItems?.splice($index, 1)"
+                    >移除</el-button
+                  ></template
+                ></el-table-column
+              >
+            </el-table>
+            <template
+              v-else-if="
+                readonly &&
+                detail?.record.data.ledger?.manualBillItems == null &&
+                detail?.record.data.ledger?.feeItems.length
+              "
+            >
+              <el-table :data="detail.record.data.ledger.feeItems" border>
+                <el-table-column label="费用项目"
+                  ><template #default="{ row }">{{
+                    costLabel('COST_LOGISTICS_FEE_TYPE', row.feeTypeCode)
+                  }}</template></el-table-column
+                >
+                <el-table-column label="金额（元）" align="right"
+                  ><template #default="{ row }">{{
+                    money(row.feeAmount)
+                  }}</template></el-table-column
+                >
+              </el-table>
+            </template>
+            <span v-else-if="readonly" class="optional-label">未登记费用明细</span>
+          </template>
           <el-table v-if="!readonly && allocations.length" :data="allocations" border
             ><el-table-column prop="code" label="业务单号" /><el-table-column
               label="分摊运输费用（元）"
@@ -304,7 +401,7 @@
             ></el-table
           >
           <TransportPlatformBill
-            v-if="platform && readonly"
+            v-if="platform"
             :record-id="detail!.record.id"
             :platform="platform"
             :confirmed="detail!.record.statusCode === 'CONFIRMED'"
@@ -336,20 +433,16 @@
       <section v-if="platform && readonly" class="transport-section">
         <h3>货拉拉订单信息</h3>
         <div class="form-grid">
-          <Info label="货拉拉订单号" :value="order?.orderNo" /><Info
-            label="货拉拉订单状态"
-            :value="order?.status"
-          /><Info label="下单时间" :value="order?.raw['下单时间']" /><Info
-            label="用车时间"
-            :value="order?.useTime"
-          /><Info label="完成时间" :value="order?.facts?.completeTime" /><Info
-            label="车型"
-            :value="order?.raw['车型']"
-          /><Info label="用车原因" :value="order?.raw['用车原由']" /><Info
-            class="wide"
-            label="货拉拉订单备注"
-            :value="order?.raw['订单备注']"
-          />
+          <Info label="货拉拉订单状态" :value="order?.status" /><Info
+            label="下单时间"
+            :value="order?.raw['下单时间']"
+          /><Info label="用车时间" :value="order?.useTime" /><Info
+            label="完成时间"
+            :value="order?.facts?.completeTime"
+          /><Info label="车型" :value="order?.raw['车型']" /><Info
+            label="用车原因"
+            :value="order?.raw['用车原由']"
+          /><Info class="wide" label="货拉拉订单备注" :value="order?.raw['订单备注']" />
         </div>
         <h4>司机与车辆</h4>
         <div class="form-grid">
@@ -462,7 +555,7 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
-import { computed, defineComponent, h, onMounted, ref, toRaw, type PropType } from 'vue'
+import { computed, defineComponent, h, onMounted, ref, watch, toRaw, type PropType } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { CostEmployee, CostSource, CostAudit, CostCommand } from '@/api/core/cost'
 import { getCostEmployees, getCostHistory, getCostCities, saveCost } from '@/api/core/cost'
@@ -480,6 +573,7 @@ import {
   typeName,
   statusName,
   allocationPreview,
+  manualBillTotal,
   frozenTransportSources,
   frozenTransportReceivers,
 } from './transport-records'
@@ -546,6 +640,18 @@ const picker = ref(false),
   saving = ref(false),
   error = ref(''),
   senderTouched = ref(!!detail.value)
+function addBillItem() {
+  form.value.manualBillItems ||= []
+  form.value.manualBillItems.push({ name: '', amount: null })
+}
+watch(
+  () => form.value.manualBillItems,
+  (items) => {
+    if (!props.readonly && !platform.value && !advanced.value && items?.length)
+      form.value.amount = manualBillTotal(items)
+  },
+  { deep: true },
+)
 const hadLinks = !!form.value.orderCodes.length
 const attachmentDrafts = ref<CostAttachmentDraft[]>([])
 const allocations = computed(() => allocationPreview(form.value.amount, form.value.orderCodes))
@@ -716,6 +822,16 @@ async function save() {
     error.value = '请选择关联业务订单'
     return
   }
+  if (
+    !platform.value &&
+    form.value.manualBillItems?.length &&
+    (form.value.manualBillItems.some((item) => !item.name.trim() || item.name.length > 100) ||
+      manualBillTotal(form.value.manualBillItems) == null ||
+      manualBillTotal(form.value.manualBillItems)! < 0)
+  ) {
+    error.value = '请填写每项费用名称和金额，优惠后合计不能小于0'
+    return
+  }
   if (form.value.amount === 0 && !form.value.zeroReason.trim()) {
     error.value = '请填写零元原因'
     return
@@ -730,6 +846,15 @@ async function save() {
               revision: detail.value!.record.revision,
               costDate: form.value.date,
               ownerEmployeeCode: form.value.ownerEmployeeCode,
+              paymentStatusCode: form.value.paymentStatusCode || 'UNKNOWN',
+              ledger: advancedData.value.ledger
+                ? {
+                    ...advancedData.value.ledger,
+                    carrierCode: form.value.carrierCode,
+                    trackingNo: form.value.trackingNo || '',
+                    platformOrderNo: form.value.platformOrderNo || null,
+                  }
+                : null,
               remark: form.value.remark,
               reason: form.value.reason,
               amount: advancedData.value.ledger!.feeItems.some((f) => f.ourAmount == null)
@@ -807,6 +932,13 @@ async function save() {
   padding: 22px;
   margin-bottom: 16px;
 }
+.bill-heading {
+  margin-top: 18px;
+}
+.optional-label {
+  color: var(--el-text-color-secondary);
+  font-weight: normal;
+}
 h3 {
   margin: 0 0 22px;
   font-size: 16px;
@@ -827,6 +959,9 @@ h4 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px 24px;
+}
+.manual-bill-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .wide {
   grid-column: 1/-1;
@@ -870,13 +1005,15 @@ h4 {
   font-size: 20px;
   font-weight: 600;
 }
-@media (max-width: 900px) {
-  .form-grid {
+@media (max-width: 1000px) {
+  .form-grid,
+  .manual-bill-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 600px) {
-  .form-grid {
+  .form-grid,
+  .manual-bill-summary {
     grid-template-columns: 1fr;
   }
   .transport-content {

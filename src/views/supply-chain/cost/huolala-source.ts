@@ -52,6 +52,27 @@ export interface ImportRow {
   verification?: { amount: Amount; reason: string; actor?: string; verifiedAt?: string } | null
 }
 export const currentSource = (r: ImportRow): SourceOrder => r.latestOrder || r.order
+
+/** 企业接口旧 pay_status 已停止维护；付款进度只依据当前平台支付金额，不借用成本确认状态。 */
+export function platformPaymentStatus(source: SourceOrder): string {
+  const cents = (value: Amount | undefined): number | null => {
+    if (value == null || String(value).trim() === '') return null
+    const n = Number(value)
+    return Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100))
+      ? Math.round(n * 100)
+      : null
+  }
+  const paid = cents(source.paidAmount)
+  const unpaid = cents(source.facts?.unpaidAmount)
+  const total = cents(source.facts?.billAmount)
+  const refund = cents(source.facts?.refundAmount)
+  if (paid == null || unpaid == null || total == null) return '待核对'
+  // 有退款不能凭金额推断“退款中/退款成功”，也不能再次扣减账单成本。
+  if ((refund != null && refund > 0) || paid + unpaid !== total) return '待核对'
+  if (total === 0) return '无需付款'
+  if (unpaid === 0) return '已付款'
+  return paid > 0 ? '部分付款' : '未付款'
+}
 export const verifiedSourceAmount = (r: ImportRow): Amount =>
   r.verification?.amount ??
   (r.order.facts

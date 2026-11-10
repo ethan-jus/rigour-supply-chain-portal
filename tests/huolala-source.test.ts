@@ -4,6 +4,7 @@ import {
   verifiedSourceAmount,
   sourceReceiverHints,
   deliveryAddressesDiffer,
+  platformPaymentStatus,
   type ImportRow,
 } from '@/views/supply-chain/cost/huolala-source'
 const row = (): ImportRow => ({
@@ -24,6 +25,46 @@ const row = (): ImportRow => ({
   },
 })
 describe('货拉拉来源金额和生成门槛', () => {
+  it('企业付款进度取平台金额，与运送完成及成本确认独立，缺失和退款不猜测状态', () => {
+    const r = row()
+    r.order.facts = {
+      connectorId: 'C1',
+      sourceEmployeeName: null,
+      mappedEmployeeCode: null,
+      billAmount: '40.50',
+      unpaidAmount: 0,
+      refundAmount: 0,
+      couponAmount: 0,
+      billState: 'FINAL',
+      issue: null,
+      stops: [],
+      fees: [],
+    }
+    expect(platformPaymentStatus(r.order)).toBe('已付款')
+    r.order.status = '运送中'
+    expect(platformPaymentStatus(r.order)).toBe('已付款')
+    r.order.paidAmount = 10
+    r.order.facts.unpaidAmount = '30.50'
+    expect(platformPaymentStatus(r.order)).toBe('部分付款')
+    r.order.paidAmount = 0
+    r.order.facts.unpaidAmount = '40.50'
+    expect(platformPaymentStatus(r.order)).toBe('未付款')
+    r.order.facts.unpaidAmount = null
+    expect(platformPaymentStatus(r.order)).toBe('待核对')
+    r.order.facts.unpaidAmount = 0
+    r.order.facts.billAmount = 0
+    expect(platformPaymentStatus(r.order)).toBe('无需付款')
+    r.order.facts.refundAmount = 5
+    expect(platformPaymentStatus(r.order)).toBe('待核对')
+    r.order.facts.refundAmount = 0
+    r.order.facts.billAmount = 40.5
+    expect(platformPaymentStatus(r.order)).toBe('待核对')
+    r.order.paidAmount = -1
+    expect(platformPaymentStatus(r.order)).toBe('待核对')
+    r.order.paidAmount = 40.5
+    r.order.facts.unpaidAmount = Number.NaN
+    expect(platformPaymentStatus(r.order)).toBe('待核对')
+  })
   it('接口来源的多收货点用于候选推荐，不依赖Excel原始字段', () => {
     const r = row()
     r.order.facts = {

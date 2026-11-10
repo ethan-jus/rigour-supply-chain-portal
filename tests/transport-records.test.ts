@@ -151,7 +151,7 @@ async function startExport() {
   await button('开始导出').trigger('click')
   await flushPromises()
 }
-describe('统一运输记录 V2.5', () => {
+describe('统一运输记录 V2.6', () => {
   it('手工两个号码独立回填，平台没有运单号时不拿平台订单号补位', () => {
     const r = record()
     r.data.ledger = createLedgerCommand(true).ledger!
@@ -163,6 +163,8 @@ describe('统一运输记录 V2.5', () => {
     r.data.ledger.platformOrderNo = null
     expect(transportDraft(r).platformOrderNo).toBe('')
     expect(transportDraft(r, platform()).trackingNo).toBe('')
+    r.data.ledger.manualBillItems = [{ name: '原手工运费', amount: 137.64 }]
+    expect(transportDraft(r, platform()).manualBillItems).toEqual([])
   })
   it('最新运输费用与已确认成本分离，付款进度不重复计费，多收货方逐一展示', () => {
     const p = platform(),
@@ -206,6 +208,7 @@ describe('统一运输记录 V2.5', () => {
       '0.00',
     ])
     expect(wrapper.text()).toContain('待获取')
+    expect(wrapper.text()).toContain('付款状态已付款')
     expect(wrapper.text()).toContain('货运券抵扣')
     expect(wrapper.findAll('input')).toHaveLength(0)
   })
@@ -221,6 +224,14 @@ describe('统一运输记录 V2.5', () => {
     expect(api.selected).not.toHaveBeenCalled()
     expect(api.list).toHaveBeenCalledWith(expect.objectContaining({ begin: 0, step: 200 }), true)
     const [, headers, rows] = api.workbook.mock.calls[0]!
+    const settings = wrapper.findComponent({ name: 'TableColumnSettings' })
+    const labels = (settings.props('columns') as { label: string }[]).map((c) => c.label)
+    expect(labels).toContain('物流公司')
+    expect(labels).toContain('第三方订单号')
+    expect(labels).not.toContain('已支付（元）')
+    expect(labels).not.toContain('付款状态')
+    expect(labels).not.toContain('货拉拉下单员工')
+    expect(headers).toContain('付款状态')
     expect(headers.length).toBeGreaterThan(15)
     expect(headers).toContain('已确认运输成本（元）')
     expect(headers).toContain('本系统关联员工')
@@ -228,7 +239,8 @@ describe('统一运输记录 V2.5', () => {
     expect(rows[0][headers.indexOf('运单号')]).toBe('-')
     expect(rows[0][headers.indexOf('运输费用（元）')]).toBe(142.64)
     expect(rows[0][headers.indexOf('已确认运输成本（元）')]).toBe(137.64)
-    expect(rows[0][headers.indexOf('货拉拉订单号')]).toBe('3624071813921329726')
+    expect(rows[0][headers.indexOf('第三方订单号')]).toBe('3624071813921329726')
+    expect(rows[0][headers.indexOf('付款状态')]).toBe('已付款')
   })
   it('已勾选只导出选择记录，不能回退成整批；单据状态在创建人之前', async () => {
     api.selected.mockResolvedValue([{ record: record(), platform: platform() }])

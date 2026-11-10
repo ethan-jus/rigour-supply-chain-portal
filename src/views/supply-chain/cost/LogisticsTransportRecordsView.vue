@@ -108,12 +108,12 @@
               placeholder="收货方"
               aria-label="收货方"
             /> </el-form-item
-          ><el-form-item label="货拉拉订单号">
+          ><el-form-item label="第三方订单号">
             <el-input
               v-model="filters.platformOrderNo"
               clearable
-              placeholder="货拉拉订单号"
-              aria-label="货拉拉订单号"
+              placeholder="第三方订单号"
+              aria-label="第三方订单号"
             /> </el-form-item
           ><el-form-item label="货拉拉下单员工">
             <el-input
@@ -384,7 +384,7 @@ import {
   transportTypes,
   typeName,
 } from './transport-records'
-import { currentSource } from './huolala-source'
+import { currentSource, platformPaymentStatus } from './huolala-source'
 import { costLabel, costOptions, loadCostDictionaries } from './cost-dictionaries'
 import CostExportDialog from './CostExportDialog.vue'
 import TransportRecordEditor from './TransportRecordEditor.vue'
@@ -411,14 +411,14 @@ const table = ref<TableInstance>(),
 let applied: TransportQuery = { begin: 0, step: 20 },
   serial = 0
 const columns = [
-  { key: 'source', label: '数据来源', width: 80 },
+  { key: 'carrier', label: '物流公司', width: 96 },
   { key: 'type', label: '运输类型', width: 110 },
   { key: 'date', label: '运输日期', width: 106 },
   { key: 'receivers', label: '收货方', width: 150 },
-  { key: 'platformNo', label: '货拉拉订单号', width: 176 },
+  { key: 'platformNo', label: '第三方订单号', width: 176 },
+  { key: 'tracking', label: '运单号', width: 180 },
   { key: 'amount', label: '运输费用（元）', width: 126, numeric: true },
-  { key: 'carrier', label: '物流公司', width: 125, optional: true },
-  { key: 'tracking', label: '运单号', width: 190, optional: true },
+  { key: 'source', label: '数据来源', width: 96, optional: true },
   { key: 'platformStatus', label: '货拉拉订单状态', width: 155, optional: true },
   { key: 'platformEmployee', label: '货拉拉下单员工', width: 150, optional: true },
   { key: 'mappedEmployee', label: '本系统关联员工', width: 150, optional: true },
@@ -427,6 +427,8 @@ const columns = [
   { key: 'relation', label: '订单关联状态', width: 130, optional: true },
   { key: 'employee', label: '业务员', width: 130, optional: true },
   { key: 'department', label: '部门', width: 160, optional: true },
+  { key: 'billItems', label: '账单费用明细', width: 240, optional: true },
+  { key: 'payment', label: '付款状态', width: 100, optional: true },
   { key: 'paid', label: '已支付（元）', width: 145, numeric: true, optional: true },
   { key: 'unpaid', label: '未支付（元）', width: 145, numeric: true, optional: true },
   { key: 'refund', label: '退款（元）', width: 145, numeric: true, optional: true },
@@ -434,11 +436,13 @@ const columns = [
   { key: 'status', label: '单据状态', width: 86 },
   { key: 'creator', label: '创建人', width: 66 },
 ]
-const columnOptions = columns.map((c) => ({ ...c, locked: ['status', 'creator'].includes(c.key) }))
+const columnOptions = columns
+  .filter((c) => !c.optional)
+  .map((c) => ({ ...c, locked: ['status', 'creator'].includes(c.key) }))
 const visibility = reactive<Record<string, boolean>>(
   Object.fromEntries(columns.map((c) => [c.key, !c.optional])),
 )
-const displayed = computed(() => columns.filter((c) => visibility[c.key]))
+const displayed = computed(() => columns.filter((c) => !c.optional && visibility[c.key]))
 function resetColumns() {
   for (const c of columns) visibility[c.key] = !c.optional
 }
@@ -489,6 +493,14 @@ function value(r: CostRecord, key: string, sources = result.value.platformRecord
         (r.data.ledger?.sources ?? r.sources).map((s) => s.departmentName).filter(Boolean),
       ),
     ].join('、'),
+    billItems: source
+      ? source.facts?.fees.map((item) => `${item.name}：${money(item.amount)}`).join('；')
+      : r.data.ledger?.manualBillItems
+          ?.map((item) => `${item.name}：${money(item.amount)}`)
+          .join('；'),
+    payment: source
+      ? platformPaymentStatus(source)
+      : costLabel('COST_PAYMENT_STATUS', r.data.paymentStatusCode),
     paid: money(source?.paidAmount),
     unpaid: money(source?.facts?.unpaidAmount),
     refund: money(source?.facts?.refundAmount),

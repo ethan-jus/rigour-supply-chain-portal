@@ -15,6 +15,10 @@
     </div>
     <dl class="bill-meta">
       <div>
+        <dt>付款状态</dt>
+        <dd>{{ platformPaymentStatus(source) }}</dd>
+      </div>
+      <div>
         <dt>赠金抵扣（元）</dt>
         <dd>{{ money(facts?.bonusAmount) }}</dd>
       </div>
@@ -79,7 +83,7 @@ import { computed, defineComponent, h, ref } from 'vue'
 import { ElButton, ElTable, ElTableColumn } from 'element-plus'
 import type { PlatformTransport } from '@/api/core/transport-records'
 import { getTransportVoucher } from '@/api/core/transport-records'
-import { currentSource, type PlatformVoucher } from './huolala-source'
+import { currentSource, platformPaymentStatus, type PlatformVoucher } from './huolala-source'
 import { money } from './transport-records'
 import CostFilePreview from './CostFilePreview.vue'
 import { errorMessage } from '@/api/core/error'
@@ -204,7 +208,7 @@ dt {
 }
 .bill-meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 dd {

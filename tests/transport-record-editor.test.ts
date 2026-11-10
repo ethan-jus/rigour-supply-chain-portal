@@ -10,7 +10,12 @@ vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => true }),
 }))
 
-const api = vi.hoisted(() => ({ employees: vi.fn(), history: vi.fn(), sources: vi.fn() }))
+const api = vi.hoisted(() => ({
+  employees: vi.fn(),
+  history: vi.fn(),
+  sources: vi.fn(),
+  save: vi.fn(),
+}))
 vi.mock('@/api/core/cost', () => ({
   getCostEmployees: api.employees,
   getCostHistory: api.history,
@@ -21,10 +26,21 @@ vi.mock('@/api/core/cost-ledger', () => ({
   getLedgerSources: api.sources,
   getLedgerParties: vi.fn(),
 }))
-vi.mock('@/api/core/transport-records', () => ({ saveTransport: vi.fn() }))
+vi.mock('@/api/core/transport-records', () => ({ saveTransport: api.save }))
 vi.mock('@/utils/business-dictionary', () => ({
   loadBusinessDictionaries: vi.fn(),
-  businessDictionaryOptions: () => [],
+  businessDictionaryOptions: (_module: string, code: string) =>
+    ({
+      COST_CARRIER: [
+        { value: 'SF', label: '顺丰' },
+        { value: 'JT_NEW', label: '极兔' },
+      ],
+      COST_PAYMENT_STATUS: [
+        { value: 'PAID', label: '已付款' },
+        { value: 'UNPAID', label: '未付款' },
+        { value: 'UNKNOWN', label: '未知' },
+      ],
+    })[code] || [],
   businessDictionaryLabel: (_module: string, _code: string, value: string) => value || '-',
 }))
 
@@ -79,6 +95,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.employees.mockResolvedValue([])
   api.history.mockResolvedValue([])
+  api.save.mockResolvedValue(detail())
   api.sources.mockResolvedValue([
     { documentNo: 'SO1', receiverName: '后续修改的门店', documentDate: '2026-11-01' },
   ])
@@ -215,6 +232,155 @@ describe('运输记录详情回填', () => {
     )
     expect(save?.disabled).toBe(true)
     wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+})
+
+describe('通用手工账单', () => {
+  it.each(['SF', 'JT_NEW'])(
+    '%s 独立保存第三方订单号、运单号、付款状态和账单分项',
+    async (carrier) => {
+      const d = detail()
+      d.record.statusCode = 'DRAFT'
+      d.record.data.ledger = createLedgerCommand(true).ledger!
+      d.record.data.ledger.feeItems[0]!.allocationMethodCode = 'EQUAL'
+      Object.assign(d.record.data.ledger, {
+        carrierCode: carrier,
+        transportPurposeCode: 'DELIVERY',
+        platformOrderNo: 'THIRD-001',
+        trackingNo: 'WB-001',
+        sources: [
+          { orderCode: 'SO1', orderTypeCode: 'SALES_ORDER', linkRoleCode: 'COST', allocations: [] },
+        ],
+        manualBillItems: [
+          { name: '运费', amount: 20 },
+          { name: '优惠', amount: -2 },
+        ],
+      })
+      d.record.data.paymentStatusCode = 'UNPAID'
+      d.record.data.amount = 18
+      const w = mount(Editor, {
+        props: { modelValue: true, readonly: false, detail: d },
+        global,
+        attachTo: document.body,
+      })
+      await flushPromises()
+      await w.find('input[placeholder="填写物流公司提供的订单号"]').setValue('THIRD-002')
+      await w.find('input[placeholder="填写运单号"]').setValue('WB-002')
+      const payment = w
+        .findAllComponents({ name: 'ElSelect' })
+        .find((select) => select.props('placeholder') === '请选择付款状态')!
+      payment.vm.$emit('update:modelValue', 'PAID')
+      const amounts = w
+        .findAllComponents({ name: 'ElInputNumber' })
+        .filter((input) => input.props('placeholder') === '填写金额')
+      amounts[0]!.vm.$emit('update:modelValue', 24.35)
+      await flushPromises()
+      expect(w.text()).toContain('22.35')
+      const save = w.findAll('button').find((b) => b.text() === '保存运输记录')!
+      await save.trigger('click')
+      await flushPromises()
+      expect(api.save).toHaveBeenCalledWith(
+        'C1',
+        expect.objectContaining({
+          carrierCode: carrier,
+          platformOrderNo: 'THIRD-002',
+          trackingNo: 'WB-002',
+          paymentStatusCode: 'PAID',
+          amount: 22.35,
+          manualBillItems: [
+            { name: '运费', amount: 24.35 },
+            { name: '优惠', amount: -2 },
+          ],
+        }),
+      )
+      w.unmount()
+      document.body.innerHTML = ''
+    },
+  )
+  it('只读详情保留付款状态和带优惠的账单，账单不出现输入控件', async () => {
+    const d = detail()
+    d.record.data.ledger = createLedgerCommand(true).ledger!
+    Object.assign(d.record.data.ledger, {
+      carrierCode: 'SF',
+      platformOrderNo: 'SF-ORDER',
+      trackingNo: 'SF-WAYBILL',
+      manualBillItems: [
+        { name: '运费', amount: 20 },
+        { name: '优惠', amount: -2 },
+      ],
+    })
+    d.record.data.paymentStatusCode = 'PAID'
+    d.record.data.amount = 18
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    expect(w.text()).toContain('第三方订单号')
+    expect(w.text()).toContain('SF-ORDER')
+    expect(w.text()).toContain('SF-WAYBILL')
+    expect(w.text()).toContain('付款状态')
+    expect(w.text()).toContain('PAID')
+    expect(w.text()).toContain('-2.00')
+    expect(w.findAll('input')).toHaveLength(0)
+    expect(w.text()).not.toContain('货拉拉订单号')
+    w.unmount()
+    document.body.innerHTML = ''
+  })
+  it.each([false, true])(
+    '手工账单分项缺失为%s时，支持只填总额；负净额不能保存',
+    async (negative) => {
+      const d = detail()
+      d.record.statusCode = 'DRAFT'
+      d.record.data.ledger = createLedgerCommand(true).ledger!
+      Object.assign(d.record.data.ledger, {
+        carrierCode: 'SF',
+        transportPurposeCode: 'DELIVERY',
+        feeItems: [{ ...d.record.data.ledger.feeItems[0], allocationMethodCode: 'EQUAL' }],
+        sources: [
+          { orderCode: 'SO1', orderTypeCode: 'SALES_ORDER', linkRoleCode: 'COST', allocations: [] },
+        ],
+        manualBillItems: negative ? [{ name: '优惠', amount: -5 }] : [],
+      })
+      d.record.data.amount = negative ? -5 : 35
+      d.record.data.paymentStatusCode = 'UNPAID'
+      const w = mount(Editor, {
+        props: { modelValue: true, readonly: false, detail: d },
+        global,
+        attachTo: document.body,
+      })
+      await flushPromises()
+      await w
+        .findAll('button')
+        .find((b) => b.text() === '保存运输记录')!
+        .trigger('click')
+      await flushPromises()
+      if (negative) {
+        expect(api.save).not.toHaveBeenCalled()
+        expect(w.text()).toContain('优惠后合计不能小于0')
+      } else
+        expect(api.save).toHaveBeenCalledWith(
+          'C1',
+          expect.objectContaining({ amount: 35, paymentStatusCode: 'UNPAID', manualBillItems: [] }),
+        )
+      w.unmount()
+      document.body.innerHTML = ''
+    },
+  )
+  it('只填总额的记录不把系统的合计费用冒充账单分项', async () => {
+    const d = detail()
+    d.record.data.ledger = createLedgerCommand(true).ledger!
+    d.record.data.ledger.manualBillItems = []
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    expect(w.text()).toContain('未登记费用明细')
+    w.unmount()
     document.body.innerHTML = ''
   })
 })
