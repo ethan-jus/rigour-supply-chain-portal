@@ -511,7 +511,7 @@
     <PaymentVoucherTransactionsDialog v-model="voucherVisible" :payment="voucherTarget" />
     <PaymentCheckDialog v-model="checkVisible" :payment="checkTarget" @checked="onChecked" />
     <PaymentDetailDrawer v-model="paymentDetailVisible" :payment="selectedPayment" />
-    <OrderRegisterDetailDrawer v-model="detailVisible" :order-id="detailOrderId" />
+    <OrderRegisterDetailDrawer v-if="canReadOrders" v-model="detailVisible" :order-id="detailOrderId" />
   </div>
 </template>
 

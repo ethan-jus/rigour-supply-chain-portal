@@ -5,6 +5,7 @@ import { reactive } from 'vue'
 
 const mocks = vi.hoisted(() => ({
   routeQuery: {} as Record<string, string>,
+  can: vi.fn(() => true),
   getPayments: vi.fn(),
   getAuditStates: vi.fn().mockResolvedValue({}),
   getCategories: vi.fn().mockResolvedValue({ total: 0, items: [] }),
@@ -79,7 +80,7 @@ vi.mock('vue-router', async (importOriginal) => {
 })
 
 
-vi.mock('@/composables/useSupplyPermissions', () => ({ useSupplyPermissions: () => ({ can: () => true }) }))
+vi.mock('@/composables/useSupplyPermissions', () => ({ useSupplyPermissions: () => ({ can: mocks.can }) }))
 import PaymentRecordListView from '@/views/supply-chain/order/PaymentRecordListView.vue'
 function paymentPage() {
   return { total: 1, begin: 0, step: 20, coverage: null,
@@ -95,6 +96,16 @@ function mountPage() { return mount(PaymentRecordListView, { global: { plugins: 
   OrderRegisterDetailDrawer: true, PaymentDetailDrawer: true, PaymentCheckDialog: true,
 } } }) }
 describe('回款商品分摊', () => {
+  it('财务无订单查看权限时不挂载订单详情，避免隐藏组件请求订单字典导致403', async () => {
+    mocks.can.mockImplementation((permission?: string) => permission !== 'order:read')
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'OrderRegisterDetailDrawer' }).exists()).toBe(false)
+    expect(mocks.getPayments).toHaveBeenCalled()
+    wrapper.unmount()
+    mocks.can.mockReturnValue(true)
+  })
+
   it('回款归属缺失显示待确认，筛选按回款人传参，不冒用下单业务员', async () => {
     const page = paymentPage()
     Object.assign(page.items[0]!, { ownerEmployeeCode: 'ZHANG', ownerEmployeeName: '张三', paymentOwner: { status: 'PENDING', employeeCode: null } })
