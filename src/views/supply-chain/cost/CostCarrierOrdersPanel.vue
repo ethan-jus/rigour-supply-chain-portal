@@ -543,7 +543,8 @@ async function matched(sources: PickedLedgerSource[]) {
   if (employee) form.value.ownerEmployeeCode = employee.employeeCode
   p.transportPurposeCode = transportType.value
   p.carrierCode = 'HLL'
-  p.trackingNo = bill.orderNo
+  p.platformOrderNo = bill.orderNo
+  p.trackingNo = bill.raw['运单号'] || ''
   p.costMonth = form.value.costDate.slice(0, 7)
   p.feeItems[0]!.feeAmount = Number(total)
   p.feeItems[0]!.ourAmount = Number(total)

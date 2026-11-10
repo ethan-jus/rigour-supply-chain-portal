@@ -10,17 +10,29 @@
   >
     <div v-loading="loading" class="transport-content">
       <div v-if="detail" class="record-heading">
-        <strong>{{ detail.record.documentNo }}</strong
-        ><el-tag
-          :type="
-            detail.record.statusCode === 'CONFIRMED'
-              ? 'success'
-              : detail.record.statusCode === 'VOID'
-                ? 'info'
-                : 'warning'
-          "
-          >{{ statusName(detail.record.statusCode) }}</el-tag
-        >
+        <div>
+          <span class="heading-label">费用单号</span><strong>{{ detail.record.documentNo }}</strong
+          ><el-tag
+            :type="
+              detail.record.statusCode === 'CONFIRMED'
+                ? 'success'
+                : detail.record.statusCode === 'VOID'
+                  ? 'info'
+                  : 'warning'
+            "
+            >{{ statusName(detail.record.statusCode) }}</el-tag
+          >
+        </div>
+        <div v-if="readonly" class="heading-actions">
+          <TransportRecordActions
+            :record="detail.record"
+            detail
+            @edit="emit('edit', '')"
+            @action="(action) => emit('action', action)"
+          /><el-button v-if="platform && can('integration:huolala:sync')" @click="emit('sync')"
+            >同步此单</el-button
+          >
+        </div>
       </div>
       <el-alert v-if="error" :title="error" type="error" :closable="false" />
       <el-alert
@@ -90,8 +102,19 @@
           </div>
         </section>
         <section class="transport-section">
-          <div class="section-heading">
+          <div ref="ordersSection" class="section-heading">
             <h3>关联业务订单</h3>
+            <el-button
+              v-if="
+                readonly &&
+                detail?.record.statusCode === 'DRAFT' &&
+                can('order:logistics-cost:write')
+              "
+              link
+              type="primary"
+              @click="emit('edit', 'orders')"
+              >{{ selected.length ? '更改关联' : '关联订单' }}</el-button
+            >
             <el-button
               v-if="!readonly && !advanced"
               type="primary"
@@ -119,6 +142,14 @@
             ><el-table-column label="单据日期" width="125"
               ><template #default="{ row }">{{
                 row.documentDate || '-'
+              }}</template></el-table-column
+            ><el-table-column label="业务订单金额（元）" align="right" min-width="160"
+              ><template #default="{ row }">{{
+                money(row.documentAmount)
+              }}</template></el-table-column
+            ><el-table-column v-if="readonly" label="关联时间" min-width="180"
+              ><template #default="{ row }">{{
+                row.linkedAt ? displayRecordDateTime(row.linkedAt) : '-'
               }}</template></el-table-column
             ><el-table-column v-if="!readonly && !advanced" label="操作" width="80"
               ><template #default="{ row }"
@@ -327,12 +358,24 @@
             :value="order?.raw['司机联系电话']"
           /><Info label="车牌号" :value="order?.raw['车牌号']" />
         </div>
-        <h4>人员关联</h4>
+        <div class="section-heading">
+          <h4>人员关联</h4>
+          <el-button
+            v-if="can('integration:huolala:read')"
+            link
+            type="primary"
+            @click="emit('associate-employee')"
+            >{{ order?.facts?.mappedEmployeeCode ? '查看员工关联' : '关联员工' }}</el-button
+          >
+        </div>
         <div class="form-grid">
           <Info label="货拉拉下单员工" :value="order?.facts?.sourceEmployeeName" /><Info
             label="下单员工手机号"
             :value="order?.raw['下单员工手机号']"
           /><Info label="本系统关联员工" :value="mappedEmployee" /><Info
+            label="本系统所属部门"
+            :value="mappedDepartment"
+          /><Info
             label="员工关联状态"
             :value="order?.facts?.mappedEmployeeCode ? '已关联' : '未关联'"
           />
@@ -444,6 +487,8 @@ import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
 import CostLedgerSourcePicker, { type PickedLedgerSource } from './CostLedgerSourcePicker.vue'
 import CostCitySelect from './CostCitySelect.vue'
 import TransportPlatformBill from './TransportPlatformBill.vue'
+import TransportRecordActions from './TransportRecordActions.vue'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import CostLedgerEditor from './CostLedgerEditor.vue'
 import { totalFees } from './cost-ledger'
 import CostAttachmentEditor from './CostAttachmentEditor.vue'
@@ -453,9 +498,21 @@ import { costOptions, costLabel } from './cost-dictionaries'
 import { errorMessage } from '@/api/core/error'
 import { auditLabel } from './cost-audit'
 import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
-const props = defineProps<{ detail: TransportDetail | null; readonly: boolean }>()
+const props = defineProps<{
+  detail: TransportDetail | null
+  readonly: boolean
+  initialSection?: string
+}>()
+const { can } = useSupplyPermissions()
+const ordersSection = ref<HTMLElement>()
 const visible = defineModel<boolean>({ required: true })
-const emit = defineEmits<{ saved: [] }>()
+const emit = defineEmits<{
+  saved: []
+  edit: [section: string]
+  action: [action: 'confirm' | 'revoke' | 'void' | 'delete']
+  sync: []
+  'associate-employee': []
+}>()
 const detail = ref(props.detail),
   platform = computed(() => detail.value?.platform)
 const order = computed(() => (platform.value ? currentSource(platform.value.source) : null))
@@ -517,6 +574,11 @@ const mappedEmployee = computed(
       ?.employeeName ||
     order.value?.facts?.mappedEmployeeCode ||
     '-',
+)
+const mappedDepartment = computed(
+  () =>
+    employees.value.find((e) => e.employeeCode === order.value?.facts?.mappedEmployeeCode)
+      ?.departmentName || null,
 )
 const Info = defineComponent({
   props: {
@@ -633,6 +695,10 @@ onMounted(async () => {
     error.value = errorMessage(e, '运输记录加载失败')
   } finally {
     loading.value = false
+    if (props.initialSection === 'orders' && !props.readonly) {
+      ordersSection.value?.scrollIntoView?.({ block: 'start' })
+      picker.value = true
+    }
   }
 })
 async function save() {
@@ -701,6 +767,24 @@ async function save() {
 }
 </script>
 <style scoped>
+.heading-label {
+  display: block;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.record-heading > div:first-child {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+}
+.heading-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .transport-content {
   max-height: calc(88vh - 120px);
   overflow: auto;

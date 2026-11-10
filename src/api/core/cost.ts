@@ -57,6 +57,8 @@ export interface CostEmployee {
   cityName?: string | null
 }
 export interface CostSource {
+  documentAmount?: number | null
+  linkedAt?: string | null
   linkedLogisticsCount?: number | null
   referenceIssue?: string | null
   senderCityCode?: string | null

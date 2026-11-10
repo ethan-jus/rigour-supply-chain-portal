@@ -28,6 +28,9 @@ export interface LedgerAllocation {
   amount: number | null
 }
 export interface LedgerSource {
+  documentAmount?: number | null
+  documentDate?: string | null
+  linkedAt?: string | null
   employeeCode?: string | null
   employeeName?: string | null
   departmentId?: number | null
@@ -40,6 +43,7 @@ export interface LedgerSource {
   noSourceReason?: string
 }
 export interface LogisticsLedger {
+  platformOrderNo?: string | null
   schemaVersion: 2
   sourceSync?: {
     originBizKey: string

@@ -11,6 +11,8 @@ export interface PlatformVoucher {
 export interface Facts {
   connectorId: string
   sourceEmployeeName: string | null
+  sourceStaffId?: string | null
+  sourceDepartmentName?: string | null
   mappedEmployeeCode: string | null
   bonusAmount?: Amount
   receipts?: PlatformVoucher[]

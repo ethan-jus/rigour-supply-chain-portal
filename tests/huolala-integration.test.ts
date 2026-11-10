@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import View from '@/views/supply-chain/huolala/HuolalaIntegrationView.vue'
+import ConsoleTabPane from '@/components/console/ConsoleTabPane.vue'
 import type { HuolalaConnection } from '@/api/core/huolala'
 const api = vi.hoisted(() => ({
   connection: vi.fn(),
@@ -105,6 +107,14 @@ describe('货拉拉企业控制面', () => {
         departmentName: '销售部',
         employmentStatus: 'ACTIVE',
       },
+      {
+        id: 92,
+        employeeCode: 'EMP92',
+        employeeName: '李经理',
+        mobile: '13800000000',
+        departmentName: '运营部',
+        employmentStatus: 'ACTIVE',
+      },
     ])
     await open()
     await wrapper
@@ -116,6 +126,54 @@ describe('货拉拉企业控制面', () => {
     await flushPromises()
     expect(api.candidates).toHaveBeenCalled()
     expect(api.bind).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('关联或变更原因')
+    expect(wrapper.find('output[aria-label="本系统所属部门"]').text()).toBe('-')
+    await wrapper.get('input[type="radio"][value="91"]').setValue()
+    await flushPromises()
+    expect(wrapper.find('output[aria-label="本系统所属部门"]').text()).toBe('销售部')
+    expect(wrapper.text()).not.toContain('平台部门')
+    expect(wrapper.text()).not.toContain('更改关联原因')
+    api.bind.mockResolvedValue([])
+    await button('确认关联').trigger('click')
+    await flushPromises()
+    expect(api.bind).toHaveBeenCalledWith('1', 91, 0, '首次关联')
+  })
+  it('复用已打开页面时按入口切换到员工关联、同步记录或连接设置', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/huolala', component: View },
+        { path: '/logistics', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/huolala?tab=runs')
+    await router.isReady()
+    wrapper = mount(ConsoleTabPane, {
+      props: { active: true, route: router.currentRoute.value },
+      global: { plugins: [ElementPlus, router] },
+    })
+    await flushPromises()
+    const activeTab = () => wrapper.find('[role="tab"][aria-selected="true"]').text()
+    expect(activeTab()).toBe('同步记录')
+    await router.push('/huolala?tab=employees')
+    await wrapper.setProps({ route: router.currentRoute.value })
+    await flushPromises()
+    expect(activeTab()).toBe('员工关联')
+    await wrapper
+      .findAll('[role="tab"]')
+      .find((t) => t.text() === '同步记录')!
+      .trigger('click')
+    expect(activeTab()).toBe('同步记录')
+    await wrapper.setProps({ active: false })
+    await router.push('/logistics')
+    await router.push('/huolala?tab=employees')
+    await wrapper.setProps({ active: true, route: router.currentRoute.value })
+    await flushPromises()
+    expect(activeTab()).toBe('员工关联')
+    await router.push('/huolala?tab=connection')
+    await wrapper.setProps({ route: router.currentRoute.value })
+    await flushPromises()
+    expect(activeTab()).toBe('企业授权与同步设置')
+    expect(api.sync).not.toHaveBeenCalled()
+    expect(api.bind).not.toHaveBeenCalled()
   })
 })

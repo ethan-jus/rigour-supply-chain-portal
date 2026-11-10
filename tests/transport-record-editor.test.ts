@@ -6,6 +6,10 @@ import type { TransportDetail } from '@/api/core/transport-records'
 import type { CostSource } from '@/api/core/cost'
 import { createLedgerCommand } from '@/views/supply-chain/cost/cost-ledger'
 
+vi.mock('@/composables/useSupplyPermissions', () => ({
+  useSupplyPermissions: () => ({ can: () => true }),
+}))
+
 const api = vi.hoisted(() => ({ employees: vi.fn(), history: vi.fn(), sources: vi.fn() }))
 vi.mock('@/api/core/cost', () => ({
   getCostEmployees: api.employees,
@@ -166,6 +170,34 @@ describe('运输记录详情回填', () => {
     expect(document.body.textContent).not.toContain('选择业务订单后显示收货信息')
     expect(api.sources).not.toHaveBeenCalled()
     wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+  it.each([
+    ['DRAFT', ['编辑', '确认', '作废'], ['撤销', '删除']],
+    ['CONFIRMED', ['撤销'], ['编辑', '确认', '作废', '删除']],
+    ['VOID', ['删除'], ['编辑', '确认', '作废', '撤销']],
+  ])('详情 %s 只提供允许的操作并从详情进入订单关联', async (status, allowed, forbidden) => {
+    const d = detail()
+    d.record.statusCode = status as string
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const heading = document.body.querySelector('.record-heading')!
+    const labels = Array.from(heading.querySelectorAll('button')).map((b) => b.textContent!.trim())
+    for (const label of allowed as string[]) expect(labels).toContain(label)
+    for (const label of forbidden as string[]) expect(labels).not.toContain(label)
+    const link = Array.from(document.body.querySelectorAll('button')).find(
+      (b) => b.textContent!.trim() === '更改关联',
+    )
+    if (status === 'DRAFT') {
+      link!.click()
+      await flushPromises()
+      expect(w.emitted('edit')).toEqual([['orders']])
+    } else expect(link).toBeUndefined()
+    w.unmount()
     document.body.innerHTML = ''
   })
   it('资料未加载完时不能保存半加载的运输记录', async () => {

@@ -1,177 +1,175 @@
 <template>
   <div class="transport-page">
-    <OrderRegisterFilterCard
-      class="order-register-filter--compact"
-      :loading="loading"
-      @search="search"
-      @reset="reset"
-    >
-      <template #primary>
-        <div class="list-filter-field list-filter-field--text">
-          <el-input
-            v-model="filters.documentNo"
-            clearable
-            placeholder="费用单号"
-            aria-label="费用单号"
-          />
+    <section class="transport-filter-card">
+      <el-form label-position="top" @submit.prevent="search">
+        <div class="transport-filter-grid">
+          <el-form-item label="费用单号">
+            <el-input
+              v-model="filters.documentNo"
+              clearable
+              placeholder="输入费用单号"
+              aria-label="费用单号"
+            /> </el-form-item
+          ><el-form-item label="数据来源">
+            <el-select
+              v-model="filters.sourceSystem"
+              clearable
+              placeholder="全部"
+              aria-label="数据来源"
+              ><el-option label="货拉拉同步" value="HUOLALA" /><el-option
+                label="手动录入"
+                value="MANUAL_ENTRY"
+            /></el-select> </el-form-item
+          ><el-form-item label="运输类型">
+            <el-select v-model="filters.typeCode" clearable placeholder="全部" aria-label="运输类型"
+              ><el-option
+                v-for="t in transportTypes"
+                :key="t.value"
+                :label="t.label"
+                :value="t.value"
+            /></el-select> </el-form-item
+          ><el-form-item label="运输日期">
+            <el-date-picker
+              v-model="dates"
+              type="daterange"
+              start-placeholder="运输开始日期"
+              end-placeholder="结束日期"
+              range-separator="至"
+              value-format="YYYY-MM-DD"
+              aria-label="运输日期"
+            /> </el-form-item
+          ><el-form-item label="单据状态">
+            <el-select
+              v-model="filters.statusCode"
+              clearable
+              placeholder="全部"
+              aria-label="单据状态"
+              ><el-option label="待确认" value="DRAFT" /><el-option
+                label="已确认"
+                value="CONFIRMED" /><el-option label="已作废" value="VOID"
+            /></el-select> </el-form-item
+          ><el-form-item label="订单关联状态">
+            <el-select
+              v-model="filters.relationState"
+              clearable
+              placeholder="全部"
+              aria-label="订单关联状态"
+              ><el-option label="已关联" value="LINKED" /><el-option
+                label="未关联"
+                value="UNLINKED"
+            /></el-select>
+          </el-form-item>
         </div>
-        <div class="list-filter-field list-filter-field--select">
-          <el-select
-            v-model="filters.sourceSystem"
-            clearable
-            placeholder="数据来源"
-            aria-label="数据来源"
-            ><el-option label="货拉拉同步" value="HUOLALA" /><el-option
-              label="手动录入"
-              value="MANUAL_ENTRY"
-          /></el-select>
+        <div v-if="moreFilters" class="transport-filter-grid more-filters">
+          <el-form-item label="运单号">
+            <el-input
+              v-model="filters.trackingNo"
+              clearable
+              placeholder="运单号"
+              aria-label="运单号"
+            /> </el-form-item
+          ><el-form-item label="物流公司">
+            <el-select
+              v-model="filters.carrierCode"
+              clearable
+              placeholder="物流公司"
+              aria-label="物流公司"
+              ><el-option
+                v-for="o in costOptions('COST_CARRIER')"
+                :key="o.value"
+                :label="o.label"
+                :value="o.value"
+            /></el-select> </el-form-item
+          ><el-form-item label="业务订单号">
+            <el-input
+              v-model="filters.sourceDocumentNo"
+              clearable
+              placeholder="业务订单号"
+              aria-label="业务订单号"
+            /> </el-form-item
+          ><el-form-item label="业务员">
+            <el-input
+              v-model="filters.sourceEmployeeName"
+              clearable
+              placeholder="业务员"
+              aria-label="业务员"
+            /> </el-form-item
+          ><el-form-item label="部门">
+            <el-input
+              v-model="filters.sourceDepartmentName"
+              clearable
+              placeholder="部门"
+              aria-label="部门"
+            /> </el-form-item
+          ><el-form-item label="收货方">
+            <el-input
+              v-model="filters.receiverName"
+              clearable
+              placeholder="收货方"
+              aria-label="收货方"
+            /> </el-form-item
+          ><el-form-item label="货拉拉订单号">
+            <el-input
+              v-model="filters.platformOrderNo"
+              clearable
+              placeholder="货拉拉订单号"
+              aria-label="货拉拉订单号"
+            /> </el-form-item
+          ><el-form-item label="货拉拉下单员工">
+            <el-input
+              v-model="filters.platformEmployeeName"
+              clearable
+              placeholder="货拉拉下单员工"
+              aria-label="货拉拉下单员工"
+            /> </el-form-item
+          ><el-form-item label="员工关联状态">
+            <el-select
+              v-model="filters.employeeRelationState"
+              clearable
+              placeholder="员工关联状态"
+              aria-label="员工关联状态"
+              ><el-option label="已关联" value="LINKED" /><el-option
+                label="未关联"
+                value="UNLINKED"
+            /></el-select> </el-form-item
+          ><el-form-item label="本系统关联员工">
+            <el-select
+              v-model="filters.mappedEmployeeCode"
+              clearable
+              filterable
+              placeholder="本系统关联员工"
+              aria-label="本系统关联员工"
+              ><el-option
+                v-for="employee in importEmployees"
+                :key="employee.employeeCode"
+                :label="employee.employeeName"
+                :value="employee.employeeCode"
+            /></el-select> </el-form-item
+          ><el-form-item label="联系电话">
+            <el-input
+              v-model="filters.contactPhone"
+              clearable
+              placeholder="联系电话"
+              aria-label="联系电话"
+            />
+          </el-form-item>
         </div>
-        <div class="list-filter-field list-filter-field--select">
-          <el-select
-            v-model="filters.typeCode"
-            clearable
-            placeholder="运输类型"
-            aria-label="运输类型"
-            ><el-option
-              v-for="t in transportTypes"
-              :key="t.value"
-              :label="t.label"
-              :value="t.value"
-          /></el-select>
+        <div class="filter-toolbar">
+          <el-button
+            link
+            type="primary"
+            :aria-expanded="moreFilters"
+            @click="moreFilters = !moreFilters"
+            >{{ moreFilters ? '收起条件' : '更多条件'
+            }}<el-icon><ArrowDown :class="{ rotated: moreFilters }" /></el-icon
+          ></el-button>
+          <div>
+            <el-button @click="reset">重置</el-button
+            ><el-button type="primary" :loading="loading" @click="search">查询</el-button>
+          </div>
         </div>
-        <div class="list-filter-field list-filter-field--date-range">
-          <el-date-picker
-            v-model="dates"
-            type="daterange"
-            start-placeholder="运输开始日期"
-            end-placeholder="结束日期"
-            range-separator="至"
-            value-format="YYYY-MM-DD"
-            aria-label="运输日期"
-          />
-        </div>
-        <div class="list-filter-field list-filter-field--select">
-          <el-select
-            v-model="filters.statusCode"
-            clearable
-            placeholder="单据状态"
-            aria-label="单据状态"
-            ><el-option label="待确认" value="DRAFT" /><el-option
-              label="已确认"
-              value="CONFIRMED" /><el-option label="已作废" value="VOID"
-          /></el-select>
-        </div>
-        <div class="list-filter-field list-filter-field--select">
-          <el-select
-            v-model="filters.relationState"
-            clearable
-            placeholder="订单关联状态"
-            aria-label="订单关联状态"
-            ><el-option label="已关联" value="LINKED" /><el-option label="未关联" value="UNLINKED"
-          /></el-select>
-        </div>
-        <div class="list-filter-field list-filter-field--text">
-          <el-input
-            v-model="filters.trackingNo"
-            clearable
-            placeholder="运单号"
-            aria-label="运单号"
-          />
-        </div>
-        <div class="list-filter-field list-filter-field--select">
-          <el-select
-            v-model="filters.carrierCode"
-            clearable
-            placeholder="物流公司"
-            aria-label="物流公司"
-            ><el-option
-              v-for="o in costOptions('COST_CARRIER')"
-              :key="o.value"
-              :label="o.label"
-              :value="o.value"
-          /></el-select>
-        </div>
-        <div class="list-filter-field list-filter-field--text">
-          <el-input
-            v-model="filters.sourceDocumentNo"
-            clearable
-            placeholder="业务订单号"
-            aria-label="业务订单号"
-          />
-        </div>
-        <div class="list-filter-field list-filter-field--person">
-          <el-input
-            v-model="filters.sourceEmployeeName"
-            clearable
-            placeholder="业务员"
-            aria-label="业务员"
-          />
-        </div>
-        <div class="list-filter-field list-filter-field--select">
-          <el-input
-            v-model="filters.sourceDepartmentName"
-            clearable
-            placeholder="部门"
-            aria-label="部门"
-          />
-        </div>
-        <div class="list-filter-field list-filter-field--text">
-          <el-input
-            v-model="filters.receiverName"
-            clearable
-            placeholder="收货方"
-            aria-label="收货方"
-          />
-        </div>
-        <div class="list-filter-field list-filter-field--text">
-          <el-input
-            v-model="filters.platformOrderNo"
-            clearable
-            placeholder="货拉拉订单号"
-            aria-label="货拉拉订单号"
-          />
-        </div>
-        <div class="list-filter-field list-filter-field--person">
-          <el-input
-            v-model="filters.platformEmployeeName"
-            clearable
-            placeholder="货拉拉下单员工"
-            aria-label="货拉拉下单员工"
-          />
-        </div>
-        <div class="list-filter-field list-filter-field--select">
-          <el-select
-            v-model="filters.employeeRelationState"
-            clearable
-            placeholder="员工关联状态"
-            aria-label="员工关联状态"
-            ><el-option label="已关联" value="LINKED" /><el-option label="未关联" value="UNLINKED"
-          /></el-select>
-        </div>
-        <div class="list-filter-field list-filter-field--person">
-          <el-select
-            v-model="filters.mappedEmployeeCode"
-            clearable
-            filterable
-            placeholder="本系统关联员工"
-            aria-label="本系统关联员工"
-            ><el-option
-              v-for="employee in importEmployees"
-              :key="employee.employeeCode"
-              :label="employee.employeeName"
-              :value="employee.employeeCode"
-          /></el-select>
-        </div>
-        <div class="list-filter-field list-filter-field--text">
-          <el-input
-            v-model="filters.contactPhone"
-            clearable
-            placeholder="联系电话"
-            aria-label="联系电话"
-          />
-        </div>
-      </template>
-    </OrderRegisterFilterCard>
+      </el-form>
+    </section>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <section class="transport-list">
       <div class="list-heading">
@@ -179,7 +177,40 @@
           <strong>物流运输记录</strong><el-tag round type="info">{{ result.page.total }} 条</el-tag
           ><span v-if="selected.length" class="selection">已选 {{ selected.length }} 条</span>
         </div>
-        <div>
+        <div class="list-toolbar">
+          <el-button v-if="can('integration:huolala:read')" @click="connection('employees')"
+            >员工关联</el-button
+          ><el-button v-if="can('integration:huolala:read')" @click="connection('runs')"
+            >同步记录</el-button
+          ><TableColumnSettings
+            label="显示列"
+            :columns="columnOptions"
+            :visibility="visibility"
+            size="default"
+            @change="(k, v) => (visibility[k] = v)"
+            @reset="resetColumns"
+          /><el-button
+            v-if="can('order:logistics-cost:export')"
+            :disabled="loading || !result.page.total"
+            @click="openExport"
+            >自定义导出</el-button
+          ><el-dropdown
+            ><el-button
+              >其他操作<el-icon><ArrowDown /></el-icon></el-button
+            ><template #dropdown
+              ><el-dropdown-menu
+                ><el-dropdown-item
+                  v-if="can('integration:huolala:read')"
+                  @click="connection('connection')"
+                  >货拉拉连接</el-dropdown-item
+                ><el-dropdown-item
+                  v-if="can('order:logistics-cost:manage-imports')"
+                  @click="openImport()"
+                  >历史报表补录</el-dropdown-item
+                ></el-dropdown-menu
+              ></template
+            ></el-dropdown
+          >
           <el-button v-if="can('integration:huolala:sync')" @click="syncOpen = true"
             >同步货拉拉订单</el-button
           ><el-button v-if="can('order:logistics-cost:write')" type="primary" @click="create"
@@ -197,8 +228,8 @@
         empty-text="暂无运输记录"
         @selection-change="selectionChanged"
       >
-        <el-table-column type="selection" width="45" :reserve-selection="true" fixed="left" />
-        <el-table-column label="费用单号" min-width="265" fixed="left"
+        <el-table-column type="selection" width="40" :reserve-selection="true" fixed="left" />
+        <el-table-column label="费用单号" min-width="230" fixed="left"
           ><template #default="{ row }"
             ><el-button
               link
@@ -214,6 +245,7 @@
           :key="col.key"
           :label="col.label"
           :min-width="col.width"
+          :fixed="['amount', 'status', 'creator'].includes(col.key) ? 'right' : undefined"
           :align="col.numeric ? 'right' : 'left'"
           :show-overflow-tooltip="!['receivers', 'orders'].includes(col.key)"
         >
@@ -241,69 +273,16 @@
             }}</span></template
           >
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="225"
+        <el-table-column label="操作" fixed="right" width="140"
           ><template #default="{ row }"
-            ><div class="row-actions">
-              <el-button link type="primary" @click="view(row as CostRecord)">查看</el-button
-              ><template v-if="row.statusCode === 'DRAFT'"
-                ><el-button
-                  v-if="can('order:logistics-cost:write')"
-                  link
-                  type="primary"
-                  @click="edit(row as CostRecord)"
-                  >编辑</el-button
-                ><el-button
-                  v-if="can('order:logistics-cost:confirm')"
-                  link
-                  type="primary"
-                  @click="act(row as CostRecord, 'confirm')"
-                  >确认</el-button
-                ><el-button
-                  v-if="can('order:logistics-cost:void')"
-                  link
-                  type="danger"
-                  @click="act(row as CostRecord, 'void')"
-                  >作废</el-button
-                ></template
-              ><el-button
-                v-if="row.statusCode === 'CONFIRMED' && can('order:logistics-cost:confirm')"
-                link
-                type="primary"
-                @click="act(row as CostRecord, 'revoke')"
-                >撤销</el-button
-              ><el-button
-                v-if="row.statusCode === 'VOID' && can('order:logistics-cost:void')"
-                link
-                type="danger"
-                @click="act(row as CostRecord, 'delete')"
-                >删除</el-button
-              >
-            </div></template
-          ></el-table-column
-        >
+            ><TransportRecordActions
+              :record="row as CostRecord"
+              @view="view(row as CostRecord)"
+              @edit="edit(row as CostRecord)"
+              @action="(action) => act(row as CostRecord, action)" /></template
+        ></el-table-column>
       </el-table>
       <ListTableFooter
-        ><template #actions
-          ><el-button
-            v-if="can('order:logistics-cost:export')"
-            :disabled="loading || !result.page.total"
-            @click="openExport"
-            >自定义导出</el-button
-          ><TableColumnSettings
-            :columns="columnOptions"
-            :visibility="visibility"
-            size="default"
-            @change="(k, v) => (visibility[k] = v)"
-            @reset="resetColumns"
-          /><el-button v-if="can('integration:huolala:read')" @click="connection('employees')"
-            >员工关联</el-button
-          ><el-button v-if="can('integration:huolala:read')" @click="connection('runs')"
-            >同步记录</el-button
-          ><el-button v-if="can('integration:huolala:read')" @click="connection('connection')"
-            >货拉拉连接</el-button
-          ><el-button v-if="can('order:logistics-cost:manage-imports')" @click="openImport()"
-            >历史报表补录</el-button
-          ></template
         ><CompactPagination
           :current-page="page"
           :page-size="step"
@@ -319,6 +298,11 @@
       :detail="active"
       :readonly="readonly"
       @saved="load"
+      @edit="(section) => open(active!.record, false, section)"
+      @action="(action) => act(active!.record, action)"
+      @associate-employee="associateEmployee"
+      @sync="syncOne"
+      :initial-section="initialSection"
     />
     <CostExportDialog
       v-model="exportOpen"
@@ -367,7 +351,7 @@
 import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
-import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
+import { ArrowDown } from '@element-plus/icons-vue'
 import ListTableFooter from '@/components/supply/ListTableFooter.vue'
 import CompactPagination from '@/components/supply/CompactPagination.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
@@ -404,6 +388,7 @@ import { currentSource } from './huolala-source'
 import { costLabel, costOptions, loadCostDictionaries } from './cost-dictionaries'
 import CostExportDialog from './CostExportDialog.vue'
 import TransportRecordEditor from './TransportRecordEditor.vue'
+import TransportRecordActions from './TransportRecordActions.vue'
 import CostCarrierOrdersPanel from './CostCarrierOrdersPanel.vue'
 import { exportCostRows } from './cost-export'
 import { collectCostExportRows, selectedCostColumns } from './custom-cost-export'
@@ -420,21 +405,24 @@ const filters = ref<Partial<TransportQuery>>({}),
   step = ref(20),
   loading = ref(false),
   error = ref('')
+const moreFilters = ref(false)
 const table = ref<TableInstance>(),
   selected = ref<CostRecord[]>([])
 let applied: TransportQuery = { begin: 0, step: 20 },
   serial = 0
 const columns = [
-  { key: 'source', label: '数据来源', width: 115 },
-  { key: 'type', label: '运输类型', width: 135 },
-  { key: 'date', label: '运输日期', width: 120 },
-  { key: 'receivers', label: '收货方', width: 215 },
-  { key: 'platformNo', label: '货拉拉订单号', width: 220 },
-  { key: 'amount', label: '运输费用（元）', width: 155, numeric: true },
+  { key: 'source', label: '数据来源', width: 80 },
+  { key: 'type', label: '运输类型', width: 110 },
+  { key: 'date', label: '运输日期', width: 106 },
+  { key: 'receivers', label: '收货方', width: 150 },
+  { key: 'platformNo', label: '货拉拉订单号', width: 176 },
+  { key: 'amount', label: '运输费用（元）', width: 126, numeric: true },
   { key: 'carrier', label: '物流公司', width: 125, optional: true },
   { key: 'tracking', label: '运单号', width: 190, optional: true },
   { key: 'platformStatus', label: '货拉拉订单状态', width: 155, optional: true },
   { key: 'platformEmployee', label: '货拉拉下单员工', width: 150, optional: true },
+  { key: 'mappedEmployee', label: '本系统关联员工', width: 150, optional: true },
+  { key: 'employeeRelation', label: '员工关联状态', width: 130, optional: true },
   { key: 'orders', label: '已关联业务单号', width: 220, optional: true },
   { key: 'relation', label: '订单关联状态', width: 130, optional: true },
   { key: 'employee', label: '业务员', width: 130, optional: true },
@@ -443,8 +431,8 @@ const columns = [
   { key: 'unpaid', label: '未支付（元）', width: 145, numeric: true, optional: true },
   { key: 'refund', label: '退款（元）', width: 145, numeric: true, optional: true },
   { key: 'synced', label: '最近同步时间', width: 190, optional: true },
-  { key: 'status', label: '单据状态', width: 105 },
-  { key: 'creator', label: '创建人', width: 110 },
+  { key: 'status', label: '单据状态', width: 86 },
+  { key: 'creator', label: '创建人', width: 66 },
 ]
 const columnOptions = columns.map((c) => ({ ...c, locked: ['status', 'creator'].includes(c.key) }))
 const visibility = reactive<Record<string, boolean>>(
@@ -474,8 +462,7 @@ function value(r: CostRecord, key: string, sources = result.value.platformRecord
         r.data.logistics?.legCode,
     ),
     date: source?.useTime.slice(0, 10) || r.data.costDate,
-    platformNo:
-      source?.orderNo || (r.data.ledger?.carrierCode === 'HLL' ? r.data.ledger.trackingNo : '-'),
+    platformNo: source?.orderNo || r.data.ledger?.platformOrderNo || '-',
     amount: money(amountOf(r, platform)),
     status: statusName(r.statusCode),
     creator: platform ? '系统同步' : displayRecordActor(r.createdBy),
@@ -484,9 +471,15 @@ function value(r: CostRecord, key: string, sources = result.value.platformRecord
       : r.data.ledger?.carrierCode
         ? costLabel('COST_CARRIER', r.data.ledger.carrierCode)
         : r.data.logistics?.carrierName,
-    tracking: source?.orderNo || r.data.ledger?.trackingNo || r.data.logistics?.trackingNo,
+    tracking: source
+      ? source.raw['运单号']
+      : r.data.ledger?.trackingNo || r.data.logistics?.trackingNo,
     platformStatus: source?.status,
     platformEmployee: source?.facts?.sourceEmployeeName,
+    mappedEmployee:
+      importEmployees.value.find((e) => e.employeeCode === source?.facts?.mappedEmployeeCode)
+        ?.employeeName || source?.facts?.mappedEmployeeCode,
+    employeeRelation: source ? (source.facts?.mappedEmployeeCode ? '已关联' : '未关联') : '-',
     relation: ordersOf(r, platform).length ? '已关联' : '未关联',
     employee: [
       ...new Set((r.data.ledger?.sources ?? r.sources).map((s) => s.employeeName).filter(Boolean)),
@@ -560,14 +553,17 @@ function changeSize(n: number) {
 const editorOpen = ref(false),
   editorKey = ref(0),
   active = ref<TransportDetail | null>(null),
-  readonly = ref(true)
+  readonly = ref(true),
+  initialSection = ref('')
 function create() {
   active.value = null
+  initialSection.value = ''
   readonly.value = false
   editorKey.value++
   editorOpen.value = true
 }
-async function open(r: CostRecord, mode: boolean) {
+async function open(r: CostRecord, mode: boolean, section = '') {
+  initialSection.value = section
   try {
     active.value = await getTransport(r.id)
     readonly.value = mode
@@ -600,12 +596,35 @@ async function act(row: CostRecord, action: 'confirm' | 'revoke' | 'void' | 'del
     ElMessage.success(`已${label}`)
     table.value?.clearSelection()
     await load()
+    if (editorOpen.value && active.value?.record.id === row.id) {
+      if (action === 'delete') editorOpen.value = false
+      else await open(row, true)
+    }
   } catch (e) {
     if (e !== 'cancel' && e !== 'close') ElMessage.error(errorMessage(e, '操作失败'))
   }
 }
-function connection(tab: string) {
-  void router.push({ path: '/supply-chain/integration/huolala', query: { tab } })
+function connection(tab: string, staffId?: string) {
+  editorOpen.value = false
+  void router.push({
+    path: '/supply-chain/integration/huolala',
+    query: { tab, ...(staffId ? { staffId } : {}) },
+  })
+}
+function associateEmployee() {
+  connection(
+    'employees',
+    active.value?.platform
+      ? currentSource(active.value.platform.source).facts?.sourceStaffId || undefined
+      : undefined,
+  )
+}
+function syncOne() {
+  if (!active.value?.platform) return
+  const order = currentSource(active.value.platform.source)
+  syncNo.value = order.orderNo
+  syncDates.value = [order.useTime.slice(0, 10), order.useTime.slice(0, 10)]
+  syncOpen.value = true
 }
 const syncOpen = ref(false),
   syncDates = ref<string[]>([
@@ -732,7 +751,7 @@ onMounted(async () => {
     ElMessage.error(errorMessage(e, '字典加载失败'))
   }
   try {
-    importEmployees.value = await getCostEmployees('logistics')
+    importEmployees.value = (await getCostEmployees('logistics')) || []
   } catch {
     /* 人员目录不可用不阻塞已保存的运输记录。 */
   }
@@ -746,6 +765,50 @@ onBeforeUnmount(() => {
 })
 </script>
 <style scoped>
+.transport-filter-card {
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 20px;
+}
+.transport-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px 24px;
+}
+.transport-filter-grid :deep(.el-input),
+.transport-filter-grid :deep(.el-select),
+.transport-filter-grid :deep(.el-date-editor) {
+  width: 100%;
+}
+.more-filters {
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 18px;
+}
+.filter-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+}
+.rotated {
+  transform: rotate(180deg);
+}
+.list-toolbar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 1000px) {
+  .transport-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .transport-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .transport-page {
   display: flex;
   flex-direction: column;
@@ -806,6 +869,16 @@ onBeforeUnmount(() => {
 }
 .transport-page :deep(.el-table__cell) {
   padding: 13px 0;
+}
+.transport-list :deep(.el-table .cell) {
+  padding-inline: 10px;
+}
+.transport-list :deep(.el-table__header .cell) {
+  white-space: nowrap;
+}
+.transport-list :deep(.transport-actions) {
+  gap: 4px;
+  flex-wrap: nowrap;
 }
 @media (max-width: 750px) {
   .list-heading {

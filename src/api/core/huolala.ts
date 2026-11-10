@@ -27,6 +27,7 @@ export interface HuolalaEmployee {
   phone: string
   staffNo: string
   externalDepartmentId: string
+  externalDepartmentName?: string | null
   employeeCode: string | null
   employeeName: string | null
   departmentName: string | null
@@ -58,6 +59,12 @@ export interface HuolalaRun {
   startedAt: string | null
   finishedAt: string | null
   message: string | null
+  stages?: {
+    listSaved: number
+    detailSaved: number
+    detailPending: number
+    orderFailed: number
+  } | null
 }
 const base = '/integration/huolala',
   options = { stayOnUnauthorized: true }

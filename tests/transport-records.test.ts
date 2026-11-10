@@ -152,6 +152,18 @@ async function startExport() {
   await flushPromises()
 }
 describe('统一运输记录 V2.5', () => {
+  it('手工两个号码独立回填，平台没有运单号时不拿平台订单号补位', () => {
+    const r = record()
+    r.data.ledger = createLedgerCommand(true).ledger!
+    r.data.ledger.carrierCode = 'HLL'
+    r.data.ledger.trackingNo = 'WB-001'
+    r.data.ledger.platformOrderNo = '3624071813921329726'
+    expect(transportDraft(r).trackingNo).toBe('WB-001')
+    expect(transportDraft(r).platformOrderNo).toBe('3624071813921329726')
+    r.data.ledger.platformOrderNo = null
+    expect(transportDraft(r).platformOrderNo).toBe('')
+    expect(transportDraft(r, platform()).trackingNo).toBe('')
+  })
   it('最新运输费用与已确认成本分离，付款进度不重复计费，多收货方逐一展示', () => {
     const p = platform(),
       r = record()
@@ -211,6 +223,9 @@ describe('统一运输记录 V2.5', () => {
     const [, headers, rows] = api.workbook.mock.calls[0]!
     expect(headers.length).toBeGreaterThan(15)
     expect(headers).toContain('已确认运输成本（元）')
+    expect(headers).toContain('本系统关联员工')
+    expect(headers).toContain('员工关联状态')
+    expect(rows[0][headers.indexOf('运单号')]).toBe('-')
     expect(rows[0][headers.indexOf('运输费用（元）')]).toBe(142.64)
     expect(rows[0][headers.indexOf('已确认运输成本（元）')]).toBe(137.64)
     expect(rows[0][headers.indexOf('货拉拉订单号')]).toBe('3624071813921329726')

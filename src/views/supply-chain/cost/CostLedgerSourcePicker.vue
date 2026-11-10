@@ -2,6 +2,8 @@
   <el-dialog
     v-model="visible"
     title="选择关联单据"
+    class="cost-source-picker"
+    top="4vh"
     width="min(1320px, 94vw)"
     append-to-body
     destroy-on-close
@@ -57,7 +59,7 @@
       v-loading="loading"
       :data="rows"
       border
-      max-height="420"
+      max-height="min(420px, 40vh)"
       row-key="documentNo"
       empty-text="暂无符合条件且可引用的单据"
     >
@@ -71,7 +73,10 @@
         ><template #default="{ row }"
           ><el-checkbox
             :model-value="chosen.has(key(row as PickedLedgerSource))"
-            :disabled="existing.has(key(row as PickedLedgerSource)) || (!!row.referenceIssue && !allowIncomplete)"
+            :disabled="
+              existing.has(key(row as PickedLedgerSource)) ||
+              (!!row.referenceIssue && !allowIncomplete)
+            "
             :aria-label="`选择${row.documentNo}`"
             @change="(value) => toggle(row as PickedLedgerSource, !!value)" /></template
       ></el-table-column>
@@ -98,6 +103,9 @@
         label="部门"
         min-width="140"
       />
+      <el-table-column label="业务单金额（元）" min-width="155" align="right"
+        ><template #default="{ row }">{{ money(row.documentAmount) }}</template></el-table-column
+      >
       <el-table-column label="已关联物流" width="130">
         <template #default="{ row }">{{
           row.linkedLogisticsCount == null ? '-' : `${row.linkedLogisticsCount}笔`
@@ -152,6 +160,7 @@ import type { CostSource } from '@/api/core/cost'
 import { errorMessage } from '@/api/core/error'
 import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
 import { logisticsOrderTypes } from './cost-transport-types'
+import { money } from './transport-records'
 const visible = defineModel<boolean>({ required: true })
 const props = defineProps<{
   allowIncomplete?: boolean
@@ -188,7 +197,9 @@ const sourceWarehouse = ref<string | null>(null),
 const existing = computed(() => new Set(props.selectedKeys))
 const key = (row: PickedLedgerSource) => `${row.orderTypeCode}:${row.documentNo}`
 const selectable = computed(() =>
-  rows.value.filter((r) => !existing.value.has(key(r)) && (!r.referenceIssue || props.allowIncomplete)),
+  rows.value.filter(
+    (r) => !existing.value.has(key(r)) && (!r.referenceIssue || props.allowIncomplete),
+  ),
 )
 const allSelected = computed(
   () => !!selectable.value.length && selectable.value.every((r) => chosen.value.has(key(r))),
@@ -295,6 +306,20 @@ function recommendation(row: PickedLedgerSource) {
 }
 </script>
 <style scoped>
+:global(.cost-source-picker) {
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+:global(.cost-source-picker .el-dialog__body) {
+  min-height: 0;
+  overflow-y: auto;
+}
+:global(.cost-source-picker .el-dialog__header),
+:global(.cost-source-picker .el-dialog__footer) {
+  flex-shrink: 0;
+}
+
 .source-filters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

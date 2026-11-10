@@ -91,6 +91,9 @@ export function frozenTransportSources(row: CostRecord): CostSource[] {
         s.allocations.some((a) => a.receivingPointCode === p.pointCode),
       )
       return {
+        documentAmount: s.documentAmount,
+        documentDate: s.documentDate,
+        linkedAt: s.linkedAt,
         id: s.orderCode!,
         documentNo: s.orderCode!,
         sourceType: s.orderTypeCode,
@@ -143,8 +146,10 @@ export function transportDraft(
     date:
       order?.useTime.slice(0, 10) || row?.data.costDate || new Date().toLocaleDateString('sv-SE'),
     carrierCode: platform ? 'HLL' : (ledger?.carrierCode ?? null),
-    trackingNo: order?.orderNo || ledger?.trackingNo || row?.data.logistics?.trackingNo || '',
-    platformOrderNo: order?.orderNo || (ledger?.carrierCode === 'HLL' ? ledger.trackingNo : ''),
+    trackingNo: order
+      ? order.raw['运单号'] || ''
+      : ledger?.trackingNo || row?.data.logistics?.trackingNo || '',
+    platformOrderNo: order?.orderNo || ledger?.platformOrderNo || '',
     warehouseCode:
       saved?.warehouseCode ??
       (ledger?.sender.partyTypeCode === 'WAREHOUSE' ? ledger.sender.partyCode : null),

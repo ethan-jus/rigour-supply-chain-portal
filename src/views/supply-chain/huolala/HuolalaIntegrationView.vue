@@ -77,7 +77,7 @@
             ><el-descriptions-item label="最近成功同步">{{
               dateTime(connection.lastSuccessAt)
             }}</el-descriptions-item
-            ><el-descriptions-item label="令牌有效期">{{
+            ><el-descriptions-item label="连接有效期">{{
               dateTime(connection.expiresAt)
             }}</el-descriptions-item
             ><el-descriptions-item v-if="connection.lastError" label="需处理事项" :span="2">{{
@@ -129,7 +129,7 @@
                 >{{ row.employeeName || '-' }}
                 <div v-if="row.employeeCode" class="muted">{{ row.employeeCode }}</div></template
               ></el-table-column
-            ><el-table-column prop="departmentName" label="本系统部门" min-width="150"
+            ><el-table-column prop="departmentName" label="本系统所属部门" min-width="150"
               ><template #default="{ row }">{{
                 row.departmentName || '-'
               }}</template></el-table-column
@@ -185,6 +185,22 @@
                   >{{ runLabel(row.status) }}</el-tag
                 ></template
               ></el-table-column
+            ><el-table-column label="列表已保存" width="110"
+              ><template #default="{ row }">{{
+                row.stages?.listSaved ?? '-'
+              }}</template></el-table-column
+            ><el-table-column label="详情已保存" width="110"
+              ><template #default="{ row }">{{
+                row.stages?.detailSaved ?? '-'
+              }}</template></el-table-column
+            ><el-table-column label="详情待补" width="100"
+              ><template #default="{ row }">{{
+                row.stages?.detailPending ?? '-'
+              }}</template></el-table-column
+            ><el-table-column label="订单失败" width="100"
+              ><template #default="{ row }">{{
+                row.stages?.orderFailed ?? '-'
+              }}</template></el-table-column
             ><el-table-column prop="fetched" label="读取" width="80" /><el-table-column
               prop="accepted"
               label="新增／更新"
@@ -220,13 +236,18 @@
     <el-dialog
       v-model="bindingOpen"
       title="关联本系统员工"
-      width="min(700px,94vw)"
+      width="min(1000px,94vw)"
       :close-on-click-modal="false"
-      ><el-descriptions :column="2" border
+      ><el-descriptions :column="3" border
         ><el-descriptions-item label="货拉拉员工">{{ selectedEmployee?.name }}</el-descriptions-item
         ><el-descriptions-item label="手机号">{{
           selectedEmployee?.phone || '-'
-        }}</el-descriptions-item></el-descriptions
+        }}</el-descriptions-item
+        ><el-descriptions-item label="本系统所属部门"
+          ><output aria-label="本系统所属部门">{{
+            selectedInternalDepartment
+          }}</output></el-descriptions-item
+        ></el-descriptions
       ><el-form label-position="top" class="binding-form"
         ><el-form-item label="查找本系统员工"
           ><div class="candidate-search">
@@ -236,14 +257,38 @@
               @keyup.enter="findCandidates"
             /><el-button :loading="candidateLoading" @click="findCandidates">查找</el-button>
           </div></el-form-item
-        ><el-form-item label="本系统员工" required
-          ><el-select v-model="selectedInternalId" filterable placeholder="选择核对后的员工"
-            ><el-option
-              v-for="e in candidates"
-              :key="e.id"
-              :value="e.id"
-              :label="`${e.employeeName} · ${e.departmentName || '未维护部门'} · ${e.employeeCode}`" /></el-select></el-form-item
-        ><el-form-item label="关联或变更原因" required
+        ><el-form-item label="本系统员工" required>
+          <el-table
+            :data="candidates"
+            v-loading="candidateLoading"
+            border
+            max-height="300"
+            empty-text="暂无匹配员工，请调整姓名、手机号或员工编号"
+          >
+            <el-table-column label="选择" width="60"
+              ><template #default="{ row }"
+                ><el-radio
+                  v-model="selectedInternalId"
+                  :value="row.id"
+                  :disabled="['LEFT', 'RESIGNED', 'INACTIVE'].includes(row.employmentStatus)"
+                  :aria-label="`选择员工${row.employeeName}（${row.employeeCode}）`"
+                  ><span /></el-radio></template
+            ></el-table-column>
+            <el-table-column prop="employeeName" label="姓名" min-width="100" />
+            <el-table-column prop="employeeCode" label="员工编号" min-width="130" />
+            <el-table-column prop="mobile" label="手机号" min-width="135" />
+            <el-table-column label="本系统所属部门" min-width="150"
+              ><template #default="{ row }">{{
+                row.departmentName || '-'
+              }}</template></el-table-column
+            >
+            <el-table-column label="在职状态" min-width="100"
+              ><template #default="{ row }">{{
+                employeeStatusLabel(row.employmentStatus)
+              }}</template></el-table-column
+            >
+          </el-table></el-form-item
+        ><el-form-item v-if="selectedEmployee?.employeeCode" label="更改关联原因" required
           ><el-input
             v-model="bindingReason"
             type="textarea"
@@ -324,8 +369,8 @@
   </div>
 </template>
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
   huolalaApi,
@@ -347,19 +392,31 @@ const connection = ref<HuolalaConnection | null>(null),
   employees = ref<HuolalaEmployee[]>([]),
   runs = ref<HuolalaRun[]>([])
 function resetEmployeeFilters() {
+  entryStaffId.value = ''
   employeeName.value = ''
   employeePhone.value = ''
   employeeState.value = ''
 }
-const tab = ref(
-    ['employees', 'runs'].includes(String(useRoute()?.query?.tab))
-      ? String(useRoute()?.query?.tab)
-      : 'connection',
-  ),
+const route = useRoute(),
+  router = useRouter()
+const tabFrom = (value: unknown) =>
+  ['employees', 'runs'].includes(String(value)) ? String(value) : 'connection'
+const entryStaffId = ref('')
+const tab = ref(tabFrom(route?.query?.tab)),
   loading = ref(false),
   saving = ref(false),
   error = ref(''),
   formRef = ref<FormInstance>()
+function followEntry() {
+  const current = router?.currentRoute.value
+  // 工作区给缓存页注入私有路由快照；只在进入当前页面时读取新的入口参数。
+  if (current && current.path === route?.path) {
+    tab.value = tabFrom(current.query.tab)
+    entryStaffId.value = typeof current.query.staffId === 'string' ? current.query.staffId : ''
+  }
+}
+watch(() => router?.currentRoute.value.fullPath, followEntry, { immediate: true, flush: 'post' })
+onActivated(followEntry)
 const settings = reactive<HuolalaSettings>({
   enabled: false,
   intervalMinutes: 15,
@@ -382,6 +439,7 @@ const employeeName = ref(''),
 const filteredEmployees = computed(() =>
   employees.value.filter(
     (e) =>
+      (!entryStaffId.value || e.staffId === entryStaffId.value) &&
       (!employeeName.value || e.name.includes(employeeName.value.trim())) &&
       (!employeePhone.value || e.phone.includes(employeePhone.value.trim())) &&
       (!employeeState.value || e.state === employeeState.value),
@@ -395,6 +453,19 @@ const bindingOpen = ref(false),
   selectedInternalId = ref<number>(),
   bindingReason = ref(''),
   bindingError = ref('')
+const employeeStatusLabel = (status: string | null) =>
+  status === 'ACTIVE'
+    ? '在职'
+    : ['LEFT', 'RESIGNED'].includes(status || '')
+      ? '离职'
+      : status === 'INACTIVE'
+        ? '停用'
+        : status
+          ? '待核对'
+          : '-'
+const selectedInternalDepartment = computed(
+  () => candidates.value.find((e) => e.id === selectedInternalId.value)?.departmentName || '-',
+)
 const syncOpen = ref(false),
   syncScope = ref('ALL'),
   syncRange = ref<[string, string]>([firstDay, localDay()]),
