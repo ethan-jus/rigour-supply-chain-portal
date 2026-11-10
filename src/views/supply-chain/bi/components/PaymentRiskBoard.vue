@@ -136,6 +136,15 @@
         </button>
         <button
           type="button"
+          class="outline"
+          :disabled="loading || !!error || !orders.length || exporting"
+          title="导出当前查询及下钻的全部订单"
+          @click="exportDetails"
+        >
+          {{ exporting ? '导出中…' : '导出明细' }}
+        </button>
+        <button
+          type="button"
           class="outline icon-button"
           :disabled="loading"
           aria-label="刷新数据"
@@ -165,6 +174,7 @@
     </div>
     <p v-if="fullscreenError" role="alert" class="error">{{ fullscreenError }}</p>
     <p v-if="rangeError" role="alert" class="error">{{ rangeError }}</p>
+    <p v-if="exportError" role="alert" class="error">{{ exportError }}</p>
     <div class="selection-line">
       <span v-if="demo" class="demo-label">演示数据</span>
       <span>订单月份 {{ initialRange[0] }} — {{ initialRange[1] }} · 账龄截至 {{ asOf }}</span>
@@ -508,6 +518,8 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import type { EChartsCoreOption } from 'echarts/core'
 import type { PaymentRiskData } from '@/api/core/payment-risk'
+import { downloadBlob } from '@/utils/file-download'
+import { buildPaymentRiskExcel } from '../payment-risk-export'
 import {
   emptyRiskFilters,
   groupRiskOrders,
@@ -586,6 +598,8 @@ const productMode = ref(false)
 const detailsOpen = ref(false)
 const detailSection = ref<HTMLElement | null>(null)
 const page = ref(1)
+const exporting = ref(false)
+const exportError = ref('')
 const orders = computed(() => (props.data ? selectRiskOrders(props.data, filters.value) : []))
 const total = computed(() => orderAmount(orders.value))
 const risks = computed(() => riskGroups(orders.value))
@@ -642,10 +656,11 @@ const matrix = computed(() =>
 const hasFilters = computed(() =>
   Object.values(filters.value).some((v) => (Array.isArray(v) ? v.length : v)),
 )
+const sortedOrders = computed(() =>
+  [...orders.value].sort((a, b) => b.ageDays - a.ageDays || b.orderAmount - a.orderAmount),
+)
 const pagedOrders = computed(() =>
-  [...orders.value]
-    .sort((a, b) => b.ageDays - a.ageDays || b.orderAmount - a.orderAmount)
-    .slice((page.value - 1) * 20, page.value * 20),
+  sortedOrders.value.slice((page.value - 1) * 20, page.value * 20),
 )
 const dateText = (value?: string | null) =>
   value
@@ -866,6 +881,42 @@ async function showDetails() {
   detailsOpen.value = true
   await nextTick()
   detailSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+async function exportDetails() {
+  if (props.loading || props.error || !orders.value.length || exporting.value) return
+  exporting.value = true
+  exportError.value = ''
+  const selected = filters.value
+  const label = (value: string, options: { key: string; name: string }[]) =>
+    value ? options.find((option) => option.key === value)?.name || '待确认' : '全部（当前查询范围）'
+  try {
+    const result = await buildPaymentRiskExcel({
+      orders: sortedOrders.value,
+      range: [...props.initialRange],
+      scope: [
+        ['城市', label(selected.region, cities.value)],
+        ['业务员', label(selected.owner, people.value)],
+        ['产品分类', selected.categories.length
+          ? selected.categories.map((id) => props.data?.categories.find((c) => c.id === id)?.name || '分类待确认').join('、')
+          : '全部（当前查询范围）'],
+        ['风险等级', label(selected.risk, riskLevels)],
+        ['下钻订单月份', selected.month || '全部'],
+        ['下钻产品', selected.product
+          ? orders.value[0]?.products[0]?.productName || '产品待确认'
+          : '全部'],
+      ],
+      asOf: asOf.value,
+      updated: updated.value,
+      demo: props.demo,
+    })
+    downloadBlob(new Blob([result.bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }), result.filename)
+  } catch (cause) {
+    exportError.value = cause instanceof Error ? cause.message : '导出失败，请重试'
+  } finally {
+    exporting.value = false
+  }
 }
 function yuan(value: number) {
   return value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
