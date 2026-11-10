@@ -1,6 +1,6 @@
 <template>
   <section>
-    <h3>附件</h3>
+    <h3>{{ title || '附件' }}</h3>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <p v-if="editable && row.statusCode === 'DRAFT'">
       可选：PNG、JPEG、PDF，每个不超过 10 MB，最多 20 个。上传后保留上传人和时间。
@@ -52,7 +52,12 @@ import {
 import { errorMessage } from '@/api/core/error'
 import { displayRecordActor as auditActorLabel } from '@/utils/business-display'
 import { displayRecordDateTime as displayDateTime } from '@/utils/business-display'
-const props = defineProps<{ category: CostCategory; row: CostRecord; editable: boolean }>()
+const props = defineProps<{
+  category: CostCategory
+  row: CostRecord
+  editable: boolean
+  title?: string
+}>()
 const emit = defineEmits<{ changed: [] }>()
 const files = ref<CostAttachment[]>([]),
   loading = ref(false),

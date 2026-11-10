@@ -71,7 +71,7 @@
         ><template #default="{ row }"
           ><el-checkbox
             :model-value="chosen.has(key(row as PickedLedgerSource))"
-            :disabled="existing.has(key(row as PickedLedgerSource)) || !!row.referenceIssue"
+            :disabled="existing.has(key(row as PickedLedgerSource)) || (!!row.referenceIssue && !allowIncomplete)"
             :aria-label="`选择${row.documentNo}`"
             @change="(value) => toggle(row as PickedLedgerSource, !!value)" /></template
       ></el-table-column>
@@ -154,6 +154,7 @@ import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
 import { logisticsOrderTypes } from './cost-transport-types'
 const visible = defineModel<boolean>({ required: true })
 const props = defineProps<{
+  allowIncomplete?: boolean
   selectedKeys: string[]
   orderTypeCode?: string
   suggestedDate?: string
@@ -187,7 +188,7 @@ const sourceWarehouse = ref<string | null>(null),
 const existing = computed(() => new Set(props.selectedKeys))
 const key = (row: PickedLedgerSource) => `${row.orderTypeCode}:${row.documentNo}`
 const selectable = computed(() =>
-  rows.value.filter((r) => !existing.value.has(key(r)) && !r.referenceIssue),
+  rows.value.filter((r) => !existing.value.has(key(r)) && (!r.referenceIssue || props.allowIncomplete)),
 )
 const allSelected = computed(
   () => !!selectable.value.length && selectable.value.every((r) => chosen.value.has(key(r))),
@@ -233,7 +234,7 @@ function page(direction: number) {
   void load()
 }
 function toggle(row: PickedLedgerSource, value: boolean) {
-  if (existing.value.has(key(row)) || row.referenceIssue) return
+  if (existing.value.has(key(row)) || (row.referenceIssue && !props.allowIncomplete)) return
   if (value) chosen.value.set(key(row), row)
   else chosen.value.delete(key(row))
 }

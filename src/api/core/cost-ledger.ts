@@ -37,10 +37,10 @@ export interface LedgerSourceQuery {
   dateTo?: string
   begin: number
 }
-export const getLedgerSources = (query: LedgerSourceQuery) =>
+export const getLedgerSources = (query: LedgerSourceQuery, exact = false) =>
   apiClient.get<CostSource[]>('/orders/logistics-costs/ledger/sources', {
     ...options,
-    params: { ...query, exact: false, historical: false },
+    params: { ...query, exact, historical: false },
   })
 export const getLedgerExport = (logistics: boolean, query: CostQuery) =>
   apiClient.get<CostPage>(

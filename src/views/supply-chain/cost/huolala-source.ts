@@ -1,9 +1,22 @@
 import type { LalamoveOrder } from './lalamove-import'
 export type Amount = string | number | null
+export interface PlatformVoucher {
+  id: string
+  name: string
+  fileKey?: string | null
+  contentType?: string | null
+  state: string
+  savedAt?: string | null
+}
 export interface Facts {
   connectorId: string
   sourceEmployeeName: string | null
   mappedEmployeeCode: string | null
+  bonusAmount?: Amount
+  receipts?: PlatformVoucher[]
+  billVouchers?: PlatformVoucher[]
+  completeTime?: string | null
+  billUpdatedTime?: string | null
   billAmount: Amount
   unpaidAmount: Amount
   refundAmount: Amount
@@ -11,7 +24,13 @@ export interface Facts {
   billState: string
   issue: string | null
   stops: { name: string; address: string; contactName: string; contactPhone: string }[]
-  fees: { name: string; amount: Amount }[]
+  fees: {
+    code?: string
+    name: string
+    amount: Amount
+    lineId?: string
+    vouchers?: PlatformVoucher[]
+  }[]
 }
 export type SourceOrder = Omit<LalamoveOrder, 'paidAmount'> & {
   paidAmount: Amount
@@ -26,6 +45,7 @@ export interface ImportRow {
   order: SourceOrder
   latestOrder?: SourceOrder | null
   sourceChannel?: string
+  lastSyncedAt?: string | null
   sourceDifference?: boolean
   verification?: { amount: Amount; reason: string; actor?: string; verifiedAt?: string } | null
 }

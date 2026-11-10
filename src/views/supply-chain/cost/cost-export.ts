@@ -3,6 +3,11 @@ import type { CellValue, Workbook } from 'exceljs'
 
 type ExportValue = string | number | null | undefined
 const moneyHeaders = new Set([
+  '运输费用（元）',
+  '已确认运输成本（元）',
+  '已支付（元）',
+  '未支付（元）',
+  '退款（元）',
   '金额',
   '单据金额（元）',
   '金额（元）',

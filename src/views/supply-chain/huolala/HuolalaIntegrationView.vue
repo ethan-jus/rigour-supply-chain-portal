@@ -324,6 +324,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
@@ -350,7 +351,11 @@ function resetEmployeeFilters() {
   employeePhone.value = ''
   employeeState.value = ''
 }
-const tab = ref('connection'),
+const tab = ref(
+    ['employees', 'runs'].includes(String(useRoute()?.query?.tab))
+      ? String(useRoute()?.query?.tab)
+      : 'connection',
+  ),
   loading = ref(false),
   saving = ref(false),
   error = ref(''),

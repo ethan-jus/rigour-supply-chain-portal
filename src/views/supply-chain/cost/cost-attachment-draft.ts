@@ -119,6 +119,46 @@ function formSignature(command: CostCommand) {
   return stable(data)
 }
 
+/** 共用附件变更流程；重试只处理未完成项，每项成功后更新乐观锁。 */
+export async function saveCostAttachmentChanges(
+  category: CostCategory,
+  record: CostRecord,
+  attachments: CostAttachmentDraft[],
+  saved: (row: CostRecord) => void,
+): Promise<CostRecord> {
+  for (const item of attachments.filter((file) => file.status !== 'uploaded')) {
+    item.status = 'uploading'
+    item.error = ''
+    try {
+      if (item.removing && item.replaces)
+        await removeCostAttachment(category, record, item.replaces.id)
+      else
+        item.attachment = item.replaces
+          ? await replaceCostAttachment(category, record, item.replaces.id, item.file)
+          : await uploadCostAttachment(category, record, item.file)
+      item.status = 'uploaded'
+    } catch (error) {
+      item.status = 'failed'
+      item.error = errorMessage(error, '上传失败，请重试')
+      throw new Error('费用已保存，附件未全部上传成功，请重试未成功的附件')
+    }
+    let current: CostRecord
+    try {
+      current = await getCost(category, record.id)
+    } catch {
+      throw new Error('附件已上传，费用信息刷新失败，请重试核对')
+    }
+    if (
+      current.statusCode !== 'DRAFT' ||
+      formSignature(current.data) !== formSignature(record.data)
+    )
+      throw new Error('费用已被其他操作修改，请重新打开费用核对')
+    record = current
+    saved(current)
+  }
+  return record
+}
+
 /** 保存结果不确定或附件部分失败时沿用本次单据，不重新创建费用。 */
 export class CostAttachmentSaveSession {
   savedRecord: CostRecord | null = null
@@ -149,37 +189,16 @@ export class CostAttachmentSaveSession {
       this.savedSignature = signature
       saved(this.savedRecord)
     }
-    for (const item of attachments.filter((file) => file.status !== 'uploaded')) {
-      item.status = 'uploading'
-      item.error = ''
-      try {
-        if (item.removing && item.replaces)
-          await removeCostAttachment(category, this.savedRecord, item.replaces.id)
-        else
-          item.attachment = item.replaces
-            ? await replaceCostAttachment(category, this.savedRecord, item.replaces.id, item.file)
-            : await uploadCostAttachment(category, this.savedRecord, item.file)
-        item.status = 'uploaded'
-      } catch (error) {
-        item.status = 'failed'
-        item.error = errorMessage(error, '上传失败，请重试')
-        throw new Error('费用已保存，附件未全部上传成功，请重试未成功的附件')
-      }
-      let current: CostRecord
-      try {
-        current = await getCost(category, this.savedRecord.id)
-      } catch {
-        throw new Error('附件已上传，费用信息刷新失败，请重试核对')
-      }
-      if (
-        current.statusCode !== 'DRAFT' ||
-        formSignature(current.data) !== formSignature(this.savedRecord.data)
-      )
-        throw new Error('费用已被其他操作修改，请重新打开费用核对')
-      this.savedRecord = current
-      command.revision = current.revision
-      saved(current)
-    }
+    this.savedRecord = await saveCostAttachmentChanges(
+      category,
+      this.savedRecord,
+      attachments,
+      (row) => {
+        this.savedRecord = row
+        command.revision = row.revision
+        saved(row)
+      },
+    )
     return this.savedRecord
   }
 }
