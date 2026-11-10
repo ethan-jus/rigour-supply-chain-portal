@@ -308,7 +308,7 @@
           <el-table-column type="index" label="序号" width="52" fixed="left" :index="tableRowIndex" />
           <el-table-column label="订单号" width="160" fixed="left">
             <template #default="{ row }">
-              <el-link type="primary" underline="never" @click.stop="openDetail(row)">
+              <el-link type="primary" underline="never" :disabled="!canReadOrders" @click.stop="openDetail(row)">
                 <span class="order-no-cell">{{ row.orderNo || '-' }}</span>
               </el-link>
             </template>
@@ -554,7 +554,7 @@ import {
   type OrderRegisterPaymentPage,
 } from '@/api/core/order-register'
 import { useOrderRegisterCommonFilters } from '@/composables/useOrderRegisterQuery'
-import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
+import { usePaymentFilterOptions } from '@/composables/usePaymentFilterOptions'
 import { useOrderProductFilters } from '@/composables/useOrderProductFilters'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
@@ -595,10 +595,11 @@ const {
   areaTreeProps,
   departmentTreeProps,
   loadOptions,
+  productSources,
   searchEmployees,
   areaLabel,
   employeeLabel,
-} = useOrderRegisterOptions()
+} = usePaymentFilterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
   categoryIds: [] as string[],
@@ -616,7 +617,7 @@ const {
   productOptions, productSearching, productLoadFailed, variantGroups, variantLoading, variantLoadFailed,
   loadCategoryOptions, resolveProductIds, searchProductOptions, loadVariants,
   onCategoryChange, onCategoryVisibleChange,
-} = useOrderProductFilters(pageFilters)
+} = useOrderProductFilters(pageFilters, productSources)
 const allocationActive = ref(false)
 const loadFailed = ref(false)
 let paymentRequest = 0
@@ -661,6 +662,7 @@ const paymentDetailVisible = ref(false)
 const selectedPayment = ref<OrderRegisterPaymentItem | null>(null)
 
 const { can } = useSupplyPermissions()
+const canReadOrders = computed(() => can('order:read'))
 const canCheckPayments = computed(() => can('order:payment:check'))
 const checkVisible = ref(false)
 const checkTarget = ref<OrderRegisterPaymentItem | null>(null)
@@ -786,6 +788,7 @@ function changeSort({ prop, order }: { prop: string | null; order: string | null
 }
 
 function openDetail(row: { orderId?: string }) {
+  if (!canReadOrders.value) return
   detailOrderId.value = row.orderId ?? null
   detailVisible.value = true
 }

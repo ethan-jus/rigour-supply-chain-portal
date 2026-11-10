@@ -38,8 +38,9 @@ vi.mock('@/api/core/erp-product', () => ({
 vi.mock('@/api/core/erp-internal', () => ({
   getErpProductCategories: mocks.getCategories,
 }))
-vi.mock('@/composables/useOrderRegisterOptions', () => ({
-  useOrderRegisterOptions: () => ({
+vi.mock('@/composables/usePaymentFilterOptions', () => ({
+  usePaymentFilterOptions: () => ({
+    productSources: { categories: mocks.getCategories, products: mocks.getProducts },
     areaTree: [],
     departmentOptionsTree: [],
     employeeOptions: [],
