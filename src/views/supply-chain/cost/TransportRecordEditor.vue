@@ -64,7 +64,9 @@
             <el-form-item label="物流公司" :required="!readonly && !platform"
               ><span v-if="platform">货拉拉</span
               ><span v-else-if="readonly">{{
-                costLabel('COST_CARRIER', form.carrierCode) || '-'
+                form.carrierCode
+                  ? costLabel('COST_CARRIER', form.carrierCode)
+                  : detail?.record.data.logistics?.carrierName || '-'
               }}</span
               ><el-select v-else v-model="form.carrierCode" placeholder="请选择物流公司"
                 ><el-option
@@ -206,7 +208,7 @@
             </div>
           </div>
           <p v-if="!receivers.length" class="empty-text">
-            {{ platform ? '暂无收货信息' : '选择业务订单后显示收货信息' }}
+            {{ platform || readonly ? '暂无收货信息' : '选择业务订单后显示收货信息' }}
           </p>
         </section>
         <section class="transport-section">
@@ -436,6 +438,7 @@ import {
   statusName,
   allocationPreview,
   frozenTransportSources,
+  frozenTransportReceivers,
 } from './transport-records'
 import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
 import CostLedgerSourcePicker, { type PickedLedgerSource } from './CostLedgerSourcePicker.vue'
@@ -493,13 +496,8 @@ const platformSenders = computed(() => order.value?.facts?.stops.slice(0, 1) || 
 const receivers = computed(() =>
   platform.value
     ? order.value?.facts?.stops.slice(1) || []
-    : props.readonly && detail.value?.record.data.ledger
-      ? detail.value.record.data.ledger.receivingPoints.map((p) => ({
-          name: p.displayName || p.manualName,
-          contactName: p.contactName,
-          contactPhone: p.phone,
-          address: p.address,
-        }))
+    : props.readonly && detail.value
+      ? frozenTransportReceivers(detail.value.record)
       : selected.value.map((s) => ({
           name: s.receiverName,
           contactName: s.contactName,

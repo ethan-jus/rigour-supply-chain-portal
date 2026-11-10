@@ -132,10 +132,42 @@ describe('运输记录详情回填', () => {
       expect(document.body.textContent).toContain('确认时的业务员')
       expect(document.body.textContent).toContain('确认时的部门')
       expect(document.body.textContent).not.toContain('后续修改的门店')
+      const receiverSection = Array.from(document.body.querySelectorAll('.transport-section')).find(
+        (s) => s.querySelector('h3')?.textContent === '收货信息',
+      )
+      expect(receiverSection?.textContent).toContain('原收货人')
+      expect(receiverSection?.textContent).toContain('13900000001')
+      expect(receiverSection?.textContent).toContain('原收货地址')
       wrapper.unmount()
       document.body.innerHTML = ''
     },
   )
+  it('历史未关联原单仍显示已保存的收货方、地址和物流公司，不提示查看者选单', async () => {
+    const d = detail()
+    d.record.sources = []
+    d.record.data.logistics = {
+      ...createLedgerCommand(true).logistics!,
+      receiverName: '历史收货仓',
+      destinationAddress: '历史收货地址',
+      carrierName: '历史承运公司',
+    }
+    const wrapper = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const receiverSection = Array.from(document.body.querySelectorAll('.transport-section')).find(
+      (s) => s.querySelector('h3')?.textContent === '收货信息',
+    )
+    expect(receiverSection?.textContent).toContain('历史收货仓')
+    expect(receiverSection?.textContent).toContain('历史收货地址')
+    expect(document.body.textContent).toContain('历史承运公司')
+    expect(document.body.textContent).not.toContain('选择业务订单后显示收货信息')
+    expect(api.sources).not.toHaveBeenCalled()
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
   it('资料未加载完时不能保存半加载的运输记录', async () => {
     api.employees.mockReturnValue(new Promise(() => {}))
     const d = detail()

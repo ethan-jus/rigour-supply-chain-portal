@@ -28,6 +28,42 @@ export const ordersOf = (row: CostRecord, platform?: PlatformTransport | null) =
   platform?.draft?.orderCodes ??
   row.data.ledger?.sources.map((s) => s.orderCode).filter((s): s is string => !!s) ??
   row.sources.map((s) => s.documentNo)
+/** 历史记录可能只有原运输信息，详情仍展示已保存的收货方及地址。 */
+export function frozenTransportReceivers(row: CostRecord) {
+  const points = row.data.ledger?.receivingPoints || []
+  if (points.length)
+    return points.map((p) => ({
+      name: p.displayName || p.manualName,
+      contactName: p.contactName,
+      contactPhone: p.phone,
+      address: p.address,
+    }))
+  if (row.sources.length)
+    return row.sources.map((s) => ({
+      name: s.receiverName,
+      contactName: s.contactName,
+      contactPhone: s.contactPhone,
+      address: s.destinationAddress,
+    }))
+  const legacy = row.data.logistics
+  if (legacy?.deliveryStops?.length)
+    return legacy.deliveryStops.map((s) => ({
+      name: s.customerName,
+      address: s.address,
+      contactName: null,
+      contactPhone: null,
+    }))
+  return legacy?.receiverName || legacy?.destinationAddress
+    ? [
+        {
+          name: legacy.receiverName,
+          address: legacy.destinationAddress,
+          contactName: null,
+          contactPhone: null,
+        },
+      ]
+    : []
+}
 export function receiversOf(row: CostRecord, platform?: PlatformTransport | null): string[] {
   if (platform) {
     const stops =
@@ -37,13 +73,10 @@ export function receiversOf(row: CostRecord, platform?: PlatformTransport | null
         .filter(Boolean) || []
     return stops.length ? stops : ['-']
   }
-  if (row.data.ledger)
-    return row.data.ledger.receivingPoints.map(
-      (p) => p.displayName || p.manualName || p.address || '-',
-    )
-  return row.sources.length
-    ? [...new Set(row.sources.map((s) => s.receiverName).filter(Boolean))]
-    : [row.data.logistics?.receiverName || '-']
+  const names = frozenTransportReceivers(row)
+    .map((p) => p.name || p.address || '-')
+    .filter(Boolean)
+  return names.length ? [...new Set(names)] : ['-']
 }
 /** 新旧单据分别从完整来源快照、台账归属及收货点恢复展示，不回读变化后的原单。 */
 export function frozenTransportSources(row: CostRecord): CostSource[] {
