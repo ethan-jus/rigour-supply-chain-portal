@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>货拉拉企业授权</title>
+  </head>
+  <body>
+    <main>
+      <h1>货拉拉企业授权</h1>
+      <p id="status">正在返回原系统完成授权…</p>
+      <label for="credential">若未自动返回，可将以下临时授权码填写到原系统的授权窗口。</label>
+      <p>
+        <input
+          id="credential"
+          type="password"
+          readonly
+          autocomplete="off"
+          aria-label="临时授权码"
+        />
+      </p>
+      <button id="copy" type="button">复制临时授权码</button>
+    </main>
+    <script src="/huolala-authorized.js"></script>
+  </body>
+</html>

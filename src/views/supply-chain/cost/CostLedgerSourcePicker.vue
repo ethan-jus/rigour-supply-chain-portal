@@ -23,6 +23,9 @@
       <el-form-item v-if="query.orderTypeCode === 'SALES_ORDER'" label="业务员"
         ><el-input v-model="query.employeeName" clearable @keyup.enter="search"
       /></el-form-item>
+      <el-form-item v-if="query.orderTypeCode === 'SALES_ORDER'" label="归属部门"
+        ><el-input v-model="query.departmentName" clearable @keyup.enter="search"
+      /></el-form-item>
       <el-form-item
         :label="query.orderTypeCode === 'TRANSFER_ORDER' ? '收货仓名称' : '客户 / 收货方名称'"
         ><el-input v-model="query.partyName" clearable @keyup.enter="search"
@@ -95,7 +98,15 @@
         label="部门"
         min-width="140"
       />
-      <el-table-column v-if="suggestedReceiver" label="推荐依据" min-width="150"
+      <el-table-column label="已关联物流" width="130">
+        <template #default="{ row }">{{
+          row.linkedLogisticsCount == null ? '-' : `${row.linkedLogisticsCount}笔`
+        }}</template>
+      </el-table-column>
+      <el-table-column
+        v-if="suggestedReceiver || suggestedDate || suggestedOrderNo"
+        label="推荐依据"
+        min-width="150"
         ><template #default="{ row }">{{
           recommendation(row as PickedLedgerSource) || '请人工核对'
         }}</template></el-table-column
@@ -147,6 +158,7 @@ const props = defineProps<{
   orderTypeCode?: string
   suggestedDate?: string
   suggestedOrderNo?: string
+  suggestedEmployeeCode?: string
   suggestedReceiver?: string
 }>()
 export type PickedLedgerSource = CostSource & { orderTypeCode: string }
@@ -268,6 +280,16 @@ function recommendation(row: PickedLedgerSource) {
   ]
     .filter(([, value]) => value && value.length >= 2 && raw.includes(normalize(value)))
     .map(([label]) => label)
+  if (props.suggestedOrderNo && [row.documentNo, row.originalNo].includes(props.suggestedOrderNo))
+    matches.unshift('报表指定单号')
+  if (
+    props.suggestedDate &&
+    row.documentDate &&
+    Math.abs(Date.parse(props.suggestedDate) - Date.parse(row.documentDate)) <= 7 * 86400000
+  )
+    matches.push('日期接近')
+  if (props.suggestedEmployeeCode && props.suggestedEmployeeCode === row.employeeCode)
+    matches.push('下单员工一致')
   return matches.join('、')
 }
 </script>

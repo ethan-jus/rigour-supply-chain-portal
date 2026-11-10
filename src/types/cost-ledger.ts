@@ -28,6 +28,10 @@ export interface LedgerAllocation {
   amount: number | null
 }
 export interface LedgerSource {
+  employeeCode?: string | null
+  employeeName?: string | null
+  departmentId?: number | null
+  departmentName?: string | null
   sourceWarehouseCode?: string | null
   orderTypeCode: string
   orderCode: string | null

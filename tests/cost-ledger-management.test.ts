@@ -164,6 +164,37 @@ afterEach(() => {
 })
 
 describe('精简成本台账页面业务流程', () => {
+  it('默认列与六个常用筛选按已确认方案排列，物流公司移至可选列', async () => {
+    await open()
+    expect(wrapper.findAll('.filter-panel .el-form-item__label').map((e) => e.text())).toEqual([
+      '费用单号',
+      '货拉拉／运单号',
+      '业务单号',
+      '运输类型',
+      '运输日期',
+      '单据状态',
+    ])
+    const columns = wrapper
+      .findAll('.ledger-table .el-table__header th')
+      .map((e) => e.text())
+      .filter(Boolean)
+    expect(columns).toEqual([
+      '费用单号',
+      '货拉拉／运单号',
+      '运输类型',
+      '运输日期',
+      '收货方',
+      '本单我方费用（元）',
+      '单据状态',
+      '创建人',
+      '操作',
+    ])
+    await button('更多条件').trigger('click')
+    expect(wrapper.findAll('.filter-panel .el-form-item__label').map((e) => e.text())).toEqual(
+      expect.arrayContaining(['客户／收货方', '业务员', '归属部门']),
+    )
+  })
+
   it('仓储费用同样支持选中记录及自选字段，重新打开默认恢复全部字段', async () => {
     state.route.path = '/supply-chain/cost/warehouse-rentals'
     api.list.mockResolvedValue({ ...empty(), total: 2, items: [record('WH-1'), record('WH-2')] })
@@ -382,7 +413,9 @@ describe('精简成本台账页面业务流程', () => {
     await open()
     await button('自定义导出').trigger('click')
     await flushPromises()
-    const fields = wrapper.findComponent({ name: 'ElCheckboxGroup' })
+    const fields = wrapper
+      .findComponent({ name: 'CostExportDialog' })
+      .findComponent({ name: 'ElCheckboxGroup' })
     fields.vm.$emit('update:modelValue', [])
     await flushPromises()
     expect(button('开始导出').attributes('disabled')).toBeDefined()
@@ -412,6 +445,7 @@ describe('精简成本台账页面业务流程', () => {
     await button('自定义导出').trigger('click')
     await flushPromises()
     wrapper
+      .findComponent({ name: 'CostExportDialog' })
       .findComponent({ name: 'ElCheckboxGroup' })
       .vm.$emit('update:modelValue', ['documentNo', 'amount'])
     await flushPromises()

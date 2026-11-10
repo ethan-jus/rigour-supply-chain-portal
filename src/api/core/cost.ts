@@ -18,6 +18,8 @@ export interface CostQuery {
   title?: string
   remark?: string
   trackingNo?: string
+  sourceEmployeeName?: string
+  sourceDepartmentName?: string
   sourceDocumentNo?: string
   costMonth?: string
   supplierName?: string
@@ -55,6 +57,7 @@ export interface CostEmployee {
   cityName?: string | null
 }
 export interface CostSource {
+  linkedLogisticsCount?: number | null
   referenceIssue?: string | null
   senderCityCode?: string | null
   employeeCode?: string | null
@@ -209,6 +212,7 @@ export interface CostPage {
   items: CostRecord[]
 }
 export interface CostAudit {
+  evidence?: Record<string, unknown> | null
   action: string
   actorId: string
   reason: string | null

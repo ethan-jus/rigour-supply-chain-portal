@@ -31,6 +31,7 @@ export interface CostDepartmentSummary {
   purchaseGoods: string
   purchaseFreight: string
   logistics: string
+  transportTypes?: { key: string; label: string; amount: string }[]
   people: { employeeCode: string; employeeName: string; role: string; amount: string }[]
 }
 export const getCostDepartments = (params: CostQuery, signal?: AbortSignal) =>

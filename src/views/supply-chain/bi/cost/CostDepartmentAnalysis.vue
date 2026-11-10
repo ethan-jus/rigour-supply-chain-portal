@@ -16,6 +16,7 @@
             <th class="numeric">采购货款</th>
             <th class="numeric">采购运费</th>
             <th class="numeric">采购成本合计</th>
+            <th v-for="type in transportTypes" :key="type.key" class="numeric">{{ type.label }}</th>
             <th class="numeric">物流成本合计</th>
             <th>明细</th>
           </tr>
@@ -29,6 +30,11 @@
               <td class="numeric">
                 <button class="text-button" @click="detail(row, 'purchase')">
                   {{ sum(row.purchaseGoods, row.purchaseFreight) }}
+                </button>
+              </td>
+              <td v-for="type in transportTypes" :key="type.key" class="numeric">
+                <button class="text-button" @click="transportDetail(row, type.key)">
+                  {{ money(row.transportTypes?.find((t) => t.key === type.key)?.amount || '0') }}
                 </button>
               </td>
               <td class="numeric">
@@ -47,7 +53,7 @@
               </td>
             </tr>
             <tr v-if="expanded === row.departmentId">
-              <td colspan="6">
+              <td :colspan="6 + transportTypes.length">
                 <table :aria-label="row.departmentName + '人员物流成本'">
                   <thead>
                     <tr>
@@ -77,7 +83,9 @@
             </tr>
           </template>
           <tr v-if="!rows.length">
-            <td colspan="6" class="empty">当前期间暂无已确认采购及物流成本</td>
+            <td :colspan="6 + transportTypes.length" class="empty">
+              当前期间暂无已确认采购及物流成本
+            </td>
           </tr>
         </tbody>
       </table>
@@ -85,20 +93,36 @@
   </section>
 </template>
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import {
   getCostDepartments,
   type CostDepartmentSummary,
   type CostQuery,
 } from '@/api/core/bi-cost-dashboard'
 import { errorMessage } from '@/api/core/error'
-import { money } from './cost-presentation'
+import { money, dictionaryValue } from './cost-presentation'
 const props = defineProps<{ query: CostQuery }>()
 const emit = defineEmits<{ detail: [query: CostQuery] }>()
 const rows = ref<CostDepartmentSummary[]>([]),
   loading = ref(false),
   error = ref(''),
   expanded = ref('')
+const transportTypes = computed(() => {
+  const types = new Map<string, { key: string; label: string }>()
+  for (const row of rows.value)
+    for (const type of row.transportTypes || [])
+      types.set(type.key, { key: type.key, label: dictionaryValue(type.key, type.label) })
+  return [...types.values()]
+})
+function transportDetail(row: CostDepartmentSummary, key: string) {
+  emit('detail', {
+    scope: 'opex',
+    category: 'freight',
+    department: row.departmentId,
+    dimension: 'leg',
+    dimensionKey: key,
+  })
+}
 let serial = 0,
   controller: AbortController | undefined
 async function load() {

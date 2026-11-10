@@ -126,9 +126,7 @@ export const SUPPLY_DOMAIN_MENU_KEYS: string[] = [
 ]
 
 export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
-  ...directPages('cost', '成本管理', 'order-center-service', [
-    { key: 'logistics', title: '运费' },
-  ]),
+  ...directPages('cost', '成本管理', 'order-center-service', [{ key: 'logistics', title: '运费' }]),
   ...directPages('cost', '成本管理', 'erp-core-service', [
     { key: 'marketing', title: '营销费用' },
     { key: 'warehouse-rentals', title: '仓储费用' },
@@ -185,11 +183,15 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
   ]),
   ...groupPages('crm', 'CRM', 'merchant-crm-service', [
     {
-      key: 'stores', title: '客户管理',
+      key: 'stores',
+      title: '客户管理',
       pages: [
-        { key: 'mine', title: '我的客户' }, { key: 'public', title: '公海' },
-        { key: 'cooperated', title: '合作客户' }, { key: 'leads', title: '门店提报' },
-        { key: 'library', title: '商家库管理' }, { key: 'analysis', title: '客户经营分析' },
+        { key: 'mine', title: '我的客户' },
+        { key: 'public', title: '公海' },
+        { key: 'cooperated', title: '合作客户' },
+        { key: 'leads', title: '门店提报' },
+        { key: 'library', title: '商家库管理' },
+        { key: 'analysis', title: '客户经营分析' },
       ],
     },
     {
@@ -285,6 +287,15 @@ export const SUPPLY_DOMAIN_PAGES: SupplyDomainPage[] = [
     title: '订货宝同步中心',
     routeKey: 'supply.integration.overview',
     path: '/supply-chain/integration',
+    owner: 'integration-migration-service',
+  },
+  {
+    domainKey: 'integration',
+    domainTitle: '外部同步',
+    groupTitle: '同步控制',
+    title: '货拉拉接入',
+    routeKey: 'supply.integration.huolala',
+    path: '/supply-chain/integration/huolala',
     owner: 'integration-migration-service',
   },
   {

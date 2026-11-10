@@ -12,6 +12,10 @@ describe('部门采购与物流成本', () => {
         purchaseGoods: '100.10',
         purchaseFreight: '12.30',
         logistics: '40.50',
+        transportTypes: [
+          { key: 'dict:COST_TRANSPORT_PURPOSE:DELIVERY', label: '销售订单配送', amount: '30.50' },
+          { key: 'dict:COST_TRANSPORT_PURPOSE:TRANSFER', label: '仓间调拨', amount: '10.00' },
+        ],
         people: [
           { employeeCode: 'employee:E1', employeeName: '张三', role: '业务员', amount: '40.50' },
         ],
@@ -26,6 +30,8 @@ describe('部门采购与物流成本', () => {
       expect.any(AbortSignal),
     )
     expect(w.text()).toContain('112.40')
+    expect(w.text()).toContain('30.50')
+    expect(w.text()).toContain('10.00')
     await w
       .findAll('button')
       .find((b) => b.text() === '112.40')!

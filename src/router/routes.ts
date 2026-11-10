@@ -16,7 +16,8 @@ const costPermissions: Record<string, string> = {
   'supply.cost.purchases': 'erp:cost:purchase:read',
   'supply.cost.losses': 'erp:cost:loss:read',
   'supply.cost.marketing': 'erp:cost:marketing:read',
-  'supply.cost.office-rentals': 'erp:cost:rental:read', 'supply.cost.warehouse-rentals': 'erp:cost:rental:read',
+  'supply.cost.office-rentals': 'erp:cost:rental:read',
+  'supply.cost.warehouse-rentals': 'erp:cost:rental:read',
   'supply.hr.expenses': 'hr:expense:read',
 }
 
@@ -103,77 +104,89 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
     page.routeKey === 'supply.cost.purchases'
       ? () => import('@/views/supply-chain/cost/ProcurementCostRecordsView.vue')
       : page.routeKey in crmStorePermissions
-      ? () => import('@/views/supply-chain/crm/CrmStorePoolView.vue')
-      : page.routeKey === 'supply.hr.payroll-schemes'
-      ? () => import('@/views/supply-chain/hr/PayrollSchemeView.vue')
-      : page.routeKey === 'supply.hr.attendance-rules'
-        ? () => import('@/views/supply-chain/hr/HrAttendanceRuleView.vue')
-        : page.routeKey === 'supply.hr.attendance'
-          ? () => import('@/views/supply-chain/hr/HrAttendanceView.vue')
-          : page.routeKey in costPermissions
-            ? () => import('@/views/supply-chain/cost/CostManagementEntry.vue')
-            : payrollRuleRouteKeys.has(page.routeKey)
-              ? page.routeKey === 'supply.hr.city-managers'
-                ? () => import('@/views/supply-chain/hr/PayrollRuleView.vue')
-                : () => import('@/views/supply-chain/hr/PayrollComponentView.vue')
-              : page.routeKey === 'supply.hr.payroll'
-                ? () => import('@/views/supply-chain/hr/PayrollView.vue')
-                : erpProductManagementRouteKeys.has(page.routeKey)
-                  ? () => import('@/views/supply-chain/erp/ErpProductManagementView.vue')
-                  : erpProductSpecificationRouteKeys.has(page.routeKey)
-                    ? () => import('@/views/supply-chain/erp/ErpProductSpecificationView.vue')
-                    : erpProductPriceRouteKeys.has(page.routeKey)
-                      ? () => import('@/views/supply-chain/erp/ErpProductCustomerTypePriceView.vue')
-                      : page.routeKey === 'supply.erp.suppliers.profiles'
-                        ? () => import('@/views/supply-chain/erp/ErpSupplierManagementView.vue')
-                      : erpBasicDataRouteKeys.has(page.routeKey)
-                        ? () => import('@/views/supply-chain/erp/ErpBasicDataManagementView.vue')
-                        : erpInventoryBalanceRouteKeys.has(page.routeKey)
-                          ? () => import('@/views/supply-chain/erp/ErpInventoryBalanceView.vue')
-                          : page.routeKey === 'supply.erp.procurement.orders'
-                            ? () => import('@/views/supply-chain/erp/ErpProcurementManagementView.vue')
-                          : erpDocumentRouteKeys.has(page.routeKey)
-                            ? () => import('@/views/supply-chain/erp/ErpDocumentManagementView.vue')
-                            : crmCustomerManagementRouteKeys.has(page.routeKey)
+        ? () => import('@/views/supply-chain/crm/CrmStorePoolView.vue')
+        : page.routeKey === 'supply.hr.payroll-schemes'
+          ? () => import('@/views/supply-chain/hr/PayrollSchemeView.vue')
+          : page.routeKey === 'supply.hr.attendance-rules'
+            ? () => import('@/views/supply-chain/hr/HrAttendanceRuleView.vue')
+            : page.routeKey === 'supply.hr.attendance'
+              ? () => import('@/views/supply-chain/hr/HrAttendanceView.vue')
+              : page.routeKey in costPermissions
+                ? () => import('@/views/supply-chain/cost/CostManagementEntry.vue')
+                : payrollRuleRouteKeys.has(page.routeKey)
+                  ? page.routeKey === 'supply.hr.city-managers'
+                    ? () => import('@/views/supply-chain/hr/PayrollRuleView.vue')
+                    : () => import('@/views/supply-chain/hr/PayrollComponentView.vue')
+                  : page.routeKey === 'supply.hr.payroll'
+                    ? () => import('@/views/supply-chain/hr/PayrollView.vue')
+                    : erpProductManagementRouteKeys.has(page.routeKey)
+                      ? () => import('@/views/supply-chain/erp/ErpProductManagementView.vue')
+                      : erpProductSpecificationRouteKeys.has(page.routeKey)
+                        ? () => import('@/views/supply-chain/erp/ErpProductSpecificationView.vue')
+                        : erpProductPriceRouteKeys.has(page.routeKey)
+                          ? () =>
+                              import('@/views/supply-chain/erp/ErpProductCustomerTypePriceView.vue')
+                          : page.routeKey === 'supply.erp.suppliers.profiles'
+                            ? () => import('@/views/supply-chain/erp/ErpSupplierManagementView.vue')
+                            : erpBasicDataRouteKeys.has(page.routeKey)
                               ? () =>
-                                  import('@/views/supply-chain/crm/CrmCustomerManagementView.vue')
-                              : crmShippingAddressRouteKeys.has(page.routeKey)
+                                  import('@/views/supply-chain/erp/ErpBasicDataManagementView.vue')
+                              : erpInventoryBalanceRouteKeys.has(page.routeKey)
                                 ? () =>
-                                    import('@/views/supply-chain/crm/CrmShippingAddressView.vue')
-                                : crmCustomerDictionaryRouteKeys.has(page.routeKey)
+                                    import('@/views/supply-chain/erp/ErpInventoryBalanceView.vue')
+                                : page.routeKey === 'supply.erp.procurement.orders'
                                   ? () =>
-                                      import('@/views/supply-chain/crm/CrmCustomerDictionaryView.vue')
-                                  : page.routeKey === 'supply.hr.target-settings'
+                                      import('@/views/supply-chain/erp/ErpProcurementManagementView.vue')
+                                  : erpDocumentRouteKeys.has(page.routeKey)
                                     ? () =>
-                                        import('@/views/supply-chain/hr/HrTargetSettingsView.vue')
-                                    : page.routeKey === 'supply.hr.departments'
+                                        import('@/views/supply-chain/erp/ErpDocumentManagementView.vue')
+                                    : crmCustomerManagementRouteKeys.has(page.routeKey)
                                       ? () =>
-                                          import('@/views/supply-chain/hr/HrDepartmentManagementView.vue')
-                                      : hrEmployeeRouteKeys.has(page.routeKey)
+                                          import('@/views/supply-chain/crm/CrmCustomerManagementView.vue')
+                                      : crmShippingAddressRouteKeys.has(page.routeKey)
                                         ? () =>
-                                            import('@/views/supply-chain/hr/HrEmployeeManagementView.vue')
-                                        : hrPositionRouteKeys.has(page.routeKey)
+                                            import('@/views/supply-chain/crm/CrmShippingAddressView.vue')
+                                        : crmCustomerDictionaryRouteKeys.has(page.routeKey)
                                           ? () =>
-                                              import('@/views/supply-chain/hr/HrPositionManagementView.vue')
-                                          : businessDictionaryRouteKeys.has(page.routeKey)
+                                              import('@/views/supply-chain/crm/CrmCustomerDictionaryView.vue')
+                                          : page.routeKey === 'supply.hr.target-settings'
                                             ? () =>
-                                                import('@/views/supply-chain/settings/BusinessDictionaryView.vue')
-                                            : feishuImportRouteKeys.has(page.routeKey)
+                                                import('@/views/supply-chain/hr/HrTargetSettingsView.vue')
+                                            : page.routeKey === 'supply.hr.departments'
                                               ? () =>
-                                                  import('@/views/supply-chain/feishu/FeishuImportPage.vue')
-                                              : page.routeKey === 'supply.integration.schedules'
+                                                  import('@/views/supply-chain/hr/HrDepartmentManagementView.vue')
+                                              : hrEmployeeRouteKeys.has(page.routeKey)
                                                 ? () =>
-                                                    import('@/views/supply-chain/dhb/DhbScheduleView.vue')
-                                                : integrationSyncCenterRouteKeys.has(page.routeKey)
+                                                    import('@/views/supply-chain/hr/HrEmployeeManagementView.vue')
+                                                : hrPositionRouteKeys.has(page.routeKey)
                                                   ? () =>
-                                                      import('@/views/supply-chain/dhb/DhbPage.vue')
-                                                  : procurementPaymentPlaceholderRouteKeys.has(
-                                                        page.routeKey,
-                                                      )
+                                                      import('@/views/supply-chain/hr/HrPositionManagementView.vue')
+                                                  : businessDictionaryRouteKeys.has(page.routeKey)
                                                     ? () =>
-                                                        import('@/views/supply-chain/erp/PurchasePaymentPlaceholderView.vue')
-                                                    : () =>
-                                                        import('@/views/supply-chain/domain/CapabilityView.vue'),
+                                                        import('@/views/supply-chain/settings/BusinessDictionaryView.vue')
+                                                    : feishuImportRouteKeys.has(page.routeKey)
+                                                      ? () =>
+                                                          import('@/views/supply-chain/feishu/FeishuImportPage.vue')
+                                                      : page.routeKey ===
+                                                          'supply.integration.schedules'
+                                                        ? () =>
+                                                            import('@/views/supply-chain/dhb/DhbScheduleView.vue')
+                                                        : page.routeKey ===
+                                                            'supply.integration.huolala'
+                                                          ? () =>
+                                                              import('@/views/supply-chain/huolala/HuolalaIntegrationView.vue')
+                                                          : integrationSyncCenterRouteKeys.has(
+                                                                page.routeKey,
+                                                              )
+                                                            ? () =>
+                                                                import('@/views/supply-chain/dhb/DhbPage.vue')
+                                                            : procurementPaymentPlaceholderRouteKeys.has(
+                                                                  page.routeKey,
+                                                                )
+                                                              ? () =>
+                                                                  import('@/views/supply-chain/erp/PurchasePaymentPlaceholderView.vue')
+                                                              : () =>
+                                                                  import('@/views/supply-chain/domain/CapabilityView.vue'),
   meta: {
     title: page.title,
     requiresAuth: true,
@@ -191,19 +204,21 @@ const supplyDomainRoutes: RouteRecordRaw[] = routableSupplyDomainPages.map((page
           : undefined) ??
       (page.routeKey === 'supply.hr.target-settings'
         ? 'hr:targets:read'
-        : page.routeKey === 'supply.integration.schedules'
-          ? 'integration:dhb:read'
-          : page.routeKey === 'supply.hr.departments'
-            ? 'hr:department:read'
-            : page.domainKey === 'crm'
-              ? 'crm:customer:read'
-              : hrEmployeeRouteKeys.has(page.routeKey)
-                ? 'hr:employee:read'
-                : hrPositionRouteKeys.has(page.routeKey)
-                  ? 'hr:position:read'
-                  : businessDictionaryRouteKeys.has(page.routeKey)
-                    ? 'business-settings:dict:read'
-                    : undefined),
+        : page.routeKey === 'supply.integration.huolala'
+          ? 'integration:huolala:read'
+          : page.routeKey === 'supply.integration.schedules'
+            ? 'integration:dhb:read'
+            : page.routeKey === 'supply.hr.departments'
+              ? 'hr:department:read'
+              : page.domainKey === 'crm'
+                ? 'crm:customer:read'
+                : hrEmployeeRouteKeys.has(page.routeKey)
+                  ? 'hr:employee:read'
+                  : hrPositionRouteKeys.has(page.routeKey)
+                    ? 'hr:position:read'
+                    : businessDictionaryRouteKeys.has(page.routeKey)
+                      ? 'business-settings:dict:read'
+                      : undefined),
   },
 }))
 

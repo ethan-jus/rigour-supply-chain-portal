@@ -1,6 +1,26 @@
 <template>
   <div class="ledger-workspace">
-    <section class="filter-panel">
+    <el-radio-group
+      v-if="logistics && can(permission + ':write')"
+      v-model="activePanel"
+      class="ledger-tabs"
+    >
+      <el-radio-button value="RECORDS">运输记录</el-radio-button
+      ><el-radio-button value="SOURCES">货拉拉待关联</el-radio-button
+      ><el-radio-button v-if="can('order:logistics-cost:manage-imports')" value="DIFFERENCES"
+        >来源差异</el-radio-button
+      >
+    </el-radio-group>
+    <CostCarrierOrdersPanel
+      v-if="logistics && activePanel !== 'RECORDS'"
+      :cities="cities"
+      :employees="employees"
+      :references-ready="referencesReady"
+      :differences-only="activePanel === 'DIFFERENCES'"
+      @generated="search"
+      @open-cost="viewCarrierCost"
+    />
+    <section v-show="activePanel === 'RECORDS'" class="filter-panel">
       <el-form class="filters" label-position="left" label-width="96px" @submit.prevent="search">
         <el-form-item label="费用单号"
           ><el-input
@@ -10,6 +30,20 @@
             @keyup.enter="search"
         /></el-form-item>
         <template v-if="logistics">
+          <el-form-item label="货拉拉／运单号"
+            ><el-input
+              v-model="filters.trackingNo"
+              placeholder="输入货拉拉订单号或运单号"
+              clearable
+              @keyup.enter="search"
+          /></el-form-item>
+          <el-form-item label="业务单号"
+            ><el-input
+              v-model="filters.sourceDocumentNo"
+              placeholder="输入业务单号"
+              clearable
+              @keyup.enter="search"
+          /></el-form-item>
           <el-form-item v-if="!purchaseHistory" label="运输类型"
             ><CostDictSelect v-model="filters.typeCode" code="COST_TRANSPORT_PURPOSE" clearable
           /></el-form-item>
@@ -25,24 +59,28 @@
           <el-form-item label="单据状态"
             ><CostDictSelect v-model="filters.statusCode" code="COST_STATUS" clearable
           /></el-form-item>
-          <el-form-item label="订单类型"
-            ><el-select v-model="filters.orderTypeCode" clearable
-              ><el-option
-                v-for="t in sourceTypes"
-                :key="t.value"
-                :label="t.label"
-                :value="t.value" /></el-select
-          ></el-form-item>
-          <el-form-item label="关联单据编号"
-            ><el-input
-              v-model="filters.sourceDocumentNo"
-              placeholder="输入关联单据编号"
-              clearable
-              @keyup.enter="search"
-          /></el-form-item>
-          <el-form-item v-if="moreFilters" label="物流公司"
-            ><CostDictSelect v-model="filters.carrierCode" code="COST_CARRIER" clearable
-          /></el-form-item>
+          <template v-if="moreFilters">
+            <el-form-item label="订单类型"
+              ><el-select v-model="filters.orderTypeCode" clearable
+                ><el-option
+                  v-for="t in sourceTypes"
+                  :key="t.value"
+                  :label="t.label"
+                  :value="t.value" /></el-select
+            ></el-form-item>
+            <el-form-item label="客户／收货方"
+              ><el-input v-model="filters.receiverName" clearable @keyup.enter="search"
+            /></el-form-item>
+            <el-form-item label="业务员"
+              ><el-input v-model="filters.sourceEmployeeName" clearable @keyup.enter="search"
+            /></el-form-item>
+            <el-form-item label="归属部门"
+              ><el-input v-model="filters.sourceDepartmentName" clearable @keyup.enter="search"
+            /></el-form-item>
+            <el-form-item label="物流公司"
+              ><CostDictSelect v-model="filters.carrierCode" code="COST_CARRIER" clearable
+            /></el-form-item>
+          </template>
         </template>
         <template v-else
           ><el-form-item label="仓库"
@@ -79,8 +117,6 @@
           ><CostDictSelect v-model="filters.paymentStatusCode" code="COST_PAYMENT_STATUS" clearable
         /></el-form-item>
         <template v-if="moreFilters"
-          ><el-form-item v-if="logistics" label="运单号"
-            ><el-input v-model="filters.trackingNo" clearable /></el-form-item
           ><el-form-item label="费用归属城市"
             ><CostCitySelect
               v-model="cityFilter"
@@ -119,7 +155,7 @@
       type="info"
       :closable="false"
     />
-    <section class="list-panel">
+    <section v-show="activePanel === 'RECORDS'" class="list-panel">
       <div class="list-toolbar">
         <div>
           <strong>{{ title }}</strong
@@ -128,10 +164,21 @@
         <div>
           <template v-if="logistics && !purchaseHistory && can(permission + ':write')">
             <el-button @click="downloadCarrierTemplate">下载导入模板</el-button>
-            <el-button :disabled="!referencesReady" @click="importOpen = true"
+            <el-button :disabled="!referencesReady" @click="activePanel = 'SOURCES'"
               >导入货拉拉报表</el-button
             >
           </template>
+          <el-popover v-if="logistics" placement="bottom-end" width="220" trigger="click">
+            <template #reference><el-button>显示列</el-button></template>
+            <el-checkbox-group v-model="visibleLogisticsColumns" class="column-options">
+              <el-checkbox
+                v-for="item in logisticsColumnOptions"
+                :key="item.key"
+                :value="item.key"
+                >{{ item.label }}</el-checkbox
+              >
+            </el-checkbox-group>
+          </el-popover>
           <el-button
             v-if="can(permission + ':export')"
             :loading="exporting"
@@ -197,7 +244,7 @@
           reserve-selection
           :selectable="() => !exporting"
         />
-        <el-table-column label="费用单号" fixed="left" width="236" show-overflow-tooltip
+        <el-table-column label="费用单号" fixed="left" width="218" show-overflow-tooltip
           ><template #default="{ row }"
             ><el-button link type="primary" class="code-link" @click="view(row as CostRecord)">{{
               row.documentNo
@@ -214,46 +261,100 @@
           ></el-table-column
         >
         <template v-if="logistics"
-          ><el-table-column label="运输类型" width="122"
+          ><el-table-column
+            v-if="visibleLogisticsColumns.includes('tracking')"
+            label="货拉拉／运单号"
+            min-width="180"
+            show-overflow-tooltip
+            ><template #default="{ row }"
+              ><span class="nowrap">{{
+                row.data.ledger?.trackingNo || row.data.logistics?.trackingNo || '—'
+              }}</span></template
+            ></el-table-column
+          ><el-table-column
+            v-if="visibleLogisticsColumns.includes('type')"
+            label="运输类型"
+            width="122"
             ><template #default="{ row }">{{
               purpose(row as CostRecord)
             }}</template></el-table-column
-          ><el-table-column label="运输日期" width="112"
+          ><el-table-column
+            v-if="visibleLogisticsColumns.includes('date')"
+            label="运输日期"
+            width="112"
             ><template #default="{ row }"
               ><span class="nowrap">{{ row.data.costDate }}</span></template
             ></el-table-column
-          ><el-table-column label="我方费用（元）" width="148" align="right"
-            ><template #default="{ row }"
-              ><strong>{{ costMoney(row.data.amount) }}</strong></template
-            ></el-table-column
-          ><el-table-column label="发货方" min-width="180" show-overflow-tooltip
+          ><el-table-column
+            v-if="visibleLogisticsColumns.includes('sender')"
+            label="发货方"
+            min-width="180"
+            show-overflow-tooltip
             ><template #default="{ row }">{{
               senderName(row as CostRecord)
             }}</template></el-table-column
           >
-          <el-table-column label="收货方" min-width="210"
+          <el-table-column
+            v-if="visibleLogisticsColumns.includes('receiver')"
+            label="收货方"
+            min-width="210"
             ><template #default="{ row }"
               ><div class="recipient-names">
                 <div v-for="(name, i) in receiverNames(row as CostRecord)" :key="i">{{ name }}</div>
               </div></template
             ></el-table-column
           >
-          <el-table-column label="物流公司" width="140" show-overflow-tooltip
+          <el-table-column label="本单我方费用（元）" width="148" align="right"
+            ><template #default="{ row }"
+              ><strong>{{ costMoney(row.data.amount) }}</strong></template
+            ></el-table-column
+          >
+          <el-table-column
+            v-if="visibleLogisticsColumns.includes('carrier')"
+            label="物流公司"
+            width="140"
+            show-overflow-tooltip
             ><template #default="{ row }">{{
               carrier(row as CostRecord)
             }}</template></el-table-column
-          ><el-table-column label="运单号" min-width="180" show-overflow-tooltip
-            ><template #default="{ row }"
-              ><span class="nowrap">{{
-                row.data.ledger?.trackingNo || row.data.logistics?.trackingNo || '—'
-              }}</span></template
-            ></el-table-column
-          ><el-table-column label="关联单据" min-width="200"
+          ><el-table-column
+            v-if="visibleLogisticsColumns.includes('sources')"
+            label="关联单据"
+            min-width="200"
             ><template #default="{ row }"
               ><div v-for="code in sourceCodes(row as CostRecord)" :key="code" class="nowrap">
                 {{ code }}
               </div></template
             ></el-table-column
+          >
+          <el-table-column
+            v-if="visibleLogisticsColumns.includes('department')"
+            label="归属部门"
+            min-width="150"
+            ><template #default="{ row }"
+              ><div
+                v-for="name in attributionNames(row as CostRecord, 'departmentName')"
+                :key="name"
+              >
+                {{ name }}
+              </div></template
+            ></el-table-column
+          ><el-table-column
+            v-if="visibleLogisticsColumns.includes('salesperson')"
+            label="业务员"
+            min-width="120"
+            ><template #default="{ row }"
+              ><div v-for="name in attributionNames(row as CostRecord, 'employeeName')" :key="name">
+                {{ name }}
+              </div></template
+            ></el-table-column
+          ><el-table-column
+            v-if="visibleLogisticsColumns.includes('payment')"
+            label="付款状态"
+            width="110"
+            ><template #default="{ row }">{{
+              costLabel('COST_PAYMENT_STATUS', row.data.paymentStatusCode)
+            }}</template></el-table-column
           >
         </template>
         <template v-else
@@ -294,7 +395,7 @@
             costMoney(row.periodAmount === undefined ? row.data.amount : row.periodAmount)
           }}</template></el-table-column
         >
-        <el-table-column label="单据状态" fixed="right" width="100" align="center"
+        <el-table-column label="单据状态" width="100" align="center"
           ><template #default="{ row }"
             ><el-tag
               :type="
@@ -307,12 +408,12 @@
               >{{ costLabel('COST_STATUS', row.statusCode) }}</el-tag
             ></template
           ></el-table-column
-        ><el-table-column label="创建人" fixed="right" width="90" show-overflow-tooltip
+        ><el-table-column label="创建人" width="90" show-overflow-tooltip
           ><template #default="{ row }">{{
             displayRecordActor(row.createdBy)
           }}</template></el-table-column
         >
-        <el-table-column label="操作" fixed="right" width="208"
+        <el-table-column label="操作" fixed="right" width="170"
           ><template #default="{ row }"
             ><el-button link type="primary" @click="view(row as CostRecord)">查看</el-button
             ><el-button
@@ -443,11 +544,40 @@
       top="3vh"
       class="cost-ledger-dialog"
       destroy-on-close
-      ><CostLedgerDetail v-if="detail" :row="detail" :category="category" /><template #footer
+      ><CostLedgerDetail
+        v-if="detail"
+        :row="detail"
+        :category="category"
+        :show-carrier-source="!viewingSnapshot"
+      /><template #footer
         ><el-button v-if="detail" @click="history(detail)">操作记录</el-button
         ><el-button @click="detailOpen = false">关闭</el-button></template
       ></el-dialog
     >
+    <el-dialog
+      :model-value="!!auditEvidence"
+      title="来源核对记录"
+      width="min(760px,94vw)"
+      @close="auditEvidence = null"
+    >
+      <el-descriptions :column="1" border>
+        <el-descriptions-item v-if="auditEvidence?.amount != null" label="核对净费用（元）">{{
+          costMoney(Number(auditEvidence.amount))
+        }}</el-descriptions-item>
+        <el-descriptions-item v-if="auditEvidence?.reason" label="核对说明">{{
+          auditEvidence.reason
+        }}</el-descriptions-item>
+        <el-descriptions-item v-if="auditEvidence?.sourceOrderNo" label="货拉拉订单号">{{
+          auditEvidence.sourceOrderNo
+        }}</el-descriptions-item>
+        <el-descriptions-item v-if="auditEvidence?.previous" label="原平台账单（元）">{{
+          evidenceBill(auditEvidence.previous)
+        }}</el-descriptions-item>
+        <el-descriptions-item v-if="auditEvidence?.accepted" label="已接受平台账单（元）">{{
+          evidenceBill(auditEvidence.accepted)
+        }}</el-descriptions-item>
+      </el-descriptions>
+    </el-dialog>
     <el-dialog v-model="historyOpen" title="操作记录" width="min(1100px, 94vw)"
       ><el-alert
         v-if="historyError"
@@ -475,18 +605,17 @@
               type="primary"
               @click="showSnapshot(row.snapshot as CostRecord)"
               >查看</el-button
+            ><el-button
+              v-if="row.evidence"
+              link
+              type="primary"
+              @click="auditEvidence = row.evidence"
+              >查看</el-button
             ></template
           ></el-table-column
         ></el-table
       ></el-dialog
     >
-    <CostCarrierImportDialog
-      v-if="logistics && can(permission + ':write')"
-      v-model="importOpen"
-      :cities="cities"
-      :employees="employees"
-      @generated="search"
-    />
   </div>
 </template>
 <script setup lang="ts">
@@ -514,7 +643,7 @@ import {
   getSelectedLogisticsExport,
 } from '@/api/core/cost-ledger'
 import { errorMessage } from '@/api/core/error'
-import CostCarrierImportDialog from './CostCarrierImportDialog.vue'
+import CostCarrierOrdersPanel from './CostCarrierOrdersPanel.vue'
 import { lalamoveTemplate } from './lalamove-import'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
@@ -529,7 +658,37 @@ import {
   totalFees,
   moneyCents,
 } from './cost-ledger'
-const importOpen = ref(false)
+const auditEvidence = ref<Record<string, unknown> | null>(null)
+function evidenceBill(value: unknown) {
+  const v = value as { facts?: { billAmount?: number }; paidAmount?: number }
+  return costMoney(v.facts?.billAmount ?? v.paidAmount ?? null)
+}
+const viewingSnapshot = ref(false)
+const activePanel = ref('RECORDS')
+const logisticsColumnOptions = [
+  { key: 'type', label: '运输类型' },
+  { key: 'date', label: '运输日期' },
+  { key: 'sender', label: '发货方' },
+  { key: 'receiver', label: '收货方' },
+  { key: 'carrier', label: '物流公司' },
+  { key: 'tracking', label: '货拉拉／运单号' },
+  { key: 'sources', label: '关联单据' },
+  { key: 'department', label: '归属部门' },
+  { key: 'salesperson', label: '业务员' },
+  { key: 'payment', label: '付款状态' },
+]
+const visibleLogisticsColumns = ref(['tracking', 'type', 'date', 'receiver'])
+function attributionNames(row: CostRecord, field: 'employeeName' | 'departmentName') {
+  const values =
+    row.data.ledger?.sources
+      .filter((s) => s.linkRoleCode === 'COST')
+      .map((s) => s[field])
+      .filter((value): value is string => typeof value === 'string' && !!value) || []
+  return values.length ? [...new Set(values)] : ['-']
+}
+async function viewCarrierCost(id: string) {
+  await view({ id } as CostRecord)
+}
 async function downloadCarrierTemplate() {
   try {
     await lalamoveTemplate()
@@ -773,7 +932,14 @@ async function init() {
   const id = route.query.sourceId || route.query.costId || route.query.id
   if (typeof id === 'string') await view({ id } as CostRecord)
 }
-watch(category, () => void init(), { immediate: true })
+watch(
+  category,
+  () => {
+    activePanel.value = 'RECORDS'
+    void init()
+  },
+  { immediate: true },
+)
 watch(
   () => route.query.sourceId,
   (id) => {
@@ -786,6 +952,7 @@ async function view(row: CostRecord) {
   try {
     const value = await getCost(selectedCategory, row.id)
     if (current !== interaction || selectedCategory !== category.value) return
+    viewingSnapshot.value = false
     detail.value = value
     detailOpen.value = true
   } catch (e) {
@@ -1027,6 +1194,7 @@ async function act(row: CostRecord, action: 'confirm' | 'void' | 'revoke' | 'del
   }
 }
 function showSnapshot(row: CostRecord) {
+  viewingSnapshot.value = true
   ++interaction
   detail.value = row
   detailOpen.value = true
@@ -1101,7 +1269,7 @@ const exportColumns = computed<{ key: LogisticsExportKey; label: string }[]>(() 
         { key: 'sender', label: '发货方' },
         { key: 'receivers', label: '收货方' },
         { key: 'carrier', label: '物流公司' },
-        { key: 'tracking', label: '运单号' },
+        { key: 'tracking', label: '货拉拉／运单号' },
         { key: 'sources', label: '关联单据' },
         { key: 'amount', label: '本单我方费用（元）' },
         { key: 'status', label: '单据状态' },
@@ -1199,6 +1367,13 @@ async function exportRows() {
 }
 </script>
 <style scoped>
+.column-options {
+  display: flex;
+  flex-direction: column;
+}
+.ledger-tabs {
+  margin-bottom: 16px;
+}
 .ledger-workspace {
   padding: 16px;
   background: #f5f7fb;

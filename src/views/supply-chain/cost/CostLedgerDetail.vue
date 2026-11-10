@@ -107,7 +107,28 @@
         </dl>
       </section>
     </div>
+    <CostCarrierBill
+      v-if="showCarrierSource !== false && logistics && plan?.carrierCode === 'HLL'"
+      :cost-id="row.id"
+    />
     <template v-if="plan">
+      <section>
+        <h3>关联业务单据</h3>
+        <el-table :data="plan.sources" border>
+          <el-table-column label="单据类型" width="140"
+            ><template #default="{ row: source }">{{
+              logisticsOrderTypeLabel(source.orderTypeCode)
+            }}</template></el-table-column
+          >
+          <el-table-column prop="orderCode" label="业务单号" min-width="210" />
+          <el-table-column prop="sourceWarehouseCode" label="原单发货仓库编码" min-width="180" />
+          <el-table-column label="关联用途" min-width="150"
+            ><template #default="{ row: source }">{{
+              source.linkRoleCode === 'TRACE' ? '仅业务追溯' : '成本归属'
+            }}</template></el-table-column
+          >
+        </el-table>
+      </section>
       <section>
         <h3>发货信息</h3>
         <dl>
@@ -159,12 +180,18 @@
         >
       </section>
       <section>
-        <h3>单据关联与分摊</h3>
+        <h3>人员归属与费用分摊</h3>
         <el-table :data="sourceRows" border
           ><el-table-column prop="type" label="单据类型" width="130" /><el-table-column
             prop="code"
             label="单据编号"
             min-width="230" /><el-table-column
+            prop="employee"
+            label="业务员"
+            width="120" /><el-table-column
+            prop="department"
+            label="归属部门"
+            min-width="150" /><el-table-column
             prop="role"
             label="关联用途"
             width="140" /><el-table-column
@@ -247,7 +274,15 @@ import { costMoney, costLabel } from './cost-dictionaries'
 import { partyName, receiverNames, warehouseMonths, type LedgerParty } from './cost-ledger'
 import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
 import CostAttachments from './CostAttachments.vue'
-const props = defineProps<{ row: CostRecord; category: CostCategory }>()
+import CostCarrierBill from './CostCarrierBill.vue'
+const props = withDefaults(
+  defineProps<{
+    row: CostRecord
+    category: CostCategory
+    showCarrierSource?: boolean
+  }>(),
+  { showCarrierSource: true },
+)
 const plan = computed(() => props.row.data.ledger)
 const warehouse = computed(() => props.row.data.warehouseLedger)
 const providerName = ref('')
@@ -282,6 +317,8 @@ const sourceRows = computed(
         code: s.orderCode || '—',
         role: s.linkRoleCode === 'TRACE' ? '仅业务追溯' : '成本归属',
         reason: s.noSourceReason || '',
+        employee: s.employeeName || '-',
+        department: s.departmentName || '-',
       }
       if (!s.allocations?.length) return [{ ...base, fee: '—', point: '—', amount: 0 }]
       return s.allocations.map((a) => ({
