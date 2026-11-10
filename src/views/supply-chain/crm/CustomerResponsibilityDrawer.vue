@@ -3,7 +3,7 @@
     <section v-loading="loading" v-if="state">
       <h2>{{ state.customerName }}</h2>
       <el-alert
-        title="客户主责决定新订单归属。修改后，已确认订单的历史归属保留。主责为空时，新订单需要补齐归属后才能提交。"
+        title="客户交接按生效时间留痕，新回款首次同步时按客户当前主责确定回款人。原订单及已确认回款的归属保留。立即交接可留空生效时间；补录时请填写真实交接时间。"
         type="info"
         :closable="false"
       />
@@ -43,6 +43,9 @@
                 placeholder="选择客户业务归属地区"
                 style="width: 100%"
             /></el-form-item>
+            <el-form-item label="生效时间" for="customer-owner-effective-at">
+              <el-date-picker id="customer-owner-effective-at" v-model="effectiveAt" type="datetime" placeholder="留空表示立即生效" :disabled-date="(date: Date) => date.getTime() > Date.now()" />
+            </el-form-item>
             <el-form-item label="变更原因" required
               ><el-input v-model="reason" type="textarea" maxlength="500" show-word-limit
             /></el-form-item>
@@ -85,12 +88,12 @@
             本页展示最近100条，处理后继续加载。
           </p> </el-tab-pane
         ><el-tab-pane :label="`归属历史（${state.historyTotal}）`">
-          <p>显示最近100条调整记录</p>
+          <p>显示最近100条记录。仅同步发现的时间不代表真实交接时间，不能用于自动认定历史回款归属。</p>
           <el-table :data="state.history" border
-            ><el-table-column label="时间" width="170"
+            ><el-table-column label="生效／发现时间" width="180"
               ><template #default="{ row }">{{
                 displayDateTime(row.occurredAt)
-              }}</template></el-table-column
+              }}<div><el-tag size="small" :type="row.effectiveKind === 'CONFIRMED' ? 'success' : 'warning'">{{ row.effectiveKind === 'CONFIRMED' ? '生效已确认' : '仅同步发现' }}</el-tag></div></template></el-table-column
             ><el-table-column label="主责变化" min-width="180"
               ><template #default="{ row }"
                 >{{ row.oldName || row.oldEmployee || '未分配' }} →
@@ -101,15 +104,14 @@
                 >{{ areaName(row.oldRegion) }} → {{ areaName(row.newRegion) }}</template
               ></el-table-column
             ><el-table-column
-              prop="reason"
+              prop="source" label="来源" width="110" />
+            <el-table-column label="系统记录时间" width="180"><template #default="{ row }">{{ displayDateTime(row.recordedAt) }}</template></el-table-column>
+            <el-table-column prop="departmentName" label="接手时部门" width="130" />
+            <el-table-column prop="reason"
               label="原因"
               min-width="220"
               show-overflow-tooltip /><el-table-column
-              prop="actor"
-              label="操作人"
-              min-width="170"
-              show-overflow-tooltip
-          /></el-table> </el-tab-pane
+              label="操作人" min-width="170"><template #default="{ row }">{{ row.effectiveKind === 'OBSERVED' ? '来源未提供（系统同步）' : row.actor }}</template></el-table-column></el-table> </el-tab-pane
       ></el-tabs>
     </section>
   </el-drawer>
@@ -128,6 +130,7 @@ import {
 } from '@/api/core/customer-responsibility'
 import { getAllCrmCustomerAreas, type CrmDictionaryView } from '@/api/core/crm'
 const emit = defineEmits<{ changed: [] }>()
+const effectiveAt = ref<Date | null>(null)
 const visible = ref(false),
   loading = ref(false),
   saving = ref(false),
@@ -162,6 +165,7 @@ function apply(value: ResponsibilityOverview) {
   employee.value = value.employeeCode || ''
   region.value = value.regionCode || ''
   reason.value = ''
+  effectiveAt.value = null
   if (value.employeeCode && !employees.value.some((e) => e.code === value.employeeCode))
     employees.value.unshift({
       code: value.employeeCode,
@@ -202,6 +206,7 @@ async function save() {
         regionCode: region.value,
         revision: state.value.revision,
         reason: reason.value.trim(),
+        effectiveAt: effectiveAt.value?.toISOString(),
       }),
     )
     emit('changed')

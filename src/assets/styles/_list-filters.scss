@@ -1,0 +1,31 @@
+@use 'sass:map';
+@use './variables' as *;
+
+// 显式使用类名的紧凑查询项，不改变录入表单或未接入的页面。
+.list-filter-field {
+  flex: 0 0 auto;
+  width: map.get($list-filter-widths, text);
+  min-width: 0;
+  max-width: 100%;
+
+  @each $kind, $width in $list-filter-widths {
+    &--#{$kind} { width: $width; }
+  }
+
+  > .el-input,
+  > .el-select,
+  > .el-date-editor.el-input__wrapper {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+.list-filter-group {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  max-width: 100%;
+}

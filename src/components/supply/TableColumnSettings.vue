@@ -1,7 +1,7 @@
 <template>
   <el-popover trigger="click" :width="240" placement="bottom-end">
     <template #reference>
-      <el-button size="small" :plain="plain">列设置</el-button>
+      <el-button :size="size ?? 'small'" :plain="plain">列设置</el-button>
     </template>
     <div class="column-settings">
       <el-checkbox-group
@@ -35,6 +35,7 @@ const props = defineProps<{
   visibility: Record<string, boolean>
   /** 与查询区其他次级按钮保持一致的浅底样式。 */
   plain?: boolean
+  size?: 'small' | 'default' | 'large'
 }>()
 const emit = defineEmits<{ change: [key: string, visible: boolean]; reset: [] }>()
 

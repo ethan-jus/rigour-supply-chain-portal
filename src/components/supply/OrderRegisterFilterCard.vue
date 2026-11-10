@@ -151,4 +151,9 @@ onBeforeUnmount(() => observer?.disconnect())
   height: 18px;
   background: var(--el-border-color);
 }
+
+/* 订单、明细、回款共用紧凑尺寸，按钮靠右且间距一致。 */
+.order-register-filter--compact .order-register-filter__fields { gap: 8px; }
+.order-register-filter--compact .order-register-filter__actions :deep(.el-button) { margin-left: 0; }
+.order-register-filter--compact .order-register-filter__actions :deep(.el-button.is-text) { padding-inline: 4px; }
 </style>

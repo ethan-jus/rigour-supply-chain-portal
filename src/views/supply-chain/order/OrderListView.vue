@@ -1,173 +1,187 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
-    <OrderRegisterFilterCard :loading="loading" query-first @search="search" @reset="resetFilters">
-      <template #actions>
-        <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
-        <el-button type="primary" @click="monthlyExportVisible = true">月业绩导出</el-button>
-        <TableColumnSettings
-          plain
-          :columns="orderColumns.columns"
-          :visibility="orderColumns.visibility"
-          @change="orderColumns.setVisible"
-          @reset="orderColumns.reset"
-        />
-        <OrderPackageSyncButton plain @completed="loadOrders" />
-      </template>
+    <OrderRegisterFilterCard class="order-register-filter--compact" :loading="loading" @search="search" @reset="resetFilters">
       <template #primary>
-        <el-date-picker
-          v-model="filters.orderDateRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="~"
-          start-placeholder="下单开始日期"
-          end-placeholder="下单结束日期"
-          aria-label="下单时间"
-          style="width: 280px"
-        />
-        <el-date-picker
-          v-model="pageFilters.paymentTimeRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          range-separator="~"
-          start-placeholder="收款开始日期"
-          end-placeholder="收款结束日期"
-          aria-label="收款日期"
-          style="width: 280px"
-        />
-        <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" style="width: 190px" @keyup.enter="search" />
-        <el-input v-model="pageFilters.dhbOrderNo" aria-label="订货宝单号" clearable placeholder="订货宝单号" style="width: 220px" @keyup.enter="search" />
-        <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" style="width: 220px" @keyup.enter="search" />
-        <el-tree-select
-          v-model="filters.regionCode"
-          v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
-          :data="areaTree"
-          :props="areaTreeProps"
-          node-key="code"
-          check-strictly
-          :render-after-expand="false"
-          :default-expanded-keys="areaTree.map((row) => row.code)"
-          aria-label="归属地区"
-          clearable
-          filterable
-          placeholder="归属地区"
-          popper-class="order-register-tree-popper"
-          style="width: 180px"
-        />
-        <el-select
-          v-model="filters.ownerEmployeeCode"
-          v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
-          aria-label="业务员"
-          clearable
-          filterable
-          remote
-          reserve-keyword
-          placeholder="搜索业务员"
-          :remote-method="searchEmployees"
-          :loading="employeeLoading"
-          style="width: 140px"
-        >
-          <el-option
-            v-for="item in employeeOptions"
-            :key="item.employeeCode"
-            :label="item.employeeName"
-            :value="item.employeeCode"
+        <div class="list-filter-field list-filter-field--date-range">
+          <el-date-picker
+            v-model="filters.orderDateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="下单开始日期"
+            end-placeholder="下单结束日期"
+            aria-label="下单时间"
           />
-        </el-select>
-        <el-tree-select
-          v-model="filters.departmentId"
-          v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
-          :data="departmentOptionsTree"
-          :props="departmentTreeProps"
-          node-key="id"
-          check-strictly
-          :render-after-expand="false"
-          :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
-          aria-label="部门"
-          clearable
-          filterable
-          placeholder="选择部门"
-          popper-class="order-register-tree-popper"
-          style="width: 180px"
-        />
-        <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
-        <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况" style="width: 115px">
-          <el-option label="全部" value="" />
-          <el-option label="有优惠" value="true" />
-          <el-option label="无优惠" value="false" />
-        </el-select>
-        <el-select v-model="pageFilters.orderStatusCode" aria-label="订单状态" clearable placeholder="订单状态" style="width: 115px">
-          <el-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态" style="width: 115px">
-          <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select v-model="pageFilters.dhbLinked" aria-label="订货宝关联单" clearable placeholder="订货宝关联单" style="width: 140px">
-          <el-option label="已关联" value="true" />
-          <el-option label="未关联" value="false" />
-        </el-select>
-        <el-select v-model="pageFilters.invoiceStatusCode" aria-label="发票状态" clearable placeholder="发票状态" style="width: 115px">
-          <el-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select
-          v-model="filters.createdBy"
-          v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
-          aria-label="创建人"
-          clearable
-          filterable
-          placeholder="创建人"
-          style="width: 125px"
-        >
-          <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
-        </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--date-range">
+          <el-date-picker
+            v-model="pageFilters.paymentTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="收款开始日期"
+            end-placeholder="收款结束日期"
+            aria-label="收款日期"
+          />
+        </div>
+        <div class="list-filter-field">
+          <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" @keyup.enter="search" />
+        </div>
+        <div class="list-filter-field">
+          <el-input v-model="pageFilters.dhbOrderNo" aria-label="订货宝单号" clearable placeholder="订货宝单号" @keyup.enter="search" />
+        </div>
+        <div class="list-filter-field">
+          <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" @keyup.enter="search" />
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-tree-select
+            v-model="filters.regionCode"
+            v-clear-filter-on-empty-input="() => (filters.regionCode = '')"
+            :data="areaTree"
+            :props="areaTreeProps"
+            node-key="code"
+            check-strictly
+            :render-after-expand="false"
+            :default-expanded-keys="areaTree.map((row) => row.code)"
+            aria-label="归属地区"
+            clearable
+            filterable
+            placeholder="归属地区"
+            popper-class="order-register-tree-popper"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--person">
+          <el-select
+            v-model="filters.ownerEmployeeCode"
+            v-clear-filter-on-empty-input="() => (filters.ownerEmployeeCode = '')"
+            aria-label="业务员"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            placeholder="搜索业务员"
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+          >
+            <el-option
+              v-for="item in employeeOptions"
+              :key="item.employeeCode"
+              :label="item.employeeName"
+              :value="item.employeeCode"
+            />
+          </el-select>
+        </div>
+        <div class="list-filter-group">
+          <div class="list-filter-field list-filter-field--select">
+            <el-tree-select
+              v-model="filters.departmentId"
+              v-clear-filter-on-empty-input="() => (filters.departmentId = null)"
+              :data="departmentOptionsTree"
+              :props="departmentTreeProps"
+              node-key="id"
+              check-strictly
+              :render-after-expand="false"
+              :default-expanded-keys="departmentOptionsTree.map((row) => row.id)"
+              aria-label="部门"
+              clearable
+              filterable
+              placeholder="选择部门"
+              popper-class="order-register-tree-popper"
+            />
+          </div>
+          <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况">
+            <el-option label="全部" value="" />
+            <el-option label="有优惠" value="true" />
+            <el-option label="无优惠" value="false" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.orderStatusCode" aria-label="订单状态" clearable placeholder="订单状态">
+            <el-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态">
+            <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.dhbLinked" aria-label="订货宝关联单" clearable placeholder="订货宝关联单">
+            <el-option label="已关联" value="true" />
+            <el-option label="未关联" value="false" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select v-model="pageFilters.invoiceStatusCode" aria-label="发票状态" clearable placeholder="发票状态">
+            <el-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--person">
+          <el-select
+            v-model="filters.createdBy"
+            v-clear-filter-on-empty-input="() => (filters.createdBy = '')"
+            aria-label="创建人"
+            clearable
+            filterable
+            placeholder="创建人"
+          >
+            <el-option v-for="name in creatorOptions" :key="name" :label="name" :value="name" />
+          </el-select>
+        </div>
       </template>
     </OrderRegisterFilterCard>
 
     <el-alert v-if="totals.missingLineOrderCount" :closable="false" type="warning"
       :title="`当前筛选有 ${totals.missingLineOrderCount} 笔订单缺少明细，订货金额、优惠额及优惠率暂无法完整计算。`" />
-    <div class="order-summary" aria-label="金额统计">
-      <div class="order-summary__metric order-summary__metric--payable">
-        <span class="order-summary__label">订单金额</span>
-        <strong class="order-summary__value">{{ moneyText(totals.payableAmount) }}</strong>
+    <OrderStatisticsPanel title="订单统计" :columns="8" :brief="`订单金额 ${moneyText(totals.payableAmount)}`">
+      <div class="order-summary order-summary--orders" aria-label="金额统计">
+        <div class="order-summary__metric order-summary__metric--payable">
+          <span class="order-summary__label">订单金额</span>
+          <strong class="order-summary__value">{{ moneyText(totals.payableAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--paid">
+          <el-tooltip content="所选订单累计回款，包含订货宝待财务确认和已确认金额；已取消回款不计入。" placement="top">
+            <span class="order-summary__label">回款金额</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ moneyText(totals.paidAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--paid">
+          <el-tooltip content="当前筛选订单的累计回款÷订单金额；按收款日期筛选时取整单最近一次有效收款日期，订单金额为零时不计算。" placement="top">
+            <span class="order-summary__label">回款率</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ repaymentRateText(totals.paidAmount, totals.payableAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--unpaid">
+          <span class="order-summary__label">待收金额</span>
+          <strong class="order-summary__value">{{ moneyText(totals.unpaidAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--count">
+          <el-tooltip content="当前筛选全部下单客户，按客户ID去重；未关联客户不计入。" placement="top">
+            <span class="order-summary__label">客户数</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ totals.customerCount ?? '-' }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--ordered">
+          <el-tooltip content="当前筛选全部订单的有效明细：单价×数量合计。" placement="top">
+            <span class="order-summary__label">订货金额</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ moneyText(totals.originalAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--discount">
+          <span class="order-summary__label">优惠额</span>
+          <strong class="order-summary__value">{{ moneyText(totals.discountAmount) }}</strong>
+        </div>
+        <div class="order-summary__metric order-summary__metric--discount">
+          <el-tooltip content="（订货金额合计－订单金额合计）÷订货金额合计；不平均各订单优惠率。订货金额为零时不计算。" placement="top">
+            <span class="order-summary__label">优惠率</span>
+          </el-tooltip>
+          <strong class="order-summary__value">{{ discountRateText(totals.discountRate) }}</strong>
+        </div>
       </div>
-      <div class="order-summary__metric order-summary__metric--paid">
-        <el-tooltip content="所选订单累计回款，包含订货宝待财务确认和已确认金额；已取消回款不计入。" placement="top">
-          <span class="order-summary__label">回款金额</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ moneyText(totals.paidAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--paid">
-        <el-tooltip content="当前筛选订单的累计回款÷订单金额；按收款日期筛选时取整单最近一次有效收款日期，订单金额为零时不计算。" placement="top">
-          <span class="order-summary__label">回款率</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ repaymentRateText(totals.paidAmount, totals.payableAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--unpaid">
-        <span class="order-summary__label">待收金额</span>
-        <strong class="order-summary__value">{{ moneyText(totals.unpaidAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--count">
-        <el-tooltip content="当前筛选全部下单客户，按客户ID去重；未关联客户不计入。" placement="top">
-          <span class="order-summary__label">客户数</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ totals.customerCount ?? '-' }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--ordered">
-        <el-tooltip content="当前筛选全部订单的有效明细：单价×数量合计。" placement="top">
-          <span class="order-summary__label">订货金额</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ moneyText(totals.originalAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--discount">
-        <span class="order-summary__label">优惠额</span>
-        <strong class="order-summary__value">{{ moneyText(totals.discountAmount) }}</strong>
-      </div>
-      <div class="order-summary__metric order-summary__metric--discount">
-        <el-tooltip content="（订货金额合计－订单金额合计）÷订货金额合计；不平均各订单优惠率。订货金额为零时不计算。" placement="top">
-          <span class="order-summary__label">优惠率</span>
-        </el-tooltip>
-        <strong class="order-summary__value">{{ discountRateText(totals.discountRate) }}</strong>
-      </div>
-    </div>
+    </OrderStatisticsPanel>
 
     <el-card class="list-card" shadow="never">
       <div class="table-viewport">
@@ -381,17 +395,29 @@
           </el-table-column>
         </el-table>
       </div>
-      <div class="pagination-row">
-        <el-pagination
+      <ListTableFooter>
+        <template #actions>
+          <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+          <el-button plain @click="monthlyExportVisible = true">月业绩导出</el-button>
+          <TableColumnSettings
+            size="default"
+            plain
+            :columns="orderColumns.columns"
+            :visibility="orderColumns.visibility"
+            @change="orderColumns.setVisible"
+            @reset="orderColumns.reset"
+          />
+          <OrderPackageSyncButton plain @completed="loadOrders" />
+        </template>
+        <CompactPagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :total="pageData.total"
           :page-sizes="[20, 50, 100, 200]"
-          layout="total, sizes, prev, pager, next, jumper"
           @size-change="onPageSizeChange"
           @current-change="loadOrders"
         />
-      </div>
+      </ListTableFooter>
     </el-card>
 
     <el-dialog v-model="monthlyExportVisible" title="月业绩导出" width="580px">
@@ -430,6 +456,9 @@ import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import OrderInvoiceApplyDialog from './components/OrderInvoiceApplyDialog.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
+import ListTableFooter from '@/components/supply/ListTableFooter.vue'
+import OrderStatisticsPanel from '@/components/supply/OrderStatisticsPanel.vue'
+import CompactPagination from '@/components/supply/CompactPagination.vue'
 import { displayDateTime } from '@/utils/business-date'
 import {
   moneyText,

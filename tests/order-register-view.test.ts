@@ -364,14 +364,16 @@ describe('订单列表页', () => {
     wrapper.unmount()
   })
 
-  it('查询条件默认全部展示在同一行，按钮固定在右侧', async () => {
+  it('查询条件自然换行，查询重置在右侧，辅助操作移到底部', async () => {
     const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     const actions = wrapper
       .findAll('.order-register-filter__actions button')
       .map((node) => node.text())
-    expect(actions).toEqual(['重置', '查询', '导出', '月业绩导出', '列设置', '同步订单'])
-    // 不再使用折叠行，全部条件在条件行内按宽度自然换行。
+    expect(actions).toEqual(['查询', '重置'])
+    expect(wrapper.findAll('.list-table-footer__actions button').map(node => node.text()))
+      .toEqual(['导出', '月业绩导出', '列设置', '同步订单'])
+    // 所有条件在同一个容器内，首行数量由当前视口宽度决定。
     expect(wrapper.find('.order-register-filter__line--extra').exists()).toBe(false)
     expect(wrapper.find('.order-register-filter__fields').text()).toContain('创建人')
     const dateEditor = wrapper.find('.order-register-filter__fields .el-date-editor')

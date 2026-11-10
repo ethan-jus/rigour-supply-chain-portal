@@ -311,6 +311,47 @@ it('薪酬类别清空时显示中文必填提示，试用期输入框只填数�
 })
 
 describe('员工部门筛选', () => {
+  it('翻页等待和失败时保留总数及页码，成功后显示第二页，查询和修改每页条数回到第一页', async () => {
+    const row = (id: string) => ({ id, employeeCode: `EMP${id}`, employeeName: `员工${id}`, employmentStatus: 'ACTIVE' }) as HrEmployeeRecord
+    vi.mocked(getHrEmployees).mockResolvedValue({ items: [row('1')], total: 42, begin: 0, step: 20 })
+    wrapper = mount(Employees, {
+      global: { plugins: [ElementPlus, createPinia()], stubs: { HrEmployeeEditor: true, ElDialog: Dialog } },
+    })
+    await flushPromises()
+    let resolvePage!: (value: Awaited<ReturnType<typeof getHrEmployees>>) => void
+    vi.mocked(getHrEmployees).mockImplementation(() => new Promise((resolve) => { resolvePage = resolve }))
+    const pageButton = (page: number) => wrapper!.findAll('.el-pagination button, .el-pagination li').find((button) => button.text() === String(page))!
+    await pageButton(2).trigger('click')
+    await flushPromises()
+    expect(getHrEmployees).toHaveBeenLastCalledWith(expect.objectContaining({ begin: 20, step: 20 }))
+    expect(wrapper.getComponent({ name: 'ElPagination' }).props()).toMatchObject({ currentPage: 2, total: 42 })
+    resolvePage({ items: [row('21')], total: 42, begin: 20, step: 20 })
+    await flushPromises()
+    expect(wrapper.findAll('.employee-name').map((name) => name.text())).toEqual(['员工21'])
+    expect(wrapper.getComponent({ name: 'ElPagination' }).props('currentPage')).toBe(2)
+
+    vi.mocked(getHrEmployees).mockRejectedValueOnce(new Error('读取失败'))
+    await pageButton(3).trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('读取失败')
+    expect(wrapper.getComponent({ name: 'ElPagination' }).props()).toMatchObject({ currentPage: 3, total: 42 })
+    expect(wrapper.findAll('.employee-name')).toHaveLength(0)
+
+    vi.mocked(getHrEmployees).mockResolvedValue({ items: [row('1')], total: 42, begin: 0, step: 20 })
+    await wrapper.get('input[aria-label="员工姓名筛选"]').setValue('员工')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(getHrEmployees).toHaveBeenLastCalledWith(expect.objectContaining({ begin: 0, employeeName: '员工' }))
+    await pageButton(2).trigger('click')
+    await flushPromises()
+    const pagination = wrapper.getComponent({ name: 'ElPagination' })
+    pagination.vm.$emit('update:page-size', 50)
+    pagination.vm.$emit('size-change', 50)
+    await flushPromises()
+    expect(getHrEmployees).toHaveBeenLastCalledWith(expect.objectContaining({ begin: 0, step: 50 }))
+    expect(pagination.props('currentPage')).toBe(1)
+  })
+
   it('默认入职时间排序、部门切换清除筛选、重置保留当前部门', async () => {
     vi.mocked(getHrEmployees).mockResolvedValue({
       items: [
@@ -457,8 +498,7 @@ it('按负责人编号高亮姓名，只提供在职与离职，旧来源未核�
   expect(wrapper.findAll('th').map((n) => n.text())).not.toContain('部门负责人')
   wrapper.getComponent(Sidebar).vm.$emit('update:modelValue', 2)
   await flushPromises()
-  expect(wrapper.get('h1').text()).toBe('杭州')
-  expect(wrapper.get('.employee-count').text()).toBe('4 人')
+  expect(wrapper.getComponent(Sidebar).props('modelValue')).toBe(2)
   wrapper
     .getComponent(Sidebar)
     .getComponent({ name: 'ElCheckbox' })

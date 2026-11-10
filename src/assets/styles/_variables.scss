@@ -38,6 +38,15 @@ $sidebar-width: 232px;
 $sidebar-collapsed-width: 64px;
 $topbar-height: 48px;
 
+// 列表查询项统一宽度；通过 _list-filters.scss 的语义类使用，不随行剩余空间拉伸。
+$list-filter-widths: (
+  text: 160px,
+  person: 120px,
+  select: 140px,
+  date-range: 248px,
+  product: 180px,
+);
+
 // 间距（8px 网格）
 $spacing-xs: 4px;
 $spacing-sm: 8px;
