@@ -429,7 +429,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           applicationCode: 'SUPPLY_CHAIN',
           routeKey: 'supply.order.invoices',
           pageKey: 'order-invoices',
-          permission: 'order:read',
+          permission: 'order:invoice:read',
         },
       },
       {

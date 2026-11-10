@@ -4,12 +4,14 @@ import ElementPlus from 'element-plus'
 
 const mocks = vi.hoisted(() => ({
   page: vi.fn(),
+  invoice: vi.fn().mockResolvedValue(null),
   can: vi.fn(() => true),
   routeQuery: { value: {} as Record<string, string> },
 }))
 
 vi.mock('@/api/core/order-register', () => ({
   getOrderInvoicePage: mocks.page,
+  getOrderInvoice: mocks.invoice,
 }))
 
 vi.mock('@/composables/useSupplyPermissions', () => ({
@@ -117,4 +119,16 @@ describe('发票管理页', () => {
     expect(wrapper.findAll('button').filter((button) => button.text() === '办理')).toHaveLength(0)
     expect(wrapper.findAll('button').filter((button) => button.text() === '查看').length).toBeGreaterThan(0)
   })
+  it('只有发票查看权限也能打开详情且不会挂载完整订单抽屉', async () => {
+    mocks.can.mockImplementation((permission?: string) => permission === 'order:invoice:read')
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === '查看')!.trigger('click')
+    await flushPromises()
+    expect(mocks.invoice).toHaveBeenCalledWith('A001')
+    expect(wrapper.findComponent({ name: 'OrderRegisterDetailDrawer' }).exists()).toBe(false)
+    expect(wrapper.findAll('button').some(button => button.text() === '办理')).toBe(false)
+    wrapper.unmount()
+  })
+
 })

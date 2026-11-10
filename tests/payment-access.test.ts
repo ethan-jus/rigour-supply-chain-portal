@@ -12,6 +12,7 @@ vi.mock('@/api/core/erp-internal', () => ({ getErpProductCategories: vi.fn(() =>
 describe('财务回款独立权限', () => {
   it('回款使用专属权限，订单页面仍要求订单查看', () => {
     const routes = constantRoutes.find(row => row.path === '/supply-chain')!.children!
+    expect(routes.find(row => row.path === 'order/invoices')?.meta?.permission).toBe('order:invoice:read')
     expect(routes.find(row => row.name === 'SupplyOrderSalesPayments')?.meta?.permission).toBe('order:payment:read')
     expect(routes.find(row => row.path === 'order/register')?.meta?.permission ?? routes.find(row => row.name === 'SupplyOrderRegister')?.meta?.permission).not.toBe('order:payment:read')
   })
