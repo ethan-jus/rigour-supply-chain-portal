@@ -109,6 +109,19 @@ async function mountView() {
   await flushPromises()
   return w
 }
+async function exportFiltered(w: Awaited<ReturnType<typeof mountView>>) {
+  await w
+    .findAll('button')
+    .find((b) => b.text() === '自定义导出')!
+    .trigger('click')
+  await flushPromises()
+  expect(exportCosts).not.toHaveBeenCalled()
+  await w
+    .findAll('button')
+    .find((b) => b.text() === '开始导出')!
+    .trigger('click')
+  await flushPromises()
+}
 describe('manual source documents', () => {
   it.each([
     ['cost/purchases', '采购成本记录'],
@@ -601,11 +614,7 @@ describe('manual source documents', () => {
       .mockResolvedValueOnce({ ...empty, total: 2, items: [{ ...r, id: '2', documentNo: 'CST2' }] })
     const w = await mountView()
     try {
-      await w
-        .findAll('button')
-        .find((b) => b.text() === '导出')!
-        .trigger('click')
-      await flushPromises()
+      await exportFiltered(w)
       expect(exportCosts).toHaveBeenNthCalledWith(
         2,
         'logistics',
@@ -916,11 +925,7 @@ describe('explicit logistics business roles', () => {
       expect(getCosts).toHaveBeenCalledTimes(1)
       expect(getCosts).toHaveBeenLastCalledWith('logistics', { ...selected, begin: 0, step: 20 })
       expect(w.get('.summary-registered strong').text()).toBe('¥180.00')
-      await w
-        .findAll('button')
-        .find((b) => b.text() === '导出')!
-        .trigger('click')
-      await flushPromises()
+      await exportFiltered(w)
       expect(exportCosts).toHaveBeenLastCalledWith('logistics', {
         ...selected,
         begin: 0,

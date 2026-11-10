@@ -457,7 +457,7 @@ describe('数据库导航注册表', () => {
       SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '同步控制').map(
         (item) => item.title,
       ),
-    ).toEqual(['订货宝同步中心', '定时任务', '飞书导入中心'])
+    ).toEqual(['订货宝同步中心', '货拉拉接入', '定时任务', '飞书导入中心'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
       'supply.erp.master-data.skus',
     )
