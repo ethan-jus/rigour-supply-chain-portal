@@ -36,6 +36,7 @@ export interface OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterOrderQuery extends OrderRegisterCommonQuery {
+  paymentOwnerEmployeeCode?: string
   paymentTimeFrom?: string
   paymentTimeTo?: string
   hasDiscount?: boolean
@@ -49,6 +50,7 @@ export interface OrderRegisterOrderQuery extends OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterLineQuery extends OrderRegisterCommonQuery {
+  paymentOwnerEmployeeCode?: string
   paymentTimeFrom?: string
   paymentTimeTo?: string
   productVariantIds?: Array<string | number>
@@ -73,6 +75,8 @@ export interface OrderRegisterPaymentQuery extends OrderRegisterCommonQuery {
 }
 
 export interface OrderRegisterOrderItem {
+  /** 有效回款的独立归属快照；多人去重，未确认归属显示待补齐。 */
+  paymentOwnerNames?: string[]
   /** 整单最近一次有效收款日期；未收款为空。 */
   paymentTime?: string | null
   id: string
@@ -137,6 +141,8 @@ export interface OrderRegisterOrderPage {
 }
 
 export interface OrderRegisterLineItem {
+  /** 有效回款的独立归属快照；多人去重，未确认归属显示待补齐。 */
+  paymentOwnerNames?: string[]
   /** 最近一次实际收款日期；未收款或无有效收款记录时为空。 */
   paymentTime?: string | null
   paymentStatusCode: string

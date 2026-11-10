@@ -71,6 +71,27 @@
             />
           </el-select>
         </div>
+        <div class="list-filter-field list-filter-field--person">
+          <el-select
+            v-model="pageFilters.paymentOwnerEmployeeCode"
+            v-clear-filter-on-empty-input="() => (pageFilters.paymentOwnerEmployeeCode = '')"
+            aria-label="回款人"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            placeholder="搜索回款人"
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+          >
+            <el-option
+              v-for="item in employeeOptions"
+              :key="item.employeeCode"
+              :label="item.employeeName"
+              :value="item.employeeCode"
+            />
+          </el-select>
+        </div>
         <div class="list-filter-group">
           <div class="list-filter-field list-filter-field--select">
             <el-tree-select
@@ -214,6 +235,9 @@
           </el-table-column>
           <el-table-column v-if="orderColumns.isVisible('ownerEmployee')" label="业务员" width="120">
             <template #default="{ row }"><strong class="order-party-name">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</strong></template>
+          </el-table-column>
+          <el-table-column v-if="orderColumns.isVisible('paymentOwner')" label="回款人" width="140" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.paymentOwnerNames?.join('、') || '-' }}</template>
           </el-table-column>
           <el-table-column v-if="orderColumns.isVisible('payableAmount')" label="订单金额" width="120" align="right" prop="payableAmount" sortable="custom">
             <template #header>
@@ -495,6 +519,7 @@ const canInvoiceOrders = computed(() => can('order:invoice:write'))
 const orderColumns = useColumnSettings('order-list', [
   { key: 'customerName', label: '客户名称', locked: true },
   { key: 'ownerEmployee', label: '业务员' },
+  { key: 'paymentOwner', label: '回款人' },
   { key: 'payableAmount', label: '订单金额' },
   { key: 'paidAmount', label: '收款金额' },
   { key: 'unpaidAmount', label: '待收金额' },
@@ -535,6 +560,7 @@ const {
 } = useOrderRegisterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
+  paymentOwnerEmployeeCode: '',
   paymentTimeRange: null as [string, string] | null,
   discountStatus: '' as string | undefined,
   dhbOrderNo: '',
@@ -670,6 +696,7 @@ function buildQuery() {
     customerName: empty(filters.customerName),
     regionCode: empty(filters.regionCode),
     ownerEmployeeCode: empty(filters.ownerEmployeeCode),
+    paymentOwnerEmployeeCode: empty(pageFilters.paymentOwnerEmployeeCode),
     departmentId: filters.departmentId ?? undefined,
     includeSubDepartments: filters.includeSubDepartments,
     createdBy: empty(filters.createdBy),
@@ -709,6 +736,7 @@ function search() {
 }
 
 function clearFilters() {
+  pageFilters.paymentOwnerEmployeeCode = ''
   pageFilters.paymentTimeRange = null
   pageFilters.discountStatus = ''
   resetCommonFilters()
