@@ -17,6 +17,16 @@ export interface Facts {
   bonusAmount?: Amount
   receipts?: PlatformVoucher[]
   billVouchers?: PlatformVoucher[]
+  receiptInfo?: {
+    type: number | null
+    status: number | null
+    backType: number | null
+    expressNo: string | null
+    remark: string | null
+    unableToReturn: number | null
+    unableReason: string | null
+  } | null
+  stopPhotos?: { stopIndex: number; name: string; phase: string; vouchers: PlatformVoucher[] }[]
   completeTime?: string | null
   billUpdatedTime?: string | null
   billAmount: Amount

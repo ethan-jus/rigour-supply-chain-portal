@@ -73,15 +73,20 @@ export const huolalaApi = {
   save: (data: HuolalaSettings) =>
     apiClient.put<HuolalaConnection>(`${base}/connection`, data, options),
   authorize: () =>
-    apiClient.post<{ url: string; state: string; expiresAt: string }>(
+    apiClient.post<{ url: string; id: string; expiresAt: string }>(
       `${base}/authorization`,
       {},
       options,
     ),
-  complete: (credential: string, state: string) =>
-    apiClient.post<HuolalaConnection>(
-      `${base}/authorization/complete`,
-      { credential, state },
+  authorizationStatus: (id: string) =>
+    apiClient.get<{ id: string; status: string; expiresAt: string; message: string | null }>(
+      `/integration/thirdparty/HUOLALA/authorizations/${encodeURIComponent(id)}`,
+      options,
+    ),
+  cancelAuthorization: (id: string) =>
+    apiClient.post<void>(
+      `/integration/thirdparty/HUOLALA/authorizations/${encodeURIComponent(id)}/cancel`,
+      {},
       options,
     ),
   employees: () => apiClient.get<HuolalaEmployee[]>(`${base}/employees`, options),

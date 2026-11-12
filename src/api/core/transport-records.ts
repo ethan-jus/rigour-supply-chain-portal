@@ -64,8 +64,8 @@ export const confirmTransport = (row: CostRecord, reason: string) =>
   )
 export const exportSelectedTransport = (ids: string[]) =>
   apiClient.post<TransportDetail[]>(`${base}/export-selected`, ids, options)
-export const getTransportVoucher = (id: string, voucher: string) =>
+export const getTransportVoucher = (id: string, voucher: string, download = false) =>
   apiClient.get<{ url: string }>(
-    `${base}/${encodeURIComponent(id)}/vouchers/${encodeURIComponent(voucher)}`,
+    `${base}/${encodeURIComponent(id)}/vouchers/${encodeURIComponent(voucher)}${download ? '?download=true' : ''}`,
     options,
   )

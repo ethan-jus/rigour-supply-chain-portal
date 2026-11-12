@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>行驶路段 · 组件视觉检查</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f5f7fb;
+        color: #25364b;
+        font:
+          14px/1.6 system-ui,
+          sans-serif;
+      }
+      main {
+        margin: 24px;
+        padding: 20px;
+        border: 1px solid #dce3ed;
+        border-radius: 8px;
+        background: white;
+      }
+      h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      p {
+        margin: 0 0 20px;
+        color: #64748b;
+      }
+      .el-table .cell {
+        padding-inline: 10px;
+      }
+      .el-table__cell {
+        padding: 13px 0 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h2>行驶路段</h2>
+      <p>本地组件展示样例，不连接业务接口或写入数据库。</p>
+      <div id="app"></div>
+    </main>
+    <script type="module">
+      import { createApp, h } from 'vue'
+      import ElementPlus, { ElTable, ElTableColumn } from 'element-plus'
+      import 'element-plus/dist/index.css'
+      import '/src/assets/styles/index.scss'
+      import Route from '/src/views/supply-chain/cost/TransportRouteSummary.vue'
+      const point = (name, address = '') => ({ name, address })
+      const rows = [
+        {
+          carrier: '货拉拉',
+          route: {
+            origin: point('美鹏SKY(儒骏大厦)4栋'),
+            receivers: [
+              point('中途收货门店', '示例路1号'),
+              point('TT桌球棋牌俱乐部(宝安华强广场店)'),
+            ],
+          },
+        },
+        {
+          carrier: '货拉拉',
+          route: {
+            origin: point('华凯活力中心'),
+            receivers: [point('中途收货门店'), point('金点台球俱乐部')],
+          },
+        },
+        {
+          carrier: '货拉拉',
+          route: {
+            origin: point('武汉城市仓'),
+            receivers: Array.from({ length: 14 }, (_, i) =>
+              point(`第${i + 1}站收货门店`, `示例路${i + 1}号`),
+            ),
+          },
+        },
+        {
+          carrier: '顺丰',
+          route: { origin: point('深圳仓'), receivers: [point('星河门店', '示例路2号')] },
+        },
+        { carrier: '极兔', route: { origin: null, receivers: [] } },
+      ].map((row, id) => ({ ...row, id }))
+      createApp({
+        render: () =>
+          h(
+            ElTable,
+            { data: rows, border: true, rowKey: 'id' },
+            {
+              default: () => [
+                h(ElTableColumn, { prop: 'carrier', label: '物流公司', width: 120 }),
+                h(
+                  ElTableColumn,
+                  { label: '行驶路段', width: 200 },
+                  {
+                    default: ({ row }) => h(Route, { route: row.route }),
+                  },
+                ),
+                h(
+                  ElTableColumn,
+                  { label: '收货点数', width: 86, align: 'center' },
+                  {
+                    default: ({ row }) => row.route.receivers.length || '-',
+                  },
+                ),
+              ],
+            },
+          ),
+      })
+        .use(ElementPlus)
+        .mount('#app')
+    </script>
+  </body>
+</html>

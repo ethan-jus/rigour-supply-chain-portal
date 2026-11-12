@@ -342,34 +342,20 @@
       title="完成企业授权"
       width="min(600px,94vw)"
       :close-on-click-modal="false"
-      ><p>
-        请在货拉拉页面完成企业账号授权，完成后会自动返回。若未自动完成，可填写回调页面提供的授权码。
-      </p>
-      <el-input
-        v-model="manualCredential"
-        placeholder="临时授权码"
-        type="password"
-        autocomplete="off"
-      /><el-alert
+      ><p>请在新窗口完成货拉拉企业账号授权，系统会自动更新授权结果。</p>
+      <el-alert
         v-if="authorizationError"
         :title="authorizationError"
-        type="error"
+        type="info"
         :closable="false"
-      /><template #footer
-        ><el-button @click="cancelAuthorization">关闭</el-button
-        ><el-button
-          type="primary"
-          :loading="saving"
-          :disabled="!manualCredential"
-          @click="finishAuthorization(manualCredential)"
-          >完成授权</el-button
-        ></template
-      ></el-dialog
-    >
+      />
+      <template #footer><el-button @click="cancelAuthorization">关闭</el-button></template>
+    </el-dialog>
   </div>
 </template>
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
+import { waitForAuthorization } from '@/utils/thirdparty-authorization'
 import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
@@ -428,9 +414,13 @@ const rules: FormRules = {
 }
 const authLabel = computed(
   () =>
-    ({ AUTHORIZED: '已授权', EXPIRED: '授权失效', UNAUTHORIZED: '未授权' })[
-      connection.value?.authStatus || 'UNAUTHORIZED'
-    ] || '未授权',
+    ({
+      AUTHORIZED: '已授权',
+      EXPIRED: '授权失效',
+      REAUTHORIZE_REQUIRED: '需重新授权',
+      DISABLED: '已停用',
+      UNAUTHORIZED: '未授权',
+    })[connection.value?.authStatus || 'UNAUTHORIZED'] || '未授权',
 )
 const running = computed(() => runs.value.some((r) => r.status === 'RUNNING'))
 const employeeName = ref(''),
@@ -488,11 +478,11 @@ async function showIssues(id: string) {
   }
 }
 const authorizing = ref(false),
-  manualCredential = ref(''),
   authorizationError = ref('')
 let disposed = false,
   popup: Window | null = null,
-  authorizationState = '',
+  authorizationId = '',
+  authorizationController: AbortController | null = null,
   candidateRequest = 0
 const dateTime = (s: string | null) => (s ? displayDateTime(s) : '-')
 const scopeLabel = (s: string) =>
@@ -555,57 +545,47 @@ async function startAuthorization() {
     error.value = '请允许本站打开授权窗口'
     return
   }
+  popup.opener = null
   authorizationError.value = ''
-  manualCredential.value = ''
   authorizing.value = true
+  authorizationController = new AbortController()
+  const controller = authorizationController
   try {
     const result = await huolalaApi.authorize()
-    if (disposed || !authorizing.value) {
-      popup.close()
+    if (disposed || controller.signal.aborted) {
+      void huolalaApi.cancelAuthorization(result.id).catch(() => {})
       return
     }
-    authorizationState = result.state
+    authorizationId = result.id
     popup.location.href = result.url
+    const status = await waitForAuthorization(
+      () => huolalaApi.authorizationStatus(result.id),
+      controller.signal,
+      (message) => {
+        authorizationError.value = message || ''
+      },
+    )
+    if (disposed || controller.signal.aborted) return
+    if (status.status === 'SUCCEEDED') {
+      authorizationId = ''
+      cancelAuthorization()
+      await load()
+      ElMessage.success('企业授权已完成')
+    } else authorizationError.value = status.message || '本次授权未完成，请关闭后重新发起授权'
   } catch (e) {
-    popup?.close()
-    authorizing.value = false
-    error.value = errorMessage(e, '发起授权失败')
-  }
-}
-async function finishAuthorization(credential: string) {
-  if (saving.value || !authorizationState || !credential) return
-  saving.value = true
-  authorizationError.value = ''
-  try {
-    const c = await huolalaApi.complete(credential, authorizationState)
-    if (disposed) return
-    connection.value = c
-    applySettings(c)
-    cancelAuthorization()
-    ElMessage.success('企业授权已完成')
-  } catch (e) {
-    authorizationError.value = errorMessage(e, '授权未完成，请重新发起授权')
-  } finally {
-    saving.value = false
-    manualCredential.value = ''
+    if (!disposed && !controller.signal.aborted)
+      authorizationError.value = errorMessage(e, '授权结果查询失败，请稍后重试')
   }
 }
 function cancelAuthorization() {
+  authorizationController?.abort()
+  authorizationController = null
+  const id = authorizationId
+  authorizationId = ''
   authorizing.value = false
-  authorizationState = ''
-  manualCredential.value = ''
   popup?.close()
   popup = null
-}
-function onMessage(event: MessageEvent) {
-  if (
-    event.origin === window.location.origin &&
-    event.source === popup &&
-    authorizing.value &&
-    event.data?.type === 'rigour-huolala-authorized' &&
-    typeof event.data.credential === 'string'
-  )
-    void finishAuthorization(event.data.credential)
+  if (id) void huolalaApi.cancelAuthorization(id).catch(() => {})
 }
 async function openBinding(e: HuolalaEmployee) {
   selectedEmployee.value = e
@@ -671,9 +651,18 @@ async function unlink(e: HuolalaEmployee) {
   }
 }
 async function loadRuns() {
+  const wasRunning = running.value
   try {
     const r = await huolalaApi.runs()
-    if (!disposed) runs.value = r
+    if (disposed) return
+    runs.value = r
+    if (wasRunning && !running.value) {
+      const [c, e] = await Promise.all([huolalaApi.connection(), huolalaApi.employees()])
+      if (disposed) return
+      connection.value = c
+      employees.value = e
+      // 同步只刷新结果，不覆盖业务尚未保存的同步设置。
+    }
   } catch (e) {
     if (!disposed) error.value = errorMessage(e, '同步记录加载失败')
   }
@@ -704,7 +693,6 @@ async function submitSync(scope: string) {
 }
 let timer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
-  window.addEventListener('message', onMessage)
   void load()
   timer = setInterval(() => {
     if (!disposed && running.value) void loadRuns()
@@ -714,7 +702,6 @@ onBeforeUnmount(() => {
   disposed = true
   ++candidateRequest
   if (timer) clearInterval(timer)
-  window.removeEventListener('message', onMessage)
   cancelAuthorization()
 })
 </script>

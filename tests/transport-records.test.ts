@@ -73,7 +73,7 @@ const platform = (): PlatformTransport => ({
       useTime: '2026-11-10 10:00:00',
       status: '已完成',
       paidAmount: 142.64,
-      raw: {},
+      raw: { 下单时间: '2026-11-09 18:30:26' },
       salesOrderNos: [],
       line: 0,
       facts: {
@@ -152,6 +152,35 @@ async function startExport() {
   await flushPromises()
 }
 describe('统一运输记录 V2.6', () => {
+  it('列表和导出使用最新平台下单时间；缺失时不拿运输日期或本系统创建时间补位', async () => {
+    const p = platform()
+    p.source.latestOrder = {
+      ...p.source.order,
+      raw: { 下单时间: '2026-11-10 08:15:36' },
+    }
+    const manual = { ...record(), id: 'MANUAL', createdTime: '2026-11-12T02:00:00Z' }
+    api.list.mockResolvedValue({
+      page: { total: 2, begin: 0, step: 20, items: [record(), manual] },
+      platformRecords: { C1: p },
+    })
+    wrapper = mount(View, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: { CostCarrierOrdersPanel: true, TransportRecordEditor: true, ElTeleport: true },
+      },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('下单时间')
+    expect(wrapper.text()).toContain('2026-11-10 08:15:36')
+    expect(wrapper.text()).not.toContain('2026-11-09 18:30:26')
+    await startExport()
+    const [, headers, rows] = api.workbook.mock.calls[0]!
+    expect(rows.map((r: string[]) => r[headers.indexOf('下单时间')])).toEqual([
+      '2026-11-10 08:15:36',
+      '-',
+    ])
+  })
+
   it('手工两个号码独立回填，平台没有运单号时不拿平台订单号补位', () => {
     const r = record()
     r.data.ledger = createLedgerCommand(true).ledger!
@@ -227,7 +256,13 @@ describe('统一运输记录 V2.6', () => {
     const settings = wrapper.findComponent({ name: 'TableColumnSettings' })
     const labels = (settings.props('columns') as { label: string }[]).map((c) => c.label)
     expect(labels).toContain('物流公司')
+    expect(labels).toContain('下单时间')
+    expect(labels.indexOf('下单时间')).toBeLessThan(labels.indexOf('运输日期'))
     expect(labels).toContain('第三方订单号')
+    expect(labels).toContain('行驶路段')
+    expect(labels).toContain('收货点数')
+    expect(labels.indexOf('行驶路段')).toBeLessThan(labels.indexOf('运输类型'))
+    expect(labels).not.toContain('收货方')
     expect(labels).not.toContain('已支付（元）')
     expect(labels).not.toContain('付款状态')
     expect(labels).not.toContain('货拉拉下单员工')
@@ -237,10 +272,16 @@ describe('统一运输记录 V2.6', () => {
     expect(headers).toContain('本系统关联员工')
     expect(headers).toContain('员工关联状态')
     expect(rows[0][headers.indexOf('运单号')]).toBe('-')
+    expect(rows[0][headers.indexOf('下单时间')]).toBe('2026-11-09 18:30:26')
     expect(rows[0][headers.indexOf('运输费用（元）')]).toBe(142.64)
     expect(rows[0][headers.indexOf('已确认运输成本（元）')]).toBe(137.64)
     expect(rows[0][headers.indexOf('第三方订单号')]).toBe('3624071813921329726')
     expect(rows[0][headers.indexOf('付款状态')]).toBe('已付款')
+    expect(rows[0][headers.indexOf('行驶路段')]).toBe(
+      '武汉仓（仓储路1号） → 星河门店（沿江路18号） → 长江门店（江汉路20号）',
+    )
+    expect(rows[0][headers.indexOf('收货点数')]).toBe(2)
+    expect(rows[0][headers.indexOf('收货方')]).toBe('星河门店\n长江门店')
   })
   it('已勾选只导出选择记录，不能回退成整批；单据状态在创建人之前', async () => {
     api.selected.mockResolvedValue([{ record: record(), platform: platform() }])
@@ -259,5 +300,114 @@ describe('统一运输记录 V2.6', () => {
     const text = wrapper.text()
     expect(text.indexOf('单据状态', text.indexOf('费用单号'))).toBeLessThan(text.indexOf('创建人'))
     expect(wrapper.text()).not.toContain('来源差异')
+  })
+})
+
+describe('平台回单、票据和装卸货照片', () => {
+  function evidence() {
+    const p = platform()
+    p.source.order.facts!.billUpdatedTime = '2026-11-08 16:00:00'
+    p.source.order.facts!.receiptInfo = {
+      type: 3,
+      status: 3,
+      backType: 2,
+      expressNo: 'SF987654321000',
+      remark: '纸质回单已寄回',
+      unableToReturn: 0,
+      unableReason: '',
+    }
+    p.source.order.facts!.receipts = [
+      {
+        id: 'R1',
+        name: '拍照回单.jpg',
+        state: 'READY',
+        contentType: 'image/jpeg',
+        savedAt: '2026-11-11T06:00:00Z',
+      },
+    ]
+    p.source.order.facts!.stopPhotos = [
+      {
+        stopIndex: 0,
+        name: '武汉仓',
+        phase: '装货照片',
+        vouchers: [{ id: 'P1', name: '装货.jpg', state: 'READY', contentType: 'image/jpeg' }],
+      },
+      {
+        stopIndex: 2,
+        name: '长江门店',
+        phase: '卸货照片',
+        vouchers: [{ id: 'P2', name: '卸货.jpg', state: 'FAILED' }],
+      },
+    ]
+    return p
+  }
+  async function renderEvidence() {
+    wrapper = mount(Bill, {
+      props: { recordId: 'C1', platform: evidence(), confirmed: true, confirmedAmount: 137.64 },
+      global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
+    })
+    await flushPromises()
+  }
+  it('纸质回单独立展示寄回快递号，逐站显示照片和失败重试状态，金额及账单只读', async () => {
+    await renderEvidence()
+    const text = wrapper!.text()
+    for (const value of [
+      '纸质回单',
+      '已确认',
+      '快递寄回',
+      '回单寄回快递单号',
+      'SF987654321000',
+      '纸质回单已寄回',
+      '2026-11-08 16:00:00',
+      '第1站 武汉仓 · 装货照片',
+      '第3站 长江门店 · 卸货照片',
+      '获取失败，将自动重试',
+    ])
+      expect(text).toContain(value)
+    expect(wrapper!.findAll('input, textarea, select')).toHaveLength(0)
+    expect(wrapper!.findAll('.bill-totals strong').map((n) => n.text())).toEqual([
+      '142.64',
+      '142.64',
+      '0.00',
+      '0.00',
+    ])
+    expect(wrapper!.findAll('button').filter((b) => b.text() === '下载')).toHaveLength(2)
+  })
+  it('照片查看与下载分别请求鉴权地址，下载不直接使用货拉拉源地址', async () => {
+    api.getVoucher.mockResolvedValue({
+      url: 'https://our-private-cos.example/temporary-signed-url',
+    })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    await renderEvidence()
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '查看')!
+      .trigger('click')
+    await flushPromises()
+    expect(api.getVoucher).toHaveBeenLastCalledWith('C1', 'R1')
+    await wrapper!
+      .findAll('button')
+      .find((b) => b.text() === '下载')!
+      .trigger('click')
+    await flushPromises()
+    expect(api.getVoucher).toHaveBeenLastCalledWith('C1', 'R1', true)
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('a[download]')).toBeNull()
+    click.mockRestore()
+  })
+  it('保留无法寄回原因，未知状态不伪装已确认', async () => {
+    const p = evidence()
+    Object.assign(p.source.order.facts!.receiptInfo!, {
+      status: 99,
+      unableToReturn: 1,
+      unableReason: '收货方未提供纸质单据',
+    })
+    wrapper = mount(Bill, {
+      props: { recordId: 'C1', platform: p, confirmed: false },
+      global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('未知（99）')
+    expect(wrapper.text()).toContain('收货方未提供纸质单据')
   })
 })

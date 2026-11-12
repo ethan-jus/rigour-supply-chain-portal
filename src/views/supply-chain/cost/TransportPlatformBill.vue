@@ -47,14 +47,16 @@
               type="primary"
               :disabled="v.state !== 'READY'"
               @click="open(v)"
-              >{{ v.state === 'READY' ? v.name : '待获取' }}</el-button
+              >{{
+                v.state === 'READY' ? v.name : v.state === 'FAILED' ? '获取失败' : '待获取'
+              }}</el-button
             ></template
           ><span v-else>-</span></template
         ></el-table-column
       >
     </el-table>
     <h4>账单凭证</h4>
-    <VoucherTable :vouchers="billFiles" @open="open" />
+    <VoucherTable :vouchers="billFiles" @open="open" @download="download" />
     <el-collapse v-if="platform.billHistory.length" class="history"
       ><el-collapse-item title="账单变更记录" name="history"
         ><el-table :data="platform.billHistory" border
@@ -73,7 +75,47 @@
       ></el-collapse
     >
     <h4>运输回单</h4>
-    <VoucherTable :vouchers="receiptFiles" @open="open" />
+    <dl v-if="facts?.receiptInfo" class="receipt-meta">
+      <div>
+        <dt>回单类型</dt>
+        <dd>{{ receiptLabel('type') }}</dd>
+      </div>
+      <div>
+        <dt>回单状态</dt>
+        <dd>{{ receiptLabel('status') }}</dd>
+      </div>
+      <div>
+        <dt>送回方式</dt>
+        <dd>{{ receiptLabel('backType') }}</dd>
+      </div>
+      <div>
+        <dt>回单寄回快递单号</dt>
+        <dd>{{ facts.receiptInfo.expressNo || '-' }}</dd>
+      </div>
+      <div>
+        <dt>回单备注</dt>
+        <dd>{{ facts.receiptInfo.remark || '-' }}</dd>
+      </div>
+      <div v-if="facts.receiptInfo.unableToReturn === 1">
+        <dt>无法送回原因</dt>
+        <dd>{{ facts.receiptInfo.unableReason || '-' }}</dd>
+      </div>
+    </dl>
+    <VoucherTable
+      :vouchers="receiptFiles"
+      group-label="资料类型"
+      empty-text="暂无拍照回单"
+      @open="open"
+      @download="download"
+    />
+    <h4>装卸货照片</h4>
+    <VoucherTable
+      :vouchers="goodsFiles"
+      group-label="发收货点"
+      empty-text="暂无装卸货照片"
+      @open="open"
+      @download="download"
+    />
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <CostFilePreview v-model="preview" :name="fileName" :type="fileType" :url="url" />
   </section>
@@ -103,15 +145,43 @@ const metrics = computed(() => [
   { label: '未支付（元）', value: facts.value?.unpaidAmount },
   { label: '退款（元）', value: facts.value?.refundAmount },
 ])
-const billFiles = computed(() => [
-  ...(facts.value?.fees.flatMap((f) => (f.vouchers || []).map((v) => ({ ...v, fee: f.name }))) ||
-    []),
-  ...(facts.value?.billVouchers || []).map((v) => ({ ...v, fee: '账单' })),
-])
+const billFiles = computed(() => {
+  const files = [
+    ...(facts.value?.fees.flatMap((f) => (f.vouchers || []).map((v) => ({ ...v, fee: f.name }))) ||
+      []),
+    ...(facts.value?.billVouchers || []).map((v) => ({ ...v, fee: '账单' })),
+  ]
+  return [...new Map(files.map((v) => [v.id, v])).values()]
+})
 const receiptFiles = computed(() =>
   (facts.value?.receipts || []).map((v) => ({ ...v, fee: '运输回单' })),
 )
-const dateTime = (v: string | null | undefined) => (v ? displayRecordDateTime(v) : '-')
+const goodsFiles = computed(() =>
+  (facts.value?.stopPhotos || []).flatMap((point) =>
+    point.vouchers.map((v) => ({
+      ...v,
+      fee: `第${point.stopIndex + 1}站 ${point.name} · ${point.phase}`,
+    })),
+  ),
+)
+function receiptLabel(field: 'type' | 'status' | 'backType') {
+  const value = facts.value?.receiptInfo?.[field]
+  if (value == null) return '-'
+  const labels: Record<string, Record<number, string>> = {
+    type: { 6: '拍照回单', 3: '纸质回单' },
+    status: { 1: '待上报', 2: '司机完成', 3: '已确认', 4: '已取消' },
+    backType: { 1: '开车送回', 2: '快递寄回' },
+  }
+  return labels[field]?.[value] || `未知（${value}）`
+}
+const dateTime = (v: string | null | undefined) => {
+  if (!v) return '-'
+  // 企业接口返回北京时间的无时区文本；自有文件时间则是带时区的Instant。
+  const value = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(v)
+    ? `${v.replace(' ', 'T')}+08:00`
+    : v
+  return displayRecordDateTime(value)
+}
 function historyFees(row: { facts?: { fees: { name: string; amount: unknown }[] } }) {
   return row.facts?.fees?.map((f) => `${f.name} ${money(f.amount)}`).join('；') || '-'
 }
@@ -132,22 +202,43 @@ async function open(v: PlatformVoucher) {
     error.value = errorMessage(e, '凭证暂未取得')
   }
 }
+async function download(v: PlatformVoucher) {
+  error.value = ''
+  try {
+    const result = await getTransportVoucher(props.recordId, v.id, true)
+    const anchor = document.createElement('a')
+    anchor.href = result.url
+    anchor.download = v.name
+    anchor.rel = 'noopener noreferrer'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } catch (e) {
+    error.value = errorMessage(e, '凭证暂未取得')
+  }
+}
 const VoucherTable = defineComponent({
   props: {
+    groupLabel: { type: String, default: '所属费用' },
+    emptyText: { type: String, default: '暂无平台凭证' },
     vouchers: { type: Array as () => (PlatformVoucher & { fee: string })[], required: true },
   },
-  emits: ['open'],
+  emits: ['open', 'download'],
   setup(p, { emit }) {
     return () =>
-      h(ElTable, { data: p.vouchers, border: true, emptyText: '暂无平台凭证' }, () => [
-        h(ElTableColumn, { prop: 'fee', label: '所属费用', minWidth: 140 }),
+      h(ElTable, { data: p.vouchers, border: true, emptyText: p.emptyText }, () => [
+        h(ElTableColumn, { prop: 'fee', label: p.groupLabel, minWidth: 140 }),
         h(ElTableColumn, { prop: 'name', label: '文件', minWidth: 180 }),
         h(
           ElTableColumn,
-          { label: '凭证状态', width: 110 },
+          { label: '凭证状态', minWidth: 170 },
           {
             default: ({ row }: { row: PlatformVoucher }) =>
-              row.state === 'READY' ? '已获取' : '待获取',
+              row.state === 'READY'
+                ? '已获取'
+                : row.state === 'FAILED'
+                  ? '获取失败，将自动重试'
+                  : '待获取',
           },
         ),
         h(
@@ -157,15 +248,22 @@ const VoucherTable = defineComponent({
         ),
         h(
           ElTableColumn,
-          { label: '操作', width: 160 },
+          { label: '操作', width: 170 },
           {
             default: ({ row }: { row: PlatformVoucher }) =>
               row.state === 'READY'
-                ? h(
-                    ElButton,
-                    { link: true, type: 'primary', onClick: () => emit('open', row) },
-                    () => '查看／下载',
-                  )
+                ? [
+                    h(
+                      ElButton,
+                      { link: true, type: 'primary', onClick: () => emit('open', row) },
+                      () => '查看',
+                    ),
+                    h(
+                      ElButton,
+                      { link: true, type: 'primary', onClick: () => emit('download', row) },
+                      () => '下载',
+                    ),
+                  ]
                 : '-',
           },
         ),
@@ -206,12 +304,14 @@ dt {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.bill-meta {
+.bill-meta,
+.receipt-meta {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 dd {
+  overflow-wrap: anywhere;
   margin: 8px 0 0;
 }
 .history {
@@ -221,7 +321,8 @@ dd {
   .bill-totals {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .bill-meta {
+  .bill-meta,
+  .receipt-meta {
     grid-template-columns: 1fr;
   }
 }

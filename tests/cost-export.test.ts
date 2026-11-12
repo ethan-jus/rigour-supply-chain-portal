@@ -12,6 +12,17 @@ import {
   parseCostCsv,
 } from '@/views/supply-chain/bi/cost/cost-report-export'
 describe('cost Excel export', () => {
+  it('行驶路段保留完整顺序，收货点数写入可计算的数字单元格', async () => {
+    const route = '武汉仓 → 同名门店（一号路） → 同名门店（二号路）'
+    const book = await buildCostWorkbook('物流运输记录', ['行驶路段', '收货点数'], [[route, 2]])
+    const restored = new Workbook()
+    await restored.xlsx.load(await book.xlsx.writeBuffer())
+    const sheet = restored.worksheets[0]!
+    expect(sheet.getCell('A2').value).toBe(route)
+    expect(sheet.getCell('B2').value).toBe(2)
+    expect(sheet.getColumn(1).width).toBe(60)
+    expect(sheet.getColumn(2).numFmt).toBe('#,##0.####')
+  })
   it('exports a readable trip purpose separately from its reference number', () => {
     const fields = costSnapshotFields({
       data: {

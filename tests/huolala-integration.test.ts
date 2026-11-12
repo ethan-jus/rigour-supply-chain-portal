@@ -11,7 +11,8 @@ const api = vi.hoisted(() => ({
   runs: vi.fn(),
   save: vi.fn(),
   authorize: vi.fn(),
-  complete: vi.fn(),
+  authorizationStatus: vi.fn(),
+  cancelAuthorization: vi.fn(),
   candidates: vi.fn(),
   bind: vi.fn(),
   sync: vi.fn(),
@@ -28,7 +29,7 @@ const connection = (): HuolalaConnection => ({
   enterpriseName: '示例企业',
   secretRef: 'env://HLL',
   sandbox: false,
-  redirectUri: 'http://localhost:5100/huolala-authorized.html',
+  redirectUri: 'http://localhost:26882/api/v1/integration/huolala/oauth/callback',
   enabled: false,
   intervalMinutes: 15,
   startDate: '2026-11-01',
@@ -52,9 +53,53 @@ beforeEach(() => {
 })
 afterEach(() => {
   wrapper?.unmount()
+  vi.restoreAllMocks()
+  vi.useRealTimers()
   document.body.innerHTML = ''
 })
 describe('货拉拉企业控制面', () => {
+  it('同步完成后自动刷新员工和连接结果，保留尚未保存的同步设置', async () => {
+    vi.useFakeTimers()
+    api.runs
+      .mockResolvedValueOnce([{ id: 'R1', status: 'RUNNING', scope: 'ALL', startedAt: null }])
+      .mockResolvedValue([{ id: 'R1', status: 'SUCCEEDED', scope: 'ALL', startedAt: null }])
+    const synced = {
+      ...connection(),
+      authStatus: 'AUTHORIZED',
+      lastSuccessAt: '2026-11-11T09:00:00Z',
+    }
+    api.connection.mockResolvedValueOnce(connection()).mockResolvedValue(synced)
+    api.employees
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([
+        {
+          staffId: 'S1',
+          name: '新同步员工',
+          phone: '',
+          staffNo: '',
+          state: 'UNMATCHED',
+          revision: 0,
+        },
+      ])
+    api.save.mockResolvedValue(synced)
+    await open()
+    await wrapper.get('input[role="spinbutton"]').setValue('16')
+    await vi.advanceTimersByTimeAsync(10000)
+    await flushPromises()
+    expect(api.connection).toHaveBeenCalledTimes(2)
+    expect(api.employees).toHaveBeenCalledTimes(2)
+    await button('保存设置').trigger('click')
+    await flushPromises()
+    expect(api.save).toHaveBeenCalledWith(expect.objectContaining({ intervalMinutes: 16 }))
+    await wrapper
+      .findAll('[role="tab"]')
+      .find((e) => e.text() === '员工关联')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('货拉拉员工 1 人')
+    expect(wrapper.text()).toContain('新同步员工')
+    expect(api.bind).not.toHaveBeenCalled()
+  })
   it('尚未取得凭据时真实显示未授权，授权和同步按钮不可使用', async () => {
     await open()
     expect(wrapper.text()).toContain('未授权')
@@ -81,6 +126,34 @@ describe('货拉拉企业控制面', () => {
       startDate: '2026-11-01',
       revision: 1,
     })
+  })
+  it('授权窗口进入后端，页面只轮询会话结果，不再录入或交换授权码', async () => {
+    const popup = { location: { href: '' }, close: vi.fn(), opener: window }
+    vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window)
+    api.connection
+      .mockResolvedValueOnce({ ...connection(), credentialsReady: true })
+      .mockResolvedValue({ ...connection(), credentialsReady: true, authStatus: 'AUTHORIZED' })
+    api.authorize.mockResolvedValue({
+      id: 'session-1',
+      url: 'http://192.168.9.90:26882/api/v1/integration/huolala/oauth/start?ticket=one-time',
+      expiresAt: '2099-01-01',
+    })
+    api.authorizationStatus.mockResolvedValue({
+      id: 'session-1',
+      status: 'SUCCEEDED',
+      expiresAt: '2099-01-01',
+      message: null,
+    })
+    await open()
+    await button('企业授权').trigger('click')
+    await flushPromises()
+    expect(popup.location.href).toContain('/oauth/start?ticket=')
+    expect(popup.opener).toBeNull()
+    expect(api.authorizationStatus).toHaveBeenCalledWith('session-1')
+    expect(api.cancelAuthorization).not.toHaveBeenCalled()
+    expect(popup.close).toHaveBeenCalled()
+    expect(document.body.textContent).not.toContain('临时授权码')
+    expect(wrapper.text()).toContain('已授权')
   })
   it('同名员工不会自动落关联，需要业务确认', async () => {
     api.employees.mockResolvedValue([

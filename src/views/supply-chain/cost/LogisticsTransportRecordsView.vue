@@ -211,7 +211,7 @@
               ></template
             ></el-dropdown
           >
-          <el-button v-if="can('integration:huolala:sync')" @click="syncOpen = true"
+          <el-button v-if="can('integration:huolala:sync')" @click="openSync"
             >同步货拉拉订单</el-button
           ><el-button v-if="can('order:logistics-cost:write')" type="primary" @click="create"
             >新增运输记录</el-button
@@ -246,11 +246,14 @@
           :label="col.label"
           :min-width="col.width"
           :fixed="['amount', 'status', 'creator'].includes(col.key) ? 'right' : undefined"
-          :align="col.numeric ? 'right' : 'left'"
-          :show-overflow-tooltip="!['receivers', 'orders'].includes(col.key)"
+          :align="col.key === 'stopCount' ? 'center' : col.numeric ? 'right' : 'left'"
+          :show-overflow-tooltip="!['route', 'orders'].includes(col.key)"
         >
           <template #default="{ row }"
-            ><template v-if="['receivers', 'orders'].includes(col.key)"
+            ><TransportRouteSummary
+              v-if="col.key === 'route'"
+              :route="routeOf(row as CostRecord, platformOf(row as CostRecord))"
+            /><template v-else-if="col.key === 'orders'"
               ><div
                 v-for="(text, i) in lines(row as CostRecord, col.key)"
                 :key="i"
@@ -322,6 +325,7 @@
         ><el-form-item label="运输日期"
           ><el-date-picker
             v-model="syncDates"
+            :disabled="syncing"
             type="daterange"
             value-format="YYYY-MM-DD"
             start-placeholder="开始日期"
@@ -329,6 +333,7 @@
         ><el-form-item label="指定货拉拉订单号"
           ><el-input
             v-model="syncNo"
+            :disabled="syncing"
             placeholder="可选，填写后只同步此单" /></el-form-item></el-form
       ><el-alert v-if="syncMessage" :title="syncMessage" type="info" :closable="false" /><template
         #footer
@@ -348,7 +353,15 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
+import {
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  onActivated,
+  onDeactivated,
+  reactive,
+  ref,
+} from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
@@ -372,7 +385,7 @@ import {
   type TransportPage,
   type TransportQuery,
 } from '@/api/core/transport-records'
-import { huolalaApi } from '@/api/core/huolala'
+import { huolalaApi, type HuolalaRun } from '@/api/core/huolala'
 import { errorMessage } from '@/api/core/error'
 import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
 import {
@@ -380,6 +393,8 @@ import {
   money,
   ordersOf,
   receiversOf,
+  routeOf,
+  routeText,
   statusName,
   transportTypes,
   typeName,
@@ -389,6 +404,7 @@ import { costLabel, costOptions, loadCostDictionaries } from './cost-dictionarie
 import CostExportDialog from './CostExportDialog.vue'
 import TransportRecordEditor from './TransportRecordEditor.vue'
 import TransportRecordActions from './TransportRecordActions.vue'
+import TransportRouteSummary from './TransportRouteSummary.vue'
 import CostCarrierOrdersPanel from './CostCarrierOrdersPanel.vue'
 import { exportCostRows } from './cost-export'
 import { collectCostExportRows, selectedCostColumns } from './custom-cost-export'
@@ -412,9 +428,12 @@ let applied: TransportQuery = { begin: 0, step: 20 },
   serial = 0
 const columns = [
   { key: 'carrier', label: '物流公司', width: 96 },
-  { key: 'type', label: '运输类型', width: 110 },
+  { key: 'orderedAt', label: '下单时间', width: 180 },
   { key: 'date', label: '运输日期', width: 106 },
-  { key: 'receivers', label: '收货方', width: 150 },
+  { key: 'route', label: '行驶路段', width: 200 },
+  { key: 'stopCount', label: '收货点数', width: 86 },
+  { key: 'type', label: '运输类型', width: 110 },
+  { key: 'receivers', label: '收货方', width: 150, optional: true },
   { key: 'platformNo', label: '第三方订单号', width: 176 },
   { key: 'tracking', label: '运单号', width: 180 },
   { key: 'amount', label: '运输费用（元）', width: 126, numeric: true },
@@ -458,6 +477,8 @@ function value(r: CostRecord, key: string, sources = result.value.platformRecord
   const platform = sources[r.id],
     source = platform ? currentSource(platform.source) : null
   const vals: Record<string, unknown> = {
+    route: routeText(routeOf(r, platform)),
+    stopCount: routeOf(r, platform).receivers.length || '-',
     source: platform ? '货拉拉同步' : '手动录入',
     type: typeName(
       platform?.draft?.transportType ||
@@ -466,6 +487,7 @@ function value(r: CostRecord, key: string, sources = result.value.platformRecord
         r.data.logistics?.legCode,
     ),
     date: source?.useTime.slice(0, 10) || r.data.costDate,
+    orderedAt: source?.raw['下单时间']?.trim() || '-',
     platformNo: source?.orderNo || r.data.ledger?.platformOrderNo || '-',
     amount: money(amountOf(r, platform)),
     status: statusName(r.statusCode),
@@ -633,21 +655,80 @@ function associateEmployee() {
 }
 function syncOne() {
   if (!active.value?.platform) return
+  if (syncing.value) {
+    syncOpen.value = true
+    return
+  }
   const order = currentSource(active.value.platform.source)
   syncNo.value = order.orderNo
   syncDates.value = [order.useTime.slice(0, 10), order.useTime.slice(0, 10)]
   syncOpen.value = true
+  syncMessage.value = ''
 }
+const localToday = () => new Date().toLocaleDateString('sv-SE')
 const syncOpen = ref(false),
-  syncDates = ref<string[]>([
-    new Date().toLocaleDateString('sv-SE'),
-    new Date().toLocaleDateString('sv-SE'),
-  ]),
+  syncDates = ref<string[]>([localToday(), localToday()]),
   syncNo = ref(''),
   syncMessage = ref(''),
   syncing = ref(false),
   importOpen = ref(false)
+let syncRunId = '',
+  syncPoll: ReturnType<typeof setTimeout> | undefined,
+  syncEpoch = 0,
+  pageActive = true,
+  disposed = false,
+  initialized = false
+function openSync() {
+  if (!syncing.value) {
+    syncDates.value = [localToday(), localToday()]
+    syncNo.value = ''
+    syncMessage.value = ''
+  }
+  syncOpen.value = true
+}
+function stopSyncPoll() {
+  clearTimeout(syncPoll)
+  syncPoll = undefined
+  syncEpoch++
+}
+function scheduleSyncPoll() {
+  clearTimeout(syncPoll)
+  if (pageActive && !disposed && syncRunId) syncPoll = setTimeout(() => void pollSync(), 5000)
+}
+async function finishSync(run: HuolalaRun) {
+  if (run.status === 'RUNNING') {
+    syncMessage.value = '货拉拉订单同步中，请稍候'
+    scheduleSyncPoll()
+    return
+  }
+  syncRunId = ''
+  syncing.value = false
+  syncMessage.value =
+    run.status === 'SUCCEEDED'
+      ? `同步完成，已读取${run.stages?.listSaved ?? run.fetched}张货拉拉订单`
+      : run.message || '同步未全部完成，请在同步记录中查看原因'
+  page.value = 1
+  table.value?.clearSelection()
+  await load()
+}
+async function pollSync() {
+  const epoch = syncEpoch,
+    id = syncRunId
+  if (!pageActive || disposed || !id) return
+  try {
+    const runs = await huolalaApi.runs()
+    if (epoch !== syncEpoch || disposed || !pageActive) return
+    const run = runs.find((item) => item.id === id)
+    if (run) await finishSync(run)
+    else scheduleSyncPoll()
+  } catch {
+    if (epoch !== syncEpoch || disposed || !pageActive) return
+    syncMessage.value = '暂未取得同步进度，正在重试；也可在同步记录中查看'
+    scheduleSyncPoll()
+  }
+}
 async function sync() {
+  if (syncing.value) return
   syncing.value = true
   syncMessage.value = ''
   try {
@@ -658,12 +739,14 @@ async function sync() {
       syncDates.value[1],
       syncNo.value || undefined,
     )
-    syncMessage.value = run.message || '已开始同步，可在同步记录查看结果'
-    await load()
+    if (disposed) return
+    syncRunId = run.id
+    if (pageActive) await finishSync(run)
   } catch (e) {
-    syncMessage.value = errorMessage(e, '同步失败')
-  } finally {
+    if (disposed) return
+    syncRunId = ''
     syncing.value = false
+    syncMessage.value = errorMessage(e, '同步失败')
   }
 }
 const importCities = ref<{ code: string; name: string }[]>([]),
@@ -740,6 +823,8 @@ async function doExport() {
           if (c.key === 'documentNo') return r.documentNo
           if (c.key === 'confirmed') return r.statusCode === 'CONFIRMED' ? r.data.amount : null
           if (c.key === 'receivers') return receiversOf(r, p).join('\n')
+          if (c.key === 'route') return routeText(routeOf(r, p))
+          if (c.key === 'stopCount') return routeOf(r, p).receivers.length || null
           if (c.key === 'orders') return ordersOf(r, p).join('\n')
           if (c.key === 'amount') {
             const amount = amountOf(r, p)
@@ -768,10 +853,23 @@ onMounted(async () => {
     /* 人员目录不可用不阻塞已保存的运输记录。 */
   }
   await load()
+  initialized = true
   const id = route.query.sourceId || route.query.costId || route.query.id
   if (typeof id === 'string' && id) await open({ id } as CostRecord, true)
 })
+onActivated(() => {
+  pageActive = true
+  if (initialized) void load()
+  if (syncRunId) void pollSync()
+})
+onDeactivated(() => {
+  pageActive = false
+  serial++
+  stopSyncPoll()
+})
 onBeforeUnmount(() => {
+  disposed = true
+  stopSyncPoll()
   serial++
   exportSequence++
 })

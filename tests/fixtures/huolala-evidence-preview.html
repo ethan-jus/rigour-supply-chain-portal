@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>运输详情资料 · 组件视觉检查</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f5f7fb;
+        font:
+          14px/1.6 system-ui,
+          sans-serif;
+        color: #1f2937;
+      }
+      main {
+        max-width: 1440px;
+        margin: 24px auto;
+        padding: 24px;
+        background: #fff;
+        border: 1px solid #dce3ed;
+        border-radius: 10px;
+      }
+      h2 {
+        margin: 0 0 12px;
+      }
+      .fixture-label {
+        color: #64748b;
+        margin: 0 0 20px;
+      }
+      @media (max-width: 760px) {
+        main {
+          margin: 8px;
+          padding: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="console">
+      <h2>运输记录详情</h2>
+      <p class="fixture-label">本地组件展示样例，不连接业务接口或写入业务数据库。</p>
+      <div id="app"></div>
+    </main>
+    <script type="module">
+      import { createApp } from 'vue'
+      import ElementPlus from 'element-plus'
+      import 'element-plus/dist/index.css'
+      import '/src/assets/styles/index.scss'
+      import Bill from '/src/views/supply-chain/cost/TransportPlatformBill.vue'
+      import { apiClient } from '/src/api/core/client'
+      // 视觉样例不能向真实业务接口提交虚构单号。
+      apiClient.get = async () => {
+        throw new Error('请在实际运输记录中查看和下载附件；此页面仅用于界面检查。')
+      }
+      const source = {
+        enterpriseId: '1001',
+        orderNo: '3624071813921329726',
+        status: '已完成',
+        useTime: '2026-11-08 14:36:58',
+        paidAmount: 137.64,
+        raw: {},
+        salesOrderNos: [],
+        line: 0,
+        facts: {
+          connectorId: 'C1',
+          billAmount: 137.64,
+          unpaidAmount: 0,
+          refundAmount: 0,
+          bonusAmount: 0,
+          billState: 'FINAL',
+          billUpdatedTime: '2026-11-08 16:00:00',
+          stops: [],
+          fees: [
+            { name: '专享价', amount: 108.85, vouchers: [] },
+            {
+              name: '高速路桥费',
+              amount: 20,
+              vouchers: [
+                {
+                  id: 'V1',
+                  name: '高速路桥费凭证.png',
+                  state: 'READY',
+                  contentType: 'image/png',
+                  savedAt: '2026-11-11T06:00:00Z',
+                },
+              ],
+            },
+            {
+              name: '搬运费',
+              amount: 11,
+              vouchers: [{ id: 'V2', name: '搬运费凭证.pdf', state: 'FAILED' }],
+            },
+            { name: '税费', amount: 2.79, vouchers: [] },
+            { name: '货运券抵扣', amount: -5, vouchers: [] },
+          ],
+          receiptInfo: {
+            type: 3,
+            status: 3,
+            backType: 2,
+            expressNo: 'SF987654321000',
+            remark: '纸质回单已寄回',
+            unableToReturn: 0,
+            unableReason: '',
+          },
+          receipts: [
+            {
+              id: 'R1',
+              name: '拍照回单.jpg',
+              state: 'READY',
+              contentType: 'image/jpeg',
+              savedAt: '2026-11-11T06:00:00Z',
+            },
+          ],
+          stopPhotos: [
+            {
+              stopIndex: 0,
+              name: '武汉仓',
+              phase: '装货照片',
+              vouchers: [
+                {
+                  id: 'P1',
+                  name: '装货照片.jpg',
+                  state: 'READY',
+                  contentType: 'image/jpeg',
+                  savedAt: '2026-11-11T06:00:00Z',
+                },
+              ],
+            },
+            {
+              stopIndex: 1,
+              name: '星河门店',
+              phase: '途经点照片',
+              vouchers: [{ id: 'P2', name: '途经点照片.jpg', state: 'FAILED' }],
+            },
+            {
+              stopIndex: 2,
+              name: '长江门店',
+              phase: '卸货照片',
+              vouchers: [{ id: 'P3', name: '卸货照片.jpg', state: 'PENDING' }],
+            },
+          ],
+        },
+      }
+      createApp(Bill, {
+        recordId: 'fixture-only',
+        confirmed: true,
+        confirmedAmount: 132.64,
+        platform: {
+          source: {
+            id: 'R1',
+            revision: 1,
+            state: 'GENERATED',
+            costId: 'fixture-only',
+            fileName: '接口',
+            order: source,
+            sourceDifference: true,
+            lastSyncedAt: '2026-11-11T06:00:00Z',
+          },
+          draft: null,
+          billHistory: [],
+        },
+      })
+        .use(ElementPlus)
+        .mount('#app')
+    </script>
+  </body>
+</html>

@@ -30,7 +30,9 @@ export const ordersOf = (row: CostRecord, platform?: PlatformTransport | null) =
   row.sources.map((s) => s.documentNo)
 /** 历史记录可能只有原运输信息，详情仍展示已保存的收货方及地址。 */
 export function frozenTransportReceivers(row: CostRecord) {
-  const points = row.data.ledger?.receivingPoints || []
+  const points = (row.data.ledger?.receivingPoints || []).filter(
+    (p) => p.displayName?.trim() || p.manualName?.trim() || p.address?.trim(),
+  )
   if (points.length)
     return points.map((p) => ({
       name: p.displayName || p.manualName,
@@ -38,8 +40,9 @@ export function frozenTransportReceivers(row: CostRecord) {
       contactPhone: p.phone,
       address: p.address,
     }))
-  if (row.sources.length)
-    return row.sources.map((s) => ({
+  const sources = row.sources.filter((s) => s.receiverName?.trim() || s.destinationAddress?.trim())
+  if (sources.length)
+    return sources.map((s) => ({
       name: s.receiverName,
       contactName: s.contactName,
       contactPhone: s.contactPhone,
@@ -77,6 +80,50 @@ export function receiversOf(row: CostRecord, platform?: PlatformTransport | null
     .map((p) => p.name || p.address || '-')
     .filter(Boolean)
   return names.length ? [...new Set(names)] : ['-']
+}
+export interface TransportRoutePoint {
+  name: string
+  address: string
+}
+export interface TransportRoute {
+  origin: TransportRoutePoint | null
+  receivers: TransportRoutePoint[]
+}
+/** 平台路线按返回站序；手工路线按保存的收货点顺序，不按名称去重或重新排序。 */
+export function routeOf(row: CostRecord, platform?: PlatformTransport | null): TransportRoute {
+  const point = (name: string | null | undefined, address: string | null | undefined) => ({
+    name: name?.trim() || address?.trim() || '-',
+    address: address?.trim() || '',
+  })
+  if (platform) {
+    const stops = currentSource(platform.source).facts?.stops || []
+    return {
+      origin: stops[0] ? point(stops[0].name, stops[0].address) : null,
+      receivers: stops.slice(1).map((s) => point(s.name, s.address)),
+    }
+  }
+  const sender = row.data.ledger?.sender
+  const legacy = row.data.logistics
+  const senderName =
+    sender?.displayName?.trim() ||
+    sender?.manualName?.trim() ||
+    legacy?.senderName?.trim() ||
+    row.sources.find((s) => s.senderName?.trim())?.senderName
+  const senderAddress = sender?.address?.trim() || legacy?.originAddress?.trim()
+  return {
+    origin: senderName || senderAddress ? point(senderName, senderAddress) : null,
+    receivers: frozenTransportReceivers(row).map((p) => point(p.name, p.address)),
+  }
+}
+export function routeText(route: TransportRoute): string {
+  const points = [route.origin, ...route.receivers]
+  if (!points.some((p) => p && p.name !== '-')) return '-'
+  return points
+    .map((p) => {
+      if (!p) return '-'
+      return p.address && p.address !== p.name ? `${p.name}（${p.address}）` : p.name
+    })
+    .join(' → ')
 }
 /** 新旧单据分别从完整来源快照、台账归属及收货点恢复展示，不回读变化后的原单。 */
 export function frozenTransportSources(row: CostRecord): CostSource[] {

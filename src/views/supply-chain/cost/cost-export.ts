@@ -24,7 +24,7 @@ const moneyHeaders = new Set([
   '实际我方运费（元）',
   '已明确成本（元）',
 ])
-const numericHeaders = new Set([...moneyHeaders, '数量', '面积（㎡）'])
+const numericHeaders = new Set([...moneyHeaders, '数量', '收货点数', '面积（㎡）'])
 
 function valueForCell(header: string, value: ExportValue): CellValue {
   if (value == null || value === '') return null
@@ -52,13 +52,14 @@ function valueForCell(header: string, value: ExportValue): CellValue {
 }
 
 function columnWidth(header: string) {
+  if (header === '行驶路段') return 60
   if (/单号|单据号|编号/.test(header)) return 34
   if (/时间/.test(header)) return 24
   if (/日期/.test(header)) return 16
   if (/月/.test(header)) return 14
   if (/金额|单价|押金/.test(header)) return 22
   if (/事项|名称|备注|说明|用途|地址|原因|期间|租期|单据来源/.test(header)) return 38
-  return /数量|单位|状态|城市/.test(header) ? 16 : 24
+  return /数量|点数|单位|状态|城市/.test(header) ? 16 : 24
 }
 
 /** 以 XLSX 字符串单元格保存单号和来源文本，保留前导零且不会执行公式。 */
