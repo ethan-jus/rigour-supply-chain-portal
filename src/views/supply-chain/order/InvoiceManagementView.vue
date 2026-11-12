@@ -134,11 +134,10 @@
       </div>
     </el-card>
 
-    <OrderRegisterDetailDrawer
-      v-model="detailVisible"
-      :order-id="detailOrderId"
-      initial-tab="invoice"
-    />
+    <el-drawer v-model="detailVisible" title="发票详情" size="70%" destroy-on-close>
+      <div>订单号：{{ detailOrderNo }}</div>
+      <OrderInvoicePanel v-if="detailVisible && detailOrderNo" :order-no="detailOrderNo" />
+    </el-drawer>
   </div>
 </template>
 
@@ -149,7 +148,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
-import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
+import OrderInvoicePanel from './components/OrderInvoicePanel.vue'
 import { displayDateTime } from '@/utils/business-date'
 import { moneyText } from '@/utils/order-register-status'
 import { orderInvoiceStatusTag } from '@/utils/order-invoice-status'
@@ -187,10 +186,10 @@ const filters = reactive({
 const dateRange = ref<[string, string] | null>(null)
 
 const detailVisible = ref(false)
-const detailOrderId = ref<string | number | null>(null)
+const detailOrderNo = ref('')
 
-function openDetail(row: { orderId?: string | number }) {
-  detailOrderId.value = row.orderId ?? null
+function openDetail(row: { orderNo?: string | null }) {
+  detailOrderNo.value = row.orderNo ?? ''
   detailVisible.value = true
 }
 

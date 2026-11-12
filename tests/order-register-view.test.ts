@@ -129,6 +129,28 @@ describe('订单列表页', () => {
     mocks.getProfiles.mockResolvedValue([])
   })
 
+  it('回款人独立展示、筛选和导出，重置后清空且不冒充下单业务员', async () => {
+    const page = pageResponse()
+    mocks.getOrders.mockResolvedValue({ ...page, items: page.items.map(row => ({ ...row, paymentOwnerNames: ['李四', '王五'] })) })
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('李四、王五')
+    const owner = wrapper.findAllComponents(ElSelect).find(item => item.props('ariaLabel') === '回款人')!
+    owner.vm.$emit('update:modelValue', 'LI')
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0]).toMatchObject({ paymentOwnerEmployeeCode: 'LI', begin: 0 })
+    expect(mocks.getOrders.mock.calls.at(-1)![0].ownerEmployeeCode).toBeUndefined()
+    await wrapper.findAll('button').find(button => button.text() === '导出')!.trigger('click')
+    await flushPromises()
+    expect(mocks.exportCsv.mock.calls.at(-1)![1]).toMatchObject({ paymentOwnerEmployeeCode: 'LI' })
+    await wrapper.findAll('button').find(button => button.text() === '重置')!.trigger('click')
+    await flushPromises()
+    expect(mocks.getOrders.mock.calls.at(-1)![0].paymentOwnerEmployeeCode).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('月业绩导出使用独立月份范围，生成双表Excel，不被列表筛选或分页截断', async () => {
     const report = { monthFrom: '2026-04', monthTo: '2026-05', generatedAt: '2026-09-22T00:00:00Z', rows: [] }
     mocks.getMonthly.mockResolvedValue(report)

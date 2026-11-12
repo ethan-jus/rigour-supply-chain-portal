@@ -1,20 +1,28 @@
 import { computed, ref, watch } from 'vue'
 import { getErpProductCategories, type ErpProductCategoryView } from '@/api/core/erp-internal'
-import { getErpManagedProducts, type ErpManagedProductSummary, type ErpManagedProductVariant } from '@/api/core/erp-product'
+import { getErpManagedProducts, type ErpManagedProductSummary, type ErpManagedProductVariant, type ErpManagedProductQuery } from '@/api/core/erp-product'
+
+type CategoryOption = Pick<ErpProductCategoryView, 'id' | 'parentId' | 'categoryName'>
+type VariantOption = Pick<ErpManagedProductVariant, 'id' | 'specificationSnapshot'>
+type ProductOption = Pick<ErpManagedProductSummary, 'id' | 'productCode' | 'productName'> & { variants?: VariantOption[] }
+export interface OrderProductFilterSources {
+  categories(query: { begin: number; step: number }): Promise<{ total: number; items: CategoryOption[] }>
+  products(query: ErpManagedProductQuery): Promise<{ total: number; items: ProductOption[] }>
+}
 
 interface Filters { categoryIds: string[]; productIds: string[]; productVariantIds: string[] }
 interface CategoryNode { id: string; categoryName: string; children: CategoryNode[] }
 const PRODUCT_LIMIT = 500
 
 /** 订单明细与订单回款共用三级多选筛选；分类范围包含子分类，异步返回不得覆盖新选择。 */
-export function useOrderProductFilters(filters: Filters) {
-  const categoryOptions = ref<ErpProductCategoryView[]>([])
+export function useOrderProductFilters(filters: Filters, sources: OrderProductFilterSources = { categories: getErpProductCategories, products: getErpManagedProducts }) {
+  const categoryOptions = ref<CategoryOption[]>([])
   const categoryLoading = ref(false)
   const categoryLoadFailed = ref(false)
-  const productOptions = ref<ErpManagedProductSummary[]>([])
+  const productOptions = ref<ProductOption[]>([])
   const productSearching = ref(false)
   const productLoadFailed = ref(false)
-  const variantOptions = ref<Array<ErpManagedProductVariant & { productId: string; productName: string }>>([])
+  const variantOptions = ref<Array<VariantOption & { productId: string; productName: string }>>([])
   const variantLoading = ref(false)
   const variantLoadFailed = ref(false)
   const categoryTreeProps = { label: 'categoryName', children: 'children' }
@@ -35,7 +43,7 @@ export function useOrderProductFilters(filters: Filters) {
   })
 
   const variantGroups = computed(() => {
-    const groups = new Map<string, { productId: string; productName: string; variants: ErpManagedProductVariant[] }>()
+    const groups = new Map<string, { productId: string; productName: string; variants: VariantOption[] }>()
     for (const variant of variantOptions.value) {
       let group = groups.get(variant.productId)
       if (!group) {
@@ -53,9 +61,9 @@ export function useOrderProductFilters(filters: Filters) {
     categoryLoadFailed.value = false
     categoryRequest = (async () => {
       try {
-        const rows: ErpProductCategoryView[] = []
+        const rows: CategoryOption[] = []
         for (let begin = 0; ; begin += 200) {
-          const page = await getErpProductCategories({ begin, step: 200 })
+          const page = await sources.categories({ begin, step: 200 })
           rows.push(...page.items)
           if (rows.length >= page.total || !page.items.length) break
           if (begin >= 9800) throw new Error('分类数量过多')
@@ -76,10 +84,10 @@ export function useOrderProductFilters(filters: Filters) {
         if (row.parentId != null && String(row.parentId) === id) categories.add(String(row.id))
       })
     }
-    const products = new Map<string, ErpManagedProductSummary>()
+    const products = new Map<string, ProductOption>()
     for (const id of categories) {
       for (let begin = 0; ; begin += 200) {
-        const page = await getErpManagedProducts({ begin, step: 200, categoryId: id })
+        const page = await sources.products({ begin, step: 200, categoryId: id })
         page.items.forEach(row => products.set(String(row.id), row))
         if (page.total > PRODUCT_LIMIT || products.size > PRODUCT_LIMIT) throw new Error(`分类下商品超过 ${PRODUCT_LIMIT} 个，请缩小分类范围后查询，避免统计不完整`)
         if (begin + page.items.length >= page.total || !page.items.length) break
@@ -104,7 +112,7 @@ export function useOrderProductFilters(filters: Filters) {
       const query = keyword?.trim() || ''
       const rows = categories.length
         ? (await categoryProducts(categories)).filter(row => `${row.productName} ${row.productCode}`.toLowerCase().includes(query.toLowerCase()))
-        : (await getErpManagedProducts({ begin: 0, step: 50,
+        : (await sources.products({ begin: 0, step: 50,
             productName: /[\u4e00-\u9fa5]/.test(query) ? query : undefined,
             productCode: query && !/[\u4e00-\u9fa5]/.test(query) ? query : undefined,
           })).items
@@ -126,9 +134,9 @@ export function useOrderProductFilters(filters: Filters) {
     variantLoading.value = products.length > 0
     if (!products.length) return
     try {
-      const variants: Array<ErpManagedProductVariant & { productId: string; productName: string }> = []
+      const variants: Array<VariantOption & { productId: string; productName: string }> = []
       for (let begin = 0; begin < products.length; begin += 200) {
-        const page = await getErpManagedProducts({ begin: 0, step: 200, productIds: products.slice(begin, begin + 200), withVariants: true })
+        const page = await sources.products({ begin: 0, step: 200, productIds: products.slice(begin, begin + 200), withVariants: true })
         for (const product of page.items) {
           variants.push(...(product.variants ?? []).map(variant => ({ ...variant, productId: String(product.id), productName: product.productName })))
         }

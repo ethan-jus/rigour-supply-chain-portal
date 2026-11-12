@@ -52,4 +52,6 @@ pnpm test:run
 pnpm build
 ```
 
+构建必须提供 `VITE_AMAP_JS_KEY` 和 `VITE_AMAP_SECURITY_CODE`，CRM 地图与销售轨迹共用这组浏览器配置。缺少配置会直接终止构建，避免发布空白地图。使用 Git 源码归档构建时，未跟踪的 `.env.local` 不会进入归档，需通过构建进程环境注入这两个值；不要复制服务端 Web 服务 Key，也不要提交凭据。
+
 本地构建、隔离测试与共享 DEV 的真实业务验收分别记录。详见 [架构](docs/architecture.md) 和 [接口契约](docs/api-contract.md)。

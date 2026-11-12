@@ -68,6 +68,27 @@
             />
           </el-select>
         </div>
+        <div class="list-filter-field list-filter-field--person">
+          <el-select
+            v-model="pageFilters.paymentOwnerEmployeeCode"
+            v-clear-filter-on-empty-input="() => (pageFilters.paymentOwnerEmployeeCode = '')"
+            aria-label="回款人"
+            clearable
+            filterable
+            remote
+            reserve-keyword
+            placeholder="搜索回款人"
+            :remote-method="searchEmployees"
+            :loading="employeeLoading"
+          >
+            <el-option
+              v-for="item in employeeOptions"
+              :key="item.employeeCode"
+              :label="item.employeeName"
+              :value="item.employeeCode"
+            />
+          </el-select>
+        </div>
         <div class="list-filter-group">
           <div class="list-filter-field list-filter-field--select">
             <el-tree-select
@@ -259,6 +280,9 @@
           </el-table-column>
           <el-table-column v-if="lineColumns.isVisible('ownerEmployee')" label="业务员" width="120">
             <template #default="{ row }"><strong class="order-party-name">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</strong></template>
+          </el-table-column>
+          <el-table-column v-if="lineColumns.isVisible('paymentOwner')" label="回款人" width="140" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.paymentOwnerNames?.join('、') || '-' }}</template>
           </el-table-column>
           <el-table-column label="商品" width="240" show-overflow-tooltip>
             <template #default="{ row }">
@@ -459,6 +483,7 @@ const lineColumns = useColumnSettings('order-lines', [
   { key: 'customerName', label: '客户名称' },
   { key: 'regionName', label: '归属地区' },
   { key: 'ownerEmployee', label: '业务员' },
+  { key: 'paymentOwner', label: '回款人' },
   { key: 'departmentName', label: '部门' },
   { key: 'product', label: '商品', locked: true },
   { key: 'skuCode', label: 'SKU/型号' },
@@ -496,6 +521,7 @@ const {
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const paymentStatusOptions = computed(() => paymentDictionaryOptions('ORDER_COLLECTION_STATUS'))
 const pageFilters = reactive({
+  paymentOwnerEmployeeCode: '',
   paymentTimeRange: null as [string, string] | null,
   discountStatus: '' as string | undefined,
   paymentStatusCode: '' as string | undefined,
@@ -597,6 +623,7 @@ async function buildQuery() {
     customerName: empty(filters.customerName),
     regionCode: empty(filters.regionCode),
     ownerEmployeeCode: empty(filters.ownerEmployeeCode),
+    paymentOwnerEmployeeCode: empty(pageFilters.paymentOwnerEmployeeCode),
     departmentId: filters.departmentId ?? undefined,
     includeSubDepartments: filters.includeSubDepartments,
     productIds,
@@ -665,6 +692,7 @@ function search() {
 
 function resetFilters() {
   resetCommonFilters()
+  pageFilters.paymentOwnerEmployeeCode = ''
   pageFilters.paymentTimeRange = null
   pageFilters.discountStatus = ''
   pageFilters.paymentStatusCode = ''

@@ -23,8 +23,15 @@ const elementPlusStyles = readdirSync(elementPlusComponents)
  * - 开发代理 /api → Gateway（默认 localhost:26880）
  * - 生产关闭 sourcemap
  */
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  if (command === 'build') {
+    const missing = ['VITE_AMAP_JS_KEY', 'VITE_AMAP_SECURITY_CODE']
+      .filter(name => !(process.env[name] ?? env[name])?.trim())
+    if (missing.length) {
+      throw new Error(`构建缺少浏览器地图配置：${missing.join('、')}。请注入现有 Web 端 JS API 配置后重新构建。`)
+    }
+  }
 
   return {
     plugins: [
