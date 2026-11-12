@@ -179,73 +179,76 @@
           >
         </div>
       </div>
-      <el-table
-        ref="table"
-        v-loading="loading"
-        :data="result.page.items"
-        row-key="id"
-        border
-        max-height="650"
-        empty-text="暂无运输记录"
-        @selection-change="selectionChanged"
-      >
-        <el-table-column type="selection" width="40" :reserve-selection="true" fixed="left" />
-        <el-table-column label="费用单号" min-width="190" fixed="left"
-          ><template #default="{ row }"
-            ><el-button
-              link
-              type="primary"
-              class="document-link"
-              :title="row.documentNo"
-              @click="view(row as CostRecord)"
-              >{{ row.documentNo }}</el-button
-            ></template
-          ></el-table-column
+      <div class="transport-table-viewport">
+        <el-table
+          ref="table"
+          v-loading="loading"
+          :data="result.page.items"
+          row-key="id"
+          border
+          scrollbar-always-on
+          height="100%"
+          empty-text="暂无运输记录"
+          @selection-change="selectionChanged"
         >
-        <el-table-column
-          v-for="col in displayed"
-          :key="col.key"
-          :label="col.label"
-          :min-width="col.width"
-          :align="col.key === 'stopCount' ? 'center' : col.numeric ? 'right' : 'left'"
-          :show-overflow-tooltip="!['route', 'orders'].includes(col.key)"
-        >
-          <template #default="{ row }"
-            ><TransportRouteSummary
-              v-if="col.key === 'route'"
-              :route="routeOf(row as CostRecord, platformOf(row as CostRecord))"
-            /><template v-else-if="col.key === 'orders'"
-              ><div
-                v-for="(text, i) in lines(row as CostRecord, col.key)"
-                :key="i"
-                class="table-line"
-              >
-                {{ text }}
-              </div></template
-            ><el-tag
-              v-else-if="col.key === 'status'"
-              :type="
-                row.statusCode === 'CONFIRMED'
-                  ? 'success'
-                  : row.statusCode === 'VOID'
-                    ? 'info'
-                    : 'warning'
-              "
-              >{{ statusName(row.statusCode) }}</el-tag
-            ><span v-else :class="{ 'money-cell': col.numeric }">{{
-              value(row as CostRecord, col.key)
-            }}</span></template
+          <el-table-column type="selection" width="48" :reserve-selection="true" fixed="left" />
+          <el-table-column label="费用单号" min-width="230" fixed="left"
+            ><template #default="{ row }"
+              ><el-button
+                link
+                type="primary"
+                class="document-link"
+                :title="row.documentNo"
+                @click="view(row as CostRecord)"
+                >{{ row.documentNo }}</el-button
+              ></template
+            ></el-table-column
           >
-        </el-table-column>
-        <el-table-column label="操作" fixed="right" width="140"
-          ><template #default="{ row }"
-            ><TransportRecordActions
-              :record="row as CostRecord"
-              @view="view(row as CostRecord)"
-              @edit="edit(row as CostRecord)"
-              @action="(action) => act(row as CostRecord, action)" /></template
-        ></el-table-column>
-      </el-table>
+          <el-table-column
+            v-for="col in displayed"
+            :key="col.key"
+            :label="col.label"
+            :min-width="col.width"
+            :align="col.key === 'stopCount' ? 'center' : col.numeric ? 'right' : 'left'"
+            :show-overflow-tooltip="!['route', 'orders'].includes(col.key)"
+          >
+            <template #default="{ row }"
+              ><TransportRouteSummary
+                v-if="col.key === 'route'"
+                :route="routeOf(row as CostRecord, platformOf(row as CostRecord))"
+              /><template v-else-if="col.key === 'orders'"
+                ><div
+                  v-for="(text, i) in lines(row as CostRecord, col.key)"
+                  :key="i"
+                  class="table-line"
+                >
+                  {{ text }}
+                </div></template
+              ><el-tag
+                v-else-if="col.key === 'status'"
+                :type="
+                  row.statusCode === 'CONFIRMED'
+                    ? 'success'
+                    : row.statusCode === 'VOID'
+                      ? 'info'
+                      : 'warning'
+                "
+                >{{ statusName(row.statusCode) }}</el-tag
+              ><span v-else :class="{ 'money-cell': col.numeric }">{{
+                value(row as CostRecord, col.key)
+              }}</span></template
+            >
+          </el-table-column>
+          <el-table-column label="操作" fixed="right" width="160"
+            ><template #default="{ row }"
+              ><TransportRecordActions
+                :record="row as CostRecord"
+                @view="view(row as CostRecord)"
+                @edit="edit(row as CostRecord)"
+                @action="(action) => act(row as CostRecord, action)" /></template
+          ></el-table-column>
+        </el-table>
+      </div>
       <ListTableFooter>
         <template #actions>
           <el-button v-if="can('integration:huolala:read')" @click="connection('employees')"
@@ -424,16 +427,16 @@ const table = ref<TableInstance>(),
 let applied: TransportQuery = { begin: 0, step: 20 },
   serial = 0
 const columns = [
-  { key: 'platformNo', label: '快递单号', width: 160 },
-  { key: 'carrier', label: '物流公司', width: 80 },
-  { key: 'vehicle', label: '车型', width: 80 },
-  { key: 'orderedAt', label: '下单时间', width: 165 },
-  { key: 'route', label: '行驶路段', width: 210 },
-  { key: 'stopCount', label: '收货点数', width: 80 },
-  { key: 'type', label: '运输类型', width: 120 },
-  { key: 'amount', label: '运输费用（元）', width: 120, numeric: true },
-  { key: 'status', label: '单据状态', width: 90 },
-  { key: 'creator', label: '创建人', width: 80 },
+  { key: 'platformNo', label: '快递单号', width: 200 },
+  { key: 'carrier', label: '物流公司', width: 120 },
+  { key: 'vehicle', label: '车型', width: 110 },
+  { key: 'orderedAt', label: '下单时间', width: 190 },
+  { key: 'route', label: '行驶路段', width: 280 },
+  { key: 'stopCount', label: '收货点数', width: 96 },
+  { key: 'type', label: '运输类型', width: 140 },
+  { key: 'amount', label: '运输费用（元）', width: 150, numeric: true },
+  { key: 'status', label: '单据状态', width: 104 },
+  { key: 'creator', label: '创建人', width: 110 },
   { key: 'relation', label: '订单关联状态', width: 130, optional: true },
   { key: 'date', label: '运输日期', width: 106, optional: true },
   { key: 'receivers', label: '收货方', width: 150, optional: true },
@@ -884,17 +887,34 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.transport-page > .order-register-filter,
+.transport-page > .el-alert {
+  flex: 0 0 auto;
 }
 .transport-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
   overflow: hidden;
   min-width: 0;
+  min-height: 0;
+}
+.transport-table-viewport {
+  flex: 1 1 auto;
+  min-height: 148px;
+  min-width: 0;
 }
 .list-heading {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -941,6 +961,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 .list-table-footer {
+  flex: 0 0 auto;
   padding: 16px 20px;
 }
 .transport-page :deep(.el-table__cell) {
