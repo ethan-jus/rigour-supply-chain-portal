@@ -871,6 +871,15 @@ onBeforeUnmount(() => {
 </script>
 <style scoped lang="scss">
 @use '@/assets/styles/list-filters';
+
+// 双指横滑越过表格边界时，不能继续触发浏览器前进／后退并重访附件地址。
+// 仅在当前运输页面生效；离开页面后恢复其他页面原有的导航手势。
+:global(html:has(.transport-page)) {
+  overscroll-behavior-x: contain;
+}
+.transport-list :deep(.el-table__body-wrapper .el-scrollbar__wrap) {
+  overscroll-behavior-x: contain;
+}
 .transport-page {
   display: flex;
   flex-direction: column;
