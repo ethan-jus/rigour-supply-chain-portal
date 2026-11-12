@@ -24,6 +24,9 @@ export const amountOf = (row: CostRecord, platform?: PlatformTransport | null) =
     )
   return row.data.amount
 }
+/** 车型使用最新平台资料；没有来源值时保留未知，不按物流公司推断。 */
+export const vehicleOf = (platform?: PlatformTransport | null): string =>
+  (platform ? currentSource(platform.source).raw['车型']?.trim() : '') || '-'
 export const ordersOf = (row: CostRecord, platform?: PlatformTransport | null) =>
   platform?.draft?.orderCodes ??
   row.data.ledger?.sources.map((s) => s.orderCode).filter((s): s is string => !!s) ??

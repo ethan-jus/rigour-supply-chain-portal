@@ -10,6 +10,7 @@ import {
   amountOf,
   allocationPreview,
   receiversOf,
+  vehicleOf,
 } from '@/views/supply-chain/cost/transport-records'
 import { createLedgerCommand } from '@/views/supply-chain/cost/cost-ledger'
 const api = vi.hoisted(() => ({
@@ -73,7 +74,7 @@ const platform = (): PlatformTransport => ({
       useTime: '2026-11-10 10:00:00',
       status: '已完成',
       paidAmount: 142.64,
-      raw: { 下单时间: '2026-11-09 18:30:26' },
+      raw: { 下单时间: '2026-11-09 18:30:26', 车型: '微面' },
       salesOrderNos: [],
       line: 0,
       facts: {
@@ -181,6 +182,32 @@ describe('统一运输记录 V2.6', () => {
     ])
   })
 
+  it('车型取最新平台资料；手工和缺失资料保持横线，不按物流公司猜测', () => {
+    const p = platform()
+    expect(vehicleOf(p)).toBe('微面')
+    p.source.latestOrder = { ...p.source.order, raw: { 车型: '小货车' } }
+    expect(vehicleOf(p)).toBe('小货车')
+    p.source.latestOrder.raw = {}
+    expect(vehicleOf(p)).toBe('-')
+    expect(vehicleOf(null)).toBe('-')
+  })
+  it('快递单号筛选使用原独立平台单号参数，不与隐藏的运单号混用', async () => {
+    wrapper = mount(View, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: { CostCarrierOrdersPanel: true, TransportRecordEditor: true },
+      },
+    })
+    await flushPromises()
+    await wrapper.find('input[aria-label="快递单号"]').setValue('3624071813921329726')
+    await wrapper.find('form[aria-label="查询条件"]').trigger('submit')
+    await flushPromises()
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ platformOrderNo: '3624071813921329726' }),
+    )
+    expect(api.list.mock.lastCall?.[0]).not.toHaveProperty('trackingNo')
+    expect(wrapper.find('input[aria-label="运单号"]').exists()).toBe(false)
+  })
   it('手工两个号码独立回填，平台没有运单号时不拿平台订单号补位', () => {
     const r = record()
     r.data.ledger = createLedgerCommand(true).ledger!
@@ -257,8 +284,11 @@ describe('统一运输记录 V2.6', () => {
     const labels = (settings.props('columns') as { label: string }[]).map((c) => c.label)
     expect(labels).toContain('物流公司')
     expect(labels).toContain('下单时间')
-    expect(labels.indexOf('下单时间')).toBeLessThan(labels.indexOf('运输日期'))
-    expect(labels).toContain('第三方订单号')
+    expect(labels.indexOf('下单时间')).toBeLessThan(labels.indexOf('行驶路段'))
+    expect(labels).toContain('快递单号')
+    expect(labels).toContain('车型')
+    expect(labels).not.toContain('运单号')
+    expect(labels.indexOf('快递单号')).toBeLessThan(labels.indexOf('物流公司'))
     expect(labels).toContain('行驶路段')
     expect(labels).toContain('收货点数')
     expect(labels.indexOf('行驶路段')).toBeLessThan(labels.indexOf('运输类型'))
@@ -271,11 +301,13 @@ describe('统一运输记录 V2.6', () => {
     expect(headers).toContain('已确认运输成本（元）')
     expect(headers).toContain('本系统关联员工')
     expect(headers).toContain('员工关联状态')
-    expect(rows[0][headers.indexOf('运单号')]).toBe('-')
+    expect(headers).not.toContain('运单号')
+    expect(headers).not.toContain('第三方订单号')
+    expect(rows[0][headers.indexOf('车型')]).toBe('微面')
     expect(rows[0][headers.indexOf('下单时间')]).toBe('2026-11-09 18:30:26')
     expect(rows[0][headers.indexOf('运输费用（元）')]).toBe(142.64)
     expect(rows[0][headers.indexOf('已确认运输成本（元）')]).toBe(137.64)
-    expect(rows[0][headers.indexOf('第三方订单号')]).toBe('3624071813921329726')
+    expect(rows[0][headers.indexOf('快递单号')]).toBe('3624071813921329726')
     expect(rows[0][headers.indexOf('付款状态')]).toBe('已付款')
     expect(rows[0][headers.indexOf('行驶路段')]).toBe(
       '武汉仓（仓储路1号） → 星河门店（沿江路18号） → 长江门店（江汉路20号）',

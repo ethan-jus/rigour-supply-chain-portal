@@ -26,7 +26,10 @@ vi.mock('@/api/core/cost-ledger', () => ({
   getLedgerSources: api.sources,
   getLedgerParties: vi.fn(),
 }))
-vi.mock('@/api/core/transport-records', () => ({ saveTransport: api.save }))
+vi.mock('@/api/core/transport-records', () => ({
+  saveTransport: api.save,
+  getTransportVoucher: vi.fn(),
+}))
 vi.mock('@/utils/business-dictionary', () => ({
   loadBusinessDictionaries: vi.fn(),
   businessDictionaryOptions: (_module: string, code: string) =>
@@ -238,7 +241,7 @@ describe('运输记录详情回填', () => {
 
 describe('通用手工账单', () => {
   it.each(['SF', 'JT_NEW'])(
-    '%s 独立保存第三方订单号、运单号、付款状态和账单分项',
+    '%s 用快递单号编辑原平台单号，保留隐藏的历史运单号、付款状态和费用分项',
     async (carrier) => {
       const d = detail()
       d.record.statusCode = 'DRAFT'
@@ -265,8 +268,8 @@ describe('通用手工账单', () => {
         attachTo: document.body,
       })
       await flushPromises()
-      await w.find('input[placeholder="填写物流公司提供的订单号"]').setValue('THIRD-002')
-      await w.find('input[placeholder="填写运单号"]').setValue('WB-002')
+      await w.find('input[placeholder="填写快递单号"]').setValue('THIRD-002')
+      expect(w.find('input[placeholder="填写运单号"]').exists()).toBe(false)
       const payment = w
         .findAllComponents({ name: 'ElSelect' })
         .find((select) => select.props('placeholder') === '请选择付款状态')!
@@ -285,7 +288,7 @@ describe('通用手工账单', () => {
         expect.objectContaining({
           carrierCode: carrier,
           platformOrderNo: 'THIRD-002',
-          trackingNo: 'WB-002',
+          trackingNo: 'WB-001',
           paymentStatusCode: 'PAID',
           amount: 22.35,
           manualBillItems: [
@@ -318,9 +321,11 @@ describe('通用手工账单', () => {
       attachTo: document.body,
     })
     await flushPromises()
-    expect(w.text()).toContain('第三方订单号')
+    expect(w.text()).toContain('快递单号')
+    expect(w.text()).not.toContain('运单号')
+    expect(w.text()).not.toContain('第三方订单号')
     expect(w.text()).toContain('SF-ORDER')
-    expect(w.text()).toContain('SF-WAYBILL')
+    expect(w.text()).not.toContain('SF-WAYBILL')
     expect(w.text()).toContain('付款状态')
     expect(w.text()).toContain('PAID')
     expect(w.text()).toContain('-2.00')
@@ -380,6 +385,96 @@ describe('通用手工账单', () => {
     })
     await flushPromises()
     expect(w.text()).toContain('未登记费用明细')
+    w.unmount()
+    document.body.innerHTML = ''
+  })
+})
+
+describe('物流详情的信息优先级', () => {
+  it('费用与快递单号前置，平台确认成本不被新账单替代，多收货点按需展开且资料不丢失', async () => {
+    const d = detail()
+    d.platform = {
+      source: {
+        id: 'P1',
+        costId: 'C1',
+        state: 'GENERATED',
+        revision: 2,
+        fileName: '接口',
+        sourceDifference: true,
+        order: {
+          enterpriseId: 'E1',
+          orderNo: 'HL-ORDER-001',
+          useTime: '2026-11-10 10:00:00',
+          status: '已完成',
+          paidAmount: 120,
+          raw: { 车型: '微面', 下单时间: '2026-11-09 19:20:30', 运单号: 'LEGACY-HIDDEN' },
+          line: 0,
+          salesOrderNos: [],
+          facts: {
+            connectorId: 'X1',
+            sourceEmployeeName: null,
+            mappedEmployeeCode: null,
+            billAmount: 120,
+            unpaidAmount: 0,
+            refundAmount: 0,
+            couponAmount: 0,
+            billState: 'FINAL',
+            issue: null,
+            stops: [
+              {
+                name: '发货仓',
+                address: '发货地址',
+                contactName: '仓管',
+                contactPhone: '13900000000',
+              },
+              ...Array.from({ length: 5 }, (_, i) => ({
+                name: `门店${i + 1}`,
+                address: `地址${i + 1}`,
+                contactName: `联系人${i + 1}`,
+                contactPhone: '13900000001',
+              })),
+            ],
+            fees: [],
+          },
+        },
+      },
+      draft: null,
+      billHistory: [],
+    }
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const sections = Array.from(document.body.querySelectorAll('.transport-section'))
+    const overview = sections[0]!
+    expect(overview.querySelector('h3')?.textContent).toBe('运输概览')
+    expect(
+      Array.from(overview.querySelectorAll('.overview-total strong')).map((n) => n.textContent),
+    ).toEqual(['120.00', '100.01', '已付款', '1 张'])
+    for (const text of [
+      '快递单号',
+      'HL-ORDER-001',
+      '微面',
+      '2026-11-09 19:20:30',
+      '已确认运输成本保持不变',
+    ])
+      expect(overview.textContent).toContain(text)
+    expect(document.body.textContent).not.toContain('LEGACY-HIDDEN')
+    expect(document.body.textContent).not.toContain('运单号')
+    expect(document.body.textContent).not.toContain('第三方订单号')
+    const receivers = sections.find((s) => s.querySelector('h3')?.textContent === '收货信息')!
+    expect(receivers.querySelectorAll('.address-card')).toHaveLength(2)
+    const toggle = Array.from(receivers.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === '展开全部 5 个收货点',
+    )!
+    toggle.click()
+    await flushPromises()
+    expect(receivers.querySelectorAll('.address-card')).toHaveLength(5)
+    expect(receivers.textContent).toContain('联系人5')
+    expect(receivers.textContent).toContain('地址5')
+    expect(api.save).not.toHaveBeenCalled()
     w.unmount()
     document.body.innerHTML = ''
   })

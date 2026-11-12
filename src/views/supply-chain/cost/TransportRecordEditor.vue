@@ -41,8 +41,59 @@
         type="warning"
         :closable="false"
       />
+      <section
+        v-if="readonly && detail"
+        class="transport-section record-overview"
+        aria-label="运输概览"
+      >
+        <h3>运输概览</h3>
+        <el-alert
+          v-if="platform?.source.sourceDifference && detail.record.statusCode === 'CONFIRMED'"
+          class="overview-warning"
+          type="warning"
+          :closable="false"
+          title="平台账单已更新，已确认运输成本保持不变，请核对账单变更。"
+        />
+        <div class="overview-totals">
+          <div class="overview-total overview-total--primary">
+            <span>运输费用（元）</span><strong>{{ money(form.amount) }}</strong>
+          </div>
+          <div class="overview-total">
+            <span>已确认运输成本（元）</span
+            ><strong>{{
+              detail.record.statusCode === 'CONFIRMED' ? money(detail.record.data.amount) : '-'
+            }}</strong>
+          </div>
+          <div class="overview-total">
+            <span>付款状态</span><strong>{{ paymentName }}</strong>
+          </div>
+          <div class="overview-total">
+            <span>关联业务订单</span
+            ><strong>{{
+              form.orderCodes.length ? `${form.orderCodes.length} 张` : '未关联'
+            }}</strong>
+          </div>
+        </div>
+        <div class="form-grid overview-fields">
+          <Info label="快递单号" :value="form.platformOrderNo" />
+          <Info label="物流公司" :value="carrierName" />
+          <Info label="车型" :value="vehicleOf(platform)" />
+          <Info label="运输类型" :value="typeName(form.transportType)" />
+          <Info label="下单时间" :value="order?.raw['下单时间']" />
+          <Info label="运输日期" :value="form.date" />
+          <Info label="费用负责人" :value="ownerName" />
+          <Info label="数据来源" :value="platform ? '货拉拉同步' : '手动录入'" />
+        </div>
+        <div class="overview-route">
+          <span>行驶路段</span>
+          <TransportRouteSummary :route="routeOf(detail.record, platform)" />
+          <span class="route-count">{{
+            receivers.length ? `${receivers.length} 个收货点` : '-'
+          }}</span>
+        </div>
+      </section>
       <el-form label-position="top" :model="form" @submit.prevent>
-        <section class="transport-section">
+        <section v-if="!readonly" class="transport-section">
           <h3>基本信息</h3>
           <div class="form-grid">
             <el-form-item label="数据来源"
@@ -87,17 +138,13 @@
                   :label="o.label"
                   :value="o.value" /></el-select
             ></el-form-item>
-            <el-form-item label="运单号"
-              ><span v-if="readonly || platform">{{ form.trackingNo || '-' }}</span
-              ><el-input v-else v-model="form.trackingNo" maxlength="100" placeholder="填写运单号"
-            /></el-form-item>
-            <el-form-item v-if="!readonly || platform || form.platformOrderNo" label="第三方订单号"
+            <el-form-item v-if="!readonly || platform || form.platformOrderNo" label="快递单号"
               ><span v-if="readonly || platform">{{ form.platformOrderNo || '-' }}</span
               ><el-input
                 v-else
                 v-model="form.platformOrderNo"
                 maxlength="80"
-                placeholder="填写物流公司提供的订单号"
+                placeholder="填写快递单号"
             /></el-form-item>
           </div>
         </section>
@@ -161,96 +208,14 @@
           >
         </section>
         <section class="transport-section">
-          <h3>发货信息</h3>
-          <template v-if="platform"
-            ><div v-for="(p, i) in platformSenders" :key="i" class="address-card">
-              <strong>{{ p.name || '-' }}</strong>
-              <div class="form-grid">
-                <Info label="发货联系人" :value="p.contactName" /><Info
-                  label="发货联系电话"
-                  :value="p.contactPhone"
-                /><Info class="wide" label="发货地址" :value="p.address" />
-              </div>
-            </div>
-            <p v-if="!platformSenders.length" class="empty-text">暂无发货信息</p>
-            <el-form-item v-if="!readonly" label="本系统发货仓库"
-              ><CostLedgerPartySelect
-                v-model="form.warehouseCode"
-                logistics
-                kind="WAREHOUSE"
-                placeholder="按实际运输补选仓库"
-            /></el-form-item>
-          </template>
-          <div v-else class="form-grid">
-            <el-form-item label="发货仓库"
-              ><span v-if="readonly">{{
-                form.warehouseCode ? form.senderName || form.warehouseCode : '-'
-              }}</span
-              ><CostLedgerPartySelect
-                v-else
-                v-model="form.warehouseCode"
-                logistics
-                kind="WAREHOUSE"
-                :name="form.senderName"
-                placeholder="搜索并选择发货仓库"
-                @selected="selectWarehouse" /></el-form-item
-            ><el-form-item label="发货方"
-              ><span v-if="readonly">{{ form.senderName || '-' }}</span
-              ><el-input
-                v-else
-                v-model="form.senderName"
-                maxlength="100"
-                placeholder="填写实际发货方"
-                @input="senderTouched = true" /></el-form-item
-            ><el-form-item label="发货联系人"
-              ><span v-if="readonly">{{ form.senderContact || '-' }}</span
-              ><el-input
-                v-else
-                v-model="form.senderContact"
-                maxlength="100"
-                @input="senderTouched = true" /></el-form-item
-            ><el-form-item label="发货联系电话"
-              ><span v-if="readonly">{{ form.senderPhone || '-' }}</span
-              ><el-input
-                v-else
-                v-model="form.senderPhone"
-                maxlength="50"
-                @input="senderTouched = true" /></el-form-item
-            ><el-form-item class="wide" label="发货地址"
-              ><span v-if="readonly">{{ form.senderAddress || '-' }}</span
-              ><el-input
-                v-else
-                v-model="form.senderAddress"
-                maxlength="500"
-                placeholder="填写本次运输的发货地址"
-                @input="senderTouched = true"
-            /></el-form-item>
-          </div>
-        </section>
-        <section class="transport-section">
-          <h3>收货信息</h3>
-          <div v-for="(p, i) in receivers" :key="i" class="address-card">
-            <strong>{{ p.name || '-' }}</strong>
-            <div class="form-grid">
-              <Info label="收货联系人" :value="p.contactName" /><Info
-                label="收货联系电话"
-                :value="p.contactPhone"
-              /><Info class="wide" label="收货地址" :value="p.address" />
-            </div>
-          </div>
-          <p v-if="!receivers.length" class="empty-text">
-            {{ platform || readonly ? '暂无收货信息' : '选择业务订单后显示收货信息' }}
-          </p>
-        </section>
-        <section class="transport-section">
-          <h3>费用信息</h3>
+          <h3>{{ readonly ? '账单与凭证' : '费用信息' }}</h3>
           <el-button
             v-if="advanced && !readonly"
             class="advanced-button"
             @click="advancedOpen = true"
             >维护费用与分摊明细</el-button
           >
-          <div class="form-grid" :class="{ 'manual-bill-summary': !platform }">
+          <div v-if="!readonly" class="form-grid" :class="{ 'manual-bill-summary': !platform }">
             <el-form-item label="运输费用（元）"
               ><span
                 v-if="readonly || platform || advanced || form.manualBillItems?.length"
@@ -400,13 +365,122 @@
               ><template #default="{ row }">{{ money(row.amount) }}</template></el-table-column
             ></el-table
           >
+          <el-collapse v-if="platform && readonly" class="platform-detail-collapse">
+            <el-collapse-item title="查看平台账单、费用明细及凭证" name="platform-bill">
+              <TransportPlatformBill
+                :record-id="detail!.record.id"
+                :platform="platform"
+                :confirmed="detail!.record.statusCode === 'CONFIRMED'"
+                :confirmed-amount="detail!.record.data.amount"
+              />
+            </el-collapse-item>
+          </el-collapse>
           <TransportPlatformBill
-            v-if="platform"
+            v-else-if="platform"
             :record-id="detail!.record.id"
             :platform="platform"
             :confirmed="detail!.record.statusCode === 'CONFIRMED'"
             :confirmed-amount="detail!.record.data.amount"
           />
+        </section>
+        <section class="transport-section">
+          <h3>发货信息</h3>
+          <template v-if="platform"
+            ><div v-for="(p, i) in platformSenders" :key="i" class="address-card">
+              <strong>{{ p.name || '-' }}</strong>
+              <div class="form-grid">
+                <Info label="发货联系人" :value="p.contactName" /><Info
+                  label="发货联系电话"
+                  :value="p.contactPhone"
+                /><Info class="wide" label="发货地址" :value="p.address" />
+              </div>
+            </div>
+            <p v-if="!platformSenders.length" class="empty-text">暂无发货信息</p>
+            <el-form-item v-if="!readonly" label="本系统发货仓库"
+              ><CostLedgerPartySelect
+                v-model="form.warehouseCode"
+                logistics
+                kind="WAREHOUSE"
+                placeholder="按实际运输补选仓库"
+            /></el-form-item>
+          </template>
+          <div v-else class="form-grid">
+            <el-form-item label="发货仓库"
+              ><span v-if="readonly">{{
+                form.warehouseCode ? form.senderName || form.warehouseCode : '-'
+              }}</span
+              ><CostLedgerPartySelect
+                v-else
+                v-model="form.warehouseCode"
+                logistics
+                kind="WAREHOUSE"
+                :name="form.senderName"
+                placeholder="搜索并选择发货仓库"
+                @selected="selectWarehouse" /></el-form-item
+            ><el-form-item label="发货方"
+              ><span v-if="readonly">{{ form.senderName || '-' }}</span
+              ><el-input
+                v-else
+                v-model="form.senderName"
+                maxlength="100"
+                placeholder="填写实际发货方"
+                @input="senderTouched = true" /></el-form-item
+            ><el-form-item label="发货联系人"
+              ><span v-if="readonly">{{ form.senderContact || '-' }}</span
+              ><el-input
+                v-else
+                v-model="form.senderContact"
+                maxlength="100"
+                @input="senderTouched = true" /></el-form-item
+            ><el-form-item label="发货联系电话"
+              ><span v-if="readonly">{{ form.senderPhone || '-' }}</span
+              ><el-input
+                v-else
+                v-model="form.senderPhone"
+                maxlength="50"
+                @input="senderTouched = true" /></el-form-item
+            ><el-form-item class="wide" label="发货地址"
+              ><span v-if="readonly">{{ form.senderAddress || '-' }}</span
+              ><el-input
+                v-else
+                v-model="form.senderAddress"
+                maxlength="500"
+                placeholder="填写本次运输的发货地址"
+                @input="senderTouched = true"
+            /></el-form-item>
+          </div>
+        </section>
+        <section class="transport-section">
+          <div class="section-heading">
+            <h3>收货信息</h3>
+            <span class="optional-label">{{
+              receivers.length ? `${receivers.length} 个收货点` : '-'
+            }}</span>
+          </div>
+          <div class="receiver-grid">
+            <div v-for="(p, i) in visibleReceivers" :key="i" class="address-card">
+              <strong>{{ p.name || '-' }}</strong>
+              <div class="form-grid">
+                <Info label="收货联系人" :value="p.contactName" /><Info
+                  label="收货联系电话"
+                  :value="p.contactPhone"
+                /><Info class="wide" label="收货地址" :value="p.address" />
+              </div>
+            </div>
+          </div>
+          <el-button
+            v-if="readonly && receivers.length > 2"
+            link
+            type="primary"
+            class="receivers-toggle"
+            :aria-expanded="allReceivers"
+            @click="allReceivers = !allReceivers"
+          >
+            {{ allReceivers ? '收起收货点' : `展开全部 ${receivers.length} 个收货点` }}
+          </el-button>
+          <p v-if="!receivers.length" class="empty-text">
+            {{ platform || readonly ? '暂无收货信息' : '选择业务订单后显示收货信息' }}
+          </p>
         </section>
         <section class="transport-section">
           <h3>备注</h3>
@@ -434,12 +508,9 @@
         <h3>货拉拉订单信息</h3>
         <div class="form-grid">
           <Info label="货拉拉订单状态" :value="order?.status" /><Info
-            label="下单时间"
-            :value="order?.raw['下单时间']"
-          /><Info label="用车时间" :value="order?.useTime" /><Info
-            label="完成时间"
-            :value="order?.facts?.completeTime"
-          /><Info label="车型" :value="order?.raw['车型']" /><Info
+            label="用车时间"
+            :value="order?.useTime"
+          /><Info label="完成时间" :value="order?.facts?.completeTime" /><Info
             label="用车原因"
             :value="order?.raw['用车原由']"
           /><Info class="wide" label="货拉拉订单备注" :value="order?.raw['订单备注']" />
@@ -565,7 +636,7 @@ import {
   type LedgerPartyReference,
 } from '@/api/core/cost-ledger'
 import { saveTransport, type TransportDetail } from '@/api/core/transport-records'
-import { currentSource } from './huolala-source'
+import { currentSource, platformPaymentStatus } from './huolala-source'
 import {
   transportDraft,
   transportTypes,
@@ -576,12 +647,15 @@ import {
   manualBillTotal,
   frozenTransportSources,
   frozenTransportReceivers,
+  vehicleOf,
+  routeOf,
 } from './transport-records'
 import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
 import CostLedgerSourcePicker, { type PickedLedgerSource } from './CostLedgerSourcePicker.vue'
 import CostCitySelect from './CostCitySelect.vue'
 import TransportPlatformBill from './TransportPlatformBill.vue'
 import TransportRecordActions from './TransportRecordActions.vue'
+import TransportRouteSummary from './TransportRouteSummary.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import CostLedgerEditor from './CostLedgerEditor.vue'
 import { totalFees } from './cost-ledger'
@@ -667,6 +741,22 @@ const receivers = computed(() =>
           contactPhone: s.contactPhone,
           address: s.destinationAddress,
         })),
+)
+const allReceivers = ref(false)
+const visibleReceivers = computed(() =>
+  props.readonly && !allReceivers.value ? receivers.value.slice(0, 2) : receivers.value,
+)
+const carrierName = computed(() =>
+  platform.value
+    ? '货拉拉'
+    : form.value.carrierCode
+      ? costLabel('COST_CARRIER', form.value.carrierCode)
+      : detail.value?.record.data.logistics?.carrierName || '-',
+)
+const paymentName = computed(() =>
+  order.value
+    ? platformPaymentStatus(order.value)
+    : costLabel('COST_PAYMENT_STATUS', form.value.paymentStatusCode),
 )
 const ownerName = computed(
   () =>
@@ -924,6 +1014,7 @@ async function save() {
 }
 .record-heading strong {
   font-size: 20px;
+  overflow-wrap: anywhere;
 }
 .transport-section {
   background: var(--el-bg-color);
@@ -1021,6 +1112,95 @@ h4 {
   }
   .transport-section {
     padding: 16px;
+  }
+}
+
+.overview-warning {
+  margin-bottom: 16px;
+}
+.overview-totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.overview-total {
+  padding: 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+  min-width: 0;
+}
+.overview-total > span {
+  display: block;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.overview-total > strong {
+  display: block;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.overview-total--primary {
+  border-color: var(--el-color-primary-light-7);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+.overview-fields {
+  row-gap: 18px;
+}
+.overview-route {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  gap: 18px;
+  border-top: 1px solid var(--el-border-color-extra-light);
+  padding-top: 20px;
+  margin-top: 20px;
+  align-items: start;
+}
+.overview-route > span {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+.overview-route :deep(.route-stop) {
+  -webkit-line-clamp: 1;
+}
+.receiver-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.receiver-grid .address-card {
+  padding: 16px;
+  border: 1px solid var(--el-border-color-extra-light);
+  border-radius: 6px;
+  min-width: 0;
+}
+.receivers-toggle {
+  margin-top: 16px;
+}
+.platform-detail-collapse {
+  border-top: 0;
+}
+@media (max-width: 1000px) {
+  .overview-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .overview-totals,
+  .receiver-grid {
+    grid-template-columns: 1fr;
+  }
+  .overview-route {
+    grid-template-columns: 1fr;
+  }
+  .record-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
   }
 }
 </style>
