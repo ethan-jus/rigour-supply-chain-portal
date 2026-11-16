@@ -5,7 +5,9 @@
   <el-dialog
     v-model="visible"
     :title="syncLabel"
-    :width="incrementalCustomer || catalogSnapshot ? 'min(920px, 96vw)' : '600px'"
+    :width="
+      incrementalCustomer || catalogSnapshot || scope === 'SHIPMENT' ? 'min(920px, 96vw)' : '600px'
+    "
     :close-on-click-modal="false"
   >
     <el-alert
@@ -14,13 +16,18 @@
           ? '同步订货宝新增和变更的客户，并重新核对本地待关联记录。保留客户原始创建时间和创建人。'
           : catalogSnapshot
             ? snapshotHint
-            : `本次只同步${label}。缺少客户、商品等映射时会保留待处理，请到对应页面补齐。`
+            : scope === 'SHIPMENT'
+              ? '先核对原销售单、客户、仓库和商品；缺少资料时尝试补同步，再同步发货记录。未完成单据保留原因，可单独重试。'
+              : `本次只同步${label}。缺少客户、商品等映射时会保留待处理，请到对应页面补齐。`
       "
       type="info"
       :closable="false"
     />
     <el-form label-width="90px" style="margin-top: 16px">
-      <el-form-item v-if="catalogSnapshot && connectors.length === 1" label="同步来源">
+      <el-form-item
+        v-if="(catalogSnapshot || scope === 'SHIPMENT') && connectors.length === 1"
+        label="同步来源"
+      >
         订货宝
       </el-form-item>
       <el-form-item v-else-if="!incrementalCustomer" label="来源连接器"
@@ -107,16 +114,22 @@
         </el-table-column>
       </el-table>
       <el-table v-else :data="steps" size="small">
-        <el-table-column label="对象" prop="objectType" />
+        <el-table-column label="对象">
+          <template #default="{ row }">{{ objectLabel(row.objectType) }}</template>
+        </el-table-column>
         <el-table-column label="读取" prop="fetched" />
         <el-table-column label="处理" prop="changed" />
+        <!-- @vue-generic {DhbSyncOrchestrationStep} -->
         <el-table-column label="结果说明"
-          ><template #default="{ row }">{{
-            row.message || (row.unmapped ? `${row.unmapped} 条待处理` : '已完成')
-          }}</template></el-table-column
+          ><template #default="{ row }">{{ resultExplanation(row) }}</template></el-table-column
         >
       </el-table>
     </div>
+    <DhbShipmentSyncIssues
+      v-if="visible && scope === 'SHIPMENT' && connectorId && !busy"
+      :key="`${connectorId}:${result?.batchId || 'pending'}`"
+      :connector-id="connectorId"
+    />
     <template #footer
       ><el-button @click="visible = false">关闭</el-button
       ><el-button
@@ -141,6 +154,7 @@ import {
 import { syncDhbPage, type DhbPageScope } from '@/api/core/dhb-page-sync'
 import { useDhbSyncJob } from '@/composables/useDhbSyncJob'
 import DhbSyncJobProgress from './DhbSyncJobProgress.vue'
+import DhbShipmentSyncIssues from './DhbShipmentSyncIssues.vue'
 const props = defineProps<{ scope: DhbPageScope; label: string; buttonLabel?: string }>()
 const incrementalCustomer = computed(() => props.scope === 'CUSTOMER')
 const catalogSnapshot = computed(() =>
@@ -183,8 +197,19 @@ const snapshotLabels: Record<string, string> = {
   SUPPLIER: '供应商',
   PURCHASE_ORDER: '采购单',
   WAREHOUSE: '仓库',
+  SHIPMENT: '发货',
+  SALES_ORDER: '销售订单',
+  RECEIPT: '回款',
+  PAYMENT: '付款',
 }
 const objectLabel = (type: string) => snapshotLabels[type] || type
+function resultExplanation(step: DhbSyncOrchestrationStep) {
+  // 兼容已保存的旧批次：业务只需知道哪些资料要补齐，不展示内部游标名称。
+  return (
+    step.message?.replace(/，?checkpoint\s*未推进/g, '，补齐资料后可重试未完成单据') ||
+    (step.unmapped ? `${step.unmapped} 条待处理` : '已完成')
+  )
+}
 function snapshotExplanation(step: DhbSyncOrchestrationStep) {
   // 兼容尚未重启的旧服务，内部统计标记不作为面向业务的结果说明。
   if (step.message?.startsWith('来源明细：')) {

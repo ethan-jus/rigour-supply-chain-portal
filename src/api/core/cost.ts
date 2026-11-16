@@ -494,6 +494,7 @@ export interface CostAttachment {
   size: number
   createdBy: string
   createdTime: string
+  categoryCode?: string
 }
 export const getCostAttachments = (category: CostCategory, id: string) =>
   apiClient.get<CostAttachment[]>(
@@ -515,6 +516,12 @@ export const getCostAttachmentUrl = (category: CostCategory, id: string, file: s
   apiClient.get<string>(
     `${base(category)}/${encodeURIComponent(id)}/attachments/${encodeURIComponent(file)}/url`,
     options,
+  )
+
+export const getTransportPdfContent = (id: string, file: string) =>
+  apiClient.get<Blob>(
+    `/orders/logistics-costs/${encodeURIComponent(id)}/attachments/${encodeURIComponent(file)}/preview`,
+    { ...options, responseType: 'blob' },
   )
 
 export const getCostCustomers = (cityCode: string, keyword: string, begin = 0) =>

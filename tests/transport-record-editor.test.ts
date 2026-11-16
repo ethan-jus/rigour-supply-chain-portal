@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { defineComponent } from 'vue'
 import Editor from '@/views/supply-chain/cost/TransportRecordEditor.vue'
 import type { TransportDetail } from '@/api/core/transport-records'
 import type { CostSource } from '@/api/core/cost'
@@ -19,7 +20,7 @@ const api = vi.hoisted(() => ({
 vi.mock('@/api/core/cost', () => ({
   getCostEmployees: api.employees,
   getCostHistory: api.history,
-  getCostCities: vi.fn(),
+  getCostCities: vi.fn().mockResolvedValue([]),
   saveCost: vi.fn(),
 }))
 vi.mock('@/api/core/cost-ledger', () => ({
@@ -28,6 +29,7 @@ vi.mock('@/api/core/cost-ledger', () => ({
 }))
 vi.mock('@/api/core/transport-records', () => ({
   saveTransport: api.save,
+  saveTransportWithEvidence: api.save,
   getTransportVoucher: vi.fn(),
 }))
 vi.mock('@/utils/business-dictionary', () => ({
@@ -69,6 +71,8 @@ function detail(): TransportDetail {
           id: 'S1',
           documentNo: 'SO1',
           sourceType: 'SALES_ORDER',
+          receiverCode: 'CUS1',
+          cityCode: 'WH',
           receiverName: '确认时的门店',
           employeeName: '确认时的业务员',
           departmentName: '确认时的部门',
@@ -88,6 +92,13 @@ const global = {
   stubs: {
     CostAttachments: true,
     CostAttachmentEditor: true,
+    TransportEvidence: defineComponent({
+      template: '<div />',
+      emits: ['count'],
+      mounted() {
+        this.$emit('count', 1)
+      },
+    }),
     CostLedgerSourcePicker: true,
     CostCitySelect: true,
     CostLedgerPartySelect: true,
@@ -104,6 +115,59 @@ beforeEach(() => {
   ])
 })
 describe('运输记录详情回填', () => {
+  it.each(['新增', '编辑', '查看'])(
+    '%s沿用同一核心分区和关联字段，查看不提供输入控件',
+    async (mode) => {
+      const d = detail()
+      d.record.statusCode = 'DRAFT'
+      d.record.data.ledger = validManualLedger()
+      const w = mount(Editor, {
+        props: {
+          modelValue: true,
+          readonly: mode === '查看',
+          detail: mode === '新增' ? null : d,
+          salesSource: mode === '新增' ? d.record.sources[0] : undefined,
+          salesOrderId: mode === '新增' ? 'SO1' : undefined,
+          initialCarrierCode: 'SF',
+        },
+        global,
+        attachTo: document.body,
+      })
+      await flushPromises()
+      const headings = [
+        ...document.body.querySelectorAll(
+          '.transport-section > h3, .transport-section > .section-heading > h3',
+        ),
+      ].map((e) => e.textContent)
+      expect(headings.slice(0, 7)).toEqual([
+        '基本信息',
+        '关联业务订单',
+        '费用信息',
+        '发货信息',
+        '收货信息与行驶路段',
+        '凭证与运输影像',
+        '备注',
+      ])
+      const columns = [...document.body.querySelectorAll('th')].map((e) => e.textContent)
+      expect(columns).toContain('关联时间')
+      for (const label of [
+        '运输费用（元）',
+        '费用负责人',
+        '付款状态',
+        '已确认运输成本（元）',
+        '发货仓库',
+        '发货方',
+        '收货单位',
+        '收货联系人',
+        '收货联系电话',
+        '收货地址',
+      ])
+        expect(document.body.textContent).toContain(label)
+      if (mode === '查看') expect(w.findAll('input')).toHaveLength(0)
+      w.unmount()
+      document.body.innerHTML = ''
+    },
+  )
   it.each(['完整来源快照', '台账快照'])(
     '只读详情使用%s，不覆盖确认时的业务资料',
     async (format) => {
@@ -150,14 +214,13 @@ describe('运输记录详情回填', () => {
         attachTo: document.body,
       })
       await flushPromises()
-      if (format === '台账快照') expect(api.sources).toHaveBeenCalledOnce()
-      else expect(api.sources).not.toHaveBeenCalled()
+      expect(api.sources).not.toHaveBeenCalled()
       expect(document.body.textContent).toContain('确认时的门店')
       expect(document.body.textContent).toContain('确认时的业务员')
       expect(document.body.textContent).toContain('确认时的部门')
       expect(document.body.textContent).not.toContain('后续修改的门店')
       const receiverSection = Array.from(document.body.querySelectorAll('.transport-section')).find(
-        (s) => s.querySelector('h3')?.textContent === '收货信息',
+        (s) => s.querySelector('h3')?.textContent === '收货信息与行驶路段',
       )
       expect(receiverSection?.textContent).toContain('原收货人')
       expect(receiverSection?.textContent).toContain('13900000001')
@@ -182,7 +245,7 @@ describe('运输记录详情回填', () => {
     })
     await flushPromises()
     const receiverSection = Array.from(document.body.querySelectorAll('.transport-section')).find(
-      (s) => s.querySelector('h3')?.textContent === '收货信息',
+      (s) => s.querySelector('h3')?.textContent === '收货信息与行驶路段',
     )
     expect(receiverSection?.textContent).toContain('历史收货仓')
     expect(receiverSection?.textContent).toContain('历史收货地址')
@@ -220,7 +283,7 @@ describe('运输记录详情回填', () => {
     w.unmount()
     document.body.innerHTML = ''
   })
-  it('资料未加载完时不能保存半加载的运输记录', async () => {
+  it('员工选项加载不阻塞已有运输快照展示，保存仍需表单必填校验', async () => {
     api.employees.mockReturnValue(new Promise(() => {}))
     const d = detail()
     d.record.statusCode = 'DRAFT'
@@ -233,19 +296,48 @@ describe('运输记录详情回填', () => {
     const save = Array.from(document.body.querySelectorAll('button')).find(
       (b) => b.textContent?.trim() === '保存运输记录',
     )
-    expect(save?.disabled).toBe(true)
+    expect(save?.disabled).toBe(false)
     wrapper.unmount()
     document.body.innerHTML = ''
   })
 })
 
+function validManualLedger() {
+  const ledger = createLedgerCommand(true).ledger!
+  Object.assign(ledger, {
+    deliveryModeCode: 'THIRD_PARTY',
+    platformOrderNo: 'SF001',
+    sender: {
+      pointCode: 'FROM',
+      partyTypeCode: 'OTHER',
+      manualName: '武汉仓',
+      displayName: '武汉仓',
+      address: '武汉市仓库路1号',
+      cityCode: 'WH',
+    },
+    receivingPoints: [
+      {
+        pointCode: 'TO0',
+        partyTypeCode: 'CUSTOMER',
+        partyCode: 'CUS1',
+        manualName: '确认时的门店',
+        displayName: '确认时的门店',
+        contactName: '王先生',
+        phone: '13900000001',
+        address: '收货地址',
+        cityCode: 'WH',
+      },
+    ],
+  })
+  return ledger
+}
 describe('通用手工账单', () => {
   it.each(['SF', 'JT_NEW'])(
     '%s 用快递单号编辑原平台单号，保留隐藏的历史运单号、付款状态和费用分项',
     async (carrier) => {
       const d = detail()
       d.record.statusCode = 'DRAFT'
-      d.record.data.ledger = createLedgerCommand(true).ledger!
+      d.record.data.ledger = validManualLedger()
       d.record.data.ledger.feeItems[0]!.allocationMethodCode = 'EQUAL'
       Object.assign(d.record.data.ledger, {
         carrierCode: carrier,
@@ -286,16 +378,19 @@ describe('通用手工账单', () => {
       expect(api.save).toHaveBeenCalledWith(
         'C1',
         expect.objectContaining({
-          carrierCode: carrier,
-          platformOrderNo: 'THIRD-002',
-          trackingNo: 'WB-001',
-          paymentStatusCode: 'PAID',
-          amount: 22.35,
-          manualBillItems: [
-            { name: '运费', amount: 24.35 },
-            { name: '优惠', amount: -2 },
-          ],
+          draft: expect.objectContaining({
+            carrierCode: carrier,
+            platformOrderNo: 'THIRD-002',
+            trackingNo: 'WB-001',
+            paymentStatusCode: 'PAID',
+            amount: 22.35,
+            manualBillItems: [
+              { name: '运费', amount: 24.35 },
+              { name: '优惠', amount: -2 },
+            ],
+          }),
         }),
+        [],
       )
       w.unmount()
       document.body.innerHTML = ''
@@ -303,7 +398,7 @@ describe('通用手工账单', () => {
   )
   it('只读详情保留付款状态和带优惠的账单，账单不出现输入控件', async () => {
     const d = detail()
-    d.record.data.ledger = createLedgerCommand(true).ledger!
+    d.record.data.ledger = validManualLedger()
     Object.assign(d.record.data.ledger, {
       carrierCode: 'SF',
       platformOrderNo: 'SF-ORDER',
@@ -339,7 +434,7 @@ describe('通用手工账单', () => {
     async (negative) => {
       const d = detail()
       d.record.statusCode = 'DRAFT'
-      d.record.data.ledger = createLedgerCommand(true).ledger!
+      d.record.data.ledger = validManualLedger()
       Object.assign(d.record.data.ledger, {
         carrierCode: 'SF',
         transportPurposeCode: 'DELIVERY',
@@ -364,11 +459,18 @@ describe('通用手工账单', () => {
       await flushPromises()
       if (negative) {
         expect(api.save).not.toHaveBeenCalled()
-        expect(w.text()).toContain('优惠后合计不能小于0')
+        expect(w.text()).toContain('金额须为非负数')
       } else
         expect(api.save).toHaveBeenCalledWith(
           'C1',
-          expect.objectContaining({ amount: 35, paymentStatusCode: 'UNPAID', manualBillItems: [] }),
+          expect.objectContaining({
+            draft: expect.objectContaining({
+              amount: 35,
+              paymentStatusCode: 'UNPAID',
+              manualBillItems: [],
+            }),
+          }),
+          [],
         )
       w.unmount()
       document.body.innerHTML = ''
@@ -376,7 +478,7 @@ describe('通用手工账单', () => {
   )
   it('只填总额的记录不把系统的合计费用冒充账单分项', async () => {
     const d = detail()
-    d.record.data.ledger = createLedgerCommand(true).ledger!
+    d.record.data.ledger = validManualLedger()
     d.record.data.ledger.manualBillItems = []
     const w = mount(Editor, {
       props: { modelValue: true, readonly: true, detail: d },
@@ -448,23 +550,26 @@ describe('物流详情的信息优先级', () => {
     })
     await flushPromises()
     const sections = Array.from(document.body.querySelectorAll('.transport-section'))
-    const overview = sections[0]!
-    expect(overview.querySelector('h3')?.textContent).toBe('运输概览')
-    expect(
-      Array.from(overview.querySelectorAll('.overview-total strong')).map((n) => n.textContent),
-    ).toEqual(['120.00', '100.01', '已付款', '1 张'])
+    expect(sections[0]!.querySelector('h3')?.textContent).toBe('基本信息')
+    expect(document.body.textContent).not.toContain('运输概览')
+    const fees = sections.find((s) => s.querySelector('h3')?.textContent === '费用信息')!
+    expect(fees.textContent).toContain('120.00')
+    expect(fees.textContent).toContain('100.01')
+    expect(fees.textContent).toContain('已付款')
     for (const text of [
       '快递单号',
       'HL-ORDER-001',
       '微面',
       '2026-11-09 19:20:30',
-      '已确认运输成本保持不变',
+      '已确认成本仍为',
     ])
-      expect(overview.textContent).toContain(text)
+      expect(document.body.textContent).toContain(text)
     expect(document.body.textContent).not.toContain('LEGACY-HIDDEN')
     expect(document.body.textContent).not.toContain('运单号')
     expect(document.body.textContent).not.toContain('第三方订单号')
-    const receivers = sections.find((s) => s.querySelector('h3')?.textContent === '收货信息')!
+    const receivers = sections.find(
+      (s) => s.querySelector('h3')?.textContent === '收货信息与行驶路段',
+    )!
     expect(receivers.querySelectorAll('.address-card')).toHaveLength(2)
     const toggle = Array.from(receivers.querySelectorAll('button')).find(
       (b) => b.textContent?.trim() === '展开全部 5 个收货点',
@@ -475,6 +580,85 @@ describe('物流详情的信息优先级', () => {
     expect(receivers.textContent).toContain('联系人5')
     expect(receivers.textContent).toContain('地址5')
     expect(api.save).not.toHaveBeenCalled()
+    w.unmount()
+    document.body.innerHTML = ''
+  })
+})
+
+describe('多单费用分摊', () => {
+  it('编辑可调整各销售单金额，合计不等于总费用时拒绝保存，保存携带完整分摊', async () => {
+    const d = detail()
+    d.record.statusCode = 'DRAFT'
+    d.record.data.amount = 137.64
+    const ledger = validManualLedger()
+    ledger.carrierCode = 'SF'
+    ledger.feeItems[0]!.feeKey = 'freight'
+    ledger.feeItems[0]!.allocationMethodCode = 'AMOUNT'
+    ledger.sources = [
+      {
+        orderCode: 'SO1',
+        orderTypeCode: 'SALES_ORDER',
+        linkRoleCode: 'COST',
+        documentAmount: 6000,
+        allocations: [
+          {
+            feeKey: 'freight',
+            receivingPointCode: 'TO0',
+            cityCode: 'WH',
+            basis: 6000,
+            amount: 82.58,
+          },
+        ],
+      },
+      {
+        orderCode: 'SO2',
+        orderTypeCode: 'SALES_ORDER',
+        linkRoleCode: 'COST',
+        documentAmount: 4000,
+        allocations: [
+          {
+            feeKey: 'freight',
+            receivingPointCode: 'TO0',
+            cityCode: 'WH',
+            basis: 4000,
+            amount: 55.06,
+          },
+        ],
+      },
+    ]
+    d.record.data.ledger = ledger
+    d.record.sources = [
+      { ...d.record.sources[0]!, documentAmount: 6000 },
+      { ...d.record.sources[0]!, id: 'S2', documentNo: 'SO2', documentAmount: 4000 },
+    ]
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: false, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const input = (code: string) =>
+      w
+        .findAllComponents({ name: 'ElInputNumber' })
+        .find((c) => c.props('ariaLabel') === `${code}分摊金额`)!
+    input('SO1').vm.$emit('update:modelValue', 80)
+    await flushPromises()
+    const save = w.findAll('button').find((b) => b.text() === '保存运输记录')!
+    await save.trigger('click')
+    await flushPromises()
+    expect(api.save).not.toHaveBeenCalled()
+    expect(w.text()).toContain('订单分摊合计必须等于运输费用')
+    input('SO2').vm.$emit('update:modelValue', 57.64)
+    await flushPromises()
+    await save.trigger('click')
+    await flushPromises()
+    expect(api.save).toHaveBeenCalledWith(
+      'C1',
+      expect.objectContaining({
+        draft: expect.objectContaining({ orderAllocations: { SO1: 80, SO2: 57.64 } }),
+      }),
+      [],
+    )
     w.unmount()
     document.body.innerHTML = ''
   })

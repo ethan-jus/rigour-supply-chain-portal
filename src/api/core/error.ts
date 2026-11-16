@@ -20,6 +20,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   VALIDATION_ERROR: '请求参数校验失败',
   RATE_LIMITED: '请求过于频繁，请稍后重试',
   SERVICE_UNAVAILABLE: '服务暂不可用，请稍后重试',
+  COST_ATTACHMENT_STORAGE_UNAVAILABLE: '附件暂时无法上传，已保留填写内容和文件，请联系管理员后重试',
   INTERNAL_ERROR: '服务器内部错误',
   NETWORK_ERROR: '网络连接失败，请检查网络后重试',
   REQUEST_TIMEOUT: '请求超时，请稍后重试',

@@ -23,7 +23,7 @@
             >{{ statusName(detail.record.statusCode) }}</el-tag
           >
         </div>
-        <div v-if="readonly" class="heading-actions">
+        <div v-if="readonly && actionsEnabled !== false" class="heading-actions">
           <TransportRecordActions
             :record="detail.record"
             detail
@@ -41,66 +41,22 @@
         type="warning"
         :closable="false"
       />
-      <section
-        v-if="readonly && detail"
-        class="transport-section record-overview"
-        aria-label="运输概览"
-      >
-        <h3>运输概览</h3>
-        <el-alert
-          v-if="platform?.source.sourceDifference && detail.record.statusCode === 'CONFIRMED'"
-          class="overview-warning"
-          type="warning"
-          :closable="false"
-          title="平台账单已更新，已确认运输成本保持不变，请核对账单变更。"
-        />
-        <div class="overview-totals">
-          <div class="overview-total overview-total--primary">
-            <span>运输费用（元）</span><strong>{{ money(form.amount) }}</strong>
-          </div>
-          <div class="overview-total">
-            <span>已确认运输成本（元）</span
-            ><strong>{{
-              detail.record.statusCode === 'CONFIRMED' ? money(detail.record.data.amount) : '-'
-            }}</strong>
-          </div>
-          <div class="overview-total">
-            <span>付款状态</span><strong>{{ paymentName }}</strong>
-          </div>
-          <div class="overview-total">
-            <span>关联业务订单</span
-            ><strong>{{
-              form.orderCodes.length ? `${form.orderCodes.length} 张` : '未关联'
-            }}</strong>
-          </div>
-        </div>
-        <div class="form-grid overview-fields">
-          <Info label="快递单号" :value="form.platformOrderNo" />
-          <Info label="物流公司" :value="carrierName" />
-          <Info label="车型" :value="vehicleOf(platform)" />
-          <Info label="运输类型" :value="typeName(form.transportType)" />
-          <Info label="下单时间" :value="order?.raw['下单时间']" />
-          <Info label="运输日期" :value="form.date" />
-          <Info label="费用负责人" :value="ownerName" />
-          <Info label="数据来源" :value="platform ? '货拉拉同步' : '手动录入'" />
-        </div>
-        <div class="overview-route">
-          <span>行驶路段</span>
-          <TransportRouteSummary :route="routeOf(detail.record, platform)" />
-          <span class="route-count">{{
-            receivers.length ? `${receivers.length} 个收货点` : '-'
-          }}</span>
-        </div>
-      </section>
       <el-form label-position="top" :model="form" @submit.prevent>
-        <section v-if="!readonly" class="transport-section">
+        <section class="transport-section">
           <h3>基本信息</h3>
           <div class="form-grid">
             <el-form-item label="数据来源"
-              ><span>{{ platform ? '货拉拉同步' : '手动录入' }}</span></el-form-item
+              ><span>{{
+                platform ? '货拉拉同步' : shipmentSources.length ? '订货宝同步' : '手动录入'
+              }}</span></el-form-item
             >
-            <el-form-item label="运输类型" :required="!readonly"
-              ><span v-if="readonly">{{ typeName(form.transportType) }}</span
+            <el-form-item
+              label="运输类型"
+              :required="!readonly && !shippingLocked"
+              :error="fieldErrors.transportType"
+              ><span v-if="readonly || salesOrderId || shipmentSources.length">{{
+                typeName(form.transportType)
+              }}</span
               ><el-select
                 v-else
                 v-model="form.transportType"
@@ -115,8 +71,11 @@
             <el-form-item label="订单类型"
               ><span>{{ type?.orderLabel || '-' }}</span></el-form-item
             >
-            <el-form-item label="运输日期" :required="!readonly && !platform"
-              ><span v-if="readonly || platform">{{ form.date || '-' }}</span
+            <el-form-item
+              label="发货日期"
+              :required="!readonly && !shippingLocked"
+              :error="fieldErrors.date"
+              ><span v-if="readonly || shippingLocked">{{ form.date || '-' }}</span
               ><el-date-picker
                 v-else
                 v-model="form.date"
@@ -124,28 +83,61 @@
                 value-format="YYYY-MM-DD"
                 placeholder="请选择运输日期"
             /></el-form-item>
-            <el-form-item label="物流公司" :required="!readonly && !platform"
+            <el-form-item
+              label="配送方式"
+              :required="!readonly && !shippingLocked"
+              :error="fieldErrors.deliveryModeCode"
+            >
+              <span v-if="readonly || shippingLocked">{{
+                costLabel('COST_DELIVERY_MODE', form.deliveryModeCode) !== '-'
+                  ? costLabel('COST_DELIVERY_MODE', form.deliveryModeCode)
+                  : shipmentSources[0]?.latest.deliveryModeName || '-'
+              }}</span>
+              <el-select v-else v-model="form.deliveryModeCode" placeholder="请选择配送方式">
+                <el-option
+                  v-for="o in deliveryModes"
+                  :key="o.value"
+                  :label="o.label"
+                  :value="o.value"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item
+              label="物流公司"
+              :required="!readonly && !shippingLocked && form.deliveryModeCode !== 'SELF'"
+              :error="fieldErrors.carrierCode"
               ><span v-if="platform">货拉拉</span
-              ><span v-else-if="readonly">{{
+              ><span v-else-if="readonly || shippingLocked">{{
                 form.carrierCode
                   ? costLabel('COST_CARRIER', form.carrierCode)
-                  : detail?.record.data.logistics?.carrierName || '-'
+                  : shipmentSources[0]?.latest.carrierName ||
+                    detail?.record.data.logistics?.carrierName ||
+                    '-'
               }}</span
               ><el-select v-else v-model="form.carrierCode" placeholder="请选择物流公司"
                 ><el-option
-                  v-for="o in costOptions('COST_CARRIER')"
+                  v-for="o in carriers"
                   :key="o.value"
                   :label="o.label"
                   :value="o.value" /></el-select
             ></el-form-item>
-            <el-form-item v-if="!readonly || platform || form.platformOrderNo" label="快递单号"
-              ><span v-if="readonly || platform">{{ form.platformOrderNo || '-' }}</span
+            <el-form-item
+              label="快递单号"
+              :required="!readonly && !shippingLocked && form.deliveryModeCode !== 'SELF'"
+              :error="fieldErrors.platformOrderNo"
+              ><span v-if="readonly || shippingLocked">{{
+                shipmentSources.length
+                  ? shipmentSources.flatMap((s) => s.latest.trackingNumbers).join('、') || '-'
+                  : form.platformOrderNo || '-'
+              }}</span
               ><el-input
                 v-else
                 v-model="form.platformOrderNo"
                 maxlength="80"
                 placeholder="填写快递单号"
             /></el-form-item>
+            <Info label="车型" :value="vehicleOf(platform)" />
+            <Info label="下单时间" :value="order?.raw['下单时间']" />
           </div>
         </section>
         <section class="transport-section">
@@ -154,6 +146,7 @@
             <el-button
               v-if="
                 readonly &&
+                actionsEnabled !== false &&
                 detail?.record.statusCode === 'DRAFT' &&
                 can('order:logistics-cost:write')
               "
@@ -163,7 +156,7 @@
               >{{ selected.length ? '更改关联' : '关联订单' }}</el-button
             >
             <el-button
-              v-if="!readonly && !advanced"
+              v-if="!readonly && !advanced && !salesOrderId && !shipmentSources.length"
               type="primary"
               plain
               :disabled="!form.transportType"
@@ -194,11 +187,14 @@
               ><template #default="{ row }">{{
                 money(row.documentAmount)
               }}</template></el-table-column
-            ><el-table-column v-if="readonly" label="关联时间" min-width="180"
+            ><el-table-column label="关联时间" min-width="180"
               ><template #default="{ row }">{{
                 row.linkedAt ? displayRecordDateTime(row.linkedAt) : '-'
               }}</template></el-table-column
-            ><el-table-column v-if="!readonly && !advanced" label="操作" width="80"
+            ><el-table-column
+              v-if="!readonly && !advanced && !salesOrderId && !shipmentSources.length"
+              label="操作"
+              width="80"
               ><template #default="{ row }"
                 ><el-button link type="danger" @click="removeOrder(row.documentNo)"
                   >移除</el-button
@@ -208,15 +204,15 @@
           >
         </section>
         <section class="transport-section">
-          <h3>{{ readonly ? '账单与凭证' : '费用信息' }}</h3>
+          <h3>费用信息</h3>
           <el-button
             v-if="advanced && !readonly"
             class="advanced-button"
             @click="advancedOpen = true"
             >维护费用与分摊明细</el-button
           >
-          <div v-if="!readonly" class="form-grid" :class="{ 'manual-bill-summary': !platform }">
-            <el-form-item label="运输费用（元）"
+          <div class="form-grid" :class="{ 'manual-bill-summary': !platform }">
+            <el-form-item label="运输费用（元）" :error="fieldErrors.amount"
               ><span
                 v-if="readonly || platform || advanced || form.manualBillItems?.length"
                 class="amount"
@@ -228,7 +224,10 @@
                 :min="0"
                 :max="999999999999"
                 :controls="false"
-                placeholder="填写运输费用" /></el-form-item
+                placeholder="确认前填写运输费用"
+              /><span v-if="!readonly && !platform" class="optional-label"
+                >确认前必填</span
+              ></el-form-item
             ><el-form-item label="费用负责人"
               ><span v-if="readonly">{{ ownerName }}</span
               ><el-select
@@ -242,13 +241,11 @@
                   :key="e.employeeCode"
                   :label="e.employeeName + (e.departmentName ? `（${e.departmentName}）` : '')"
                   :value="e.employeeCode" /></el-select></el-form-item
-            ><el-form-item v-if="!platform" label="付款状态">
-              <span v-if="readonly">{{
-                costLabel('COST_PAYMENT_STATUS', form.paymentStatusCode)
-              }}</span>
+            ><el-form-item label="付款状态">
+              <span v-if="readonly || platform">{{ paymentName }}</span>
               <el-select v-else v-model="form.paymentStatusCode" placeholder="请选择付款状态">
                 <el-option
-                  v-for="o in costOptions('COST_PAYMENT_STATUS')"
+                  v-for="o in paymentStatuses"
                   :key="o.value"
                   :label="o.label"
                   :value="o.value"
@@ -258,19 +255,23 @@
               ><strong>{{
                 detail?.record.statusCode === 'CONFIRMED' ? money(detail.record.data.amount) : '-'
               }}</strong></el-form-item
-            ><el-form-item
-              v-if="!readonly && form.orderCodes.length && !form.cityCode"
-              label="费用归属城市"
+            ><el-form-item label="费用归属城市"
+              ><span v-if="readonly">{{
+                detail?.record.data.cityName || form.cityCode || '-'
+              }}</span
               ><CostCitySelect
+                v-else
                 v-model="form.cityCode"
                 :disabled="false"
                 action="order:logistics-cost:write" /></el-form-item
             ><el-form-item
-              v-if="!readonly && form.amount === 0"
+              v-if="form.amount === 0"
               class="wide"
               label="零元原因"
-              required
+              :required="!readonly"
+              ><span v-if="readonly">{{ form.zeroReason || '-' }}</span
               ><el-input
+                v-else
                 v-model="form.zeroReason"
                 maxlength="500"
                 placeholder="填写包邮或无需我方支付的原因"
@@ -304,7 +305,7 @@
                     maxlength="100"
                   >
                     <el-option
-                      v-for="o in costOptions('COST_LOGISTICS_FEE_TYPE')"
+                      v-for="o in feeTypes"
                       :key="o.value"
                       :label="o.label"
                       :value="o.label"
@@ -312,10 +313,7 @@
                     <el-option label="优惠" value="优惠" />
                   </el-select> </template
               ></el-table-column>
-              <el-table-column
-                :label="readonly || advanced ? '金额（元）' : '金额（元，优惠填负数）'"
-                min-width="230"
-                align="right"
+              <el-table-column :label="'金额（元）'" min-width="230" align="right"
                 ><template #default="{ row }">
                   <span v-if="readonly || advanced">{{ money(row.amount) }}</span>
                   <el-input-number
@@ -338,12 +336,12 @@
             </el-table>
             <template
               v-else-if="
-                readonly &&
-                detail?.record.data.ledger?.manualBillItems == null &&
-                detail?.record.data.ledger?.feeItems.length
+                advanced &&
+                advancedData?.ledger?.manualBillItems == null &&
+                advancedData?.ledger?.feeItems.length
               "
             >
-              <el-table :data="detail.record.data.ledger.feeItems" border>
+              <el-table :data="advancedData!.ledger!.feeItems" border>
                 <el-table-column label="费用项目"
                   ><template #default="{ row }">{{
                     costLabel('COST_LOGISTICS_FEE_TYPE', row.feeTypeCode)
@@ -356,27 +354,65 @@
                 >
               </el-table>
             </template>
-            <span v-else-if="readonly" class="optional-label">未登记费用明细</span>
+            <span v-else class="optional-label">未登记费用明细</span>
           </template>
-          <el-table v-if="!readonly && allocations.length" :data="allocations" border
-            ><el-table-column prop="code" label="业务单号" /><el-table-column
-              label="分摊运输费用（元）"
-              align="right"
-              ><template #default="{ row }">{{ money(row.amount) }}</template></el-table-column
+          <div v-if="allocations.length > 1 && !readonly && !advanced" class="allocation-tools">
+            <span>订单分摊</span>
+            <el-button
+              link
+              type="primary"
+              :disabled="!weightedAvailable || form.amount == null"
+              @click="reallocate('AMOUNT')"
+              >按销售金额分摊</el-button
+            >
+            <el-button
+              link
+              type="primary"
+              :disabled="form.amount == null"
+              @click="reallocate('EQUAL')"
+              >均分</el-button
+            >
+          </div>
+          <el-table v-if="allocations.length" :data="allocations" border
+            ><el-table-column prop="code" label="业务单号" min-width="170" />
+            <el-table-column v-if="allocations.length > 1" label="业务单金额（元）" align="right"
+              ><template #default="{ row }">{{
+                money(row.source?.documentAmount)
+              }}</template></el-table-column
+            >
+            <el-table-column v-if="allocations.length > 1" label="业务员／部门" min-width="150"
+              ><template #default="{ row }"
+                >{{ row.source?.employeeName || '-' }}／{{
+                  row.source?.departmentName || '-'
+                }}</template
+              ></el-table-column
+            >
+            <el-table-column label="分摊运输费用（元）" align="right" min-width="180"
+              ><template #default="{ row }"
+                ><el-input-number
+                  v-if="!readonly && !advanced && allocations.length > 1"
+                  :model-value="row.amount"
+                  :min="0"
+                  :precision="2"
+                  :controls="false"
+                  :aria-label="`${row.code}分摊金额`"
+                  @update:model-value="setAllocation(row.code, $event ?? null)"
+                /><span v-else>{{ money(row.amount) }}</span></template
+              ></el-table-column
             ></el-table
           >
-          <el-collapse v-if="platform && readonly" class="platform-detail-collapse">
-            <el-collapse-item title="查看平台账单、费用明细及凭证" name="platform-bill">
-              <TransportPlatformBill
-                :record-id="detail!.record.id"
-                :platform="platform"
-                :confirmed="detail!.record.statusCode === 'CONFIRMED'"
-                :confirmed-amount="detail!.record.data.amount"
-              />
-            </el-collapse-item>
-          </el-collapse>
+          <div v-if="allocations.length > 1" class="allocation-total">
+            分摊合计 {{ money(allocationTotal) }} 元／运输费用 {{ money(form.amount) }} 元
+          </div>
+          <el-alert
+            v-if="allocationProblem && !readonly && !advanced"
+            :title="allocationProblem"
+            type="error"
+            :closable="false"
+          />
           <TransportPlatformBill
-            v-else-if="platform"
+            v-if="platform"
+            view="bill"
             :record-id="detail!.record.id"
             :platform="platform"
             :confirmed="detail!.record.statusCode === 'CONFIRMED'"
@@ -396,8 +432,11 @@
               </div>
             </div>
             <p v-if="!platformSenders.length" class="empty-text">暂无发货信息</p>
-            <el-form-item v-if="!readonly" label="本系统发货仓库"
+            <el-form-item label="本系统发货仓库"
+              ><span v-if="readonly">{{ warehouseName }}</span
               ><CostLedgerPartySelect
+                v-else
+                :name="warehouseName === '-' ? undefined : warehouseName"
                 v-model="form.warehouseCode"
                 logistics
                 kind="WAREHOUSE"
@@ -406,9 +445,7 @@
           </template>
           <div v-else class="form-grid">
             <el-form-item label="发货仓库"
-              ><span v-if="readonly">{{
-                form.warehouseCode ? form.senderName || form.warehouseCode : '-'
-              }}</span
+              ><span v-if="readonly || shippingLocked">{{ warehouseName }}</span
               ><CostLedgerPartySelect
                 v-else
                 v-model="form.warehouseCode"
@@ -417,8 +454,11 @@
                 :name="form.senderName"
                 placeholder="搜索并选择发货仓库"
                 @selected="selectWarehouse" /></el-form-item
-            ><el-form-item label="发货方"
-              ><span v-if="readonly">{{ form.senderName || '-' }}</span
+            ><el-form-item
+              label="发货方"
+              :required="!readonly && !shippingLocked"
+              :error="fieldErrors.senderName"
+              ><span v-if="readonly || shippingLocked">{{ form.senderName || '-' }}</span
               ><el-input
                 v-else
                 v-model="form.senderName"
@@ -426,21 +466,25 @@
                 placeholder="填写实际发货方"
                 @input="senderTouched = true" /></el-form-item
             ><el-form-item label="发货联系人"
-              ><span v-if="readonly">{{ form.senderContact || '-' }}</span
+              ><span v-if="readonly || shippingLocked">{{ form.senderContact || '-' }}</span
               ><el-input
                 v-else
                 v-model="form.senderContact"
                 maxlength="100"
                 @input="senderTouched = true" /></el-form-item
-            ><el-form-item label="发货联系电话"
-              ><span v-if="readonly">{{ form.senderPhone || '-' }}</span
+            ><el-form-item label="发货联系电话" :error="fieldErrors.senderPhone"
+              ><span v-if="readonly || shippingLocked">{{ form.senderPhone || '-' }}</span
               ><el-input
                 v-else
                 v-model="form.senderPhone"
                 maxlength="50"
                 @input="senderTouched = true" /></el-form-item
-            ><el-form-item class="wide" label="发货地址"
-              ><span v-if="readonly">{{ form.senderAddress || '-' }}</span
+            ><el-form-item
+              class="wide"
+              label="发货地址"
+              :required="!readonly && !shippingLocked"
+              :error="fieldErrors.senderAddress"
+              ><span v-if="readonly || shippingLocked">{{ form.senderAddress || '-' }}</span
               ><el-input
                 v-else
                 v-model="form.senderAddress"
@@ -452,24 +496,60 @@
         </section>
         <section class="transport-section">
           <div class="section-heading">
-            <h3>收货信息</h3>
+            <h3>收货信息与行驶路段</h3>
             <span class="optional-label">{{
               receivers.length ? `${receivers.length} 个收货点` : '-'
             }}</span>
           </div>
+          <div class="overview-route" aria-label="行驶路段">
+            <span>行驶路段</span><TransportRouteSummary :route="route" />
+          </div>
           <div class="receiver-grid">
             <div v-for="(p, i) in visibleReceivers" :key="i" class="address-card">
-              <strong>{{ p.name || '-' }}</strong>
+              <h4>{{ receivers.length > 1 ? `收货点 ${i + 1}` : '收货点' }}</h4>
               <div class="form-grid">
-                <Info label="收货联系人" :value="p.contactName" /><Info
+                <el-form-item
+                  label="收货单位"
+                  :required="!readonly && !shippingLocked"
+                  :error="fieldErrors[`receivingPoints.${i}.manualName`]"
+                >
+                  <span v-if="readonly || shippingLocked">{{ p.name || '-' }}</span>
+                  <el-input v-else v-model="form.receivingPoints![i]!.manualName" maxlength="100" />
+                </el-form-item>
+                <el-form-item
+                  label="收货联系人"
+                  :required="!readonly && !shippingLocked"
+                  :error="fieldErrors[`receivingPoints.${i}.contactName`]"
+                >
+                  <span v-if="readonly || shippingLocked">{{ p.contactName || '-' }}</span>
+                  <el-input
+                    v-else
+                    v-model="form.receivingPoints![i]!.contactName"
+                    maxlength="100"
+                  />
+                </el-form-item>
+                <el-form-item
                   label="收货联系电话"
-                  :value="p.contactPhone"
-                /><Info class="wide" label="收货地址" :value="p.address" />
+                  :required="!readonly && !shippingLocked"
+                  :error="fieldErrors[`receivingPoints.${i}.phone`]"
+                >
+                  <span v-if="readonly || shippingLocked">{{ p.contactPhone || '-' }}</span>
+                  <el-input v-else v-model="form.receivingPoints![i]!.phone" maxlength="50" />
+                </el-form-item>
+                <el-form-item
+                  class="wide"
+                  label="收货地址"
+                  :required="!readonly && !shippingLocked"
+                  :error="fieldErrors[`receivingPoints.${i}.address`]"
+                >
+                  <span v-if="readonly || shippingLocked">{{ p.address || '-' }}</span>
+                  <el-input v-else v-model="form.receivingPoints![i]!.address" maxlength="500" />
+                </el-form-item>
               </div>
             </div>
           </div>
           <el-button
-            v-if="readonly && receivers.length > 2"
+            v-if="receivers.length > 2"
             link
             type="primary"
             class="receivers-toggle"
@@ -481,6 +561,27 @@
           <p v-if="!receivers.length" class="empty-text">
             {{ platform || readonly ? '暂无收货信息' : '选择业务订单后显示收货信息' }}
           </p>
+        </section>
+        <section class="transport-section" aria-label="凭证与运输影像">
+          <h3>凭证与运输影像</h3>
+          <TransportPlatformBill
+            v-if="platform"
+            view="evidence"
+            :record-id="detail!.record.id"
+            :platform="platform"
+            :confirmed="detail!.record.statusCode === 'CONFIRMED'"
+            :confirmed-amount="detail!.record.data.amount"
+          />
+          <TransportEvidence
+            embedded
+            v-model="attachmentDrafts"
+            :row="detail?.record || null"
+            :readonly="readonly"
+            :disabled="saving"
+            :required="!platform"
+            @busy="attachmentBusy = $event"
+            @count="attachmentCount = $event"
+          />
         </section>
         <section class="transport-section">
           <h3>备注</h3>
@@ -504,73 +605,14 @@
           /></el-form-item>
         </section>
       </el-form>
-      <section v-if="platform && readonly" class="transport-section">
-        <h3>货拉拉订单信息</h3>
-        <div class="form-grid">
-          <Info label="货拉拉订单状态" :value="order?.status" /><Info
-            label="用车时间"
-            :value="order?.useTime"
-          /><Info label="完成时间" :value="order?.facts?.completeTime" /><Info
-            label="用车原因"
-            :value="order?.raw['用车原由']"
-          /><Info class="wide" label="货拉拉订单备注" :value="order?.raw['订单备注']" />
-        </div>
-        <h4>司机与车辆</h4>
-        <div class="form-grid">
-          <Info label="司机" :value="order?.raw['司机']" /><Info
-            label="司机联系电话"
-            :value="order?.raw['司机联系电话']"
-          /><Info label="车牌号" :value="order?.raw['车牌号']" />
-        </div>
-        <div class="section-heading">
-          <h4>人员关联</h4>
-          <el-button
-            v-if="can('integration:huolala:read')"
-            link
-            type="primary"
-            @click="emit('associate-employee')"
-            >{{ order?.facts?.mappedEmployeeCode ? '查看员工关联' : '关联员工' }}</el-button
-          >
-        </div>
-        <div class="form-grid">
-          <Info label="货拉拉下单员工" :value="order?.facts?.sourceEmployeeName" /><Info
-            label="下单员工手机号"
-            :value="order?.raw['下单员工手机号']"
-          /><Info label="本系统关联员工" :value="mappedEmployee" /><Info
-            label="本系统所属部门"
-            :value="mappedDepartment"
-          /><Info
-            label="员工关联状态"
-            :value="order?.facts?.mappedEmployeeCode ? '已关联' : '未关联'"
-          />
-        </div>
-      </section>
+      <TransportShipmentSources v-if="shipmentSources.length" :sources="shipmentSources" />
+      <TransportPlatformDetails
+        v-if="platform"
+        :platform="platform"
+        :employees="employees"
+        @associate-employee="emit('associate-employee')"
+      />
       <section v-if="detail" class="transport-section">
-        <CostAttachmentEditor
-          v-if="!readonly"
-          v-model="attachmentDrafts"
-          category="logistics"
-          title="运输附件"
-          :row="detail.record"
-          :disabled="saving"
-        /><CostAttachments
-          v-else
-          title="运输附件"
-          category="logistics"
-          :row="detail.record"
-          :editable="false"
-        />
-      </section>
-      <section v-if="!detail && !readonly" class="transport-section">
-        <CostAttachmentEditor
-          v-model="attachmentDrafts"
-          category="logistics"
-          title="运输附件"
-          :row="null"
-          :disabled="saving"
-        />
-      </section>
-      <section v-if="readonly && detail" class="transport-section">
         <h3>操作记录</h3>
         <el-table :data="history" border empty-text="暂无操作记录"
           ><el-table-column label="时间" min-width="190"
@@ -593,9 +635,9 @@
         v-if="!readonly"
         type="primary"
         :loading="saving"
-        :disabled="loading"
+        :disabled="loading || attachmentBusy"
         @click="save"
-        >保存运输记录</el-button
+        >{{ salesOrderId ? '保存并关联销售订单' : '保存运输记录' }}</el-button
       ></template
     >
     <el-dialog
@@ -629,13 +671,9 @@
 import { computed, defineComponent, h, onMounted, ref, watch, toRaw, type PropType } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { CostEmployee, CostSource, CostAudit, CostCommand } from '@/api/core/cost'
-import { getCostEmployees, getCostHistory, getCostCities, saveCost } from '@/api/core/cost'
-import {
-  getLedgerParties,
-  getLedgerSources,
-  type LedgerPartyReference,
-} from '@/api/core/cost-ledger'
-import { saveTransport, type TransportDetail } from '@/api/core/transport-records'
+import { getCostEmployees, getCostHistory, getCostCities } from '@/api/core/cost'
+import { getLedgerParties, type LedgerPartyReference } from '@/api/core/cost-ledger'
+import { type TransportDetail } from '@/api/core/transport-records'
 import { currentSource, platformPaymentStatus } from './huolala-source'
 import {
   transportDraft,
@@ -643,34 +681,50 @@ import {
   money,
   typeName,
   statusName,
-  allocationPreview,
   manualBillTotal,
   frozenTransportSources,
   frozenTransportReceivers,
   vehicleOf,
-  routeOf,
 } from './transport-records'
+import {
+  allocationError,
+  canWeightSales,
+  complexTransportLedger,
+  savedTransportAllocations,
+  transportAllocations,
+} from './transport-allocation'
 import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
 import CostLedgerSourcePicker, { type PickedLedgerSource } from './CostLedgerSourcePicker.vue'
 import CostCitySelect from './CostCitySelect.vue'
 import TransportPlatformBill from './TransportPlatformBill.vue'
+import TransportPlatformDetails from './TransportPlatformDetails.vue'
 import TransportRecordActions from './TransportRecordActions.vue'
 import TransportRouteSummary from './TransportRouteSummary.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import CostLedgerEditor from './CostLedgerEditor.vue'
 import { totalFees } from './cost-ledger'
-import CostAttachmentEditor from './CostAttachmentEditor.vue'
-import CostAttachments from './CostAttachments.vue'
-import { saveCostAttachmentChanges, type CostAttachmentDraft } from './cost-attachment-draft'
+import TransportEvidence from './TransportEvidence.vue'
+import TransportShipmentSources from './TransportShipmentSources.vue'
+import { TransportEvidenceSaveSession } from './transport-evidence'
+import { type CostAttachmentDraft } from './cost-attachment-draft'
+import { validateManualTransport, type TransportErrors } from './transport-validation'
 import { costOptions, costLabel } from './cost-dictionaries'
 import { errorMessage } from '@/api/core/error'
 import { auditLabel } from './cost-audit'
 import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
-const props = defineProps<{
-  detail: TransportDetail | null
-  readonly: boolean
-  initialSection?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    detail: TransportDetail | null
+    readonly: boolean
+    initialSection?: string
+    actionsEnabled?: boolean
+    salesOrderId?: string | number | null
+    salesSource?: CostSource | null
+    initialCarrierCode?: string | null
+    initialDeliveryMode?: string
+  }>(),
+  { actionsEnabled: true },
+)
 const { can } = useSupplyPermissions()
 const ordersSection = ref<HTMLElement>()
 const visible = defineModel<boolean>({ required: true })
@@ -683,19 +737,29 @@ const emit = defineEmits<{
 }>()
 const detail = ref(props.detail),
   platform = computed(() => detail.value?.platform)
+const shipmentSources = computed(() => detail.value?.shipments || [])
+const shippingLocked = computed(() => !!platform.value || !!shipmentSources.value.length)
 const order = computed(() => (platform.value ? currentSource(platform.value.source) : null))
 const form = ref(transportDraft(detail.value?.record, platform.value))
+if (props.salesSource && !detail.value)
+  Object.assign(form.value, {
+    transportType: 'DELIVERY',
+    orderCodes: [props.salesSource.documentNo],
+    carrierCode: props.initialCarrierCode || null,
+    deliveryModeCode: props.initialDeliveryMode || 'THIRD_PARTY',
+    cityCode: props.salesSource.cityCode || '',
+    ownerEmployeeCode: props.salesSource.employeeCode || null,
+  })
+const deliveryModes = computed(() => costOptions('COST_DELIVERY_MODE'))
+const carriers = computed(() => costOptions('COST_CARRIER'))
+const paymentStatuses = computed(() => costOptions('COST_PAYMENT_STATUS'))
+const feeTypes = computed(() => costOptions('COST_LOGISTICS_FEE_TYPE'))
+const fieldErrors = ref<TransportErrors>({})
 const advancedData = ref<CostCommand | null>(
   detail.value ? structuredClone(toRaw(detail.value.record.data)) : null,
 )
 const advanced = computed(
-  () =>
-    !platform.value &&
-    !!advancedData.value?.ledger &&
-    (advancedData.value.ledger.feeItems.length !== 1 ||
-      advancedData.value.ledger.feeItems.some(
-        (f) => f.bearerCode !== 'COMPANY' || f.allocationMethodCode !== 'EQUAL',
-      )),
+  () => !platform.value && complexTransportLedger(advancedData.value?.ledger),
 )
 const advancedOpen = ref(false),
   cities = ref<{ code: string; name: string }[]>([])
@@ -728,31 +792,120 @@ watch(
 )
 const hadLinks = !!form.value.orderCodes.length
 const attachmentDrafts = ref<CostAttachmentDraft[]>([])
-const allocations = computed(() => allocationPreview(form.value.amount, form.value.orderCodes))
+const attachmentBusy = ref(false),
+  attachmentCount = ref(0)
+const evidenceSession = new TransportEvidenceSaveSession()
+const allocations = computed(() => {
+  const sources = advanced.value
+    ? advancedData.value?.ledger?.sources
+    : detail.value?.record.data.ledger?.sources
+  let rows
+  if (props.readonly && detail.value) rows = savedTransportAllocations(detail.value, selected.value)
+  else if (advanced.value && sources?.length)
+    rows = sources
+      .filter((s) => s.orderCode)
+      .map((s) => ({
+        code: s.orderCode!,
+        amount:
+          form.value.amount == null
+            ? null
+            : s.allocations.reduce((sum, a) => sum + Number(a.amount), 0),
+      }))
+  else
+    rows = transportAllocations(
+      form.value.amount,
+      form.value.orderCodes,
+      selected.value,
+      form.value.orderAllocations,
+    )
+  return rows.map((row) => ({
+    ...row,
+    source: selected.value.find((s) => s.documentNo === row.code),
+  }))
+})
+const weightedAvailable = computed(() => canWeightSales(form.value.orderCodes, selected.value))
+const allocationProblem = computed(() =>
+  allocationError(form.value.amount, form.value.orderCodes, form.value.orderAllocations),
+)
+const allocationTotal = computed(() =>
+  allocations.value.some((r) => r.amount == null)
+    ? null
+    : allocations.value.reduce((sum, r) => sum + Math.round(r.amount! * 100), 0) / 100,
+)
+function setAllocation(code: string, amount: number | null) {
+  form.value.orderAllocations = {
+    ...Object.fromEntries(allocations.value.map((r) => [r.code, r.amount])),
+    [code]: amount,
+  }
+}
+function reallocate(mode: 'AMOUNT' | 'EQUAL') {
+  form.value.orderAllocations = Object.fromEntries(
+    transportAllocations(
+      form.value.amount,
+      form.value.orderCodes,
+      mode === 'AMOUNT' ? selected.value : [],
+    ).map((r) => [r.code, r.amount]),
+  )
+}
+watch(
+  () => form.value.orderCodes.join('|'),
+  () => {
+    if (!props.readonly) form.value.orderAllocations = null
+  },
+)
+watch(
+  () => form.value.amount,
+  (amount) => {
+    if (
+      !props.readonly &&
+      !advanced.value &&
+      form.value.orderCodes.length === 1 &&
+      form.value.orderAllocations
+    )
+      form.value.orderAllocations = { [form.value.orderCodes[0]!]: amount }
+  },
+)
+const warehouseName = computed(
+  () =>
+    detail.value?.record.warehouseName ||
+    (form.value.warehouseCode ? form.value.senderName || form.value.warehouseCode : '-'),
+)
 const platformSenders = computed(() => order.value?.facts?.stops.slice(0, 1) || [])
 const receivers = computed(() =>
   platform.value
     ? order.value?.facts?.stops.slice(1) || []
-    : props.readonly && detail.value
+    : (props.readonly || shippingLocked.value) && detail.value
       ? frozenTransportReceivers(detail.value.record)
-      : selected.value.map((s) => ({
-          name: s.receiverName,
-          contactName: s.contactName,
-          contactPhone: s.contactPhone,
-          address: s.destinationAddress,
+      : (form.value.receivingPoints || []).map((p) => ({
+          name: p.manualName || p.displayName,
+          contactName: p.contactName,
+          contactPhone: p.phone,
+          address: p.address,
         })),
 )
 const allReceivers = ref(false)
 const visibleReceivers = computed(() =>
-  props.readonly && !allReceivers.value ? receivers.value.slice(0, 2) : receivers.value,
+  !allReceivers.value ? receivers.value.slice(0, 2) : receivers.value,
 )
-const carrierName = computed(() =>
-  platform.value
-    ? '货拉拉'
-    : form.value.carrierCode
-      ? costLabel('COST_CARRIER', form.value.carrierCode)
-      : detail.value?.record.data.logistics?.carrierName || '-',
-)
+const route = computed(() => ({
+  origin: platform.value
+    ? platformSenders.value[0]
+      ? {
+          name: platformSenders.value[0].name || platformSenders.value[0].address || '-',
+          address: platformSenders.value[0].address,
+        }
+      : null
+    : form.value.senderName || form.value.senderAddress
+      ? {
+          name: form.value.senderName || form.value.senderAddress || '-',
+          address: form.value.senderAddress || '',
+        }
+      : null,
+  receivers: receivers.value.map((p) => ({
+    name: p.name || p.address || '-',
+    address: p.address || '',
+  })),
+}))
 const paymentName = computed(() =>
   order.value
     ? platformPaymentStatus(order.value)
@@ -763,18 +916,6 @@ const ownerName = computed(
     employees.value.find((e) => e.employeeCode === form.value.ownerEmployeeCode)?.employeeName ||
     detail.value?.record.ownerEmployeeName ||
     '-',
-)
-const mappedEmployee = computed(
-  () =>
-    employees.value.find((e) => e.employeeCode === order.value?.facts?.mappedEmployeeCode)
-      ?.employeeName ||
-    order.value?.facts?.mappedEmployeeCode ||
-    '-',
-)
-const mappedDepartment = computed(
-  () =>
-    employees.value.find((e) => e.employeeCode === order.value?.facts?.mappedEmployeeCode)
-      ?.departmentName || null,
 )
 const Info = defineComponent({
   props: {
@@ -797,10 +938,44 @@ function close(done?: () => void) {
 function typeChanged() {
   selected.value = []
   form.value.orderCodes = []
+  form.value.receivingPoints = []
 }
 function removeOrder(code: string) {
+  const snapshot = receiverSnapshot()
   selected.value = selected.value.filter((s) => s.documentNo !== code)
   form.value.orderCodes = form.value.orderCodes.filter((c) => c !== code)
+  updateReceiverDrafts(snapshot)
+}
+function receiverSnapshot() {
+  return new Map(
+    form.value.orderCodes.map((code, index) => [
+      code,
+      form.value.receivingPoints?.find((p) => p.pointCode === `TO${index}`),
+    ]),
+  )
+}
+function updateReceiverDrafts(snapshot = receiverSnapshot()) {
+  selected.value.sort((a, b) => a.documentNo.localeCompare(b.documentNo))
+  form.value.orderCodes = selected.value.map((source) => source.documentNo)
+  form.value.receivingPoints = selected.value.map((source, index) => {
+    const saved = snapshot.get(source.documentNo)
+    return {
+      pointCode: `TO${index}`,
+      partyTypeCode:
+        source.sourceType === 'TRANSFER_ORDER'
+          ? 'WAREHOUSE'
+          : source.sourceType === 'SALES_ORDER'
+            ? 'CUSTOMER'
+            : 'OTHER',
+      partyCode: source.receiverCode || null,
+      manualName: saved?.manualName ?? saved?.displayName ?? source.receiverName,
+      displayName: saved?.displayName ?? source.receiverName,
+      contactName: saved?.contactName ?? source.contactName ?? '',
+      phone: saved?.phone ?? source.contactPhone ?? '',
+      address: saved?.address ?? source.destinationAddress ?? '',
+      cityCode: source.cityCode || '',
+    }
+  })
 }
 async function selectWarehouse(w: LedgerPartyReference | null) {
   senderTouched.value = true
@@ -815,8 +990,10 @@ async function selectWarehouse(w: LedgerPartyReference | null) {
   })
 }
 async function addOrders(rows: PickedLedgerSource[]) {
+  const snapshot = receiverSnapshot()
   selected.value.push(...rows.filter((r) => !form.value.orderCodes.includes(r.documentNo)))
   form.value.orderCodes = selected.value.map((r) => r.documentNo)
+  updateReceiverDrafts(snapshot)
   if (!form.value.cityCode) form.value.cityCode = selected.value[0]?.cityCode || ''
   if (!platform.value && !senderTouched.value) {
     const codes = new Set(selected.value.map((s) => s.senderCode))
@@ -831,80 +1008,75 @@ async function addOrders(rows: PickedLedgerSource[]) {
   }
 }
 onMounted(async () => {
-  loading.value = true
   const frozen = detail.value ? frozenTransportSources(detail.value.record) : []
-  selected.value = frozen
-  try {
-    employees.value = await getCostEmployees('logistics')
-    if (advanced.value) cities.value = await getCostCities()
-    if (props.readonly && detail.value)
-      history.value = await getCostHistory('logistics', detail.value.record.id)
-    if (props.readonly) {
-      // 旧台账未保存单据日期，只补查日期；归属、联系人及地址始终保留已存快照。
-      for (const source of selected.value.filter((s) => !s.documentDate)) {
-        try {
-          const current = (
-            await getLedgerSources(
-              { orderTypeCode: source.sourceType, documentNo: source.documentNo, begin: 0 },
-              true,
-            )
-          ).find((s) => s.documentNo === source.documentNo)
-          source.documentDate = current?.documentDate || null
-        } catch {
-          /* 历史原单不可见时保留空日期，不能覆盖已存业务资料。 */
-        }
-      }
-      return
+  selected.value = props.salesSource && !detail.value ? [props.salesSource] : frozen
+  if (!props.readonly && !shippingLocked.value) updateReceiverDrafts()
+  if (!props.readonly || form.value.ownerEmployeeCode || order.value?.facts?.mappedEmployeeCode)
+    void getCostEmployees('logistics')
+      .then((rows) => {
+        employees.value = rows
+      })
+      .catch(() => {
+        error.value = '费用负责人加载失败，请稍后重试'
+      })
+  if (advanced.value && !props.readonly)
+    void getCostCities()
+      .then((rows) => {
+        cities.value = rows
+      })
+      .catch(() => {
+        error.value = '城市资料加载失败，请稍后重试'
+      })
+  if (detail.value)
+    void getCostHistory('logistics', detail.value.record.id)
+      .then((rows) => {
+        history.value = rows
+      })
+      .catch(() => {
+        error.value = '操作记录加载失败，请稍后重试'
+      })
+  if (props.salesSource && !detail.value && props.salesSource.senderCode) {
+    loading.value = true
+    try {
+      const rows = await getLedgerParties(true, 'WAREHOUSE', { code: props.salesSource.senderCode })
+      if (rows[0]) await selectWarehouse(rows[0])
+    } catch (e) {
+      error.value = errorMessage(e, '发货仓库加载失败，请选择实际发货仓库')
+    } finally {
+      loading.value = false
     }
-    const current: CostSource[] = []
-    for (const code of form.value.orderCodes) {
-      let found: CostSource | undefined
-      try {
-        found = (
-          await getLedgerSources(
-            { orderTypeCode: type.value?.orderType || 'SALES_ORDER', documentNo: code, begin: 0 },
-            true,
-          )
-        ).find((s) => s.documentNo === code)
-      } catch {
-        /* 已确认历史资料仍从冻结快照展示。 */
-      }
-      found ||= frozen.find((s) => s.documentNo === code)
-      if (found) current.push(found)
-      else
-        current.push({
-          documentNo: code,
-          sourceType: type.value?.orderType || '',
-          id: code,
-          cityCode: '',
-          warehouseId: null,
-          targetWarehouseId: null,
-          senderCode: '',
-          senderName: '',
-          receiverCode: '',
-          receiverName: '',
-          statusCode: '',
-        })
-    }
-    selected.value = current
-  } catch (e) {
-    error.value = errorMessage(e, '运输记录加载失败')
-  } finally {
-    loading.value = false
-    if (props.initialSection === 'orders' && !props.readonly) {
-      ordersSection.value?.scrollIntoView?.({ block: 'start' })
-      picker.value = true
-    }
+  }
+  if (props.initialSection === 'orders' && !props.readonly && !props.salesOrderId) {
+    ordersSection.value?.scrollIntoView?.({ block: 'start' })
+    picker.value = true
   }
 })
 async function save() {
-  if (saving.value || loading.value) return
+  if (saving.value || loading.value || attachmentBusy.value) return
   error.value = ''
+  fieldErrors.value =
+    !shippingLocked.value && !advanced.value ? validateManualTransport(form.value) : {}
+  if (Object.keys(fieldErrors.value).length) {
+    error.value = Object.values(fieldErrors.value)[0]!
+    if (Object.keys(fieldErrors.value).some((key) => key.startsWith('receivingPoints.')))
+      allReceivers.value = true
+    return
+  }
+  if (!advanced.value && allocationProblem.value) {
+    error.value = allocationProblem.value
+    return
+  }
   if (!form.value.transportType && !platform.value) {
     error.value = '请选择运输类型'
     return
   }
-  if (!form.value.date || (!platform.value && !form.value.carrierCode)) {
+  if (
+    !form.value.date ||
+    (!platform.value &&
+      !shipmentSources.value.length &&
+      form.value.deliveryModeCode !== 'SELF' &&
+      !form.value.carrierCode)
+  ) {
     error.value = '请选择运输日期和物流公司'
     return
   }
@@ -926,51 +1098,50 @@ async function save() {
     error.value = '请填写零元原因'
     return
   }
+  if (!platform.value && attachmentCount.value < 1) {
+    error.value = '手工运输记录至少上传一份业务凭证'
+    return
+  }
   saving.value = true
   try {
-    const result =
+    const advancedCommand =
       advanced.value && advancedData.value
         ? {
-            record: await saveCost('logistics', detail.value!.record.id, {
-              ...advancedData.value,
-              revision: detail.value!.record.revision,
-              costDate: form.value.date,
-              ownerEmployeeCode: form.value.ownerEmployeeCode,
-              paymentStatusCode: form.value.paymentStatusCode || 'UNKNOWN',
-              ledger: advancedData.value.ledger
-                ? {
-                    ...advancedData.value.ledger,
-                    carrierCode: form.value.carrierCode,
-                    trackingNo: form.value.trackingNo || '',
-                    platformOrderNo: form.value.platformOrderNo || null,
-                  }
-                : null,
-              remark: form.value.remark,
-              reason: form.value.reason,
-              amount: advancedData.value.ledger!.feeItems.some((f) => f.ourAmount == null)
-                ? null
-                : advancedData.value.ledger!.feeItems.reduce(
-                    (sum, f) => sum + Number(f.ourAmount),
-                    0,
-                  ),
-            }),
-            platform: null,
+            ...advancedData.value,
+            revision: detail.value!.record.revision,
+            costDate: form.value.date,
+            ownerEmployeeCode: form.value.ownerEmployeeCode,
+            paymentStatusCode: form.value.paymentStatusCode || 'UNKNOWN',
+            ledger: advancedData.value.ledger
+              ? {
+                  ...advancedData.value.ledger,
+                  carrierCode: form.value.carrierCode,
+                  trackingNo: form.value.trackingNo || '',
+                  platformOrderNo: form.value.platformOrderNo || null,
+                }
+              : null,
+            remark: form.value.remark,
+            reason: form.value.reason,
+            amount: advancedData.value.ledger!.feeItems.some((f) => f.ourAmount == null)
+              ? null
+              : advancedData.value.ledger!.feeItems.reduce(
+                  (sum, f) => sum + Number(f.ourAmount),
+                  0,
+                ),
           }
-        : await saveTransport(detail.value?.record.id || null, {
-            ...form.value,
-            revision: detail.value?.record.revision ?? null,
-          })
+        : null
+    const result = await evidenceSession.save(
+      detail.value?.record.id || null,
+      {
+        ...form.value,
+        revision: detail.value?.record.revision ?? null,
+      },
+      advancedCommand,
+      attachmentDrafts.value,
+      props.salesOrderId,
+    )
     detail.value = result
     form.value.revision = result.record.revision
-    await saveCostAttachmentChanges(
-      'logistics',
-      detail.value.record,
-      attachmentDrafts.value,
-      (row) => {
-        detail.value!.record = row
-        form.value.revision = row.revision
-      },
-    )
     ElMessage.success('运输记录已保存')
     emit('saved')
     visible.value = false
@@ -1115,45 +1286,9 @@ h4 {
   }
 }
 
-.overview-warning {
-  margin-bottom: 16px;
-}
-.overview-totals {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 22px;
-}
-.overview-total {
-  padding: 16px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 6px;
-  background: var(--el-fill-color-lighter);
-  min-width: 0;
-}
-.overview-total > span {
-  display: block;
-  color: var(--el-text-color-secondary);
-  margin-bottom: 10px;
-  font-size: 13px;
-}
-.overview-total > strong {
-  display: block;
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-.overview-total--primary {
-  border-color: var(--el-color-primary-light-7);
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-}
-.overview-fields {
-  row-gap: 18px;
-}
 .overview-route {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr) auto;
+  grid-template-columns: 84px minmax(0, 1fr);
   gap: 18px;
   border-top: 1px solid var(--el-border-color-extra-light);
   padding-top: 20px;
@@ -1178,29 +1313,30 @@ h4 {
   border-radius: 6px;
   min-width: 0;
 }
+.receiver-grid .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .receivers-toggle {
   margin-top: 16px;
 }
-.platform-detail-collapse {
-  border-top: 0;
+.allocation-tools {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 0 8px;
 }
-@media (max-width: 1000px) {
-  .overview-totals {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.allocation-total {
+  text-align: right;
+  margin: 8px 0;
+  font-variant-numeric: tabular-nums;
 }
 @media (max-width: 600px) {
-  .overview-totals,
-  .receiver-grid {
+  .receiver-grid,
+  .receiver-grid .form-grid {
     grid-template-columns: 1fr;
   }
   .overview-route {
     grid-template-columns: 1fr;
-  }
-  .record-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 16px;
   }
 }
 </style>

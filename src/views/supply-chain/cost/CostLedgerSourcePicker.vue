@@ -9,50 +9,100 @@
     destroy-on-close
     @open="reset"
   >
-    <el-form class="source-filters" label-position="top" @submit.prevent="search">
-      <el-form-item label="订单类型"
-        ><el-select v-model="query.orderTypeCode" :disabled="!!orderTypeCode" @change="search"
-          ><el-option
-            v-for="t in types"
-            :key="t.value"
-            :label="t.label"
-            :value="t.value" /></el-select
-      ></el-form-item>
-      <el-form-item
-        :label="query.orderTypeCode === 'SALES_ORDER' ? '销售单号／订货宝单号' : '单据编号'"
-        ><el-input v-model="query.documentNo" clearable @keyup.enter="search"
-      /></el-form-item>
-      <el-form-item v-if="query.orderTypeCode === 'SALES_ORDER'" label="业务员"
-        ><el-input v-model="query.employeeName" clearable @keyup.enter="search"
-      /></el-form-item>
-      <el-form-item v-if="query.orderTypeCode === 'SALES_ORDER'" label="归属部门"
-        ><el-input v-model="query.departmentName" clearable @keyup.enter="search"
-      /></el-form-item>
-      <el-form-item
-        :label="query.orderTypeCode === 'TRANSFER_ORDER' ? '收货仓名称' : '客户 / 收货方名称'"
-        ><el-input v-model="query.partyName" clearable @keyup.enter="search"
-      /></el-form-item>
-      <el-form-item v-if="query.orderTypeCode !== 'PURCHASE_ORDER'" label="发货仓库"
-        ><CostLedgerPartySelect v-model="sourceWarehouse" logistics kind="WAREHOUSE"
-      /></el-form-item>
-      <el-form-item v-if="query.orderTypeCode === 'TRANSFER_ORDER'" label="收货仓库"
-        ><CostLedgerPartySelect v-model="targetWarehouse" logistics kind="WAREHOUSE"
-      /></el-form-item>
-      <el-form-item label="单据日期"
-        ><el-date-picker
-          v-model="dates"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          start-placeholder="开始日期"
-          end-placeholder="截止日期"
-      /></el-form-item>
-    </el-form>
+    <OrderRegisterFilterCard
+      class="order-register-filter--compact"
+      :loading="loading"
+      @search="search"
+      @reset="clearFilters"
+    >
+      <template #primary>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select
+            v-model="query.orderTypeCode"
+            aria-label="订单类型"
+            :disabled="!!orderTypeCode"
+            @change="search"
+            ><el-option v-for="t in types" :key="t.value" :label="t.label" :value="t.value"
+          /></el-select>
+        </div>
+        <div class="list-filter-field">
+          <el-input
+            v-model="query.documentNo"
+            :placeholder="
+              query.orderTypeCode === 'SALES_ORDER' ? '销售单号／订货宝单号' : '单据编号'
+            "
+            aria-label="单据编号"
+            clearable
+          />
+        </div>
+        <div
+          v-if="query.orderTypeCode === 'SALES_ORDER'"
+          class="list-filter-field list-filter-field--person"
+        >
+          <el-input
+            v-model="query.employeeName"
+            placeholder="业务员"
+            aria-label="业务员"
+            clearable
+          />
+        </div>
+        <div
+          v-if="query.orderTypeCode === 'SALES_ORDER'"
+          class="list-filter-field list-filter-field--select"
+        >
+          <el-input
+            v-model="query.departmentName"
+            placeholder="归属部门"
+            aria-label="归属部门"
+            clearable
+          />
+        </div>
+        <div class="list-filter-field">
+          <el-input
+            v-model="query.partyName"
+            :placeholder="
+              query.orderTypeCode === 'TRANSFER_ORDER' ? '收货仓名称' : '客户／收货方名称'
+            "
+            aria-label="客户或收货方"
+            clearable
+          />
+        </div>
+        <div
+          v-if="query.orderTypeCode !== 'PURCHASE_ORDER'"
+          class="list-filter-field list-filter-field--select"
+        >
+          <CostLedgerPartySelect
+            v-model="sourceWarehouse"
+            logistics
+            kind="WAREHOUSE"
+            placeholder="发货仓库"
+          />
+        </div>
+        <div
+          v-if="query.orderTypeCode === 'TRANSFER_ORDER'"
+          class="list-filter-field list-filter-field--select"
+        >
+          <CostLedgerPartySelect
+            v-model="targetWarehouse"
+            logistics
+            kind="WAREHOUSE"
+            placeholder="收货仓库"
+          />
+        </div>
+        <div class="list-filter-field list-filter-field--date-range">
+          <el-date-picker
+            v-model="dates"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="截止日期"
+            aria-label="单据日期"
+          />
+        </div>
+      </template>
+    </OrderRegisterFilterCard>
     <div class="picker-toolbar">
       <span>已选 {{ chosen.size }} 张单据</span>
-      <div>
-        <el-button @click="clearFilters">重置</el-button
-        ><el-button type="primary" :loading="loading" @click="search">查询</el-button>
-      </div>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <el-table
@@ -111,14 +161,6 @@
           row.linkedLogisticsCount == null ? '-' : `${row.linkedLogisticsCount}笔`
         }}</template>
       </el-table-column>
-      <el-table-column
-        v-if="suggestedReceiver || suggestedDate || suggestedOrderNo"
-        label="推荐依据"
-        min-width="150"
-        ><template #default="{ row }">{{
-          recommendation(row as PickedLedgerSource) || '请人工核对'
-        }}</template></el-table-column
-      >
       <el-table-column prop="senderName" label="发货方" min-width="190" /><el-table-column
         prop="receiverName"
         label="收货方"
@@ -154,6 +196,7 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
+import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import { computed, ref } from 'vue'
 import { getLedgerSources, type LedgerSourceQuery } from '@/api/core/cost-ledger'
 import type { CostSource } from '@/api/core/cost'
@@ -223,10 +266,7 @@ async function load() {
       dateFrom: dates.value?.[0],
       dateTo: dates.value?.[1],
     })
-    if (current === serial)
-      rows.value = data
-        .map((r) => ({ ...r, orderTypeCode: type }))
-        .sort((a, b) => Number(!!recommendation(b)) - Number(!!recommendation(a)))
+    if (current === serial) rows.value = data.map((r) => ({ ...r, orderTypeCode: type }))
   } catch (e) {
     if (current === serial) {
       rows.value = []
@@ -281,29 +321,6 @@ function confirm() {
   emit('selected', [...chosen.value.values()])
   visible.value = false
 }
-function recommendation(row: PickedLedgerSource) {
-  const normalize = (value: string) => value.replace(/[\s，,。；;\-]/g, '')
-  const raw = normalize(props.suggestedReceiver || '')
-  const matches = [
-    ['联系电话', row.contactPhone],
-    ['收货地址', row.destinationAddress],
-    ['客户名称', row.receiverName],
-    ['收货人', row.contactName],
-  ]
-    .filter(([, value]) => value && value.length >= 2 && raw.includes(normalize(value)))
-    .map(([label]) => label)
-  if (props.suggestedOrderNo && [row.documentNo, row.originalNo].includes(props.suggestedOrderNo))
-    matches.unshift('报表指定单号')
-  if (
-    props.suggestedDate &&
-    row.documentDate &&
-    Math.abs(Date.parse(props.suggestedDate) - Date.parse(row.documentDate)) <= 7 * 86400000
-  )
-    matches.push('日期接近')
-  if (props.suggestedEmployeeCode && props.suggestedEmployeeCode === row.employeeCode)
-    matches.push('下单员工一致')
-  return matches.join('、')
-}
 </script>
 <style scoped>
 :global(.cost-source-picker) {
@@ -320,18 +337,6 @@ function recommendation(row: PickedLedgerSource) {
   flex-shrink: 0;
 }
 
-.source-filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0 20px;
-}
-.reference-issue {
-  color: var(--el-color-warning-dark-2);
-}
-.source-filters :deep(.el-select),
-.source-filters :deep(.el-date-editor) {
-  width: 100%;
-}
 .picker-toolbar {
   display: flex;
   justify-content: space-between;
@@ -339,10 +344,5 @@ function recommendation(row: PickedLedgerSource) {
   gap: 16px;
   margin: 12px 0;
   color: var(--el-text-color-secondary);
-}
-@media (max-width: 800px) {
-  .source-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 </style>

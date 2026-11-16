@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { h, KeepAlive, ref } from 'vue'
+import { defineComponent, h, KeepAlive, ref } from 'vue'
 import ElementPlus, { ElDatePicker } from 'element-plus'
 import View from '@/views/supply-chain/cost/LogisticsTransportRecordsView.vue'
 
-const api = vi.hoisted(() => ({ list: vi.fn(), sync: vi.fn(), runs: vi.fn() }))
+const api = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), sync: vi.fn(), runs: vi.fn() }))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useRoute: () => ({ query: {} }),
@@ -14,7 +14,7 @@ vi.mock('@/composables/useSupplyPermissions', () => ({
 }))
 vi.mock('@/api/core/transport-records', () => ({
   getTransportRecords: api.list,
-  getTransport: vi.fn(),
+  getTransport: api.detail,
   confirmTransport: vi.fn(),
   exportSelectedTransport: vi.fn(),
 }))
@@ -77,6 +77,47 @@ async function begin() {
 }
 
 describe('运输列表同步完成后刷新', () => {
+  it.each(['查看', '编辑'])('同步后刷新当前%s详情，保留编辑中的未保存内容', async (mode) => {
+    const row = {
+      id: 'C1',
+      documentNo: 'LC1',
+      revision: 1,
+      categoryCode: 'LOGISTICS',
+      statusCode: 'DRAFT',
+      data: { typeCode: 'DELIVERY', logistics: {}, ledger: null },
+      sources: [],
+    }
+    api.list.mockResolvedValue({
+      page: { total: 1, begin: 0, step: 20, items: [row] },
+      platformRecords: {},
+    })
+    api.detail
+      .mockResolvedValueOnce({ record: row, platform: null })
+      .mockResolvedValue({ record: { ...row, revision: 2 }, platform: null })
+    wrapper = mount(View, {
+      attachTo: document.body,
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          TransportRecordEditor: defineComponent({
+            props: ['detail', 'readonly'],
+              setup: (props) => ({ openedRevision: ref(props.detail.record.revision) }),
+              template: '<div data-test="opened-detail">{{ openedRevision }}</div>',
+          }),
+        },
+      },
+    })
+    await flushPromises()
+    await click(mode)
+    expect(wrapper.get('[data-test="opened-detail"]').text()).toBe('1')
+    await begin()
+    api.runs.mockResolvedValue([run('SUCCEEDED')])
+    await vi.advanceTimersByTimeAsync(5000)
+    await flushPromises()
+    expect(wrapper.get('[data-test="opened-detail"]').text()).toBe(mode === '查看' ? '2' : '1')
+    expect(api.detail).toHaveBeenCalledTimes(mode === '查看' ? 2 : 1)
+  })
+
   it('提交并非完成；轮询到终态后重新读取列表，避免提前刷新后停留在旧结果', async () => {
     await render()
     await begin()

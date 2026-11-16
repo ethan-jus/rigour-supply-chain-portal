@@ -21,6 +21,7 @@ export interface CostAttachmentDraft {
   replaces?: CostAttachment
   removing?: boolean
   attachment?: CostAttachment
+  categoryCode?: string
 }
 
 /** 现场报损与员工报销需要在填单时提交证据，其余台账继续使用各自业务单据入口。 */
@@ -37,7 +38,7 @@ function readBytes(file: Blob): Promise<ArrayBuffer> {
   })
 }
 
-async function checkedFile(file: File): Promise<File> {
+async function checkedFile(file: File, office = false): Promise<File> {
   if (!file.name.trim() || file.name.length > 200 || /[\u0000-\u001f]/u.test(file.name))
     throw new Error('文件名须为 1—200 个字符，不能包含控制字符')
   if (file.size === 0 || file.size > 10 * 1024 * 1024)
@@ -50,14 +51,27 @@ async function checkedFile(file: File): Promise<File> {
         ? 'image/jpeg'
         : /\.pdf$/i.test(file.name)
           ? 'application/pdf'
-          : '')
+          : office && /\.docx$/i.test(file.name)
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : office && /\.xlsx$/i.test(file.name)
+              ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+              : '')
   const bytes = new Uint8Array(await readBytes(file.slice(0, 8)))
   const matches =
     bytes.length >= 8 &&
     ((type === 'image/png' && [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v)) ||
       (type === 'image/jpeg' && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) ||
-      (type === 'application/pdf' && [37, 80, 68, 70, 45].every((v, i) => bytes[i] === v)))
-  if (!matches) throw new Error(`${file.name}：请选择有效的 PNG、JPEG 或 PDF 文件`)
+      (type === 'application/pdf' && [37, 80, 68, 70, 45].every((v, i) => bytes[i] === v)) ||
+      (office &&
+        [
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ].includes(type) &&
+        [80, 75, 3, 4].every((v, i) => bytes[i] === v)))
+  if (!matches)
+    throw new Error(
+      `${file.name}：请选择有效的 PNG、JPEG、PDF${office ? '、Word（docx）或 Excel（xlsx）' : ''} 文件`,
+    )
   return file.type ? file : new File([file], file.name, { type, lastModified: file.lastModified })
 }
 
@@ -65,10 +79,11 @@ export async function appendCostAttachmentFiles(
   current: CostAttachmentDraft[],
   files: File[],
   existingCount: number,
+  office = false,
 ): Promise<CostAttachmentDraft[]> {
   const result = [...current]
   for (const candidate of files) {
-    const file = await checkedFile(candidate)
+    const file = await checkedFile(candidate, office)
     let duplicate = false
     for (const item of result.filter(
       (r) => r.file.name === file.name && r.file.size === file.size && r.file.type === file.type,

@@ -1,8 +1,12 @@
 import { apiClient } from './client'
 import type { CostPage, CostQuery, CostRecord } from './cost'
 import type { ImportRow, SourceOrder } from '@/views/supply-chain/cost/huolala-source'
+import type { CostCommand } from './cost'
 
 export interface TransportDraft {
+  orderAllocations?: Record<string, number | null> | null
+  deliveryModeCode?: string | null
+  receivingPoints?: import('@/types/cost-ledger').LedgerParty[] | null
   revision: number | null
   requestId: string
   transportType: string | null
@@ -30,13 +34,38 @@ export interface PlatformTransport {
   draft: TransportDraft | null
   billHistory: SourceOrder[]
 }
+export interface ShipmentTransportSource {
+  id: string
+  costId: string | null
+  issue: string | null
+  differencePending: boolean
+  latest: {
+    shipmentId: string
+    shipmentNo: string
+    salesOrderId: string | number
+    sourceStatus: string
+    shipTime: string
+    sourceUpdatedAt: string | null
+    carrierCode: string | null
+    carrierName: string | null
+    deliveryModeCode: string | null
+    deliveryModeName: string | null
+    trackingNumbers: string[]
+    receiver: import('@/types/cost-ledger').LedgerParty | null
+    sourceFields: Record<string, unknown>
+    goods: Record<string, unknown>[]
+  }
+}
 export interface TransportDetail {
+  orderAllocations?: Record<string, number | null>
   record: CostRecord
   platform: PlatformTransport | null
+  shipments?: ShipmentTransportSource[]
 }
 export interface TransportPage {
   page: CostPage
   platformRecords: Record<string, PlatformTransport>
+  shipmentRecords?: Record<string, ShipmentTransportSource[]>
 }
 export type TransportQuery = CostQuery & {
   relationState?: string
@@ -67,5 +96,33 @@ export const exportSelectedTransport = (ids: string[]) =>
 export const getTransportVoucher = (id: string, voucher: string, download = false) =>
   apiClient.get<{ url: string }>(
     `${base}/${encodeURIComponent(id)}/vouchers/${encodeURIComponent(voucher)}${download ? '?download=true' : ''}`,
+    options,
+  )
+
+export interface TransportSubmission {
+  submissionId: string
+  draft: TransportDraft
+  advanced: CostCommand | null
+  uploads: { categoryCode: string; replacingId: string | null }[]
+  removedIds: string[]
+  salesOrderId?: string | number | null
+}
+export const saveTransportWithEvidence = (
+  id: string | null,
+  command: TransportSubmission,
+  files: File[],
+) => {
+  const body = new FormData()
+  body.append('command', new Blob([JSON.stringify(command)], { type: 'application/json' }))
+  files.forEach((file) => body.append('files', file, file.name))
+  return apiClient.post<TransportDetail>(
+    `${base}${id ? '/' + encodeURIComponent(id) : ''}/with-evidence`,
+    body,
+    { ...options, headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+}
+export const getTransportAttachmentDownloadUrl = (id: string, file: string) =>
+  apiClient.get<string>(
+    `${base}/${encodeURIComponent(id)}/attachments/${encodeURIComponent(file)}/download-url`,
     options,
   )

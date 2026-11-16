@@ -29,7 +29,9 @@ export const vehicleOf = (platform?: PlatformTransport | null): string =>
   (platform ? currentSource(platform.source).raw['车型']?.trim() : '') || '-'
 export const ordersOf = (row: CostRecord, platform?: PlatformTransport | null) =>
   platform?.draft?.orderCodes ??
-  row.data.ledger?.sources.map((s) => s.orderCode).filter((s): s is string => !!s) ??
+  (row.data.ledger?.sources.length
+    ? row.data.ledger.sources.map((s) => s.orderCode).filter((s): s is string => !!s)
+    : undefined) ??
   row.sources.map((s) => s.documentNo)
 /** 历史记录可能只有原运输信息，详情仍展示已保存的收货方及地址。 */
 export function frozenTransportReceivers(row: CostRecord) {
@@ -131,7 +133,7 @@ export function routeText(route: TransportRoute): string {
 /** 新旧单据分别从完整来源快照、台账归属及收货点恢复展示，不回读变化后的原单。 */
 export function frozenTransportSources(row: CostRecord): CostSource[] {
   const ledger = row.data.ledger
-  if (!ledger) return row.sources
+  if (!ledger?.sources.length) return row.sources
   return ledger.sources
     .filter((s) => !!s.orderCode)
     .map((s) => {
@@ -188,13 +190,16 @@ export function transportDraft(
     requestId: row?.data.requestId || randomId(),
     revision: row?.revision ?? null,
     transportType:
-      saved?.transportType ??
-      ledger?.transportPurposeCode ??
-      row?.data.typeCode ??
-      row?.data.logistics?.legCode ??
+      saved?.transportType ||
+      ledger?.transportPurposeCode ||
+      row?.data.typeCode ||
+      row?.data.logistics?.legCode ||
       null,
     date:
       order?.useTime.slice(0, 10) || row?.data.costDate || new Date().toLocaleDateString('sv-SE'),
+    deliveryModeCode:
+      ledger?.deliveryModeCode || (ledger?.carrierCode === 'SELF' ? 'SELF' : 'THIRD_PARTY'),
+    receivingPoints: ledger?.receivingPoints.map((p) => ({ ...p })) || null,
     carrierCode: platform ? 'HLL' : (ledger?.carrierCode ?? null),
     trackingNo: order
       ? order.raw['运单号'] || ''
@@ -226,6 +231,23 @@ export function transportDraft(
     reason: '',
     zeroReason: saved?.zeroReason ?? ledger?.feeItems[0]?.zeroCostReason ?? '',
     orderCodes: row ? ordersOf(row, platform) : [],
+    orderAllocations: saved?.orderAllocations
+      ? { ...saved.orderAllocations }
+      : row?.data.amount != null &&
+          ledger?.sources.length &&
+          ledger.sources.every((s) => s.allocations.length > 0)
+        ? Object.fromEntries(
+            ledger.sources
+              .filter((s) => s.orderCode)
+              .map((s) => [
+                s.orderCode!,
+                row?.data.amount == null
+                  ? null
+                  : s.allocations.reduce((sum, a) => sum + Math.round((a.amount ?? 0) * 100), 0) /
+                    100,
+              ]),
+          )
+        : null,
   }
 }
 /** 展示预览也按分分摊，尾差固定给排序后的首批单据；最终以服务端结果为准。 */

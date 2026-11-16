@@ -78,8 +78,8 @@
             placeholder="数据来源"
             aria-label="数据来源"
             ><el-option label="货拉拉同步" value="HUOLALA" /><el-option
-              label="手动录入"
-              value="MANUAL_ENTRY"
+              label="订货宝同步"
+              value="DHB" /><el-option label="手动录入" value="MANUAL_ENTRY"
           /></el-select>
         </div>
         <div class="list-filter-field list-filter-field--select">
@@ -409,6 +409,8 @@ import TransportRouteSummary from './TransportRouteSummary.vue'
 import CostCarrierOrdersPanel from './CostCarrierOrdersPanel.vue'
 import { exportCostRows } from './cost-export'
 import { collectCostExportRows, selectedCostColumns } from './custom-cost-export'
+import { savedTransportAllocations } from './transport-allocation'
+import { frozenTransportSources } from './transport-records'
 const { can } = useSupplyPermissions(),
   router = useRouter(),
   route = useRoute()
@@ -479,7 +481,11 @@ function value(r: CostRecord, key: string, sources = result.value.platformRecord
   const vals: Record<string, unknown> = {
     route: routeText(routeOf(r, platform)),
     stopCount: routeOf(r, platform).receivers.length || '-',
-    source: platform ? '货拉拉同步' : '手动录入',
+    source: platform
+      ? '货拉拉同步'
+      : result.value.shipmentRecords?.[r.id]?.length
+        ? '订货宝同步'
+        : '手动录入',
     type: typeName(
       platform?.draft?.transportType ||
         r.data.ledger?.transportPurposeCode ||
@@ -488,7 +494,11 @@ function value(r: CostRecord, key: string, sources = result.value.platformRecord
     ),
     date: source?.useTime.slice(0, 10) || r.data.costDate,
     orderedAt: source?.raw['下单时间']?.trim() || '-',
-    platformNo: source?.orderNo || r.data.ledger?.platformOrderNo || '-',
+    platformNo:
+      source?.orderNo ||
+      result.value.shipmentRecords?.[r.id]?.flatMap((s) => s.latest.trackingNumbers).join('、') ||
+      r.data.ledger?.platformOrderNo ||
+      '-',
     amount: money(amountOf(r, platform)),
     status: statusName(r.statusCode),
     creator: platform ? '系统同步' : displayRecordActor(r.createdBy),
@@ -496,7 +506,8 @@ function value(r: CostRecord, key: string, sources = result.value.platformRecord
       ? '货拉拉'
       : r.data.ledger?.carrierCode
         ? costLabel('COST_CARRIER', r.data.ledger.carrierCode)
-        : r.data.logistics?.carrierName,
+        : result.value.shipmentRecords?.[r.id]?.[0]?.latest.carrierName ||
+          r.data.logistics?.carrierName,
     vehicle: vehicleOf(platform),
     platformStatus: source?.status,
     platformEmployee: source?.facts?.sourceEmployeeName,
@@ -708,6 +719,25 @@ async function finishSync(run: HuolalaRun) {
   page.value = 1
   table.value?.clearSelection()
   await load()
+  // 同步完成时更新当前查看的原单；编辑中的草稿不能被后台回填替换。
+  if (editorOpen.value && readonly.value && active.value) {
+    const id = active.value.record.id,
+      key = editorKey.value
+    try {
+      const detail = await getTransport(id)
+      if (
+        editorOpen.value &&
+        readonly.value &&
+        editorKey.value === key &&
+        active.value?.record.id === id
+      ) {
+        active.value = detail
+        editorKey.value++
+      }
+    } catch (e) {
+      ElMessage.warning(errorMessage(e, '列表已更新，当前详情刷新失败，请重新打开'))
+    }
+  }
 }
 async function pollSync() {
   const epoch = syncEpoch,
@@ -778,6 +808,7 @@ const exportColumns = [
   { key: 'documentNo', label: '费用单号' },
   ...columns.map((c) => ({ key: c.key, label: c.label })),
   { key: 'confirmed', label: '已确认运输成本（元）' },
+  { key: 'orderAllocations', label: '订单分摊费用（元）' },
 ]
 let exportQuery: TransportQuery = { begin: 0, step: 200 },
   exportSequence = 0
@@ -816,21 +847,26 @@ async function doExport() {
     await exportCostRows(
       '物流运输记录',
       chosen.map((c) => c.label),
-      rows.map(({ record: r, platform: p }) =>
-        chosen.map((c) => {
+      rows.map((detail) => {
+        const { record: r, platform: p } = detail
+        return chosen.map((c) => {
           if (c.key === 'documentNo') return r.documentNo
           if (c.key === 'confirmed') return r.statusCode === 'CONFIRMED' ? r.data.amount : null
           if (c.key === 'receivers') return receiversOf(r, p).join('\n')
           if (c.key === 'route') return routeText(routeOf(r, p))
           if (c.key === 'stopCount') return routeOf(r, p).receivers.length || null
           if (c.key === 'orders') return ordersOf(r, p).join('\n')
+          if (c.key === 'orderAllocations')
+            return savedTransportAllocations(detail, frozenTransportSources(r))
+              .map((s) => `${s.code}：${money(s.amount)}`)
+              .join('\n')
           if (c.key === 'amount') {
             const amount = amountOf(r, p)
             return amount == null ? null : Number(amount)
           }
           return value(r, c.key, p ? { [r.id]: p } : {})
-        }),
-      ),
+        })
+      }),
     )
     exportOpen.value = false
   } catch (e) {

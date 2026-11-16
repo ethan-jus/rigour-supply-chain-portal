@@ -24,6 +24,12 @@ describe('统一错误协议', () => {
     expect(requestFailureNotices.value.some(notice => notice.message === message)).toBe(true)
   })
 
+  it('附件服务未就绪保留安全、可操作的业务提示，不暴露存储内部错误', () => {
+    const error = new ApiError({code: 'COST_ATTACHMENT_STORAGE_UNAVAILABLE', message: 'COS internal secret'}, 503)
+    expect(error.message).toBe('附件暂时无法上传，已保留填写内容和文件，请联系管理员后重试')
+    expect(errorMessage(error, '保存失败')).not.toContain('secret')
+  })
+
   it('通用权限拒绝不误报成数据范围问题', () => {
     expect(new ApiError({ code: 'IAM_FORBIDDEN' }, 403).message)
       .toBe('没有执行该操作或访问该资源的权限')

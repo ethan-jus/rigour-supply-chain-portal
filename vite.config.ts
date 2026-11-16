@@ -54,7 +54,7 @@ export default defineConfig(({ command, mode }) => {
     optimizeDeps: {
       // 自动导入插件生成的样式依赖不会出现在启动扫描中。预构建全部组件样式，
       // 避免首次打开懒加载页面时重新打包依赖、整页刷新并丢失内存会话。
-      include: elementPlusStyles,
+      include: [...elementPlusStyles, 'pdfjs-dist'],
     },
     server: {
       // 允许手机、飞书 WebView 通过本机局域网 IP 访问开发SCDP。

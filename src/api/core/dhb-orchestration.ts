@@ -61,6 +61,9 @@ export interface DhbSyncOpenIssueItem {
   manualResolutionRequired: boolean
   replaySupported: boolean
   handlingAdvice: string
+  requiredDataType?: string | null
+  requiredSourceId?: string | null
+  relatedSalesOrderNo?: string | null
   updatedAt: string | null
 }
 
@@ -215,4 +218,19 @@ export function queryDhbWarehousingReceipts(connectorId: string, begin = 0, step
     { begin, step },
     { timeout: 240000, stayOnUnauthorized: true },
   )
+}
+
+export function linkDhbDependency(command: {
+  connectorId: string
+  sourceObjectType: string
+  sourceId: string
+  targetId: string
+  productId?: string
+  requiredDataType: string
+  requiredSourceId: string
+}) {
+  return apiClient.post<void>('/integration/dhb/sync-center/dependency-recoveries', command, {
+    timeout: 30000,
+    stayOnUnauthorized: true,
+  })
 }

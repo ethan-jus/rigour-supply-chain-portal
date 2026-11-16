@@ -112,7 +112,7 @@ describe('费用票据查看', () => {
       props: { modelValue: true, name: '现场照片.png', type: 'image/png', url: 'blob:local-test' },
       global: {
         plugins: [ElementPlus],
-        stubs: { ElDialog: { template: '<div><slot/><slot name="footer"/></div>' } },
+        stubs: { ElDialog: { template: '<div><slot/><slot name="footer"/></div>' }, CostPdfPreview: true },
       },
     })
     expect(wrapper.get('img').attributes('alt')).toBe('现场照片.png')
@@ -124,13 +124,13 @@ describe('费用票据查看', () => {
     await wrapper.setProps({
       name: '票据.pdf',
       type: 'application/pdf',
-      url: 'https://files.invalid/test.pdf',
+      url: 'blob:local-pdf',
     })
     expect(wrapper.find('img').exists()).toBe(false)
-    expect(wrapper.get('iframe').attributes()).toMatchObject({
-      src: 'https://files.invalid/test.pdf',
-      title: '票据.pdf',
-      referrerpolicy: 'no-referrer',
+    await flushPromises()
+    expect(wrapper.find('iframe').exists()).toBe(false)
+    expect(wrapper.getComponent({ name: 'CostPdfPreview' }).attributes()).toMatchObject({
+      url: 'blob:local-pdf', name: '票据.pdf',
     })
     await wrapper
       .findAll('button')

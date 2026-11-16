@@ -1,6 +1,11 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
-    <OrderRegisterFilterCard class="order-register-filter--compact" :loading="loading" @search="search" @reset="resetFilters">
+    <OrderRegisterFilterCard
+      class="order-register-filter--compact"
+      :loading="loading"
+      @search="search"
+      @reset="resetFilters"
+    >
       <template #primary>
         <div class="list-filter-field list-filter-field--date-range">
           <el-date-picker
@@ -25,13 +30,31 @@
           />
         </div>
         <div class="list-filter-field">
-          <el-input v-model="filters.orderNo" aria-label="订单号" clearable placeholder="订单号" @keyup.enter="search" />
+          <el-input
+            v-model="filters.orderNo"
+            aria-label="订单号"
+            clearable
+            placeholder="订单号"
+            @keyup.enter="search"
+          />
         </div>
         <div class="list-filter-field">
-          <el-input v-model="pageFilters.dhbOrderNo" aria-label="订货宝单号" clearable placeholder="订货宝单号" @keyup.enter="search" />
+          <el-input
+            v-model="pageFilters.dhbOrderNo"
+            aria-label="订货宝单号"
+            clearable
+            placeholder="订货宝单号"
+            @keyup.enter="search"
+          />
         </div>
         <div class="list-filter-field">
-          <el-input v-model="filters.customerName" aria-label="客户名称" clearable placeholder="客户名称" @keyup.enter="search" />
+          <el-input
+            v-model="filters.customerName"
+            aria-label="客户名称"
+            clearable
+            placeholder="客户名称"
+            @keyup.enter="search"
+          />
         </div>
         <div class="list-filter-field list-filter-field--select">
           <el-tree-select
@@ -113,31 +136,71 @@
           <el-checkbox v-model="filters.includeSubDepartments">含子部门</el-checkbox>
         </div>
         <div class="list-filter-field list-filter-field--select">
-          <el-select v-model="pageFilters.discountStatus" aria-label="优惠情况" clearable placeholder="优惠情况">
+          <el-select
+            v-model="pageFilters.discountStatus"
+            aria-label="优惠情况"
+            clearable
+            placeholder="优惠情况"
+          >
             <el-option label="全部" value="" />
             <el-option label="有优惠" value="true" />
             <el-option label="无优惠" value="false" />
           </el-select>
         </div>
         <div class="list-filter-field list-filter-field--select">
-          <el-select v-model="pageFilters.orderStatusCode" aria-label="订单状态" clearable placeholder="订单状态">
-            <el-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="pageFilters.orderStatusCode"
+            aria-label="订单状态"
+            clearable
+            placeholder="订单状态"
+          >
+            <el-option
+              v-for="item in orderStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </div>
         <div class="list-filter-field list-filter-field--select">
-          <el-select v-model="pageFilters.paymentStatusCode" aria-label="收款状态" clearable placeholder="收款状态">
-            <el-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="pageFilters.paymentStatusCode"
+            aria-label="收款状态"
+            clearable
+            placeholder="收款状态"
+          >
+            <el-option
+              v-for="item in paymentStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </div>
         <div class="list-filter-field list-filter-field--select">
-          <el-select v-model="pageFilters.dhbLinked" aria-label="订货宝关联单" clearable placeholder="订货宝关联单">
+          <el-select
+            v-model="pageFilters.dhbLinked"
+            aria-label="订货宝关联单"
+            clearable
+            placeholder="订货宝关联单"
+          >
             <el-option label="已关联" value="true" />
             <el-option label="未关联" value="false" />
           </el-select>
         </div>
         <div class="list-filter-field list-filter-field--select">
-          <el-select v-model="pageFilters.invoiceStatusCode" aria-label="发票状态" clearable placeholder="发票状态">
-            <el-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="pageFilters.invoiceStatusCode"
+            aria-label="发票状态"
+            clearable
+            placeholder="发票状态"
+          >
+            <el-option
+              v-for="item in invoiceStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </div>
         <div class="list-filter-field list-filter-field--person">
@@ -155,32 +218,51 @@
       </template>
     </OrderRegisterFilterCard>
 
-    <el-alert v-if="totals.missingLineOrderCount" :closable="false" type="warning"
-      :title="`当前筛选有 ${totals.missingLineOrderCount} 笔订单缺少明细，订货金额、优惠额及优惠率暂无法完整计算。`" />
-    <OrderStatisticsPanel title="订单统计" :columns="8" :brief="`订单金额 ${moneyText(totals.payableAmount)}`">
+    <el-alert
+      v-if="totals.missingLineOrderCount"
+      :closable="false"
+      type="warning"
+      :title="`当前筛选有 ${totals.missingLineOrderCount} 笔订单缺少明细，订货金额、优惠额及优惠率暂无法完整计算。`"
+    />
+    <OrderStatisticsPanel
+      title="订单统计"
+      :columns="8"
+      :brief="`订单金额 ${moneyText(totals.payableAmount)}`"
+    >
       <div class="order-summary order-summary--orders" aria-label="金额统计">
         <div class="order-summary__metric order-summary__metric--payable">
           <span class="order-summary__label">订单金额</span>
           <strong class="order-summary__value">{{ moneyText(totals.payableAmount) }}</strong>
         </div>
         <div class="order-summary__metric order-summary__metric--paid">
-          <el-tooltip content="所选订单累计回款，包含订货宝待财务确认和已确认金额；已取消回款不计入。" placement="top">
+          <el-tooltip
+            content="所选订单累计回款，包含订货宝待财务确认和已确认金额；已取消回款不计入。"
+            placement="top"
+          >
             <span class="order-summary__label">回款金额</span>
           </el-tooltip>
           <strong class="order-summary__value">{{ moneyText(totals.paidAmount) }}</strong>
         </div>
         <div class="order-summary__metric order-summary__metric--paid">
-          <el-tooltip content="当前筛选订单的累计回款÷订单金额；按收款日期筛选时取整单最近一次有效收款日期，订单金额为零时不计算。" placement="top">
+          <el-tooltip
+            content="当前筛选订单的累计回款÷订单金额；按收款日期筛选时取整单最近一次有效收款日期，订单金额为零时不计算。"
+            placement="top"
+          >
             <span class="order-summary__label">回款率</span>
           </el-tooltip>
-          <strong class="order-summary__value">{{ repaymentRateText(totals.paidAmount, totals.payableAmount) }}</strong>
+          <strong class="order-summary__value">{{
+            repaymentRateText(totals.paidAmount, totals.payableAmount)
+          }}</strong>
         </div>
         <div class="order-summary__metric order-summary__metric--unpaid">
           <span class="order-summary__label">待收金额</span>
           <strong class="order-summary__value">{{ moneyText(totals.unpaidAmount) }}</strong>
         </div>
         <div class="order-summary__metric order-summary__metric--count">
-          <el-tooltip content="当前筛选全部下单客户，按客户ID去重；未关联客户不计入。" placement="top">
+          <el-tooltip
+            content="当前筛选全部下单客户，按客户ID去重；未关联客户不计入。"
+            placement="top"
+          >
             <span class="order-summary__label">客户数</span>
           </el-tooltip>
           <strong class="order-summary__value">{{ totals.customerCount ?? '-' }}</strong>
@@ -196,7 +278,10 @@
           <strong class="order-summary__value">{{ moneyText(totals.discountAmount) }}</strong>
         </div>
         <div class="order-summary__metric order-summary__metric--discount">
-          <el-tooltip content="（订货金额合计－订单金额合计）÷订货金额合计；不平均各订单优惠率。订货金额为零时不计算。" placement="top">
+          <el-tooltip
+            content="（订货金额合计－订单金额合计）÷订货金额合计；不平均各订单优惠率。订货金额为零时不计算。"
+            placement="top"
+          >
             <span class="order-summary__label">优惠率</span>
           </el-tooltip>
           <strong class="order-summary__value">{{ discountRateText(totals.discountRate) }}</strong>
@@ -222,7 +307,13 @@
             </div>
             <span v-else>暂无数据</span>
           </template>
-          <el-table-column type="index" label="序号" width="70" fixed="left" :index="tableRowIndex" />
+          <el-table-column
+            type="index"
+            label="序号"
+            width="70"
+            fixed="left"
+            :index="tableRowIndex"
+          />
           <el-table-column label="订单号" width="170" fixed="left" sortable="custom" prop="orderNo">
             <template #default="{ row }">
               <el-link type="primary" underline="never" @click.stop="openDetail(row)">
@@ -230,16 +321,44 @@
               </el-link>
             </template>
           </el-table-column>
-          <el-table-column prop="customerName" label="客户名称" width="190" fixed="left" show-overflow-tooltip>
-            <template #default="{ row }"><strong class="order-party-name">{{ row.customerName || '-' }}</strong></template>
+          <el-table-column
+            prop="customerName"
+            label="客户名称"
+            width="190"
+            fixed="left"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }"
+              ><strong class="order-party-name">{{ row.customerName || '-' }}</strong></template
+            >
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('ownerEmployee')" label="业务员" width="120">
-            <template #default="{ row }"><strong class="order-party-name">{{ employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName) }}</strong></template>
+          <el-table-column
+            v-if="orderColumns.isVisible('ownerEmployee')"
+            label="业务员"
+            width="120"
+          >
+            <template #default="{ row }"
+              ><strong class="order-party-name">{{
+                employeeLabel(row.ownerEmployeeCode, row.ownerEmployeeName)
+              }}</strong></template
+            >
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('paymentOwner')" label="回款人" width="140" show-overflow-tooltip>
+          <el-table-column
+            v-if="orderColumns.isVisible('paymentOwner')"
+            label="回款人"
+            width="140"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">{{ row.paymentOwnerNames?.join('、') || '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('payableAmount')" label="订单金额" width="120" align="right" prop="payableAmount" sortable="custom">
+          <el-table-column
+            v-if="orderColumns.isVisible('payableAmount')"
+            label="订单金额"
+            width="120"
+            align="right"
+            prop="payableAmount"
+            sortable="custom"
+          >
             <template #header>
               <el-tooltip content="折扣、优惠后真实下单的实际应收金额。" placement="top">
                 <span class="column-header-hint">订单金额</span>
@@ -249,28 +368,59 @@
               <span class="amount amount--strong">{{ moneyText(row.payableAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('paidAmount')" label="收款金额" width="120" align="right" prop="paidAmount">
+          <el-table-column
+            v-if="orderColumns.isVisible('paidAmount')"
+            label="收款金额"
+            width="120"
+            align="right"
+            prop="paidAmount"
+          >
             <template #default="{ row }">
               <span class="amount amount--paid">{{ moneyText(row.paidAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('unpaidAmount')" label="待收金额" width="120" align="right" prop="unpaidAmount">
+          <el-table-column
+            v-if="orderColumns.isVisible('unpaidAmount')"
+            label="待收金额"
+            width="120"
+            align="right"
+            prop="unpaidAmount"
+          >
             <template #default="{ row }">
-              <span class="amount" :class="Number(row.unpaidAmount) > 0 ? 'amount--due' : 'amount--muted'">
+              <span
+                class="amount"
+                :class="Number(row.unpaidAmount) > 0 ? 'amount--due' : 'amount--muted'"
+              >
                 {{ moneyText(row.unpaidAmount) }}
               </span>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('paymentStatus')" label="收款状态" width="110">
+          <el-table-column
+            v-if="orderColumns.isVisible('paymentStatus')"
+            label="收款状态"
+            width="110"
+          >
             <template #default="{ row }">
-              <el-tag class="order-status-tag" :type="orderPaymentStatusTag(row.paymentStatusCode)" effect="light">
+              <el-tag
+                class="order-status-tag"
+                :type="orderPaymentStatusTag(row.paymentStatusCode)"
+                effect="light"
+              >
                 {{ orderPaymentStatusLabel(row.paymentStatusCode) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('paymentTime')" label="收款日期" width="170" sortable="custom" prop="paymentTime">
+          <el-table-column
+            v-if="orderColumns.isVisible('paymentTime')"
+            label="收款日期"
+            width="170"
+            sortable="custom"
+            prop="paymentTime"
+          >
             <template #header>
-              <el-tooltip content="最近一次有效收款日期；查当月结清订单，请选“已结清”。"><span class="column-header-hint">收款日期</span></el-tooltip>
+              <el-tooltip content="最近一次有效收款日期；查当月结清订单，请选“已结清”。"
+                ><span class="column-header-hint">收款日期</span></el-tooltip
+              >
             </template>
             <template #default="{ row }">
               <el-link
@@ -280,22 +430,45 @@
                 underline="hover"
                 title="查看此订单的回款记录"
                 @click.stop="openPayments(row)"
-              >{{ displayDateTime(row.paymentTime) }}</el-link>
+                >{{ displayDateTime(row.paymentTime) }}</el-link
+              >
               <span v-else-if="row.paymentTime">{{ displayDateTime(row.paymentTime) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('orderDate')" label="下单时间" width="170" sortable="custom" prop="orderDate">
+          <el-table-column
+            v-if="orderColumns.isVisible('orderDate')"
+            label="下单时间"
+            width="170"
+            sortable="custom"
+            prop="orderDate"
+          >
             <template #default="{ row }">{{ displayDateTime(row.orderDate) }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('departmentName')" label="部门" width="140" show-overflow-tooltip>
-            <template #default="{ row }">{{ departmentLabel(row.departmentId, row.departmentName) }}</template>
+          <el-table-column
+            v-if="orderColumns.isVisible('departmentName')"
+            label="部门"
+            width="140"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">{{
+              departmentLabel(row.departmentId, row.departmentName)
+            }}</template>
           </el-table-column>
           <el-table-column v-if="orderColumns.isVisible('regionName')" label="归属地区" width="140">
             <template #default="{ row }">{{ areaLabel(row.regionCode, row.regionName) }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('originalAmount')" label="订货金额" width="120" align="right" prop="originalAmount">
+          <el-table-column
+            v-if="orderColumns.isVisible('originalAmount')"
+            label="订货金额"
+            width="120"
+            align="right"
+            prop="originalAmount"
+          >
             <template #header>
-              <el-tooltip content="所有有效订单明细的单价×数量合计；缺少明细时不以订单头金额代替。" placement="top">
+              <el-tooltip
+                content="所有有效订单明细的单价×数量合计；缺少明细时不以订单头金额代替。"
+                placement="top"
+              >
                 <span class="column-header-hint">订货金额</span>
               </el-tooltip>
             </template>
@@ -303,47 +476,102 @@
               <span class="amount amount--muted">{{ moneyText(row.originalAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('discountAmount')" label="优惠额" width="120" align="right" prop="discountAmount" sortable="custom">
+          <el-table-column
+            v-if="orderColumns.isVisible('discountAmount')"
+            label="优惠额"
+            width="120"
+            align="right"
+            prop="discountAmount"
+            sortable="custom"
+          >
             <template #default="{ row }">{{ moneyText(row.discountAmount) }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('discountRate')" label="优惠率" width="100" align="right" prop="discountRate" sortable="custom">
+          <el-table-column
+            v-if="orderColumns.isVisible('discountRate')"
+            label="优惠率"
+            width="100"
+            align="right"
+            prop="discountRate"
+            sortable="custom"
+          >
             <template #default="{ row }">{{ discountRateText(row.discountRate) }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('orderStatus')" label="订单状态" width="110">
+          <el-table-column
+            v-if="orderColumns.isVisible('orderStatus')"
+            label="订单状态"
+            width="110"
+          >
             <template #default="{ row }">
               <el-tooltip
                 :disabled="!orderStatusHint(row as OrderRegisterOrderItem)"
                 :content="orderStatusHint(row as OrderRegisterOrderItem)"
                 placement="top"
               >
-                <el-tag class="order-status-tag" :type="orderStatusTone(row as OrderRegisterOrderItem)" effect="light">
-                {{ orderStatusLabel(row.orderStatusCode) }}
-              </el-tag>
+                <el-tag
+                  class="order-status-tag"
+                  :type="orderStatusTone(row as OrderRegisterOrderItem)"
+                  effect="light"
+                >
+                  {{ orderStatusLabel(row.orderStatusCode) }}
+                </el-tag>
               </el-tooltip>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('invoiceStatus')" label="发票状态" width="110">
+          <el-table-column
+            v-if="orderColumns.isVisible('invoiceStatus')"
+            label="发票状态"
+            width="110"
+          >
             <template #default="{ row }">
-              <el-tag class="order-status-tag" :type="orderInvoiceStatusTag(row.invoiceStatusCode)" effect="light">
+              <el-tag
+                class="order-status-tag"
+                :type="orderInvoiceStatusTag(row.invoiceStatusCode)"
+                effect="light"
+              >
                 {{ orderInvoiceStatusText(row as OrderRegisterOrderItem) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('checkedAmount')" label="已确认金额" width="120" align="right" prop="checkedAmount">
+          <el-table-column
+            v-if="orderColumns.isVisible('checkedAmount')"
+            label="已确认金额"
+            width="120"
+            align="right"
+            prop="checkedAmount"
+          >
             <template #default="{ row }">
               <span class="amount amount--muted">{{ moneyText(row.checkedAmount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('shipmentTime')" label="发货时间" width="170">
+          <el-table-column
+            v-if="orderColumns.isVisible('shipmentTime')"
+            label="发货时间"
+            width="170"
+          >
             <template #default="{ row }">{{ displayDateTime(row.shipmentTime) }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('dhbOrderNo')" label="订货宝订单号" width="160" show-overflow-tooltip>
+          <el-table-column
+            v-if="orderColumns.isVisible('dhbOrderNo')"
+            label="订货宝订单号"
+            width="160"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">{{ row.dhbOrderNo || '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('sourceOrderNo')" label="来源单号" width="150" show-overflow-tooltip>
+          <el-table-column
+            v-if="orderColumns.isVisible('sourceOrderNo')"
+            label="来源单号"
+            width="150"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">{{ row.sourceOrderNo || '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('createdBy')" label="创建人" width="110" show-overflow-tooltip>
+          <el-table-column
+            v-if="orderColumns.isVisible('createdBy')"
+            label="创建人"
+            width="110"
+            show-overflow-tooltip
+          >
             <template #header>
               <el-tooltip content="来源系统真实创建人；无来源时为本系统记录人。" placement="top">
                 <span class="column-header-hint">创建人</span>
@@ -351,10 +579,21 @@
             </template>
             <template #default="{ row }">{{ row.createdBy || '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('createdTime')" label="创建时间" width="170" sortable="custom" prop="createdTime">
+          <el-table-column
+            v-if="orderColumns.isVisible('createdTime')"
+            label="创建时间"
+            width="170"
+            sortable="custom"
+            prop="createdTime"
+          >
             <template #default="{ row }">{{ displayDateTime(row.createdTime) }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('updatedBy')" label="修改人" width="110" show-overflow-tooltip>
+          <el-table-column
+            v-if="orderColumns.isVisible('updatedBy')"
+            label="修改人"
+            width="110"
+            show-overflow-tooltip
+          >
             <template #header>
               <el-tooltip content="来源系统真实修改人；无来源时为本系统记录人。" placement="top">
                 <span class="column-header-hint">修改人</span>
@@ -362,17 +601,59 @@
             </template>
             <template #default="{ row }">{{ row.updatedBy || '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('updatedTime')" label="修改时间" width="170">
+          <el-table-column
+            v-if="orderColumns.isVisible('updatedTime')"
+            label="修改时间"
+            width="170"
+          >
             <template #default="{ row }">{{ displayDateTime(row.updatedTime) }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('syncedBy')" label="同步人" width="110" show-overflow-tooltip>
+          <el-table-column
+            v-if="orderColumns.isVisible('syncedBy')"
+            label="同步人"
+            width="110"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">{{ row.syncedBy || '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="orderColumns.isVisible('syncedAt')" label="同步时间" width="170" sortable="custom" prop="syncedAt">
+          <el-table-column
+            v-if="orderColumns.isVisible('syncedAt')"
+            label="同步时间"
+            width="170"
+            sortable="custom"
+            prop="syncedAt"
+          >
             <template #default="{ row }">{{ displayDateTime(row.syncedAt) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right" class-name="order-actions-cell">
+          <el-table-column v-if="can('order:logistics-cost:read')" label="物流关联" width="130"
+            ><template #default="{ row }"
+              ><el-button
+                link
+                type="primary"
+                @click="openDetail(row as OrderRegisterOrderItem, 'logistics')"
+                >{{
+                  logisticsCounts === null
+                    ? '-'
+                    : logisticsCounts[row.orderNo]
+                      ? `已关联${logisticsCounts[row.orderNo]}笔`
+                      : '未关联'
+                }}</el-button
+              ></template
+            ></el-table-column
+          >
+          <el-table-column label="操作" width="225" fixed="right" class-name="order-actions-cell">
             <template #default="{ row }">
+              <el-button
+                v-if="
+                  can('order:logistics-cost:write') &&
+                  !['DRAFT', 'CANCELLED'].includes(row.orderStatusCode)
+                "
+                link
+                type="primary"
+                size="small"
+                @click="openSalesLogistics(row as OrderRegisterOrderItem)"
+                >选择物流</el-button
+              >
               <el-button
                 v-if="canViewOrders"
                 class="order-action order-action--detail"
@@ -446,19 +727,44 @@
 
     <el-dialog v-model="monthlyExportVisible" title="月业绩导出" width="580px">
       <p>导出城市、销售两张汇总表，包含所选月份的交易额、回款额和未回款额。</p>
-      <el-date-picker v-model="monthlyRange" type="monthrange" value-format="YYYY-MM"
-        start-placeholder="开始月份" end-placeholder="结束月份" range-separator="至" aria-label="业绩月份"
-        :disabled-date="(date: Date) => date.getTime() > Date.now()" style="width: 100%" />
-      <p class="monthly-export-note">交易额按下单月份、回款额按实际回款月份，未回款额为月末累计欠款（当前月截至导出时）。导出全部可见订单，不受列表筛选和分页影响。</p>
+      <el-date-picker
+        v-model="monthlyRange"
+        type="monthrange"
+        value-format="YYYY-MM"
+        start-placeholder="开始月份"
+        end-placeholder="结束月份"
+        range-separator="至"
+        aria-label="业绩月份"
+        :disabled-date="(date: Date) => date.getTime() > Date.now()"
+        style="width: 100%"
+      />
+      <p class="monthly-export-note">
+        交易额按下单月份、回款额按实际回款月份，未回款额为月末累计欠款（当前月截至导出时）。导出全部可见订单，不受列表筛选和分页影响。
+      </p>
       <template #footer>
         <el-button @click="monthlyExportVisible = false">取消</el-button>
-        <el-button type="primary" :loading="monthlyExporting" @click="exportMonthlyPerformance">导出 Excel</el-button>
+        <el-button type="primary" :loading="monthlyExporting" @click="exportMonthlyPerformance"
+          >导出 Excel</el-button
+        >
       </template>
     </el-dialog>
+    <el-dialog
+      v-model="salesLogisticsOpen"
+      title="物流发货"
+      width="min(1320px, 96vw)"
+      top="3vh"
+      destroy-on-close
+      ><SalesLogisticsPanel
+        v-if="salesLogisticsOrderId && salesLogisticsOpen"
+        :order-id="salesLogisticsOrderId"
+        open-chooser
+        @changed="refreshLogisticsCounts"
+    /></el-dialog>
     <OrderRegisterDetailDrawer
       v-model="detailVisible"
       :order-id="detailOrderId"
       :initial-tab="detailTab"
+      @logistics-changed="refreshLogisticsCounts"
     />
 
     <OrderInvoiceApplyDialog
@@ -470,13 +776,19 @@
 </template>
 
 <script setup lang="ts">
-import { loadOrderDictionaries, orderLifecycleOptions, paymentDictionaryOptions } from '@/utils/order-register-status'
+import {
+  loadOrderDictionaries,
+  orderLifecycleOptions,
+  paymentDictionaryOptions,
+} from '@/utils/order-register-status'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { businessMonth } from '@/utils/business-date'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderPackageSyncButton from '@/components/supply/OrderPackageSyncButton.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
+import SalesLogisticsPanel from './components/SalesLogisticsPanel.vue'
+import { getSalesLogisticsCounts } from '@/api/core/sales-logistics'
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import OrderInvoiceApplyDialog from './components/OrderInvoiceApplyDialog.vue'
 import TableColumnSettings from '@/components/supply/TableColumnSettings.vue'
@@ -585,7 +897,16 @@ const loadFailed = ref(false)
 const exporting = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
-const sortBy = ref<'createdTime' | 'orderDate' | 'syncedAt' | 'orderNo' | 'payableAmount' | 'discountAmount' | 'discountRate' | 'paymentTime'>('createdTime')
+const sortBy = ref<
+  | 'createdTime'
+  | 'orderDate'
+  | 'syncedAt'
+  | 'orderNo'
+  | 'payableAmount'
+  | 'discountAmount'
+  | 'discountRate'
+  | 'paymentTime'
+>('createdTime')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 const pageData = ref<OrderRegisterOrderPage>({
   total: 0,
@@ -613,23 +934,50 @@ const reportNow = businessMonth(new Date())
 const reportYear = Number(reportNow.slice(0, 4))
 const reportMonth = Number(reportNow.slice(5))
 const monthlyRange = ref<[string, string] | null>([
-  `${reportMonth < 4 ? reportYear - 1 : reportYear}-04`, `${reportYear}-${String(reportMonth).padStart(2, '0')}`,
+  `${reportMonth < 4 ? reportYear - 1 : reportYear}-04`,
+  `${reportYear}-${String(reportMonth).padStart(2, '0')}`,
 ])
 async function exportMonthlyPerformance() {
-  if (!monthlyRange.value?.[0] || !monthlyRange.value?.[1]) { ElMessage.warning('请选择业绩月份'); return }
+  if (!monthlyRange.value?.[0] || !monthlyRange.value?.[1]) {
+    ElMessage.warning('请选择业绩月份')
+    return
+  }
   monthlyExporting.value = true
   try {
-    const { performanceMonths, monthlyPerformanceBlob } = await import('@/utils/monthly-performance-export')
+    const { performanceMonths, monthlyPerformanceBlob } =
+      await import('@/utils/monthly-performance-export')
     const [monthFrom, monthTo] = monthlyRange.value
     performanceMonths(monthFrom, monthTo)
     const report = await getMonthlyPerformance({ monthFrom, monthTo })
     const blob = await monthlyPerformanceBlob(report)
     downloadBlob(blob, `月业绩汇总_${monthFrom}_${monthTo}.xlsx`)
     monthlyExportVisible.value = false
-  } catch (reason) { ElMessage.error(errorMessage(reason, '月业绩导出失败，请重试')) }
-  finally { monthlyExporting.value = false }
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason, '月业绩导出失败，请重试'))
+  } finally {
+    monthlyExporting.value = false
+  }
 }
 
+const logisticsCounts = ref<Record<string, number> | null>(null)
+const salesLogisticsOpen = ref(false),
+  salesLogisticsOrderId = ref<string | number | null>(null)
+let logisticsCountSerial = 0
+function openSalesLogistics(row: OrderRegisterOrderItem) {
+  salesLogisticsOrderId.value = row.id
+  salesLogisticsOpen.value = true
+}
+async function refreshLogisticsCounts() {
+  const current = ++logisticsCountSerial
+  logisticsCounts.value = null
+  if (!can('order:logistics-cost:read')) return
+  try {
+    const values = await getSalesLogisticsCounts(pageData.value.items.map((r) => r.orderNo))
+    if (current === logisticsCountSerial) logisticsCounts.value = values
+  } catch {
+    /* 摘要加载失败保留-，不把未知误报为未关联。 */
+  }
+}
 const detailVisible = ref(false)
 const detailOrderId = ref<string | number | null>(null)
 const detailTab = ref('overview')
@@ -704,7 +1052,8 @@ function buildQuery() {
     paymentStatusCode: empty(pageFilters.paymentStatusCode),
     invoiceStatusCode: empty(pageFilters.invoiceStatusCode),
     dhbLinked: empty(pageFilters.dhbLinked) == null ? undefined : pageFilters.dhbLinked === 'true',
-    hasDiscount: empty(pageFilters.discountStatus) == null ? undefined : pageFilters.discountStatus === 'true',
+    hasDiscount:
+      empty(pageFilters.discountStatus) == null ? undefined : pageFilters.discountStatus === 'true',
     sortBy: sortBy.value,
     sortDirection: sortDirection.value,
     ...dateParams,
@@ -717,6 +1066,7 @@ async function loadOrders() {
   loadFailed.value = false
   try {
     pageData.value = await getOrderRegisterOrders(buildQuery())
+    void refreshLogisticsCounts()
     notifyCoverage(pageData.value.coverage)
   } catch (reason) {
     loadFailed.value = true
@@ -749,7 +1099,10 @@ function clearFilters() {
   sortDirection.value = 'desc'
 }
 
-function resetFilters() { clearFilters(); search() }
+function resetFilters() {
+  clearFilters()
+  search()
+}
 
 function onPageSizeChange() {
   currentPage.value = 1
@@ -761,7 +1114,16 @@ function tableRowIndex(index: number): number {
 }
 
 function changeSort({ prop, order }: { prop: string | null; order: string | null }) {
-  const allowed = new Set(['createdTime', 'orderDate', 'syncedAt', 'orderNo', 'payableAmount', 'discountAmount', 'discountRate', 'paymentTime'])
+  const allowed = new Set([
+    'createdTime',
+    'orderDate',
+    'syncedAt',
+    'orderNo',
+    'payableAmount',
+    'discountAmount',
+    'discountRate',
+    'paymentTime',
+  ])
   if (prop && order && allowed.has(prop)) {
     sortBy.value = prop as typeof sortBy.value
     sortDirection.value = order === 'ascending' ? 'asc' : 'desc'
@@ -805,7 +1167,10 @@ function openLines(row: { orderNo?: string }) {
 
 function openPayments(row: { orderNo?: string }) {
   if (row.orderNo) {
-    void router.push({ path: '/supply-chain/order/sales-payments', query: { orderNo: row.orderNo } })
+    void router.push({
+      path: '/supply-chain/order/sales-payments',
+      query: { orderNo: row.orderNo },
+    })
   }
 }
 
@@ -833,7 +1198,11 @@ async function deleteDraftOrder(row: OrderRegisterOrderItem) {
     await loadOrders()
   } catch (reason) {
     if (reason === 'cancel' || reason === 'close') return
-    ElMessage.error({ message: errorMessage(reason, '草稿订单删除失败'), showClose: true, grouping: true })
+    ElMessage.error({
+      message: errorMessage(reason, '草稿订单删除失败'),
+      showClose: true,
+      grouping: true,
+    })
   }
 }
 
@@ -847,7 +1216,11 @@ async function exportCsv() {
     const blob = await exportOrderRegisterCsv('orders', params)
     downloadBlob(blob, csvFilename('订单列表'))
   } catch (reason) {
-    ElMessage.error({ message: errorMessage(reason, '导出失败，请稍后重试'), showClose: true, grouping: true })
+    ElMessage.error({
+      message: errorMessage(reason, '导出失败，请稍后重试'),
+      showClose: true,
+      grouping: true,
+    })
   } finally {
     exporting.value = false
   }
@@ -868,9 +1241,9 @@ watch(
 onMounted(() => {
   void loadOrderDictionaries()
   void loadOptions()
-  if (!route.query.orderNo && !['shipment', 'unpaid'].includes(String(route.query.homeTask))) void loadOrders()
+  if (!route.query.orderNo && !['shipment', 'unpaid'].includes(String(route.query.homeTask)))
+    void loadOrders()
 })
-
 
 /** 归属地区变化时清空业务员并按地区级联重载业务员选项。 */
 watch(
@@ -880,11 +1253,14 @@ watch(
     void searchEmployees('', value)
   },
 )
-
 </script>
 
 <style scoped>
-.monthly-export-note { color: #64748b; font-size: var(--app-font-size-base); line-height: 1.7; }
+.monthly-export-note {
+  color: #64748b;
+  font-size: var(--app-font-size-base);
+  line-height: 1.7;
+}
 .order-register-page {
   display: flex;
   min-height: 0;
@@ -969,7 +1345,6 @@ watch(
   white-space: nowrap;
 }
 
-
 .order-no-cell {
   font-weight: 600;
 }
@@ -978,8 +1353,6 @@ watch(
   border-bottom: 1px dashed var(--el-border-color);
   cursor: help;
 }
-
-
 </style>
 
 <style scoped src="./order-summary.css"></style>

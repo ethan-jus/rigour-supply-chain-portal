@@ -43,18 +43,32 @@
               <el-descriptions-item label="客户">
                 {{ detail.customerNameSnapshot || '客户待补齐' }}
               </el-descriptions-item>
-              <el-descriptions-item label="客户编码">{{ detail.customerCodeSnapshot || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="客户编码">{{
+                detail.customerCodeSnapshot || '-'
+              }}</el-descriptions-item>
               <el-descriptions-item label="归属地区">
                 {{ regionLabel(detail.regionCode, detail.regionName) }}
               </el-descriptions-item>
               <el-descriptions-item label="业务员">
                 {{ detail.ownerEmployeeNameSnapshot || detail.ownerEmployeeCode || '-' }}
               </el-descriptions-item>
-              <el-descriptions-item label="下单时间">{{ displayDateTime(detail.orderDate) }}</el-descriptions-item>
-              <el-descriptions-item label="发货时间">{{ displayDateTime(detail.shipmentTime) }}</el-descriptions-item>
-              <el-descriptions-item label="订单状态">{{ orderStatusLabel(detail.orderStatusCode) }}</el-descriptions-item>
+              <el-descriptions-item label="下单时间">{{
+                displayDateTime(detail.orderDate)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="发货时间">{{
+                displayDateTime(detail.shipmentTime)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="订单状态">{{
+                orderStatusLabel(detail.orderStatusCode)
+              }}</el-descriptions-item>
               <el-descriptions-item label="收款状态">
-                {{ orderPaymentStatusLabel(detail.payableAmount != null && Number(detail.payableAmount) === 0 ? 'NOT_REQUIRED' : detail.paymentStatusCode) }}
+                {{
+                  orderPaymentStatusLabel(
+                    detail.payableAmount != null && Number(detail.payableAmount) === 0
+                      ? 'NOT_REQUIRED'
+                      : detail.paymentStatusCode,
+                  )
+                }}
               </el-descriptions-item>
               <el-descriptions-item label="备注">{{ detail.remark || '-' }}</el-descriptions-item>
             </el-descriptions>
@@ -102,7 +116,7 @@
               empty-text="暂无回款记录"
             >
               <!-- @vue-generic {OrderRegisterPaymentItem} -->
-            <el-table-column label="回款单号" min-width="170">
+              <el-table-column label="回款单号" min-width="170">
                 <template #default="{ row }">
                   <el-link type="primary" underline="never" @click.stop="openPayment(row)">
                     {{ row.paymentNo }}
@@ -114,7 +128,11 @@
               </el-table-column>
               <el-table-column label="回款状态" width="100">
                 <template #default="{ row }">
-                  <el-tag :type="paymentRecordStatusTag(row.paymentStatusCode)" effect="plain" size="small">
+                  <el-tag
+                    :type="paymentRecordStatusTag(row.paymentStatusCode)"
+                    effect="plain"
+                    size="small"
+                  >
                     {{ paymentRecordStatusLabel(row.paymentStatusCode) }}
                   </el-tag>
                 </template>
@@ -127,14 +145,18 @@
               </el-table-column>
               <el-table-column label="凭证" width="90" align="center">
                 <template #default="{ row }">
-                  <span v-if="row.attachments && row.attachments.length">共 {{ row.attachments.length }} 张</span>
+                  <span v-if="row.attachments && row.attachments.length"
+                    >共 {{ row.attachments.length }} 张</span
+                  >
                   <span v-else>-</span>
                 </template>
               </el-table-column>
               <el-table-column label="财务确认" min-width="150">
                 <template #default="{ row }">
                   {{ paymentConfirmationLabel(row.paymentStatusCode) }}
-                  <span v-if="row.paymentStatusCode === 'CHECKED' && row.checkedBy"> · {{ row.checkedBy }} · {{ displayDateTime(row.checkedAt) }}</span>
+                  <span v-if="row.paymentStatusCode === 'CHECKED' && row.checkedBy">
+                    · {{ row.checkedBy }} · {{ displayDateTime(row.checkedAt) }}</span
+                  >
                 </template>
               </el-table-column>
             </el-table>
@@ -144,23 +166,66 @@
             <OrderInvoicePanel v-if="detail" :order-no="detail.orderNo" />
           </el-tab-pane>
 
+          <el-tab-pane v-if="can('order:logistics-cost:read')" label="物流发货" name="logistics">
+            <SalesLogisticsPanel
+              v-if="activeTab === 'logistics'"
+              :order-id="detail.id"
+              @changed="emit('logistics-changed')"
+            />
+          </el-tab-pane>
           <el-tab-pane label="来源与审计" name="audit">
             <el-descriptions :column="2" border size="small">
               <el-descriptions-item label="来源系统">
                 {{ sourceSystemLabel(detail.sourceSystemCode) }}
               </el-descriptions-item>
-              <el-descriptions-item label="来源单号">{{ detail.sourceOrderNo || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="创建人">{{ detail.sourceCreatorName || detail.createdBy || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="下单时间">{{ displayDateTime(detail.orderDate) }}</el-descriptions-item>
-              <el-descriptions-item label="修改人">{{ detail.updatedBy || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="修改时间">{{ displayDateTime(detail.updatedTime) }}</el-descriptions-item>
+              <el-descriptions-item label="来源单号">{{
+                detail.sourceOrderNo || '-'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="创建人">{{
+                detail.sourceCreatorName || detail.createdBy || '-'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="下单时间">{{
+                displayDateTime(detail.orderDate)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="修改人">{{
+                detail.updatedBy || '-'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="修改时间">{{
+                displayDateTime(detail.updatedTime)
+              }}</el-descriptions-item>
             </el-descriptions>
-            <el-alert v-if="lifecycleError" :title="lifecycleError" type="warning" :closable="false" />
-            <el-table v-if="lifecycleEvents.length" :data="lifecycleEvents" size="small" style="margin-top: 16px">
-              <el-table-column label="状态" width="90"><template #default="{ row }">{{ orderStatusLabel(row.status) }}</template></el-table-column>
-              <el-table-column label="来源操作人" width="120"><template #default="{ row }">{{ row.operatorName || '来源未提供' }}</template></el-table-column>
-              <el-table-column label="来源操作时间" width="175"><template #default="{ row }">{{ row.operatedAt ? displayDateTime(row.operatedAt) : '来源未提供' }}</template></el-table-column>
-              <el-table-column label="系统发现时间" width="175"><template #default="{ row }">{{ displayDateTime(row.detectedAt) }}</template></el-table-column>
+            <el-alert
+              v-if="lifecycleError"
+              :title="lifecycleError"
+              type="warning"
+              :closable="false"
+            />
+            <el-table
+              v-if="lifecycleEvents.length"
+              :data="lifecycleEvents"
+              size="small"
+              style="margin-top: 16px"
+            >
+              <el-table-column label="状态" width="90"
+                ><template #default="{ row }">{{
+                  orderStatusLabel(row.status)
+                }}</template></el-table-column
+              >
+              <el-table-column label="来源操作人" width="120"
+                ><template #default="{ row }">{{
+                  row.operatorName || '来源未提供'
+                }}</template></el-table-column
+              >
+              <el-table-column label="来源操作时间" width="175"
+                ><template #default="{ row }">{{
+                  row.operatedAt ? displayDateTime(row.operatedAt) : '来源未提供'
+                }}</template></el-table-column
+              >
+              <el-table-column label="系统发现时间" width="175"
+                ><template #default="{ row }">{{
+                  displayDateTime(row.detectedAt)
+                }}</template></el-table-column
+              >
               <el-table-column prop="reason" label="核对依据" min-width="220" />
             </el-table>
           </el-tab-pane>
@@ -175,7 +240,9 @@
 <script setup lang="ts">
 import { onMounted as onPaymentMounted } from 'vue'
 import { loadOrderDictionaries, paymentConfirmationLabel } from '@/utils/order-register-status'
-onPaymentMounted(() => { void loadOrderDictionaries() })
+onPaymentMounted(() => {
+  void loadOrderDictionaries()
+})
 import { ref, watch } from 'vue'
 import { displayDateTime } from '@/utils/business-date'
 import {
@@ -191,6 +258,8 @@ import { orderLifecycleEvents, type SourceLifecycleEvent } from '@/api/core/orde
 import { getSalesOrder, type SalesOrderDetail } from '@/api/core/order-sales'
 import { getOrderRegisterPayments, type OrderRegisterPaymentItem } from '@/api/core/order-register'
 import PaymentDetailDrawer from './PaymentDetailDrawer.vue'
+import SalesLogisticsPanel from './SalesLogisticsPanel.vue'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import OrderInvoicePanel from './OrderInvoicePanel.vue'
 
 const props = defineProps<{
@@ -199,7 +268,8 @@ const props = defineProps<{
   /** 打开时默认展示的页签；列表操作列的“发票”入口直接定位到发票页签。 */
   initialTab?: string
 }>()
-const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: boolean]; 'logistics-changed': [] }>()
+const { can } = useSupplyPermissions()
 
 const loading = ref(false)
 const loadError = ref('')
@@ -242,8 +312,11 @@ watch(
     try {
       const order = await getSalesOrder(orderId)
       detail.value = order
-      try { lifecycleEvents.value = await orderLifecycleEvents(orderId) }
-      catch { lifecycleError.value = '状态留痕加载失败，请稍后重试' }
+      try {
+        lifecycleEvents.value = await orderLifecycleEvents(orderId)
+      } catch {
+        lifecycleError.value = '状态留痕加载失败，请稍后重试'
+      }
       paymentsLoading.value = true
       try {
         const page = await getOrderRegisterPayments({

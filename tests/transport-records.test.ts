@@ -3,6 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import View from '@/views/supply-chain/cost/LogisticsTransportRecordsView.vue'
 import Bill from '@/views/supply-chain/cost/TransportPlatformBill.vue'
+import PlatformDetails from '@/views/supply-chain/cost/TransportPlatformDetails.vue'
 import type { TransportPage, PlatformTransport } from '@/api/core/transport-records'
 import type { CostRecord } from '@/api/core/cost'
 import {
@@ -153,6 +154,80 @@ async function startExport() {
   await flushPromises()
 }
 describe('统一运输记录 V2.6', () => {
+  it.each(['bill', 'evidence'] as const)(
+    '平台%s区域各司其职且只读，回单和装卸货资料没有被删除',
+    async (view) => {
+      wrapper = mount(Bill, {
+        props: {
+          recordId: 'C1',
+          platform: platform(),
+          confirmed: true,
+          confirmedAmount: 137.64,
+          view,
+        },
+        global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
+      })
+      await flushPromises()
+      if (view === 'bill') {
+        expect(wrapper.text()).toContain('账单总计')
+        expect(wrapper.text()).toContain('费用明细')
+        expect(wrapper.text()).not.toContain('运输回单')
+        expect(wrapper.text()).not.toContain('装卸货照片')
+      } else {
+        for (const label of ['平台费用凭证', '运输回单', '装卸货照片'])
+          expect(wrapper.text()).toContain(label)
+        expect(wrapper.text()).not.toContain('账单总计')
+      }
+      expect(wrapper.findAll('input')).toHaveLength(0)
+    },
+  )
+  it('平台业务资料保持实际来源，联系人、下单员工与本系统员工部门分别展示', async () => {
+    const p = platform()
+    p.source.order.facts!.mappedEmployeeCode = 'EMP1'
+    Object.assign(p.source.order.raw, {
+      下单联系人: '联系人小李',
+      下单联系电话: '01012345678',
+      支付方式: '月结账期支付',
+      发票状态: '待结清',
+      '可开票金额（元）': '142.64',
+      '规划里程（公里）': '10.5',
+      '实际行驶里程（公里）': '11.2',
+      保价状态: '生效中',
+      运输进度: '司机接单|2026-11-10 10:00,货物卸完|2026-11-10 11:00',
+    })
+    wrapper = mount(PlatformDetails, {
+      props: {
+        platform: p,
+        employees: [
+          {
+            employeeCode: 'EMP1',
+            employeeName: '本系统员工',
+            departmentId: 1,
+            departmentName: '武汉销售部',
+          },
+        ],
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    for (const text of [
+      '联系人小李',
+      '王先生',
+      '本系统员工',
+      '武汉销售部',
+      '待结清',
+      '142.64',
+      '10.5',
+      '11.2',
+      '司机接单',
+      '货物卸完',
+    ])
+      expect(wrapper.text()).toContain(text)
+    expect(wrapper.findAll('input')).toHaveLength(0)
+    await wrapper.find('button').trigger('click')
+    expect(wrapper.emitted('associate-employee')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('ep_id')
+  })
   it('列表和导出使用最新平台下单时间；缺失时不拿运输日期或本系统创建时间补位', async () => {
     const p = platform()
     p.source.latestOrder = {
@@ -442,4 +517,21 @@ describe('平台回单、票据和装卸货照片', () => {
     expect(wrapper.text()).toContain('未知（99）')
     expect(wrapper.text()).toContain('收货方未提供纸质单据')
   })
+})
+
+it('待补运费的手工单编辑不将占位分摊零元当成已录入分摊', () => {
+  const row = record()
+  row.statusCode = 'DRAFT'
+  row.data.amount = null
+  row.data.ledger!.sources = [
+    {
+      orderCode: 'SO1',
+      orderTypeCode: 'SALES_ORDER',
+      linkRoleCode: 'COST',
+      allocations: [
+        { feeKey: 'freight', receivingPointCode: 'TO0', cityCode: 'WH', basis: 1, amount: 0 },
+      ],
+    },
+  ]
+  expect(transportDraft(row, null).orderAllocations).toBeNull()
 })

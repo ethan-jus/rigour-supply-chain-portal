@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ElementPlus from 'element-plus'
 import Button from '@/components/supply/DhbPageSyncButton.vue'
 const mocks = vi.hoisted(() => ({ allowed: true, tasks: vi.fn(), sync: vi.fn() }))
+vi.mock('@/components/supply/DhbShipmentSyncIssues.vue', () => ({
+  default: { template: '<div data-testid="shipment-issues" />' },
+}))
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => mocks.allowed }),
 }))
@@ -28,6 +31,51 @@ beforeEach(() => {
   mocks.tasks.mockResolvedValue([{ connectorId: 'connector-1' }])
 })
 describe('逐页手动同步', () => {
+  it('打开即可处理已有发货问题，无需先执行整批同步', async () => {
+    const w = mount(Button, {
+      props: { scope: 'SHIPMENT', label: '发货' },
+      global: { plugins: [ElementPlus] },
+    })
+    await w.get('button').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="shipment-issues"]').exists()).toBe(true)
+    expect(mocks.sync).not.toHaveBeenCalled()
+    w.unmount()
+  })
+  it('发货部分完成保留缺失原因，但不向业务展示内部对象码和游标术语', async () => {
+    mocks.sync.mockResolvedValue({
+      status: 'PARTIAL',
+      tenants: [
+        {
+          steps: [
+            {
+              objectType: 'SHIPMENT',
+              status: 'PARTIAL',
+              fetched: 349,
+              changed: 0,
+              rejected: 349,
+              message:
+                '105张销售发货的物流已留存；缺少原单、仓库或商品映射的记录仍需处理，checkpoint 未推进',
+            },
+          ],
+        },
+      ],
+    })
+    const w = mount(Button, {
+      props: { scope: 'SHIPMENT', label: '发货' },
+      global: { plugins: [ElementPlus] },
+    })
+    await w.get('button').trigger('click')
+    await flushPromises()
+    await (w.vm as unknown as { run: () => Promise<void> }).run()
+    await flushPromises()
+    expect(w.text()).toContain('同步未全部完成')
+    expect(w.text()).toContain('105张销售发货的物流已留存')
+    expect(w.text()).toContain('补齐资料后可重试未完成单据')
+    expect(w.text()).not.toContain('checkpoint')
+    expect(w.text()).not.toContain('SHIPMENT')
+    w.unmount()
+  })
   it.each(['SUPPLIER', 'PURCHASE_ORDER', 'WAREHOUSE'] as const)(
     '%s明确核对全部来源，不发送无效日期窗口',
     async (scope) => {

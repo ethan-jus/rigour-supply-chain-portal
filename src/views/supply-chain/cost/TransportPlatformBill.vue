@@ -1,121 +1,129 @@
 <template>
   <section class="platform-bill">
-    <h4>平台账单 <el-tag type="info" size="small">只读</el-tag></h4>
-    <el-alert
-      v-if="changed"
-      type="warning"
-      :closable="false"
-      :title="`平台账单已更新，已确认成本仍为 ¥${money(confirmedAmount)}，请核对后处理。`"
-    />
-    <div class="bill-totals">
-      <div v-for="metric in metrics" :key="metric.label">
-        <span>{{ metric.label }}</span
-        ><strong>{{ money(metric.value) }}</strong>
+    <template v-if="view !== 'evidence'">
+      <h4>平台账单 <el-tag type="info" size="small">只读</el-tag></h4>
+      <el-alert
+        v-if="changed"
+        type="warning"
+        :closable="false"
+        :title="`平台账单已更新，已确认成本仍为 ¥${money(confirmedAmount)}，请核对后处理。`"
+      />
+      <div class="bill-totals">
+        <div v-for="metric in metrics" :key="metric.label">
+          <span>{{ metric.label }}</span
+          ><strong>{{ money(metric.value) }}</strong>
+        </div>
       </div>
-    </div>
-    <dl class="bill-meta">
-      <div>
-        <dt>付款状态</dt>
-        <dd>{{ platformPaymentStatus(source) }}</dd>
-      </div>
-      <div>
-        <dt>赠金抵扣（元）</dt>
-        <dd>{{ money(facts?.bonusAmount) }}</dd>
-      </div>
-      <div>
-        <dt>账单更新时间</dt>
-        <dd>{{ dateTime(facts?.billUpdatedTime) }}</dd>
-      </div>
-      <div>
-        <dt>最近同步时间</dt>
-        <dd>{{ dateTime(platform.source.lastSyncedAt) }}</dd>
-      </div>
-    </dl>
-    <h4>费用明细</h4>
-    <el-table :data="facts?.fees || []" border empty-text="暂无平台费用明细">
-      <el-table-column prop="name" label="费用项目" min-width="200" />
-      <el-table-column label="金额（元）" width="160" align="right"
-        ><template #default="{ row }">{{ money(row.amount) }}</template></el-table-column
+      <dl class="bill-meta">
+        <div>
+          <dt>优惠金额（元）</dt>
+          <dd>{{ money(facts?.couponAmount) }}</dd>
+        </div>
+        <div>
+          <dt>付款状态</dt>
+          <dd>{{ platformPaymentStatus(source) }}</dd>
+        </div>
+        <div>
+          <dt>赠金抵扣（元）</dt>
+          <dd>{{ money(facts?.bonusAmount) }}</dd>
+        </div>
+        <div>
+          <dt>账单更新时间</dt>
+          <dd>{{ dateTime(facts?.billUpdatedTime) }}</dd>
+        </div>
+        <div>
+          <dt>最近同步时间</dt>
+          <dd>{{ dateTime(platform.source.lastSyncedAt) }}</dd>
+        </div>
+      </dl>
+      <h4>费用明细</h4>
+      <el-table :data="facts?.fees || []" border empty-text="暂无平台费用明细">
+        <el-table-column prop="name" label="费用项目" min-width="200" />
+        <el-table-column label="金额（元）" width="160" align="right"
+          ><template #default="{ row }">{{ money(row.amount) }}</template></el-table-column
+        >
+        <el-table-column label="凭证" min-width="180"
+          ><template #default="{ row }"
+            ><template v-if="row.vouchers?.length"
+              ><el-button
+                v-for="v in row.vouchers"
+                :key="v.id"
+                link
+                type="primary"
+                :disabled="v.state !== 'READY'"
+                @click="open(v)"
+                >{{
+                  v.state === 'READY' ? v.name : v.state === 'FAILED' ? '获取失败' : '待获取'
+                }}</el-button
+              ></template
+            ><span v-else>-</span></template
+          ></el-table-column
+        >
+      </el-table>
+      <el-collapse v-if="platform.billHistory.length" class="history"
+        ><el-collapse-item title="账单变更记录" name="history"
+          ><el-table :data="platform.billHistory" border
+            ><el-table-column label="账单更新时间" min-width="190"
+              ><template #default="{ row }">{{
+                dateTime(row.facts?.billUpdatedTime)
+              }}</template></el-table-column
+            ><el-table-column label="账单总计（元）" align="right"
+              ><template #default="{ row }">{{
+                money(row.facts?.billAmount)
+              }}</template></el-table-column
+            ><el-table-column label="费用明细" min-width="300"
+              ><template #default="{ row }">{{ historyFees(row) }}</template></el-table-column
+            ></el-table
+          ></el-collapse-item
+        ></el-collapse
       >
-      <el-table-column label="凭证" min-width="180"
-        ><template #default="{ row }"
-          ><template v-if="row.vouchers?.length"
-            ><el-button
-              v-for="v in row.vouchers"
-              :key="v.id"
-              link
-              type="primary"
-              :disabled="v.state !== 'READY'"
-              @click="open(v)"
-              >{{
-                v.state === 'READY' ? v.name : v.state === 'FAILED' ? '获取失败' : '待获取'
-              }}</el-button
-            ></template
-          ><span v-else>-</span></template
-        ></el-table-column
-      >
-    </el-table>
-    <h4>账单凭证</h4>
-    <VoucherTable :vouchers="billFiles" @open="open" @download="download" />
-    <el-collapse v-if="platform.billHistory.length" class="history"
-      ><el-collapse-item title="账单变更记录" name="history"
-        ><el-table :data="platform.billHistory" border
-          ><el-table-column label="账单更新时间" min-width="190"
-            ><template #default="{ row }">{{
-              dateTime(row.facts?.billUpdatedTime)
-            }}</template></el-table-column
-          ><el-table-column label="账单总计（元）" align="right"
-            ><template #default="{ row }">{{
-              money(row.facts?.billAmount)
-            }}</template></el-table-column
-          ><el-table-column label="费用明细" min-width="300"
-            ><template #default="{ row }">{{ historyFees(row) }}</template></el-table-column
-          ></el-table
-        ></el-collapse-item
-      ></el-collapse
-    >
-    <h4>运输回单</h4>
-    <dl v-if="facts?.receiptInfo" class="receipt-meta">
-      <div>
-        <dt>回单类型</dt>
-        <dd>{{ receiptLabel('type') }}</dd>
-      </div>
-      <div>
-        <dt>回单状态</dt>
-        <dd>{{ receiptLabel('status') }}</dd>
-      </div>
-      <div>
-        <dt>送回方式</dt>
-        <dd>{{ receiptLabel('backType') }}</dd>
-      </div>
-      <div>
-        <dt>回单寄回快递单号</dt>
-        <dd>{{ facts.receiptInfo.expressNo || '-' }}</dd>
-      </div>
-      <div>
-        <dt>回单备注</dt>
-        <dd>{{ facts.receiptInfo.remark || '-' }}</dd>
-      </div>
-      <div v-if="facts.receiptInfo.unableToReturn === 1">
-        <dt>无法送回原因</dt>
-        <dd>{{ facts.receiptInfo.unableReason || '-' }}</dd>
-      </div>
-    </dl>
-    <VoucherTable
-      :vouchers="receiptFiles"
-      group-label="资料类型"
-      empty-text="暂无拍照回单"
-      @open="open"
-      @download="download"
-    />
-    <h4>装卸货照片</h4>
-    <VoucherTable
-      :vouchers="goodsFiles"
-      group-label="发收货点"
-      empty-text="暂无装卸货照片"
-      @open="open"
-      @download="download"
-    />
+    </template>
+    <template v-if="view !== 'bill'">
+      <h4>平台费用凭证 <el-tag type="info" size="small">只读</el-tag></h4>
+      <VoucherTable :vouchers="billFiles" @open="open" @download="download" />
+      <h4>运输回单</h4>
+      <dl v-if="facts?.receiptInfo" class="receipt-meta">
+        <div>
+          <dt>回单类型</dt>
+          <dd>{{ receiptLabel('type') }}</dd>
+        </div>
+        <div>
+          <dt>回单状态</dt>
+          <dd>{{ receiptLabel('status') }}</dd>
+        </div>
+        <div>
+          <dt>送回方式</dt>
+          <dd>{{ receiptLabel('backType') }}</dd>
+        </div>
+        <div>
+          <dt>回单寄回快递单号</dt>
+          <dd>{{ facts.receiptInfo.expressNo || '-' }}</dd>
+        </div>
+        <div>
+          <dt>回单备注</dt>
+          <dd>{{ facts.receiptInfo.remark || '-' }}</dd>
+        </div>
+        <div v-if="facts.receiptInfo.unableToReturn === 1">
+          <dt>无法送回原因</dt>
+          <dd>{{ facts.receiptInfo.unableReason || '-' }}</dd>
+        </div>
+      </dl>
+      <VoucherTable
+        :vouchers="receiptFiles"
+        group-label="资料类型"
+        empty-text="暂无拍照回单"
+        @open="open"
+        @download="download"
+      />
+      <h4>装卸货照片</h4>
+      <VoucherTable
+        :vouchers="goodsFiles"
+        group-label="发收货点"
+        empty-text="暂无装卸货照片"
+        @open="open"
+        @download="download"
+      />
+    </template>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <CostFilePreview v-model="preview" :name="fileName" :type="fileType" :url="url" />
   </section>
@@ -130,12 +138,16 @@ import { money } from './transport-records'
 import CostFilePreview from './CostFilePreview.vue'
 import { errorMessage } from '@/api/core/error'
 import { displayRecordDateTime } from '@/utils/business-display'
-const props = defineProps<{
-  recordId: string
-  platform: PlatformTransport
-  confirmedAmount?: number | null
-  confirmed: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    recordId: string
+    platform: PlatformTransport
+    confirmedAmount?: number | null
+    confirmed: boolean
+    view?: 'all' | 'bill' | 'evidence'
+  }>(),
+  { view: 'all' },
+)
 const source = computed(() => currentSource(props.platform.source))
 const facts = computed(() => source.value.facts)
 const changed = computed(() => props.confirmed && props.platform.source.sourceDifference)
