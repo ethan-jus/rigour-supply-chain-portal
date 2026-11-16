@@ -165,6 +165,45 @@ async function display(mode: 'list' | 'map') {
   await flushPromises()
 }
 describe('门店列表、详情和地图的真实组件交互', () => {
+  it('街道地图批量添加图钉，平移复用未变化标记，只替换变化门店', async () => {
+    const layer = { add: vi.fn(), remove: vi.fn(), clear: vi.fn() }
+    const labels: { on: ReturnType<typeof vi.fn> }[] = []
+    const batchSdk: StoreMapSdk = {
+      ...sdk,
+      LabelsLayer: class { constructor() { return layer } } as unknown as StoreMapSdk['LabelsLayer'],
+      LabelMarker: class {
+        on = vi.fn()
+        constructor() { labels.push(this) }
+      },
+    }
+    vi.mocked(loadStoreMapSdk).mockResolvedValue(batchSdk)
+    const rows = [sampleStore, { ...sampleStore, id: 'second' }]
+    vi.mocked(crmStoreApi.map).mockResolvedValue(mapResult(rows))
+    wrapper = mount(CrmStoreMap, {
+      props: { query: { view: 'PUBLIC', size: 20 }, focusRow: null },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    expect(labels).toHaveLength(2)
+    expect(layer.add).toHaveBeenCalledTimes(1)
+    expect(layer.add.mock.calls[0][0]).toHaveLength(2)
+    const move = map.on.mock.calls.find(([event]) => event === 'moveend')![1] as () => void
+    vi.useFakeTimers()
+    move()
+    await vi.advanceTimersByTimeAsync(310)
+    await flushPromises()
+    expect(labels).toHaveLength(2)
+    expect(layer.add).toHaveBeenCalledTimes(1)
+    expect(layer.remove).not.toHaveBeenCalled()
+    vi.mocked(crmStoreApi.map).mockResolvedValue(mapResult([rows[0], { ...rows[1], poolType: 'PRIVATE' }]))
+    move()
+    await vi.advanceTimersByTimeAsync(310)
+    await flushPromises()
+    expect(labels).toHaveLength(3)
+    expect(layer.remove).toHaveBeenCalledExactlyOnceWith([labels[1]])
+    expect(layer.add).toHaveBeenLastCalledWith([labels[2]])
+    expect(map.clearMap).not.toHaveBeenCalled()
+  })
   it.each(['public', 'library', 'mine', 'cooperated', 'leads'])(
     '新增入口仅公海和商家库显示：%s',
     async (page) => {
@@ -921,7 +960,9 @@ describe('门店列表、详情和地图的真实组件交互', () => {
       sampleStore.latitude,
     ])
     expect(page.get('.map-store-name').text()).toBe(sampleStore.name)
-    expect(map.add.mock.lastCall?.[0]).toHaveLength(3)
+    const active = new Set(map.add.mock.calls.flatMap(([items]) => items))
+    map.remove.mock.calls.flatMap(([items]) => items).forEach(marker => active.delete(marker))
+    expect([...active].filter(marker => marker instanceof sdk.Marker)).toHaveLength(3)
     expect(page.text()).toContain('170,099')
     expect(page.find('.el-pagination').exists()).toBe(false)
     expect(page.text()).toContain('1 家位置待完善')
@@ -940,6 +981,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     expect(crmStoreApi.map).toHaveBeenCalledWith(
       expect.objectContaining({ view: 'PUBLIC', cursor: undefined }),
       expect.any(AbortSignal),
+      false,
     )
     ;(markerOptions[0].content as HTMLButtonElement).click()
     await flushPromises()
@@ -1011,6 +1053,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     expect(crmStoreApi.map).toHaveBeenLastCalledWith(
       expect.objectContaining({ cursor: undefined }),
       expect.any(AbortSignal),
+      false,
     )
     button.click()
     expect(map.setZoomAndCenter).toHaveBeenLastCalledWith(6, [
@@ -1030,6 +1073,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     expect(crmStoreApi.map).toHaveBeenLastCalledWith(
       expect.objectContaining({ storeType: 'POI_L1_08' }),
       expect.any(AbortSignal),
+      false,
     )
     await page.get('input[aria-label="门店名称或地址"]').setValue('未提交')
     vi.useFakeTimers()
@@ -1051,6 +1095,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
         north: 31,
       }),
       expect.any(AbortSignal),
+      false,
     )
     vi.useRealTimers()
   })
@@ -1238,7 +1283,7 @@ describe('地图坐标系', () => {
     vi.mocked(sdk.convertFrom).mockImplementation((_points, _type, callback) =>
       callback('error', {}),
     )
-    const result = await storeMapPositions(sdk, [{ ...sampleStore, coordinateSystem: 'WGS84' }])
+    const result = await storeMapPositions(sdk, [{ ...sampleStore, longitude: 121.159, coordinateSystem: 'WGS84' }])
     expect(result.positions.size).toBe(0)
     expect(result.conversionFailed).toBe(true)
   })

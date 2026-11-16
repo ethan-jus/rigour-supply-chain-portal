@@ -109,3 +109,36 @@ it('密集区域标签错开且保留全部区域，孤立标签不移动', asyn
     }),
   )
 })
+
+it('相同GPS位置复用转换结果，坐标变化重新转换且不改原始坐标', async () => {
+  vi.resetModules()
+  const { storeMapPositions } = await import('@/utils/crm-store-map')
+  const convertFrom = vi.fn((points, _type, callback) => callback('complete', {
+    locations: points.map(([lng, lat]: number[]) => ({ getLng: () => lng + .005, getLat: () => lat + .002 })),
+  }))
+  const sdk = { convertFrom } as unknown as StoreMapSdk
+  const row = { id: '1', name: '门店', longitude: 120, latitude: 30, coordinateSystem: 'WGS84' }
+  const a = await storeMapPositions(sdk, [row])
+  const b = await storeMapPositions(sdk, [{ ...row, id: '2' }])
+  expect(a.positions.get('1')).toEqual(b.positions.get('2'))
+  expect(convertFrom).toHaveBeenCalledTimes(1)
+  await storeMapPositions(sdk, [{ ...row, longitude: 121 }])
+  expect(convertFrom).toHaveBeenCalledTimes(2)
+  expect(row.longitude).toBe(120)
+})
+
+it('异常转换坐标不写入缓存，后续查询可以重新转换', async () => {
+  vi.resetModules()
+  const { storeMapPositions } = await import('@/utils/crm-store-map')
+  const convertFrom = vi.fn((_points, _type, callback) => callback('complete', {
+    locations: [{ getLng: () => NaN, getLat: () => 30 }],
+  }))
+  const sdk = { convertFrom } as unknown as StoreMapSdk
+  const row = { id: '1', name: '门店', longitude: 120, latitude: 30, coordinateSystem: 'WGS84' }
+  expect((await storeMapPositions(sdk, [row])).conversionFailed).toBe(true)
+  convertFrom.mockImplementation((_points, _type, callback) => callback('complete', {
+    locations: [{ getLng: () => 120.005, getLat: () => 30.002 }],
+  }))
+  expect((await storeMapPositions(sdk, [row])).positions.get('1')).toEqual([120.005, 30.002])
+  expect(convertFrom).toHaveBeenCalledTimes(2)
+})

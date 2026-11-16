@@ -6,7 +6,8 @@
       </div>
     </header>
 
-    <SalesDashboard v-if="pageKey === 'dashboard'" />
+    <SalesVisitPolicy v-if="pageKey === 'policies-visit'" />
+    <SalesFieldwork v-else-if="pageKey === 'dashboard' || pageKey === 'attendance-today'" />
     <SalesVisitPlans v-else-if="pageKey === 'visit-plans'" />
     <SalesReviewQueue v-else-if="isReviewPage" />
     <SalesTrackComparison v-else-if="isTrackPage" />
@@ -21,7 +22,8 @@ import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { SALES_PAGES } from './catalog'
-import SalesDashboard from './SalesDashboard.vue'
+import SalesVisitPolicy from './SalesVisitPolicy.vue'
+import SalesFieldwork from './SalesFieldwork.vue'
 import SalesVisitPlans from './SalesVisitPlans.vue'
 import SalesReviewQueue from './SalesReviewQueue.vue'
 import SalesTrackComparison from './SalesTrackComparison.vue'

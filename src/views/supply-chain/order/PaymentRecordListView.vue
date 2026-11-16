@@ -277,14 +277,15 @@
           height="100%"
           v-loading="loading"
           :data="pageData.items"
-          row-key="id"
+          :row-key="paymentRowKey"
           :default-sort="{ prop: 'paymentTime', order: 'descending' }"
           @sort-change="changeSort"
         >
           <el-table-column type="expand" width="36" fixed="left">
             <template #default="{ row }">
               <div class="allocation-detail">
-                <p>商品分摊明细 · 按整单订货金额比例计算，分币尾差已计入。</p>
+                <p v-if="!row.id">已作废来源单，未入账，不计入统计。</p>
+                <p v-else>商品分摊明细 · 按整单订货金额比例计算，分币尾差已计入。</p>
                 <el-table v-if="row.productAllocations?.length" :data="row.productAllocations" size="small">
                   <el-table-column prop="productCode" label="商品编码" width="170" />
                   <el-table-column prop="productName" label="商品" min-width="220" />
@@ -308,7 +309,7 @@
           <el-table-column type="index" label="序号" width="52" fixed="left" :index="tableRowIndex" />
           <el-table-column label="订单号" width="160" fixed="left">
             <template #default="{ row }">
-              <el-link type="primary" underline="never" :disabled="!canReadOrders" @click.stop="openDetail(row)">
+              <el-link type="primary" underline="never" :disabled="!canReadOrders || !row.orderId" @click.stop="openDetail(row)">
                 <span class="order-no-cell">{{ row.orderNo || '-' }}</span>
               </el-link>
             </template>
@@ -363,7 +364,7 @@
             <template #default="{ row }">{{ displayDateTime(row.paymentTime) }}</template>
           </el-table-column>
           <el-table-column v-if="paymentColumns.isVisible('voucherPaidTime')" label="凭证付款时间" width="180">
-            <template #default="{ row }"><div v-for="time in auditStates[row.id]?.voucherTimes || []" :key="time.paidTime">{{ voucherTimeText(time.paidTime, time.precision) }}</div><span v-if="!auditStates[row.id]?.voucherTimes?.length">未识别</span></template>
+            <template #default="{ row }"><div v-for="time in auditStates[row.id || '']?.voucherTimes || []" :key="time.paidTime">{{ voucherTimeText(time.paidTime, time.precision) }}</div><span v-if="!auditStates[row.id || '']?.voucherTimes?.length">未识别</span></template>
           </el-table-column>
           <el-table-column
             v-if="paymentColumns.isVisible('transactionNo')"
@@ -387,8 +388,8 @@
           </el-table-column>
           <el-table-column label="凭证核查状态" width="125">
             <template #default="{ row }">
-              <el-tooltip v-if="auditStates[row.id]" :content="auditStates[row.id].reasonCodes.map(auditReasonLabel).join('；')" :disabled="!auditStates[row.id].reasonCodes.length">
-                <el-tag :type="auditStates[row.id].statusCode === 'NORMAL' ? 'success' : auditStates[row.id].statusCode === 'ABNORMAL' ? 'danger' : 'warning'">{{ auditStatusLabel(auditStates[row.id].statusCode) }}</el-tag>
+              <el-tooltip v-if="auditStates[row.id || '']" :content="auditStates[row.id || ''].reasonCodes.map(auditReasonLabel).join('；')" :disabled="!auditStates[row.id || ''].reasonCodes.length">
+                <el-tag :type="auditStates[row.id || ''].statusCode === 'NORMAL' ? 'success' : auditStates[row.id || ''].statusCode === 'ABNORMAL' ? 'danger' : 'warning'">{{ auditStatusLabel(auditStates[row.id || ''].statusCode) }}</el-tag>
               </el-tooltip>
               <span v-else>{{ auditLoadFailed ? '加载失败' : '—' }}</span>
             </template>
@@ -599,7 +600,7 @@ const {
   searchEmployees,
   areaLabel,
   employeeLabel,
-} = usePaymentFilterOptions()
+} = usePaymentFilterOptions({ salesDepartmentsOnly: true })
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
   categoryIds: [] as string[],
@@ -732,7 +733,7 @@ async function loadPayments() {
     allocationActive.value = query.productIds != null
     auditStates.value = {}
     auditLoadFailed.value = false
-    void getPaymentAuditStates(data.items.map(row => String(row.id))).then(states => {
+    void getPaymentAuditStates(data.items.flatMap(row => row.id ? [row.id] : [])).then(states => {
       if (request === paymentRequest) auditStates.value = states
     }).catch(() => { if (request === paymentRequest) auditLoadFailed.value = true })
   } catch (reason) {
@@ -787,8 +788,12 @@ function changeSort({ prop, order }: { prop: string | null; order: string | null
   search()
 }
 
-function openDetail(row: { orderId?: string }) {
-  if (!canReadOrders.value) return
+function paymentRowKey(row: OrderRegisterPaymentItem) {
+  return row.id || `source:${row.sourceRecordId}`
+}
+
+function openDetail(row: { orderId?: string | null }) {
+  if (!canReadOrders.value || !row.orderId) return
   detailOrderId.value = row.orderId ?? null
   detailVisible.value = true
 }

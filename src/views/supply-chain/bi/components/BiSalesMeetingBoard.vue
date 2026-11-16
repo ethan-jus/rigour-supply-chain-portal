@@ -2,7 +2,7 @@
   <div ref="root" class="sales-dashboard" :class="{ embedded }">
     <header class="sales-dashboard-header">
       <div>
-        <h1>供应链数字化平台 <span>销售业绩</span></h1>
+        <h1>销售业绩</h1>
         <p>
           {{ period.from }} — {{ period.to }} · {{ comparison
           }}{{ dataCutoff ? ` · 数据截至 ${dataCutoff}` : '' }}
@@ -50,7 +50,10 @@
     </div>
     <template v-else-if="!selectedCode">
       <div class="sales-team-heading">
-        <h2>销售业绩对比</h2>
+        <div class="sales-team-title">
+          <h2>销售业绩对比</h2>
+          <span v-if="search.trim()">当前筛选 · {{ rows.length }} 位销售</span>
+        </div>
         <div class="sales-controls">
           <select :value="regionCode" aria-label="城市" @change="emit('city', value($event))">
             <option value="">全部授权城市</option>
@@ -67,6 +70,12 @@
       </div>
       <div v-if="loading" class="sales-state" role="status">正在读取真实经营数据…</div>
       <template v-else>
+        <p v-if="summaryError && search.trim()" class="sales-summary-state error" role="alert">
+          {{ summaryError }}
+        </p>
+        <p v-else-if="summaryLoading && search.trim()" class="sales-summary-state" role="status">
+          正在汇总筛选结果…
+        </p>
         <div class="sales-kpis">
           <article>
             <h3>本期交易额</h3>
@@ -629,9 +638,7 @@
       </template>
     </template>
     <footer class="sales-dashboard-footer">
-      <span>{{
-        active?.notice || '交易按订单销售归属；到账优先回款经办人，缺失时按客户当前归属业务员。'
-      }}</span
+      <span>{{ active?.notice || '交易按订单业务员归属；到账按回款记录中的回款人归属。' }}</span
       ><button class="sales-link" @click="showDefinitions = !showDefinitions">
         {{ showDefinitions ? '收起' : '查看' }}统计口径
       </button>
@@ -657,6 +664,7 @@ import {
   salesProductTotals,
   type SalesDashboardSnapshot,
 } from '../sales-dashboard-model'
+import type { SalesDashboardSummary } from '@/api/core/bi-sales-dashboard'
 import type { SalesPeriod } from '../sales-meeting-model'
 const props = withDefaults(
   defineProps<{
@@ -675,10 +683,17 @@ const props = withDefaults(
     detailLoading?: boolean
     error?: string
     detailError?: string
+    filteredSummary?: {
+      current: SalesDashboardSummary
+      previous: SalesDashboardSummary | null
+    } | null
+    summaryLoading?: boolean
+    summaryError?: string
   }>(),
   { error: '', detailError: '' },
 )
 const emit = defineEmits<{
+  filter: [string[] | null]
   day: [string]
   period: [SalesPeriod, boolean?]
   city: [string]
@@ -721,7 +736,21 @@ const comparison = computed(() =>
   props.dayMode ? '前一天' : annual.value ? '上年同期' : '上月同期',
 )
 const active = computed(() => (props.selectedCode ? props.detail : props.snapshot))
-const customers = computed(() => salesCustomerStats(active.value, annual.value))
+const filtering = computed(() => !props.selectedCode && !!search.value.trim())
+const customers = computed(() => {
+  if (!filtering.value) return salesCustomerStats(active.value, annual.value)
+  const s =
+    meetingMetric(active.value?.current, 'cooperated_customer_count') != null
+      ? props.filteredSummary?.current
+      : null
+  const returning = s ? (annual.value ? s.annualReturningCustomers : s.returningCustomers) : null
+  return {
+    customers: s?.customers ?? null,
+    returning,
+    newCustomers: s?.newCustomers ?? null,
+    rate: rate(returning, s?.customers ?? null),
+  }
+})
 const person = computed(
   () =>
     props.detail?.sales?.people.find((p) => p.code === props.selectedCode) ||
@@ -731,8 +760,20 @@ const rows = computed(() =>
   salesDashboardRows(props.snapshot, receiptRank.value, month.value, search.value),
 )
 const pageRows = computed(() => rows.value.slice(rankPage.value * 8, rankPage.value * 8 + 8))
-const metric = (code: string) => meetingMetric(active.value?.current, code)
-const previousMetric = (code: string) => meetingMetric(active.value?.previous, code)
+function scopedMetric(code: string, previous = false) {
+  const original = meetingMetric(previous ? active.value?.previous : active.value?.current, code)
+  if (!filtering.value || original == null) return original
+  const s = previous ? props.filteredSummary?.previous : props.filteredSummary?.current
+  return s
+    ? code === 'sales_amount'
+      ? s.sales
+      : code === 'receipt_amount'
+        ? s.receipts
+        : null
+    : null
+}
+const metric = (code: string) => scopedMetric(code)
+const previousMetric = (code: string) => scopedMetric(code, true)
 const personalReceipts = computed(() =>
   metric('receipt_amount') != null
     ? (props.detail?.sales?.people.find((p) => p.code === props.selectedCode)?.receipts ?? 0)
@@ -910,6 +951,10 @@ function donut(amount: number | null, received: number | null) {
     ),
   })
 }
+watch(
+  () => (search.value.trim() ? JSON.stringify(rows.value.map((p) => p.code).sort()) : null),
+  (selection) => emit('filter', selection === null ? null : JSON.parse(selection)),
+)
 watch(search, () => {
   rankPage.value = 0
 })

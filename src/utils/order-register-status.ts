@@ -34,7 +34,9 @@ export function orderStatusTag(
   const raw = value?.toUpperCase()
   if (raw === 'COMPLETED' || raw === 'PAID' || raw === 'CONFIRMED' || raw === 'CHECKED')
     return 'success'
-  if (raw === 'DRAFT' || raw === 'CANCELLED' || raw === 'DELETED' || raw === 'RETURNED') return 'info'
+  if (raw === 'DRAFT') return 'primary'
+  if (raw === 'DELETED') return 'danger'
+  if (raw === 'CANCELLED' || raw === 'RETURNED') return 'info'
   if (raw === 'SUBMITTED' || raw === 'PARTIAL_PAID') return 'warning'
   if (raw === 'UNPAID' || raw === 'PENDING') return 'danger'
   return 'primary'

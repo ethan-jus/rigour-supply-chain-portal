@@ -17,7 +17,7 @@ const page = (
 ): SalesPageDefinition => ({ title, group, description, owner, api, facts })
 
 export const SALES_PAGES: Record<string, SalesPageDefinition> = {
-  dashboard: page('销售管控台', '管理首页', '聚合团队当日外勤、拜访进度、门店覆盖、证据异常和待复核任务。', 'Sales Work', '/api/v1/sales/management/dashboard', ['不提供PC打卡', '完整经营分析跳转BI', '只展示授权DataScope']),
+  dashboard: page('外勤监督', '管理首页', '聚合团队当日外勤、拜访进度、门店覆盖、证据异常和待复核任务。', 'Sales Work', '/api/v1/sales/management/dashboard', ['不提供PC打卡', '完整经营分析跳转BI', '只展示授权DataScope']),
   'attendance-today': page('今日状态', '外勤考勤', '查看应到、已签到、工作中、已签退和异常人员。', 'Sales Work', '/api/v1/sales/management/work-days?date=today', ['H5是销售打卡入口', '服务端时间为判定依据', '定位中断不单独判旷工']),
   'attendance-punches': page('打卡明细', '外勤考勤', '查询H5签到、签退、补卡等追加式原始事件。', 'Sales Work', '/api/v1/sales/management/punch-events', ['原始事件不可覆盖', '客户端事件必须幂等', '敏感位置按能力授权']),
   'attendance-days': page('工作日结', '外勤考勤', '查看Sales Work形成并发送给HR的销售工作日结候选。', 'Sales Work', '/api/v1/sales/management/work-day-summaries', ['不是HR正式考勤', '固定引用规则版本', '调整生成新版本']),

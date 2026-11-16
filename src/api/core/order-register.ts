@@ -236,10 +236,10 @@ export interface OrderRegisterPaymentItem {
   voucherTransactionNos?: string[]
   allocatedPaymentAmount?: number | null
   productAllocations?: PaymentProductAllocation[]
-  id: string
+  id: string | null
   paymentNo: string
   sourceRecordId: string | null
-  orderId: string
+  orderId: string | null
   orderNo: string
   dhbOrderNo: string | null
   customerId: string | null

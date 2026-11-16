@@ -34,18 +34,11 @@
     margin: 0;
   }
   h1 {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 650;
   }
-  h1 span {
-    font-size: 22px;
-    font-weight: 400;
-    border-left: 1px solid #60778c;
-    margin-left: 20px;
-    padding-left: 20px;
-  }
   h2 {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 650;
   }
   h3 {
@@ -125,7 +118,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 20px;
-    padding: 26px 32px;
+    padding: 18px 24px;
     border-bottom: 1px solid var(--sales-line);
   }
   .sales-dashboard-header p {
@@ -151,7 +144,7 @@
   }
   .sales-team-heading,
   .sales-person-heading {
-    padding: 24px 32px;
+    padding: 16px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -182,12 +175,35 @@
   .sales-search input {
     border: 0;
     background: transparent;
-    min-width: 170px;
+    min-width: 0;
+    width: 160px;
+    outline: none;
+  }
+  .sales-search:focus-within {
+    border-color: #479bff;
+  }
+  .sales-team-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sales-team-title > span {
+    color: var(--sales-muted);
+    font-size: 12px;
+  }
+  .sales-summary-state {
+    margin: 0;
+    padding: 0 24px 8px;
+    color: var(--sales-muted);
+    font-size: 12px;
+  }
+  .sales-summary-state.error {
+    color: #ff9292;
   }
   .sales-kpis {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    padding: 22px 32px 28px;
+    padding: 12px 24px 20px;
     border-bottom: 1px solid var(--sales-line);
     scroll-margin-top: 60px;
   }
@@ -205,9 +221,10 @@
   }
   .sales-kpis strong {
     display: block;
-    font-size: clamp(25px, 2.75vw, 42px);
+    font-size: clamp(24px, 2.1vw, 32px);
+    font-variant-numeric: tabular-nums;
     line-height: 1.4;
-    margin: 16px 0 14px;
+    margin: 8px 0;
     letter-spacing: -0.6px;
     white-space: nowrap;
   }
@@ -223,7 +240,7 @@
   .sales-products,
   .sales-collections,
   .sales-month-detail {
-    padding: 28px 32px;
+    padding: 20px 24px;
     border-bottom: 1px solid var(--sales-line);
   }
   .sales-section-heading {
@@ -231,7 +248,7 @@
     justify-content: space-between;
     align-items: center;
     gap: 15px;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
   }
   .sales-section-heading > span {
     font-size: 12px;
@@ -267,7 +284,7 @@
     font-size: 14px;
   }
   td {
-    padding: 17px 12px;
+    padding: 12px;
     border-bottom: 1px solid var(--sales-line);
     text-align: right;
   }
@@ -479,7 +496,7 @@
     border-right: 1px solid var(--sales-line);
   }
   .sales-customer-grid h2 {
-    margin-bottom: 24px;
+    margin-bottom: 16px;
   }
   .sales-customer-stats {
     display: grid;
@@ -503,7 +520,7 @@
     scroll-margin-top: 52px;
   }
   .sales-collections h2 {
-    margin-bottom: 24px;
+    margin-bottom: 16px;
   }
   .sales-collection-grid {
     display: grid;
@@ -644,7 +661,7 @@
       padding: 32px;
     }
     .sales-kpis strong {
-      font-size: 42px;
+      font-size: 34px;
     }
   }
   @media (max-width: 1200px) {
@@ -715,11 +732,6 @@
   @media (max-width: 520px) {
     h1 {
       font-size: 19px;
-    }
-    h1 span {
-      font-size: 17px;
-      margin-left: 10px;
-      padding-left: 10px;
     }
     .sales-dashboard-header,
     .sales-team-heading,

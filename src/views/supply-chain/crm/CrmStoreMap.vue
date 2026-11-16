@@ -170,6 +170,7 @@ import {
   type StoreMapInstance,
   type StoreMapSdk,
   type StoreMarker,
+  type StoreLabelsLayer,
 } from '@/utils/crm-store-map'
 
 const props = defineProps<{
@@ -204,6 +205,20 @@ let generation = 0,
 let request: AbortController | null = null,
   timer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
+type AreaLabel = { anchor: HTMLElement; button: HTMLButtonElement; line: SVGLineElement }
+let pointLayer: StoreLabelsLayer | null = null
+const rendered = new Map<
+  string,
+  { signature: string; marker: StoreMarker; label?: AreaLabel; batch?: boolean }
+>()
+function removePoint(entry: { marker: StoreMarker; batch?: boolean }) {
+  if (entry.batch) pointLayer?.remove([entry.marker])
+  else map?.remove([entry.marker])
+}
+function clearPoints() {
+  for (const entry of rendered.values()) removePoint(entry)
+  rendered.clear()
+}
 let labelFrame = 0
 let districtLayer: StoreMarker | null = null
 let districtKey = '',
@@ -378,12 +393,55 @@ async function renderPoints() {
   ])
   if (current !== renderGeneration || disposed || !map) return
   conversionFailed.value = converted.conversionFailed
-  map.clearMap()
+  const wanted = new Set<string>()
   const overlays: StoreMarker[] = []
-  const areaLabels: { anchor: HTMLElement; button: HTMLButtonElement; line: SVGLineElement }[] = []
+  const batchMarkers: StoreMarker[] = []
+  const areaLabels: AreaLabel[] = []
   for (const point of points) {
     const position = converted.positions.get(point.id)
     if (!position || (selected && point.storeId === selected.id)) continue
+    wanted.add(point.id)
+    const signature = JSON.stringify([point, position, mapLevel.value])
+    const previous = rendered.get(point.id)
+    if (previous?.signature === signature) {
+      if (previous.label) areaLabels.push(previous.label)
+      continue
+    }
+    if (previous) removePoint(previous)
+    if (!point.areaCode && pointLayer && sdk.LabelMarker) {
+      const privatePool = point.privateCount === point.count
+      const fill = privatePool ? '#0f766e' : '#2563eb'
+      const clustered = point.count > 1
+      const svg = clustered
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44"><circle cx="22" cy="22" r="20" fill="${fill}" stroke="white" stroke-width="2"/></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40"><path d="M16 39C12 34 2 23 2 16a14 14 0 1 1 28 0c0 7-10 18-14 23Z" fill="${fill}" stroke="white"/><path d="${privatePool ? personPath : storefrontPath}" transform="translate(6 5) scale(.83)" fill="none" stroke="white" stroke-width="2"/>${point.cooperatedCount ? '<circle cx="26" cy="6" r="5" fill="#15803d" stroke="white"/>' : ''}</svg>`
+      const marker = new sdk.LabelMarker({
+        name: point.name ?? point.id,
+        position,
+        rank: clustered ? 2 : 1,
+        icon: {
+          image: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+          size: clustered ? [44, 44] : [32, 40],
+          anchor: clustered ? 'center' : 'bottom-center',
+        },
+        ...(clustered
+          ? {
+              text: {
+                content: number(point.count),
+                direction: 'center',
+                style: { fontSize: 13, fillColor: '#fff', strokeWidth: 0 },
+              },
+            }
+          : {}),
+      })
+      marker.on('click', () =>
+        clustered ? openCluster(point, position) : void selectStore(point.storeId!),
+      )
+      rendered.set(point.id, { signature, marker, batch: true })
+      batchMarkers.push(marker)
+      continue
+    }
+    let label: AreaLabel | undefined
     const button = document.createElement('button')
     let content: HTMLElement = button
     button.type = 'button'
@@ -414,7 +472,8 @@ async function renderPoints() {
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
       connector.append(line)
       anchor.append(connector, button)
-      areaLabels.push({ anchor, button, line })
+      label = { anchor, button, line }
+      areaLabels.push(label)
       content = anchor
     } else if (point.count > 1) {
       button.className = `crm-store-cluster${privatePool ? ' is-private' : ''}${point.cooperatedCount === point.count ? ' is-cooperated' : ''}`
@@ -432,37 +491,51 @@ async function renderPoints() {
       )
       button.onclick = () => void selectStore(point.storeId!)
     }
-    overlays.push(
-      new sdk.Marker({
-        position,
-        content,
-        anchor: point.areaCode || point.count > 1 ? 'center' : 'bottom-center',
-      }),
-    )
+    const marker = new sdk.Marker({
+      position,
+      content,
+      anchor: point.areaCode || point.count > 1 ? 'center' : 'bottom-center',
+    })
+    rendered.set(point.id, { signature, marker, label })
+    overlays.push(marker)
   }
   const selectedPosition = selected ? converted.positions.get(`focus:${selected.id}`) : null
   if (selected && selectedPosition) {
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.className = `crm-store-marker is-selected${selected.poolType === 'PRIVATE' ? ' is-private' : ''}`
-    button.innerHTML = markerContent(
-      selected.poolType === 'PRIVATE',
-      selected.cooperationStatus === 'COOPERATED',
-    )
-    button.title = selected.name
-    button.setAttribute('aria-label', `打开${selected.name}详情`)
-    button.setAttribute('aria-pressed', 'true')
-    button.onclick = () => void openDetail(selected)
-    overlays.push(
-      new sdk.Marker({
+    const id = `focus:${selected.id}`
+    wanted.add(id)
+    const previous = rendered.get(id)
+    const signature = JSON.stringify([selected, selectedPosition])
+    if (previous?.signature !== signature) {
+      if (previous) removePoint(previous)
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = `crm-store-marker is-selected${selected.poolType === 'PRIVATE' ? ' is-private' : ''}`
+      button.innerHTML = markerContent(
+        selected.poolType === 'PRIVATE',
+        selected.cooperationStatus === 'COOPERATED',
+      )
+      button.title = selected.name
+      button.setAttribute('aria-label', `打开${selected.name}详情`)
+      button.setAttribute('aria-pressed', 'true')
+      button.onclick = () => void openDetail(selected)
+      const marker = new sdk.Marker({
         position: selectedPosition,
         content: button,
         anchor: 'bottom-center',
         zIndex: 200,
-      }),
-    )
+      })
+      rendered.set(id, { signature, marker })
+      overlays.push(marker)
+    }
   }
-  map.add(overlays)
+  for (const [id, entry] of rendered) {
+    if (!wanted.has(id)) {
+      removePoint(entry)
+      rendered.delete(id)
+    }
+  }
+  if (overlays.length) map.add(overlays)
+  if (batchMarkers.length) pointLayer?.add(batchMarkers)
   cancelAnimationFrame(labelFrame)
   labelFrame = requestAnimationFrame(() => {
     if (current !== renderGeneration || disposed || !container.value) return
@@ -502,7 +575,7 @@ function scheduleRefresh() {
   generation++
   timer = setTimeout(() => void refresh(false), 300)
 }
-async function refresh(fit: boolean, focusRequested = false) {
+async function refresh(fit: boolean, focusRequested = false, cacheBypass = false) {
   clearTimeout(timer)
   request?.abort()
   const current = ++generation
@@ -514,7 +587,7 @@ async function refresh(fit: boolean, focusRequested = false) {
   try {
     const [loadedSdk, data] = await Promise.all([
       loadStoreMapSdk(),
-      crmStoreApi.map({ ...props.query, cursor: undefined, size: 20, ...viewport }, request.signal),
+      crmStoreApi.map({ ...props.query, cursor: undefined, size: 20, ...viewport }, request.signal, cacheBypass),
     ])
     if (current !== generation || disposed || !container.value) return
     sdk = loadedSdk
@@ -526,6 +599,10 @@ async function refresh(fit: boolean, focusRequested = false) {
         viewMode: '2D',
         resizeEnable: true,
       })
+      if (sdk.LabelsLayer && sdk.LabelMarker) {
+        pointLayer = new sdk.LabelsLayer({ zIndex: 100, collision: false, allowCollision: false })
+        map.add([pointLayer])
+      }
       map.on('moveend', scheduleRefresh)
       map.on('zoomend', scheduleRefresh)
       map.on('resize', scheduleRefresh)
@@ -546,7 +623,7 @@ async function refresh(fit: boolean, focusRequested = false) {
     }
   } catch (e) {
     if (current === generation && !disposed) {
-      map?.clearMap()
+      clearPoints()
       result.value = null
       error.value = e instanceof Error ? e.message : '地图数据加载失败，请重试'
     }
@@ -559,14 +636,14 @@ async function refresh(fit: boolean, focusRequested = false) {
 }
 function overview() {
   clearSelection()
-  void refresh(true)
+  void refresh(true, false, true)
 }
 watch(
   () => props.query,
   () => {
     result.value = null
     clearSelection()
-    map?.clearMap()
+    clearPoints()
     void refresh(true)
   },
 )
@@ -597,6 +674,8 @@ onBeforeUnmount(() => {
   map?.off('moveend', scheduleRefresh)
   map?.off('zoomend', scheduleRefresh)
   map?.off('resize', scheduleRefresh)
+  rendered.clear()
+  pointLayer = null
   map?.destroy()
 })
 </script>

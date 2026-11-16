@@ -274,8 +274,8 @@ export const crmStoreApi = {
   context: (view: StoreView) =>
     apiClient.get<StoreContext>(`${base}/context`, { ...options, params: { view } }),
   list: (params: StoreQuery) => apiClient.get<StorePage>(base, { ...options, params }),
-  map: (params: StoreQuery & Partial<StoreMapBounds> & { zoom?: number }, signal?: AbortSignal) =>
-    apiClient.get<StoreMapResult>(`${base}/map`, { ...options, params, signal }),
+  map: (params: StoreQuery & Partial<StoreMapBounds> & { zoom?: number }, signal?: AbortSignal, cacheBypass = false) =>
+    apiClient.get<StoreMapResult>(`${base}/map`, { ...options, params, signal, cacheBypass }),
   mapStores: (params: StoreQuery & StoreMapBounds & { coordinateSystem: string }) =>
     apiClient.get<StorePage>(`${base}/map/stores`, { ...options, params }),
   detail: (id: string, view: StoreView) =>

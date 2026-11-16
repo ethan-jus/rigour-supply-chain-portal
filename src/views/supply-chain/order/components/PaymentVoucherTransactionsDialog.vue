@@ -38,7 +38,7 @@ const loading = ref(false), checkVisible = ref(false), selectedTransaction = ref
 const { can } = useSupplyPermissions()
 const recognizing = ref(false)
 async function recognize() {
-  if (!props.payment) return
+  if (!props.payment?.id) return
   recognizing.value = true
   try {
     const count = await recognizePaymentVouchers(props.payment.id)
@@ -51,7 +51,7 @@ function check(value: string) { selectedTransaction.value = value; checkVisible.
 watch([() => props.modelValue, () => props.payment?.id], async ([open]) => {
   const id = ++requestId
   rows.value = []; error.value = ''; loading.value = false
-  if (!open || !props.payment) return
+  if (!open || !props.payment?.id) return
   loading.value = true
   try {
     const result = await getPaymentVoucherTransactions(props.payment.id)

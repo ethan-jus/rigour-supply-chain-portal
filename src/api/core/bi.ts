@@ -473,7 +473,7 @@ export interface SupplyDashboardOperatingAnalysis {
   }[]
 }
 
-export const getSupplyDashboardOperatingAnalysis = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback'> = {}) =>
+export const getSupplyDashboardOperatingAnalysis = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass'> = {}) =>
   apiClient.get<SupplyDashboardOperatingAnalysis>(
     '/analytics/supply/dashboard/operating-analysis',
     { params, ...options, ...feedback },
@@ -486,7 +486,7 @@ const SUPPLY_DASHBOARD_CITY_COST_IMPORT_PATH = '/analytics/supply/city-cost-reco
 const SUPPLY_DASHBOARD_FEISHU_ARCHIVES_PATH = '/analytics/supply/legacy/feishu-archives'
 const options = { stayOnUnauthorized: true }
 
-export const getSupplyDashboardOverview = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback'> = {}) =>
+export const getSupplyDashboardOverview = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass'> = {}) =>
   apiClient.get<SupplyDashboardOverview>(SUPPLY_DASHBOARD_PATH, { params, ...options, ...feedback })
 
 export const createSupplyDashboardRefreshRun = (command: SupplyDashboardRefreshCommand = {}) =>

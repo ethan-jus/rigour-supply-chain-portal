@@ -56,6 +56,17 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe('回款详情抽屉', () => {
+  it('作废来源单显示来源信息且不请求不存在的业务回款', async () => {
+    const wrapper=mount(PaymentDetailDrawer, {
+      props:{modelValue:true,payment:paymentRow({id:null,orderId:null,paymentStatusCode:'CANCELLED'})},
+      global:{plugins:[ElementPlus],stubs:{teleport:true}},
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('已作废来源单，未入账，不计入统计。')
+    expect(mocks.getSalesPayment).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
   })

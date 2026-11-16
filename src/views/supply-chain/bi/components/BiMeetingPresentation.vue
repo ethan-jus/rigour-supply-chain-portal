@@ -17,7 +17,7 @@
       @month="changeMonth"
       @year="changePeriod($event, null)"
       @period="changePeriod"
-      @refresh="load"
+      @refresh="load(true)"
       @close="emit('close')"
       @back="embedded ? emit('overview', snapshot?.query || query) : (cityMode = false)"
       @report="openCityReport" />
@@ -31,7 +31,7 @@
       :loading="loading"
       :error="error"
       @period="changePeriod"
-      @refresh="load"
+      @refresh="load(true)"
       @city="openCity" />
     <BiMeetingBoard
       v-else
@@ -44,7 +44,7 @@
       :loading="loading"
       :error="error"
       @month="changeMonth"
-      @refresh="load"
+      @refresh="load(true)"
       @close="emit('close')"
       @open-report="openReport"
       @city="openCity"
@@ -115,7 +115,7 @@ const regionCode = ref(props.query.regionCode || '')
 const loading = ref(false)
 const error = ref('')
 let sequence = 0
-async function load() {
+async function load(cacheBypass = false) {
   const request = ++sequence
   loading.value = true
   error.value = ''
@@ -149,12 +149,12 @@ async function load() {
       previousAnalysisResult,
       regionsResult,
     ] = await Promise.allSettled([
-      getSupplyDashboardOverview(query),
-      getSupplyDashboardOverview(previousQuery),
+      getSupplyDashboardOverview(query, { cacheBypass }),
+      getSupplyDashboardOverview(previousQuery, { cacheBypass }),
       access.globalGovernance ? getSupplyDashboardDataTrust() : Promise.resolve(null),
-      getSupplyDashboardOperatingAnalysis(query),
+      getSupplyDashboardOperatingAnalysis(query, { cacheBypass }),
       props.embedded && !cityMode.value
-        ? getSupplyDashboardOperatingAnalysis(previousQuery)
+        ? getSupplyDashboardOperatingAnalysis(previousQuery, { cacheBypass })
         : Promise.resolve(null),
       getSupplyDashboardFilterOptions(),
     ])
@@ -190,7 +190,7 @@ async function load() {
       const code =
         available.find((row) => row.code === regionCode.value)?.code || available[0]?.code
       if (code) {
-        await selectCity(code)
+        await selectCity(code, cacheBypass)
         return
       }
     }
@@ -225,7 +225,7 @@ async function openCity(code?: string) {
   if (selected) await selectCity(selected)
   else citySnapshot.value = snapshot.value
 }
-async function selectCity(code: string) {
+async function selectCity(code: string, cacheBypass = false) {
   if (!snapshot.value || !code) return
   if (
     code &&
@@ -249,10 +249,10 @@ async function selectCity(code: string) {
     const previousQuery = { ...snapshot.value.previousQuery, regionCode: code }
     const [current, previous, analysis, previousAnalysis, personalGoals] = await Promise.allSettled(
       [
-        getSupplyDashboardOverview(query),
-        getSupplyDashboardOverview(previousQuery),
-        getSupplyDashboardOperatingAnalysis(query),
-        getSupplyDashboardOperatingAnalysis(previousQuery),
+        getSupplyDashboardOverview(query, { cacheBypass }),
+        getSupplyDashboardOverview(previousQuery, { cacheBypass }),
+        getSupplyDashboardOperatingAnalysis(query, { cacheBypass }),
+        getSupplyDashboardOperatingAnalysis(previousQuery, { cacheBypass }),
         getSalesDashboardAnalysis(query),
       ],
     )

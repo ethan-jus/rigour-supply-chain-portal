@@ -109,7 +109,7 @@ function errorMessage(reason: unknown, fallback: string) {
 
 async function submit() {
   const current = props.payment
-  if (!current || submitting.value) return
+  if (!current?.id || submitting.value) return
   const value = transactionNo.value.trim()
   if (!value) {
     checkError.value = '请填写交易单号后再点击确认收款'

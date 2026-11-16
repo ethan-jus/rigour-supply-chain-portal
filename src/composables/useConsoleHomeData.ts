@@ -111,7 +111,7 @@ export function useConsoleHomeData(entries: Ref<ConsoleEntry[]>) {
         if (version !== generation) return
         tasks[key].count = page.total
         tasks[key].rows = page.items.map((row) => ({
-          id: row.id,
+          id: row.id ?? `source:${row.sourceRecordId}`,
           orderNo: row.orderNo,
           customer: row.customerName || '未命名客户',
           date: row.paymentTime,

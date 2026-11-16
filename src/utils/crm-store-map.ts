@@ -4,7 +4,7 @@ import { storeMapUrl } from './crm-store'
 
 export type MapPosition = [number, number]
 export interface StoreMarker {
-  setzIndex(value: number): void
+  setzIndex?(value: number): void
 }
 export interface StoreMapInstance {
   add(markers: StoreMarker[]): void
@@ -26,7 +26,17 @@ export interface StoreMapInstance {
   off(event: 'moveend' | 'zoomend' | 'resize', handler: () => void): void
   destroy(): void
 }
+export interface StoreLabelMarker extends StoreMarker {
+  on(event: 'click', handler: () => void): void
+}
+export interface StoreLabelsLayer extends StoreMarker {
+  add(markers: StoreMarker[]): void
+  remove(markers: StoreMarker[]): void
+  clear(): void
+}
 export interface StoreMapSdk {
+  LabelMarker?: new (options: Record<string, unknown>) => StoreLabelMarker
+  LabelsLayer?: new (options: Record<string, unknown>) => StoreLabelsLayer
   Map: new (container: HTMLElement, options: Record<string, unknown>) => StoreMapInstance
   Marker: new (options: Record<string, unknown>) => StoreMarker
   plugin(names: string[], callback: () => void): void
@@ -61,6 +71,10 @@ export async function loadStoreDistrictLayers(sdk: StoreMapSdk) {
   })
 }
 
+const displayPositions = new Map<string, MapPosition>()
+const positionKey = (row: { longitude: number | null; latitude: number | null; coordinateSystem: string | null }) =>
+  `${row.coordinateSystem}:${row.longitude}:${row.latitude}`
+
 /** Convert only the display positions. Never overwrite the company's source coordinates. */
 export async function storeMapPositions(
   sdk: StoreMapSdk,
@@ -73,7 +87,16 @@ export async function storeMapPositions(
     .forEach((row) => {
       positions.set(row.id, [Number(row.longitude), Number(row.latitude)])
     })
-  const gps = valid.filter((row) => row.coordinateSystem === 'WGS84')
+  const gps = valid.filter((row) => {
+    if (row.coordinateSystem !== 'WGS84') return false
+    const key = positionKey(row)
+    const cached = displayPositions.get(key)
+    if (!cached) return true
+    displayPositions.delete(key)
+    displayPositions.set(key, cached)
+    positions.set(row.id, cached)
+    return false
+  })
   if (!gps.length) return { positions, conversionFailed: false }
   const converted = await new Promise<MapPosition[] | null>((resolve) => {
     const timer = setTimeout(() => resolve(null), 8000)
@@ -96,8 +119,11 @@ export async function storeMapPositions(
     }
   })
   converted?.forEach((point, index) => {
-    if (point.every(Number.isFinite) && Math.abs(point[0]) <= 180 && Math.abs(point[1]) <= 90)
-      positions.set(gps[index].id, point)
+    if (!point.every(Number.isFinite) || Math.abs(point[0]) > 180 || Math.abs(point[1]) > 90) return
+    positions.set(gps[index].id, point)
+    displayPositions.set(positionKey(gps[index]), point)
+    while (displayPositions.size > 4096)
+      displayPositions.delete(displayPositions.keys().next().value!)
   })
   return { positions, conversionFailed: gps.some((row) => !positions.has(row.id)) }
 }

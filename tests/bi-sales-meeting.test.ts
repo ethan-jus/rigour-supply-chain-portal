@@ -28,6 +28,47 @@ const render = (extra = {}) =>
     },
   })
 describe('销售经营看板', () => {
+  it('姓名搜索的人员范围不随交易额和到账排名切换而改变', () => {
+    const snapshot = salesDashboardFixture()
+    snapshot.sales!.people[0] = {
+      ...snapshot.sales!.people[0]!,
+      name: '王凤',
+      employmentStatus: 'LEFT',
+      sales: 0,
+      receipts: 120,
+    }
+    expect(salesDashboardRows(snapshot, false, 8, '王凤').map((p) => p.code)).toEqual(['S1'])
+    expect(salesDashboardRows(snapshot, true, 8, '王凤').map((p) => p.code)).toEqual(['S1'])
+  })
+  it('搜索姓名同时改变指标范围，清空恢复汇总，个人详情不受影响', async () => {
+    const w = render()
+    const all = w.get('.sales-kpis').text()
+    await w.get('[aria-label="搜索销售"]').setValue('张明')
+    expect(w.emitted('filter')?.at(-1)).toEqual([['S1']])
+    expect(w.get('.sales-kpis').text()).not.toContain('36,000.00')
+    const summary = {
+      sales: 234,
+      receipts: 120,
+      customers: 3,
+      newCustomers: 1,
+      returningCustomers: 2,
+      annualReturningCustomers: 2,
+    }
+    await w.setProps({
+      filteredSummary: { current: summary, previous: { ...summary, sales: 117 } },
+    })
+    expect(w.get('.sales-kpis').text()).toContain('234.00')
+    expect(w.get('.sales-kpis').text()).toContain('120.00')
+    expect(w.get('.sales-kpis').text()).toContain('66.7%')
+    expect(w.get('.sales-kpis').text()).toContain('+100.0%')
+    await w.setProps({ selectedCode: 'S1' })
+    expect(w.get('.sales-kpis').text()).toContain('36,000.00')
+    await w.setProps({ selectedCode: '' })
+    await w.get('[aria-label="搜索销售"]').setValue('')
+    expect(w.emitted('filter')?.at(-1)).toEqual([null])
+    expect(w.get('.sales-kpis').text()).toBe(all)
+    w.unmount()
+  })
   it('独立排序和离职零金额过滤，保留在职零金额', () => {
     const data = salesDashboardFixture()
     expect(salesDashboardRows(data, false, 8).map((p) => p.code)).toEqual([

@@ -77,7 +77,7 @@ export function salesDashboardRows(
         target: goal.value,
       }
     })
-    .filter((p) => !(p.employmentStatus === 'LEFT' && p.amount === 0))
+    .filter((p) => search.trim() || !(p.employmentStatus === 'LEFT' && p.amount === 0))
     .sort(
       (a, b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity) || a.code.localeCompare(b.code),
     )

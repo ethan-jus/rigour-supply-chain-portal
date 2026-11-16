@@ -517,7 +517,7 @@ const {
   areaLabel,
   departmentLabel,
   employeeLabel,
-} = useOrderRegisterOptions()
+} = useOrderRegisterOptions({ salesDepartmentsOnly: true })
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const paymentStatusOptions = computed(() => paymentDictionaryOptions('ORDER_COLLECTION_STATUS'))
 const pageFilters = reactive({

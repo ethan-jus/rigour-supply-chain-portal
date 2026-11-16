@@ -28,7 +28,7 @@ const currentMonth = new Intl.DateTimeFormat('sv-SE', {
 }).format(new Date())
 const range = ref<[string, string]>([`${currentMonth.slice(0, 4)}-01`, currentMonth])
 let request = 0
-async function load(months: [string, string]) {
+async function load(months: [string, string], cacheBypass = false) {
   const version = ++request
   range.value = months
   loading.value = true
@@ -43,7 +43,7 @@ async function load(months: [string, string]) {
       regionCode: typeof route.query.regionCode === 'string' ? route.query.regionCode : undefined,
       ownerStaffCode:
         typeof route.query.ownerStaffCode === 'string' ? route.query.ownerStaffCode : undefined,
-    })
+    }, cacheBypass)
     if (version === request) data.value = result
   } catch (cause) {
     if (version === request)
