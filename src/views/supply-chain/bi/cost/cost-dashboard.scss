@@ -1210,3 +1210,62 @@
     }
   }
 }
+
+// 费用摘要优先，筛选按视口换行；明细在自身容器横向滚动。
+.cost-dashboard {
+  padding-inline: clamp(16px, 2vw, 28px);
+  .cost-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .board-subtitle {
+    color: var(--cost-muted);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .header-actions {
+    margin-left: auto;
+  }
+  .cost-filter-bar {
+    padding: 12px;
+    border: 1px solid var(--cost-line);
+    border-radius: 8px;
+    background: var(--cost-panel);
+  }
+  .cost-filter-bar label {
+    white-space: nowrap;
+  }
+  .cost-tabs {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .cost-tabs > button {
+    white-space: nowrap;
+  }
+  .scope-line {
+    flex-wrap: wrap;
+  }
+  .table-scroll {
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+  }
+  .cost-table .numeric {
+    white-space: nowrap;
+  }
+  .ledger-filters {
+    padding: 12px 0;
+  }
+  .ledger-filters input {
+    max-width: 100%;
+    width: 260px;
+  }
+  @media (max-width: 960px) {
+    .cost-filter-bar .compare {
+      margin-left: 0;
+    }
+    .cost-header .header-actions {
+      margin-left: 0;
+    }
+  }
+}

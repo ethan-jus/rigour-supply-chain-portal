@@ -22,6 +22,58 @@ beforeEach(() => {
   vi.mocked(getCostAttachments).mockResolvedValue([])
 })
 describe('手工运输凭证整体保存', () => {
+  it('平台详情不显示空补充区，已有文件仍显示，编辑仍保留四类上传', async () => {
+    const w = mount(Evidence, {
+      props: {
+        modelValue: [],
+        row: { id: 'C1' } as never,
+        readonly: true,
+        disabled: false,
+        required: false,
+        hideEmpty: true,
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    expect(w.find('section.transport-evidence').exists()).toBe(false)
+    vi.mocked(getCostAttachments).mockResolvedValue([
+      {
+        id: 'F1',
+        fileName: '人工补充卸货.jpg',
+        contentType: 'image/jpeg',
+        categoryCode: 'UNLOADING',
+        size: 10,
+        createdBy: 'user',
+        createdTime: '',
+      },
+    ])
+    await w.setProps({ row: { id: 'C2' } as never })
+    await flushPromises()
+    expect(w.text()).toContain('人工补充卸货.jpg')
+    expect(w.text()).not.toContain('暂无运输回单')
+    expect(w.findAll('.evidence-group')).toHaveLength(1)
+    await w.setProps({ readonly: false })
+    expect(w.findAll('.evidence-group')).toHaveLength(4)
+    expect(w.text()).toContain('上传运输回单')
+    w.unmount()
+  })
+  it('精简平台补充区时仍显示读取失败和重试入口', async () => {
+    vi.mocked(getCostAttachments).mockRejectedValueOnce(new Error('附件暂不可用'))
+    const w = mount(Evidence, {
+      props: {
+        modelValue: [],
+        row: { id: 'C1' } as never,
+        readonly: true,
+        disabled: false,
+        required: false,
+        hideEmpty: true,
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    expect(w.text()).toContain('重新加载凭证')
+    w.unmount()
+  })
   it('保存后的PDF通过已登录接口读取，关闭预览释放本地对象地址', async () => {
     const revoke = vi.fn()
     vi.stubGlobal('URL', { createObjectURL: () => 'blob:private-pdf', revokeObjectURL: revoke })

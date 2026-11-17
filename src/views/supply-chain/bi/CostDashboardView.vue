@@ -1,7 +1,10 @@
 <template>
   <div ref="boardElement" class="cost-dashboard">
     <header class="cost-header">
-      <h1>成本数据看板</h1>
+      <div>
+        <h1>成本数据看板</h1>
+        <p class="board-subtitle">运输成本仅统计已完善单据；可查看部门分布和费用明细</p>
+      </div>
       <div class="controls header-actions">
         <span v-if="report" class="updated-at">更新于 {{ updatedAt }}</span>
         <button @click="definitions = true">统计说明</button>
@@ -151,7 +154,7 @@
             </button>
           </div>
           <span class="analysis-total"
-            >本期已确认 <strong>{{ money(report.current.amount) }}</strong> 元</span
+            >本期计入成本 <strong>{{ money(report.current.amount) }}</strong> 元</span
           >
         </div>
         <nav class="view-tabs" aria-label="分析视角">
@@ -182,7 +185,7 @@
             <section class="cost-panel">
               <div class="panel-heading">
                 <h2>归属费用结构</h2>
-                <span class="muted">已确认金额占比</span>
+                <span class="muted">成本金额占比</span>
               </div>
               <CostRing
                 :groups="report.cityGroups"
@@ -250,7 +253,7 @@
                   </tr>
                   <tr v-if="!report.cityGroups.length">
                     <td :colspan="report.categories.length + 2" class="empty">
-                      当前范围没有已确认记录
+                      当前范围没有计入成本的记录
                     </td>
                   </tr>
                 </tbody>
@@ -346,7 +349,7 @@
           </div>
           <div class="metric-strip">
             <div>
-              <span>本期已确认费用</span><strong>{{ money(report.current.amount) }} 元</strong>
+              <span>本期计入成本费用</span><strong>{{ money(report.current.amount) }} 元</strong>
             </div>
             <div>
               <span>期间变动金额</span
@@ -413,7 +416,7 @@
                     </td>
                   </tr>
                   <tr v-if="!report.objects.length">
-                    <td colspan="7" class="empty">当前专题没有已确认记录</td>
+                    <td colspan="7" class="empty">当前专题没有计入成本的记录</td>
                   </tr>
                 </tbody>
               </table>
@@ -487,7 +490,7 @@
               <span>匹配记录</span><strong>{{ records.summary.count }} 笔</strong>
             </div>
             <div>
-              <span>已确认金额</span><strong>{{ money(records.summary.confirmed) }} 元</strong>
+              <span>计入成本金额</span><strong>{{ money(records.summary.confirmed) }} 元</strong>
             </div>
           </div>
           <CostRecordsTable :rows="records.items" @detail="openDetail" />
@@ -648,9 +651,10 @@
               </dd>
             </div>
             <div>
-              <dt>确认状态 / 付款状态</dt>
+              <dt>单据状态 / 付款状态</dt>
               <dd>
-                {{ statusName(detail.record.status) }} / {{ statusName(detail.record.payment) }}
+                {{ recordStatusName(detail.record) }}
+                / {{ statusName(detail.record.payment) }}
               </dd>
             </div>
             <div
@@ -687,11 +691,11 @@
         <dl class="definitions">
           <dt>业务确认</dt>
           <dd>
-            仅已确认记录进入看板，待确认和已作废记录不纳入展示或导出。确认不代表审批通过或财务审核完成。本模块不提供审批流、财务审核或付款操作。
+            运输成本仅统计资料已完善的运输记录；待完善、未填金额和已作废记录不计入。其他费用沿用各自的确认规则。本模块不提供审批流、财务审核或付款操作。
           </dd>
           <dt>经营费用</dt>
           <dd>
-            系统已确认且金额非空的经营费用，包含人力薪酬、公司承担运费、场地、营销和报销。人力取已确认及已发放工资的应发金额，按工资所属月归集；激励与提成是同一项，不重复计入。差旅、住宿、打车保留在报销统计，其他报销按登记用途归类。关联已登记费用的报销不重复汇总；原费用变化或资产支出列入待核对。采购、损耗和押金不计入经营费用；采购金额不等于已售商品成本。
+            符合各业务模块计入规则且金额非空的经营费用，包含人力薪酬、公司承担运费、场地、营销和报销。人力取已确认及已发放工资的应发金额，按工资所属月归集；激励与提成是同一项，不重复计入。差旅、住宿、打车保留在报销统计，其他报销按登记用途归类。关联已登记费用的报销不重复汇总；原费用变化或资产支出列入待核对。采购、损耗和押金不计入经营费用；采购金额不等于已售商品成本。
           </dd>
           <dt>期间对比</dt>
           <dd>
@@ -699,7 +703,7 @@
           </dd>
           <dt>占比与变动贡献</dt>
           <dd>
-            结构占比以当前范围全量确认金额为分母；变动贡献按全部增加额或全部减少额分别计算。无历史覆盖不推算增幅，零基数显示“—”。
+            结构占比以当前范围全量成本金额为分母；变动贡献按全部增加额或全部减少额分别计算。无历史覆盖不推算增幅，零基数显示“—”。
           </dd>
           <dt>付款状态</dt>
           <dd>
@@ -758,6 +762,7 @@ import {
   percent,
   signed,
   statusName,
+  recordStatusName,
   matrixTotal,
 } from './cost/cost-presentation'
 const {

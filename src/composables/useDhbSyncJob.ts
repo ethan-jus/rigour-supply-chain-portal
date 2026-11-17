@@ -19,7 +19,14 @@ function requireJob(value: unknown): asserts value is DhbPageSyncJob {
     !item.jobId.trim() ||
     typeof item.connectorId !== 'string' ||
     !item.connectorId.trim() ||
-    !['CUSTOMER', 'ORDER_SALES_PACKAGE', 'SALESPERSON', 'BUSINESS_CHAIN', 'VOUCHER_BACKFILL'].includes(item.scope ?? '') ||
+    ![
+      'CUSTOMER',
+      'ORDER_SALES_PACKAGE',
+      'SALESPERSON',
+      'BUSINESS_CHAIN',
+      'VOUCHER_BACKFILL',
+      'SHIPMENT',
+    ].includes(item.scope ?? '') ||
     !['QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'UNKNOWN'].includes(item.status ?? '') ||
     typeof item.stage !== 'string' ||
     typeof item.startedAt !== 'string' ||
@@ -56,7 +63,7 @@ export function useDhbSyncJob(completed: (result: DhbSyncOrchestrationResult) =>
     trackedId = value.jobId
     const otherScope = requestedScope && value.scope !== requestedScope
     notice.value = otherScope
-      ? `当前连接正在处理${value.scope === 'CUSTOMER' ? '客户' : value.scope === 'SALESPERSON' ? '业务员' : value.scope === 'BUSINESS_CHAIN' ? '业务串行' : '订单'}同步，本次未另行启动任务。请等待结束后再开始所需同步。`
+      ? `当前连接正在处理${value.scope === 'CUSTOMER' ? '客户' : value.scope === 'SALESPERSON' ? '业务员' : value.scope === 'SHIPMENT' ? '发货' : value.scope === 'BUSINESS_CHAIN' ? '业务串行' : '订单'}同步，本次未另行启动任务。请等待结束后再开始所需同步。`
       : ''
     tracking.value = !['SUCCEEDED', 'FAILED'].includes(value.status)
     if (!tracking.value) {

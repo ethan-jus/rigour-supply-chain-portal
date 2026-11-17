@@ -16,12 +16,15 @@
     />
     <el-table
       v-loading="loading"
-      :data="items"
+      :data="pagedItems"
       size="small"
-      empty-text="暂无可显示的待处理发货；如本次仍提示未完成，请查看全部待处理。"
+      :empty-text="error ? '未能读取待处理发货' : '暂无待处理发货'"
     >
       <el-table-column prop="sourceId" label="发货单号" min-width="160" />
-      <el-table-column prop="errorMessage" label="未完成原因" min-width="300" />
+      <!-- @vue-generic {DhbSyncOpenIssueItem} -->
+      <el-table-column label="待处理问题" min-width="300">
+        <template #default="{ row }">{{ issueSummary(row) }}</template>
+      </el-table-column>
       <!-- @vue-generic {DhbSyncOpenIssueItem} -->
       <el-table-column label="操作" width="180">
         <template #default="{ row }">
@@ -31,7 +34,7 @@
             type="primary"
             :disabled="!!retrying"
             @click="manualLink?.open(row)"
-            >关联补录资料</el-button
+            >{{ linkLabel(row) }}</el-button
           >
           <el-button v-else link type="primary" @click="openCenter">核对资料</el-button>
           <el-button
@@ -41,20 +44,24 @@
             :disabled="!!retrying || loading"
             :loading="retrying === row.sourceId"
             @click="retry(row)"
-            >继续关联</el-button
+            >重试</el-button
           >
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      v-if="items.length > 20"
+      v-model:current-page="page"
+      :page-size="20"
+      :total="items.length"
+      layout="total, prev, pager, next"
+      class="shipment-issues__pagination"
+    />
     <DhbDependencyManualLink ref="manualLink" @saved="onManualSaved" />
-    <p>
-      物流已保存即代表已经出库发货。补取失败的资料请先手工补录并关联，再点击“继续关联”。此处显示当前来源最近的待处理发货，最多
-      500 项。
-    </p>
   </section>
 </template>
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DhbDependencyManualLink from './DhbDependencyManualLink.vue'
 import {
@@ -69,10 +76,40 @@ const router = useRouter()
 const manualLink = ref<InstanceType<typeof DhbDependencyManualLink>>()
 function onManualSaved() {
   retrySucceeded.value = true
-  retryMessage.value = '资料关联已保存，请点击本发货单的“继续关联”，复用已有运输记录。'
+  retryMessage.value = '关联已保存，可重试本发货单。'
   void load()
 }
 const items = ref<DhbSyncOpenIssueItem[]>([])
+const page = ref(1)
+const pagedItems = computed(() => items.value.slice((page.value - 1) * 20, page.value * 20))
+const names: Record<string, string> = {
+  SALES_ORDER: '销售单',
+  CUSTOMER: '客户',
+  WAREHOUSE: '仓库',
+  PRODUCT_SPU: '商品',
+  PRODUCT_SKU: '商品规格',
+}
+function linkLabel(item: DhbSyncOpenIssueItem) {
+  return `关联${names[item.requiredDataType || ''] || '资料'}`
+}
+function issueSummary(item: DhbSyncOpenIssueItem) {
+  if (item.requiredDataType && item.requiredSourceId) {
+    const owner =
+      item.requiredDataType !== 'SALES_ORDER' && item.relatedSalesOrderNo
+        ? `（销售单 ${item.relatedSalesOrderNo}）`
+        : ''
+    return `${names[item.requiredDataType] || '资料'} ${item.requiredSourceId} 待关联${owner}`
+  }
+  if (item.errorCode?.includes('BUSINESS_TIME_MISSING')) return '未取得发货时间'
+  if (item.errorCode === 'DHB_SHIPMENT_ORDER_NO_MISSING') return '发货单缺少销售单号'
+  if (item.errorCode?.includes('IDENTITY_CONFLICT') || item.manualResolutionRequired)
+    return '发货资料关联冲突'
+  if (item.errorCode?.includes('WAREHOUSE') || item.errorMessage?.includes('缺少仓库映射'))
+    return '发货仓库待关联'
+  if (item.errorCode?.includes('ORDER_MAPPING') || item.errorCode?.includes('SOURCE_ORDER'))
+    return `销售单${item.relatedSalesOrderNo ? ` ${item.relatedSalesOrderNo}` : ''}待关联`
+  return '发货信息未同步完整'
+}
 const loading = ref(false),
   retrying = ref(''),
   error = ref(''),
@@ -88,18 +125,42 @@ async function load() {
   error.value = ''
   try {
     const groups = await getDhbOpenIssues(500)
+    const sourceItems = groups
+      .flatMap((g) => g.items)
+      .filter((item) => item.connectorId === props.connectorId)
+    const salesIds = new Set(
+      sourceItems
+        .filter((item) => item.sourceObjectType === 'SALES_SHIPMENT')
+        .map((item) => item.sourceId),
+    )
     const unique = new Map<string, DhbSyncOpenIssueItem>()
-    for (const item of groups.flatMap((g) => g.items)) {
+    for (const item of sourceItems) {
       if (
         item.connectorId !== props.connectorId ||
-        !['SALES_SHIPMENT', 'ERP_STOCK_OUT'].includes(item.sourceObjectType)
+        !(
+          item.sourceObjectType === 'SALES_SHIPMENT' ||
+          (item.sourceObjectType === 'ERP_STOCK_OUT' &&
+            (salesIds.has(item.sourceId) || item.relatedSalesOrderNo))
+        )
       )
         continue
-      const key = `${item.sourceObjectType}:${item.sourceId}`
-      const previous = unique.get(key)
-      if (!previous || (item.updatedAt ?? '') > (previous.updatedAt ?? '')) unique.set(key, item)
+      const previous = unique.get(item.sourceId)
+      // 同一发货在销售与库存处理阶段可能各有历史问题，统一使用销售发货入口。
+      if (
+        !previous ||
+        (item.sourceObjectType === 'SALES_SHIPMENT' &&
+          previous.sourceObjectType !== 'SALES_SHIPMENT') ||
+        (item.sourceObjectType === previous.sourceObjectType &&
+          (item.updatedAt ?? '') > (previous.updatedAt ?? ''))
+      )
+        unique.set(item.sourceId, item)
     }
-    if (version === generation) items.value = [...unique.values()]
+    if (version === generation) {
+      items.value = [...unique.values()].sort((a, b) =>
+        (b.updatedAt || '').localeCompare(a.updatedAt || ''),
+      )
+      page.value = Math.min(page.value, Math.max(1, Math.ceil(items.value.length / 20)))
+    }
   } catch {
     if (version === generation) {
       items.value = []
@@ -120,9 +181,12 @@ async function retry(item: DhbSyncOpenIssueItem) {
       (t) =>
         t.connectorId === props.connectorId &&
         t.objectType === 'ORDER' &&
-        !['DISABLED', 'DELETED'].includes(t.status),
+        !['PAUSED', 'DISABLED', 'DELETED'].includes(t.status),
     )
-    if (tasks.length !== 1) throw new Error('未找到唯一可用的订单同步任务，请管理员核对同步设置。')
+    if (tasks.length !== 1) {
+      retryMessage.value = '同步设置异常，请联系管理员。'
+      return
+    }
     const result = await replayDhbOrderObject(tasks[0]!.id, {
       sourceObjectType: item.sourceObjectType,
       sourceId: item.sourceId,
@@ -130,12 +194,11 @@ async function retry(item: DhbSyncOpenIssueItem) {
     retrySucceeded.value = result.status === 'SUCCEEDED'
     retryMessage.value = retrySucceeded.value
       ? `发货单 ${item.sourceId} 已处理完成`
-      : result.errorMessage || `发货单 ${item.sourceId} 尚未完成，请核对原因后重试`
+      : `发货单 ${item.sourceId} 未处理完成，请查看待处理问题。`
     emit('repaired')
     await load()
-  } catch (cause) {
-    retryMessage.value =
-      cause instanceof Error ? cause.message : '未取得本单处理结果，请先刷新核对，不要重复提交。'
+  } catch {
+    retryMessage.value = '未取得处理结果，请刷新后核对。'
   } finally {
     retrying.value = ''
   }
@@ -153,6 +216,10 @@ watch(
 .shipment-issues {
   margin-top: 20px;
 }
+.shipment-issues__pagination {
+  margin-top: 12px;
+  justify-content: flex-end;
+}
 .shipment-issues__header {
   display: flex;
   justify-content: space-between;
@@ -160,10 +227,5 @@ watch(
   gap: 12px;
   margin-bottom: 12px;
   flex-wrap: wrap;
-}
-p {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.7;
 }
 </style>

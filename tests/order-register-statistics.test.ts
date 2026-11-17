@@ -2,6 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ElementPlus from 'element-plus'
 
+vi.mock('@/composables/useSupplyPermissions', () => ({
+  useSupplyPermissions: () => ({ can: () => true }),
+}))
+
 const mocks = vi.hoisted(() => ({
   getPeriod: vi.fn(),
   getReceivables: vi.fn(),

@@ -134,7 +134,7 @@
                 :value="row.record.id"
                 :aria-label="`选择${no(row as TransportDetail)}`"
                 :disabled="
-                  row.record.statusCode !== 'DRAFT' && !alreadyLinked(row as TransportDetail)
+                  row.record.statusCode !== 'ACTIVE' && !alreadyLinked(row as TransportDetail)
                 "
                 @change="select(row as TransportDetail)"
                 ><span /></el-radio></template
@@ -169,7 +169,7 @@
           >
           <el-table-column label="单据状态" width="110"
             ><template #default="{ row }">{{
-              statusName(row.record.statusCode)
+              statusName(row.record.statusCode, row.record.businessStatusCode)
             }}</template></el-table-column
           >
         </el-table>
@@ -267,6 +267,7 @@ import {
   ordersOf,
   routeOf,
   statusName,
+  transportTimeOf,
   vehicleOf,
 } from '../../cost/transport-records'
 import { savedTransportAllocations, transportAllocations } from '../../cost/transport-allocation'
@@ -324,12 +325,11 @@ const carrierName = (r: TransportDetail) =>
     ? '货拉拉'
     : r.shipments?.[0]?.latest.carrierName ||
       costLabel('COST_CARRIER', r.record.data.ledger?.carrierCode)
-const orderedAt = (r: TransportDetail) =>
-  r.platform ? currentSource(r.platform.source).raw['下单时间'] : '-'
+const orderedAt = (r: TransportDetail) => transportTimeOf(r.record, r.platform, r.shipments)
 const alreadyLinked = (r: TransportDetail) =>
   ordersOf(r.record, r.platform).includes(props.context.salesOrder.documentNo)
 function select(r: TransportDetail) {
-  if (r.record.statusCode === 'DRAFT' || alreadyLinked(r)) selected.value = r
+  if (r.record.statusCode === 'ACTIVE' || alreadyLinked(r)) selected.value = r
 }
 function resetFilters() {
   query.value = {

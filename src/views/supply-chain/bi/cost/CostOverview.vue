@@ -27,7 +27,7 @@
       </span>
       <span v-else class="scope-description">{{ scopeDescriptions[card.scope] }}</span>
       <span class="scope-card-footer">
-        <span>{{ card.count === undefined ? '已确认金额' : `${card.count} 笔已确认单据` }}</span>
+        <span>{{ card.count === undefined ? '计入成本金额' : `${card.count} 笔成本单据` }}</span>
         <span v-if="card.reviewCount" class="pending">{{ card.reviewCount }} 笔待核对</span>
         <span v-else>查看分析 →</span>
       </span>
@@ -48,7 +48,11 @@
       >
         <span>{{ categories[item.key] }}<span aria-hidden="true"> →</span></span>
         <strong>{{ money(item.amount) }}</strong>
-        <small>{{ item.count ? `${item.count} 笔已确认单据` : '暂无已确认单据' }}</small>
+        <small>{{
+          item.count
+            ? `${item.count} 笔${item.key === 'freight' ? '已完善' : '已确认'}单据`
+            : `暂无${item.key === 'freight' ? '已完善' : '已确认'}单据`
+        }}</small>
       </button>
     </div>
   </section>

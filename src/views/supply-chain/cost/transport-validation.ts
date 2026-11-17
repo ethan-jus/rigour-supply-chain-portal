@@ -1,7 +1,7 @@
 import type { TransportDraft } from '@/api/core/transport-records'
 export type TransportErrors = Record<string, string>
 const phone = /^[+0-9()（） #\-]{5,50}$/
-/** 三个入口使用同一保存规则；未知金额可登记，确认校验由服务端继续执行。 */
+/** 三个入口使用同一保存规则；未知金额可登记，资料完整状态由服务端判定。 */
 export function validateManualTransport(d: TransportDraft): TransportErrors {
   const errors: TransportErrors = {}
   const required = (
@@ -15,6 +15,12 @@ export function validateManualTransport(d: TransportDraft): TransportErrors {
   required('transportType', d.transportType, 64, '运输类型')
   required('deliveryModeCode', d.deliveryModeCode, 64, '配送方式')
   required('date', d.date, 10, '发货日期')
+  if (
+    !d.shippingTime ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(d.shippingTime) ||
+    d.shippingTime.slice(0, 10) !== d.date
+  )
+    errors.date = '请填写精确到时分秒的发货时间'
   if (d.deliveryModeCode !== 'SELF') {
     required('carrierCode', d.carrierCode, 64, '物流公司')
     required('platformOrderNo', d.platformOrderNo, 80, '快递单号')

@@ -7,6 +7,7 @@ function valid() {
     transportType: 'DELIVERY',
     deliveryModeCode: 'THIRD_PARTY',
     date: '2026-11-13',
+    shippingTime: '2026-11-13T10:20:30',
     carrierCode: 'SF',
     platformOrderNo: 'SF001',
     senderName: '武汉仓',
@@ -50,4 +51,12 @@ it('自营可不填配送公司和单号，新字典配送方式仍按实际录�
   expect(
     validateManualTransport({ ...draft, deliveryModeCode: 'NEW_METHOD', platformOrderNo: null }),
   ).toHaveProperty('platformOrderNo')
+})
+
+it('新增时发货时间必须完整到秒且与业务日期一致', () => {
+  expect(validateManualTransport({ ...valid(), shippingTime: null })).toHaveProperty('date')
+  expect(validateManualTransport({ ...valid(), shippingTime: '2026-11-13' })).toHaveProperty('date')
+  expect(
+    validateManualTransport({ ...valid(), shippingTime: '2026-11-12T10:20:30' }),
+  ).toHaveProperty('date')
 })

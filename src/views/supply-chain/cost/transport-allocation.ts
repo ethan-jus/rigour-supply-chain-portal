@@ -1,7 +1,6 @@
 import type { CostSource } from '@/api/core/cost'
 import type { TransportDetail } from '@/api/core/transport-records'
 import type { LogisticsLedger } from '@/types/cost-ledger'
-import { currentSource } from './huolala-source'
 
 export type Shares = Record<string, number | null>
 type Source = Pick<CostSource, 'documentNo' | 'sourceType' | 'documentAmount'>
@@ -102,9 +101,8 @@ export function savedTransportAllocations(detail: TransportDetail, sources: Sour
   const { record, platform } = detail
   if (detail.orderAllocations && Object.keys(detail.orderAllocations).length)
     return Object.entries(detail.orderAllocations).map(([code, amount]) => ({ code, amount }))
-  if (platform?.draft && record.statusCode === 'DRAFT') {
-    const bill = currentSource(platform.source).facts?.billAmount
-    const total = bill == null ? null : Number(bill)
+  if (!record.data.ledger && platform?.draft) {
+    const total = record.data.amount ?? null
     if (allocationError(total, platform.draft.orderCodes, platform.draft.orderAllocations))
       return platform.draft.orderCodes.map((code) => ({ code, amount: null }))
     return transportAllocations(

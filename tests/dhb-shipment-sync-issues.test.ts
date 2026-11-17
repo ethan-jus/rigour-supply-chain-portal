@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
 }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: mocks.push }) }))
+vi.mock('@/composables/useSupplyPermissions', () => ({
+  useSupplyPermissions: () => ({ can: () => true }),
+}))
 vi.mock('@/api/core/dhb-orchestration', () => ({
   getDhbOpenIssues: mocks.issues,
   getDhbSyncTasks: mocks.tasks,
@@ -35,6 +38,89 @@ beforeEach(() => {
   mocks.replay.mockResolvedValue({ status: 'SUCCEEDED' })
 })
 describe('发货依赖待处理闭环', () => {
+  it('显示具体待关联资料，内部错误和重复机制说明不出现在业务列表', async () => {
+    mocks.issues.mockResolvedValue([
+      {
+        items: [
+          row({
+            requiredDataType: 'CUSTOMER',
+            requiredSourceId: 'CUS1',
+            relatedSalesOrderNo: 'DH001',
+          }),
+          row({
+            sourceId: 'FH002',
+            errorCode: 'DHB_SHIPMENT_BUSINESS_TIME_MISSING',
+            errorMessage: '缺少发货/创建/更新时间，不能生成ERP销售出库单',
+          }),
+          row({
+            sourceId: 'FH003',
+            errorCode: 'SQL_ERROR',
+            errorMessage: 'SQL Exception checkpoint Raw projection',
+            handlingAdvice: '查看Raw和日志',
+          }),
+        ],
+      },
+    ])
+    const w = setup()
+    await flushPromises()
+    expect(w.text()).toContain('客户 CUS1 待关联（销售单 DH001）')
+    expect(w.text()).toContain('未取得发货时间')
+    expect(w.text()).toContain('发货信息未同步完整')
+    expect(w.text()).toContain('关联客户')
+    expect(w.text()).not.toMatch(/checkpoint|Raw|Exception|ERP|最多\s*500|保存即代表|补取失败/)
+    w.unmount()
+  })
+  it('同单跨处理阶段只展示销售发货问题，排除无关调拨', async () => {
+    mocks.issues.mockResolvedValue([
+      {
+        items: [
+          row({
+            sourceObjectType: 'ERP_STOCK_OUT',
+            errorMessage: '旧库存错误',
+            updatedAt: '2026-11-14T00:00:00Z',
+          }),
+          row({
+            requiredDataType: 'SALES_ORDER',
+            requiredSourceId: 'DH-EXACT',
+            relatedSalesOrderNo: 'DH-EXACT',
+            errorMessage: '发货同步不会夹带创建订单',
+          }),
+          row({
+            sourceObjectType: 'ERP_STOCK_OUT',
+            sourceId: 'TRANSFER-ONLY',
+            errorMessage: '调拨出库缺少仓库',
+          }),
+        ],
+      },
+    ])
+    const w = setup()
+    await flushPromises()
+    expect(w.text()).toContain('销售单 DH-EXACT 待关联')
+    expect(w.text()).not.toContain('旧库存错误')
+    expect(w.text()).not.toContain('TRANSFER-ONLY')
+    expect(w.text()).not.toContain('不会夹带创建订单')
+    expect(w.findAll('button').filter((b) => b.text() === '重试')).toHaveLength(1)
+    w.unmount()
+  })
+  it('待处理项分页避免一次堆满页面，单笔处理通知主列表刷新', async () => {
+    mocks.issues.mockResolvedValue([
+      { items: Array.from({ length: 25 }, (_, i) => row({ sourceId: `FH-${i}` })) },
+    ])
+    const w = setup()
+    await flushPromises()
+    expect(w.findAll('button').filter((b) => b.text() === '重试')).toHaveLength(20)
+    await w.findComponent({ name: 'ElPagination' }).vm.$emit('update:current-page', 2)
+    await flushPromises()
+    expect(w.findAll('button').filter((b) => b.text() === '重试')).toHaveLength(5)
+    await w
+      .findAll('button')
+      .find((b) => b.text() === '重试')!
+      .trigger('click')
+    await flushPromises()
+    expect(w.emitted('repaired')).toHaveLength(1)
+    w.unmount()
+  })
+
   it('只显示同来源的发货问题，保留最新单号和具体缺失资料', async () => {
     mocks.issues.mockResolvedValue([
       {
@@ -48,7 +134,7 @@ describe('发货依赖待处理闭环', () => {
     ])
     const w = setup()
     await flushPromises()
-    expect(w.text()).toContain('DH001 的客户 CUS1')
+    expect(w.text()).toContain('发货信息未同步完整')
     expect(w.text()).not.toContain('旧原因')
     expect(w.text()).not.toContain('FH-OTHER')
     expect(w.text()).not.toContain('DH-OTHER')
@@ -60,14 +146,14 @@ describe('发货依赖待处理闭环', () => {
     await flushPromises()
     await w
       .findAll('button')
-      .find((b) => b.text() === '继续关联')!
+      .find((b) => b.text() === '重试')!
       .trigger('click')
     await flushPromises()
     expect(mocks.replay).toHaveBeenCalledWith('t1', {
       sourceObjectType: 'SALES_SHIPMENT',
       sourceId: 'FH001',
     })
-    expect(w.text()).toContain('DH001 的客户尚未关联')
+    expect(w.text()).toContain('FH001 未处理完成')
     expect(w.text()).not.toContain('FH001 已处理完成')
     w.unmount()
   })
@@ -81,7 +167,7 @@ describe('发货依赖待处理闭环', () => {
     )
     const w = setup()
     await flushPromises()
-    const button = w.findAll('button').find((b) => b.text() === '继续关联')!
+    const button = w.findAll('button').find((b) => b.text() === '重试')!
     await button.trigger('click')
     await flushPromises()
     await button.trigger('click')
@@ -96,7 +182,7 @@ describe('发货依赖待处理闭环', () => {
     await button.trigger('click')
     await flushPromises()
     expect(mocks.replay).toHaveBeenCalledTimes(1)
-    expect(w.text()).toContain('唯一可用')
+    expect(w.text()).toContain('同步设置异常')
     w.unmount()
   })
   it('读取失败不能显示无问题，冲突记录不提供直接重试', async () => {
@@ -110,7 +196,7 @@ describe('发货依赖待处理闭环', () => {
       .find((b) => b.text() === '刷新待处理项')!
       .trigger('click')
     await flushPromises()
-    expect(w.findAll('button').some((b) => b.text() === '继续关联')).toBe(false)
+    expect(w.findAll('button').some((b) => b.text() === '重试')).toBe(false)
     await w
       .findAll('button')
       .find((b) => b.text() === '核对资料')!

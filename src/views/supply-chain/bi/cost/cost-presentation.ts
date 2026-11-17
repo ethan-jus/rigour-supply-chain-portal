@@ -84,6 +84,13 @@ export const statusName = (v: string) =>
     UNKNOWN: '未记录',
   })[v] || '未记录'
 
+/** 运输资料完整度与其他成本确认状态分别按来源呈现。 */
+export function recordStatusName(row: Pick<CostRecord, 'source' | 'status'>) {
+  if (row.source === 'ORDER')
+    return { CONFIRMED: '已完善', DRAFT: '待完善', VOID: '已作废' }[row.status] || '未记录'
+  return statusName(row.status)
+}
+
 export function overviewCards(report: CostReport, available: CostCategory[]) {
   const scopes: { scope: CostScope; label: string }[] = [
     { scope: 'opex', label: '经营费用' },

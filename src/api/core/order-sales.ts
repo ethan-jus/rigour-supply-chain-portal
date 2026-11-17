@@ -210,6 +210,8 @@ export interface SalesShipmentSummary {
   totalQuantity: number
   revision: number
   updatedTime: string
+  sourceWarehouseName?: string | null
+  stockOutTime?: string | null
 }
 
 export interface SalesShipmentLineView {

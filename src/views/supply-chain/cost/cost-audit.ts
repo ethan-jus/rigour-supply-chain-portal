@@ -42,7 +42,7 @@ export function costExportHeaders(category: CostCategory): string[] {
     ...business[category],
     ...(category === 'expenses' ? [] : ['费用负责人']),
     '金额',
-    '确认状态',
+    category === 'logistics' ? '单据状态' : '确认状态',
   ]
 }
 
@@ -69,6 +69,7 @@ export function costExportFields(row: CostRecord): { label: string; value: strin
 }
 const names: Record<string, string> = {
   CREATE: '新增',
+  STATE_UPGRADE: '调整运输记录状态',
   SOURCE_SYNC: '同步订货宝物流',
   SOURCE_ACCEPT: '核对货拉拉来源差异',
   BILL_VERIFY: '核对货拉拉净费用',
@@ -184,7 +185,10 @@ export function costSnapshotFields(
     add(`关联系统单据 ${index + 1} 收货方`, source.receiverName)
   }
   add('金额', costMoney(data.amount as number | null))
-  add('确认状态', costLabel('COST_STATUS', row.statusCode as string))
+  add(
+    row.categoryCode === 'LOGISTICS' ? '单据状态' : '确认状态',
+    costLabel('COST_STATUS', row.statusCode as string),
+  )
   add('付款状态', costLabel('COST_PAYMENT_STATUS', data.paymentStatusCode as string))
   add('备注', data.remark)
   const expense = data.expense as Record<string, unknown> | undefined

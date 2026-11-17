@@ -63,7 +63,7 @@ const empty = (): CostPage => ({
   thirdPartyCount: 0,
   warehouseCount: 0,
 })
-const record = (id = 'LC-1', status = 'DRAFT'): CostRecord => {
+const record = (id = 'LC-1', status = 'ACTIVE'): CostRecord => {
   const data = createLedgerCommand(true)
   data.costDate = '2026-11-04'
   data.cityCode = 'WH'
@@ -248,7 +248,7 @@ describe('精简成本台账页面业务流程', () => {
     await flushPromises()
     expect(wrapper.get('.detail-probe').text()).toBe('LC-1')
   })
-  it('实际列出两个收货方，并保留编辑、确认、作废和记录入口', async () => {
+  it('实际列出两个收货方，并保留查看、编辑和作废入口', async () => {
     await open()
     expect(wrapper.findAll('.recipient-names > div').map((n) => n.text())).toEqual([
       '星河门店',
@@ -256,7 +256,7 @@ describe('精简成本台账页面业务流程', () => {
     ])
     expect(wrapper.text()).not.toContain('2个收货点')
     expect(wrapper.get('.metric.primary').text()).toContain('1,200.00')
-    for (const name of ['查看', '编辑', '确认', '作废']) expect(button(name)).toBeDefined()
+    for (const name of ['查看', '编辑', '作废']) expect(button(name)).toBeDefined()
   })
   it('列表失败时金额保持未知，不能展示为零费用', async () => {
     api.list.mockRejectedValueOnce(new Error('费用服务暂不可用'))
@@ -456,16 +456,18 @@ describe('精简成本台账页面业务流程', () => {
     expect(api.workbook.mock.calls[1]![1]).toHaveLength(11)
     expect(api.workbook.mock.calls[1]![2][0]).toHaveLength(11)
   })
-  it('确认与作废继续调用对应服务并保存作废原因', async () => {
+  it('仓储确认与作废继续调用对应服务并保存作废原因', async () => {
     vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
     vi.spyOn(ElMessageBox, 'prompt').mockResolvedValue({
       value: '重复登记，作废保留原始记录',
     } as never)
+    state.route.path = '/supply-chain/cost/warehouse-rentals'
+    api.list.mockResolvedValue({ ...empty(), total: 1, items: [record('LC-1', 'DRAFT')] })
     await open()
     await button('确认').trigger('click')
     await flushPromises()
     expect(api.transition).toHaveBeenLastCalledWith(
-      'logistics',
+      'warehouse-rentals',
       expect.objectContaining({ id: 'LC-1' }),
       'confirm',
       '',
@@ -473,15 +475,16 @@ describe('精简成本台账页面业务流程', () => {
     await button('作废').trigger('click')
     await flushPromises()
     expect(api.transition).toHaveBeenLastCalledWith(
-      'logistics',
+      'warehouse-rentals',
       expect.objectContaining({ id: 'LC-1' }),
       'void',
       '重复登记，作废保留原始记录',
     )
   })
-  it('已确认只可查看和撤销，作废后才出现删除', async () => {
+  it('仓储已确认只可查看和撤销，作废后才出现删除', async () => {
     vi.spyOn(ElMessageBox, 'prompt').mockResolvedValue({ value: '业务变更' } as never)
     api.list.mockResolvedValue({ ...empty(), total: 1, items: [record('LC-1', 'CONFIRMED')] })
+    state.route.path = '/supply-chain/cost/warehouse-rentals'
     await open()
     expect(
       wrapper.findAll('button').filter((b) => ['编辑', '作废', '删除', '确认'].includes(b.text())),
@@ -489,7 +492,7 @@ describe('精简成本台账页面业务流程', () => {
     await button('撤销').trigger('click')
     await flushPromises()
     expect(api.transition).toHaveBeenLastCalledWith(
-      'logistics',
+      'warehouse-rentals',
       expect.objectContaining({ id: 'LC-1' }),
       'revoke',
       expect.any(String),
@@ -503,7 +506,7 @@ describe('精简成本台账页面业务流程', () => {
     await button('删除').trigger('click')
     await flushPromises()
     expect(api.transition).toHaveBeenLastCalledWith(
-      'logistics',
+      'warehouse-rentals',
       expect.objectContaining({ id: 'LC-1' }),
       'delete',
       expect.any(String),
@@ -512,9 +515,11 @@ describe('精简成本台账页面业务流程', () => {
   it('确认弹窗等待期间切换页面，不向其他成本类别提交旧记录', async () => {
     const confirm = deferred<never>()
     vi.spyOn(ElMessageBox, 'confirm').mockReturnValueOnce(confirm.promise)
+    state.route.path = '/supply-chain/cost/warehouse-rentals'
+    api.list.mockResolvedValue({ ...empty(), total: 1, items: [record('LC-1', 'DRAFT')] })
     await open()
     await button('确认').trigger('click')
-    state.route.path = '/supply-chain/cost/warehouse-rentals'
+    state.route.path = '/supply-chain/cost/logistics'
     api.list.mockResolvedValue(empty())
     await flushPromises()
     confirm.resolve('confirm' as never)

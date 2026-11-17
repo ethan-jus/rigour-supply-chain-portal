@@ -11,30 +11,35 @@
     :close-on-click-modal="false"
   >
     <el-alert
+      v-if="scope !== 'SHIPMENT'"
       :title="
         incrementalCustomer
           ? '同步订货宝新增和变更的客户，并重新核对本地待关联记录。保留客户原始创建时间和创建人。'
           : catalogSnapshot
             ? snapshotHint
-            : scope === 'SHIPMENT'
-              ? '先核对原销售单、客户、仓库和商品；缺少资料时尝试补同步，再同步发货记录。未完成单据保留原因，可单独重试。'
-              : `本次只同步${label}。缺少客户、商品等映射时会保留待处理，请到对应页面补齐。`
+            : `本次只同步${label}。缺少客户、商品等映射时会保留待处理，请到对应页面补齐。`
       "
       type="info"
       :closable="false"
     />
     <el-form label-width="90px" style="margin-top: 16px">
-      <el-form-item
-        v-if="(catalogSnapshot || scope === 'SHIPMENT') && connectors.length === 1"
-        label="同步来源"
-      >
-        订货宝
+      <el-form-item v-if="catalogSnapshot && connectors.length === 1" label="同步来源">
+        {{ connectorOptions[0]?.label || '订货宝' }}
       </el-form-item>
-      <el-form-item v-else-if="!incrementalCustomer" label="来源连接器"
-        ><el-select v-model="connectorId" aria-label="来源连接器" :disabled="busy"
-          ><el-option v-for="id in connectors" :key="id" :value="id" :label="id" /></el-select
+      <el-form-item
+        v-else-if="!incrementalCustomer && (scope !== 'SHIPMENT' || connectors.length > 1)"
+        label="同步来源"
+        ><el-select v-model="connectorId" aria-label="同步来源" :disabled="busy"
+          ><el-option
+            v-for="item in connectorOptions"
+            :key="item.id"
+            :value="item.id"
+            :label="item.label" /></el-select
       ></el-form-item>
-      <el-form-item v-if="!incrementalCustomer && !catalogSnapshot" label="变更范围"
+      <el-form-item
+        v-if="!incrementalCustomer && !catalogSnapshot"
+        :label="scope === 'SHIPMENT' ? '发货单更新时间' : '变更范围'"
+        :label-width="scope === 'SHIPMENT' ? '130px' : undefined"
         ><el-date-picker
           v-model="range"
           type="datetimerange"
@@ -43,8 +48,13 @@
           :disabled="busy"
       /></el-form-item>
     </el-form>
-    <div v-if="busy" role="status" class="sync-status">正在同步{{ label }}，请稍候…</div>
-    <DhbSyncJobProgress v-if="incrementalCustomer" :job="job" :notice="notice" />
+    <div v-if="preparing" role="status" class="sync-status">正在加载…</div>
+    <div v-else-if="busy" role="status" class="sync-status">正在同步{{ label }}，请稍候…</div>
+    <DhbSyncJobProgress
+      v-if="incrementalCustomer || scope === 'SHIPMENT'"
+      :job="job"
+      :notice="notice"
+    />
     <el-alert v-if="jobError" :title="jobError" type="error" :closable="false" />
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <div v-if="result" aria-live="polite">
@@ -129,6 +139,7 @@
       v-if="visible && scope === 'SHIPMENT' && connectorId && !busy"
       :key="`${connectorId}:${result?.batchId || 'pending'}`"
       :connector-id="connectorId"
+      @repaired="emit('repaired')"
     />
     <template #footer
       ><el-button @click="visible = false">关闭</el-button
@@ -166,14 +177,16 @@ const snapshotHint = computed(() =>
     : `核对订货宝全部${props.label}，按来源关联新增或更新档案，保留本地手工维护的信息。`,
 )
 const syncLabel = computed(() => (incrementalCustomer.value ? '同步' : `同步${props.label}`))
-const emit = defineEmits<{ completed: [result: DhbSyncOrchestrationResult] }>()
+const emit = defineEmits<{ completed: [result: DhbSyncOrchestrationResult]; repaired: [] }>()
 const { can } = useSupplyPermissions()
 const visible = ref(false),
   loading = ref(false),
+  preparing = ref(false),
   error = ref(''),
   connectorId = ref('')
-const connectors = ref<string[]>([]),
-  range = ref<[Date, Date] | null>(null)
+const connectorOptions = ref<Array<{ id: string; label: string }>>([])
+const connectors = computed(() => connectorOptions.value.map((item) => item.id))
+const range = ref<[Date, Date] | null>(null)
 const result = ref<DhbSyncOrchestrationResult | null>(null)
 const {
   job,
@@ -271,12 +284,31 @@ async function open() {
   if (jobBusy.value) return
   connectorId.value = ''
   loading.value = true
+  preparing.value = true
   error.value = ''
   result.value = null
+  connectorOptions.value = []
   // 首次范围显式展示；历史匹配需要时由操作者向前调整，不能悄悄触发全部对象。
   range.value = [new Date('2026-09-04T00:00:00+08:00'), new Date()]
   try {
-    connectors.value = [...new Set((await getDhbSyncTasks()).map((t) => t.connectorId))]
+    const tasks = (await getDhbSyncTasks()).filter(
+      (task) =>
+        props.scope !== 'SHIPMENT' ||
+        (task.objectType === 'ORDER' &&
+          task.status !== 'PAUSED' &&
+          task.connectorStatus !== 'DISABLED'),
+    )
+    const sources = new Map<string, string>()
+    for (const task of tasks) {
+      if (!sources.has(task.connectorId))
+        sources.set(
+          task.connectorId,
+          task.connectorName?.trim() || `订货宝来源 ${sources.size + 1}`,
+        )
+    }
+    connectorOptions.value = [...sources].map(([id, label]) => ({ id, label }))
+    if (!sources.size) error.value = '尚未配置可用的订货宝同步来源，请联系管理员。'
+
     if (connectors.value.length === 1) connectorId.value = connectors.value[0]!
     else if (incrementalCustomer.value)
       error.value =
@@ -287,6 +319,7 @@ async function open() {
     error.value = e instanceof Error ? e.message : '无法读取订货宝同步配置'
   } finally {
     loading.value = false
+    preparing.value = false
   }
   if (incrementalCustomer.value && connectorId.value && !error.value) await run()
 }
@@ -301,11 +334,17 @@ async function run() {
   error.value = ''
   result.value = null
   try {
-    if (incrementalCustomer.value) {
+    if (incrementalCustomer.value || props.scope === 'SHIPMENT') {
       await start({
         scope: props.scope,
         connectorId: connectorId.value,
-        incremental: true,
+        ...(incrementalCustomer.value
+          ? { incremental: true }
+          : {
+              incremental: false,
+              from: range.value![0].toISOString(),
+              to: range.value![1].toISOString(),
+            }),
         maxPages: 100,
       })
       return

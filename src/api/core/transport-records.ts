@@ -11,6 +11,7 @@ export interface TransportDraft {
   requestId: string
   transportType: string | null
   date: string
+  shippingTime?: string | null
   carrierCode: string | null
   trackingNo: string | null
   platformOrderNo: string | null
@@ -126,3 +127,54 @@ export const getTransportAttachmentDownloadUrl = (id: string, file: string) =>
     `${base}/${encodeURIComponent(id)}/attachments/${encodeURIComponent(file)}/download-url`,
     options,
   )
+
+export interface TransportFeeImportItem {
+  line: number
+  trackingNo: string
+  amount: number | null
+  remark: string
+  costId: string | null
+  documentNo: string | null
+  revision: number | null
+  state: 'READY' | 'ERROR' | 'UNCHANGED' | 'CONFLICT' | 'IMPORTED'
+  message: string
+}
+export interface TransportFeeImportPreview {
+  fileHash: string
+  items: TransportFeeImportItem[]
+}
+export const previewTransportFees = (file: File, carrierCode?: string) => {
+  const body = new FormData()
+  body.append('file', file, file.name)
+  if (carrierCode) body.append('carrierCode', carrierCode)
+  return apiClient.post<TransportFeeImportPreview>(base + '/fee-import/preview', body, {
+    ...options,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+export const applyTransportFees = (
+  file: File,
+  fileHash: string,
+  carrierCode: string | undefined,
+  items: TransportFeeImportItem[],
+) => {
+  const body = new FormData()
+  body.append('file', file, file.name)
+  body.append(
+    'command',
+    new Blob(
+      [
+        JSON.stringify({
+          fileHash,
+          carrierCode: carrierCode || null,
+          selections: items.map(({ line, costId, revision }) => ({ line, costId, revision })),
+        }),
+      ],
+      { type: 'application/json' },
+    ),
+  )
+  return apiClient.post<TransportFeeImportPreview>(base + '/fee-import/apply', body, {
+    ...options,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

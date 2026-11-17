@@ -62,7 +62,7 @@ function detail(): TransportDetail {
       documentNo: 'LC1',
       revision: 2,
       categoryCode: 'LOGISTICS',
-      statusCode: 'CONFIRMED',
+      statusCode: 'ACTIVE',
       data,
       warehouseName: null,
       ownerEmployeeName: null,
@@ -115,11 +115,34 @@ beforeEach(() => {
   ])
 })
 describe('运输记录详情回填', () => {
+  it('操作记录保留业务修改，隐藏系统迁移说明和附件内部编号', async () => {
+    api.history.mockResolvedValue([
+      { action: 'STATE_UPGRADE', reason: '内部迁移说明', actorId: 'system', occurredTime: '' },
+      {
+        action: 'ATTACHMENT_ADDED',
+        reason: '附件 internal-file-id',
+        actorId: 'U',
+        occurredTime: '',
+      },
+      { action: 'UPDATE', reason: '根据运费票据更正金额', actorId: 'U', occurredTime: '' },
+    ])
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: detail() },
+      global,
+    })
+    await flushPromises()
+    expect(w.text()).toContain('添加附件')
+    expect(w.text()).toContain('根据运费票据更正金额')
+    expect(w.text()).not.toContain('内部迁移说明')
+    expect(w.text()).not.toContain('internal-file-id')
+    w.unmount()
+  })
+
   it.each(['新增', '编辑', '查看'])(
     '%s沿用同一核心分区和关联字段，查看不提供输入控件',
     async (mode) => {
       const d = detail()
-      d.record.statusCode = 'DRAFT'
+      d.record.statusCode = 'ACTIVE'
       d.record.data.ledger = validManualLedger()
       const w = mount(Editor, {
         props: {
@@ -154,7 +177,7 @@ describe('运输记录详情回填', () => {
         '运输费用（元）',
         '费用负责人',
         '付款状态',
-        '已确认运输成本（元）',
+        '计入运输成本（元）',
         '发货仓库',
         '发货方',
         '收货单位',
@@ -256,8 +279,7 @@ describe('运输记录详情回填', () => {
     document.body.innerHTML = ''
   })
   it.each([
-    ['DRAFT', ['编辑', '确认', '作废'], ['撤销', '删除']],
-    ['CONFIRMED', ['撤销'], ['编辑', '确认', '作废', '删除']],
+    ['ACTIVE', ['编辑', '作废'], ['确认', '撤销', '删除']],
     ['VOID', ['删除'], ['编辑', '确认', '作废', '撤销']],
   ])('详情 %s 只提供允许的操作并从详情进入订单关联', async (status, allowed, forbidden) => {
     const d = detail()
@@ -275,7 +297,7 @@ describe('运输记录详情回填', () => {
     const link = Array.from(document.body.querySelectorAll('button')).find(
       (b) => b.textContent!.trim() === '更改关联',
     )
-    if (status === 'DRAFT') {
+    if (status === 'ACTIVE') {
       link!.click()
       await flushPromises()
       expect(w.emitted('edit')).toEqual([['orders']])
@@ -286,7 +308,7 @@ describe('运输记录详情回填', () => {
   it('员工选项加载不阻塞已有运输快照展示，保存仍需表单必填校验', async () => {
     api.employees.mockReturnValue(new Promise(() => {}))
     const d = detail()
-    d.record.statusCode = 'DRAFT'
+    d.record.statusCode = 'ACTIVE'
     const wrapper = mount(Editor, {
       props: { modelValue: true, readonly: false, detail: d },
       global,
@@ -336,7 +358,7 @@ describe('通用手工账单', () => {
     '%s 用快递单号编辑原平台单号，保留隐藏的历史运单号、付款状态和费用分项',
     async (carrier) => {
       const d = detail()
-      d.record.statusCode = 'DRAFT'
+      d.record.statusCode = 'ACTIVE'
       d.record.data.ledger = validManualLedger()
       d.record.data.ledger.feeItems[0]!.allocationMethodCode = 'EQUAL'
       Object.assign(d.record.data.ledger, {
@@ -433,7 +455,7 @@ describe('通用手工账单', () => {
     '手工账单分项缺失为%s时，支持只填总额；负净额不能保存',
     async (negative) => {
       const d = detail()
-      d.record.statusCode = 'DRAFT'
+      d.record.statusCode = 'ACTIVE'
       d.record.data.ledger = validManualLedger()
       Object.assign(d.record.data.ledger, {
         carrierCode: 'SF',
@@ -556,13 +578,7 @@ describe('物流详情的信息优先级', () => {
     expect(fees.textContent).toContain('120.00')
     expect(fees.textContent).toContain('100.01')
     expect(fees.textContent).toContain('已付款')
-    for (const text of [
-      '快递单号',
-      'HL-ORDER-001',
-      '微面',
-      '2026-11-09 19:20:30',
-      '已确认成本仍为',
-    ])
+    for (const text of ['快递单号', 'HL-ORDER-001', '微面', '2026-11-09 19:20:30', '本系统成本为'])
       expect(document.body.textContent).toContain(text)
     expect(document.body.textContent).not.toContain('LEGACY-HIDDEN')
     expect(document.body.textContent).not.toContain('运单号')
@@ -588,7 +604,7 @@ describe('物流详情的信息优先级', () => {
 describe('多单费用分摊', () => {
   it('编辑可调整各销售单金额，合计不等于总费用时拒绝保存，保存携带完整分摊', async () => {
     const d = detail()
-    d.record.statusCode = 'DRAFT'
+    d.record.statusCode = 'ACTIVE'
     d.record.data.amount = 137.64
     const ledger = validManualLedger()
     ledger.carrierCode = 'SF'

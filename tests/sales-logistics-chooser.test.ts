@@ -85,8 +85,8 @@ it('再次关联已有运输时先展示所有销售单的分摊预览，不额�
     id: 'C1',
     documentNo: 'LC1',
     revision: 3,
-    statusCode: 'DRAFT',
-    data: { typeCode: 'DELIVERY', ledger: null },
+    statusCode: 'ACTIVE',
+    data: { typeCode: 'DELIVERY', amount: 137.64, ledger: null },
     sources: [{ documentNo: 'SO002', sourceType: 'SALES_ORDER', documentAmount: 4000 }],
   }
   const platform = {

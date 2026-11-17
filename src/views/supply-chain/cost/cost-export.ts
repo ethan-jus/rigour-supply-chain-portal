@@ -4,6 +4,7 @@ import type { CellValue, Workbook } from 'exceljs'
 type ExportValue = string | number | null | undefined
 const moneyHeaders = new Set([
   '运输费用（元）',
+  '计入运输成本（元）',
   '已确认运输成本（元）',
   '已支付（元）',
   '未支付（元）',
@@ -130,6 +131,12 @@ export async function buildCostWorkbook(title: string, headers: string[], rows: 
       ) ?? 1
     row.height = index === 1 ? 32 : Math.min(409, Math.max(32, lines * 17 + 8))
     row.eachCell({ includeEmpty: true }, (cell, column) => {
+      // 同一业务时间列可混合日期和完整时间，按来源实际精度展示，不补出 00:00:00。
+      const original = rows[index - 2]?.[column - 1]
+      if (cell.value instanceof Date && typeof original === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(original)) cell.numFmt = 'yyyy-mm-dd'
+        else if (/^\d{4}-\d{2}$/.test(original)) cell.numFmt = 'yyyy-mm'
+      }
       cell.alignment = {
         vertical: 'middle',
         horizontal:

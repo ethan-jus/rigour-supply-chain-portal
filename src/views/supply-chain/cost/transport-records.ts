@@ -1,7 +1,12 @@
 import type { CostRecord, CostSource } from '@/api/core/cost'
-import type { PlatformTransport, TransportDraft } from '@/api/core/transport-records'
+import type {
+  PlatformTransport,
+  ShipmentTransportSource,
+  TransportDraft,
+} from '@/api/core/transport-records'
 import { currentSource } from './huolala-source'
 import { randomId } from '@/utils/random-id'
+import { businessDateTime } from '@/utils/business-date'
 export const transportTypes = [
   { value: 'DELIVERY', label: '销售订单配送', orderType: 'SALES_ORDER', orderLabel: '销售单' },
   { value: 'TRANSFER', label: '仓间调拨', orderType: 'TRANSFER_ORDER', orderLabel: '调拨单' },
@@ -13,10 +18,10 @@ export const money = (n: unknown) =>
     : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 export const typeName = (type: string | null | undefined) =>
   transportTypes.find((t) => t.value === type)?.label || '-'
-export const statusName = (status: string) =>
-  ({ DRAFT: '待确认', CONFIRMED: '已确认', VOID: '已作废' })[status] || '-'
+export const statusName = (status: string, business?: string | null) =>
+  status === 'VOID' ? '已作废' : business === 'COMPLETE' ? '已完善' : '待完善'
 export const amountOf = (row: CostRecord, platform?: PlatformTransport | null) => {
-  if (platform) return currentSource(platform.source).facts?.billAmount ?? null
+  if (platform) return row.data.amount ?? null
   if (row.data.ledger?.feeItems.length)
     return row.data.ledger.feeItems.reduce<number | null>(
       (sum, f) => (sum === null || f.feeAmount == null ? null : sum + f.feeAmount),
@@ -27,6 +32,32 @@ export const amountOf = (row: CostRecord, platform?: PlatformTransport | null) =
 /** 车型使用最新平台资料；没有来源值时保留未知，不按物流公司推断。 */
 export const vehicleOf = (platform?: PlatformTransport | null): string =>
   (platform ? currentSource(platform.source).raw['车型']?.trim() : '') || '-'
+function localTransportTime(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value} 00:00:00`
+  if (/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return businessDateTime(value)
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?/.test(value))
+    return `${value.slice(0, 16).replace('T', ' ')}${value.length >= 19 ? value.slice(16, 19) : ':00'}`
+  return '-'
+}
+/** 按同一业务时间排序和展示；旧手工记录只登记日期时以当天零点呈现。 */
+export function transportTimeOf(
+  row: CostRecord,
+  platform?: PlatformTransport | null,
+  shipments: ShipmentTransportSource[] = [],
+): string {
+  const placed = platform ? currentSource(platform.source).raw['下单时间']?.trim() : ''
+  if (placed) return localTransportTime(placed)
+  const shipped = shipments
+    .map((s) => s.latest.shipTime)
+    .filter((v) => v && Number.isFinite(Date.parse(v)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b))[0]
+  if (shipped) return businessDateTime(shipped)
+  if (platform) return '-'
+  return (
+    (row.data.ledger?.shippingTime ? localTransportTime(row.data.ledger.shippingTime) : '') ||
+    (row.data.costDate ? `${row.data.costDate} 00:00:00` : '-')
+  )
+}
 export const ordersOf = (row: CostRecord, platform?: PlatformTransport | null) =>
   platform?.draft?.orderCodes ??
   (row.data.ledger?.sources.length
@@ -196,7 +227,14 @@ export function transportDraft(
       row?.data.logistics?.legCode ||
       null,
     date:
-      order?.useTime.slice(0, 10) || row?.data.costDate || new Date().toLocaleDateString('sv-SE'),
+      order?.useTime.slice(0, 10) ||
+      row?.data.costDate ||
+      businessDateTime(new Date()).slice(0, 10),
+    shippingTime:
+      ledger?.shippingTime ||
+      (row?.data.costDate
+        ? `${row.data.costDate}T00:00:00`
+        : businessDateTime(new Date()).replace(' ', 'T')),
     deliveryModeCode:
       ledger?.deliveryModeCode || (ledger?.carrierCode === 'SELF' ? 'SELF' : 'THIRD_PARTY'),
     receivingPoints: ledger?.receivingPoints.map((p) => ({ ...p })) || null,
@@ -219,11 +257,7 @@ export function transportDraft(
     senderAddress:
       saved?.senderAddress ?? ledger?.sender.address ?? row?.data.logistics?.originAddress ?? '',
     cityCode: saved?.cityCode ?? row?.data.cityCode ?? '',
-    amount: platform
-      ? Number.isFinite(Number(order?.facts?.billAmount)) && order?.facts?.billAmount != null
-        ? Number(order.facts.billAmount)
-        : null
-      : (row?.data.amount ?? null),
+    amount: row?.data.amount ?? null,
     paymentStatusCode: row?.data.paymentStatusCode || 'UNKNOWN',
     manualBillItems: platform ? [] : ledger?.manualBillItems?.map((item) => ({ ...item })) || [],
     ownerEmployeeCode: saved?.ownerEmployeeCode ?? row?.data.ownerEmployeeCode ?? null,
@@ -231,11 +265,10 @@ export function transportDraft(
     reason: '',
     zeroReason: saved?.zeroReason ?? ledger?.feeItems[0]?.zeroCostReason ?? '',
     orderCodes: row ? ordersOf(row, platform) : [],
-    orderAllocations: saved?.orderAllocations
-      ? { ...saved.orderAllocations }
-      : row?.data.amount != null &&
-          ledger?.sources.length &&
-          ledger.sources.every((s) => s.allocations.length > 0)
+    orderAllocations:
+      row?.data.amount != null &&
+      ledger?.sources.length &&
+      ledger.sources.every((s) => s.allocations.length > 0)
         ? Object.fromEntries(
             ledger.sources
               .filter((s) => s.orderCode)
@@ -247,7 +280,9 @@ export function transportDraft(
                     100,
               ]),
           )
-        : null,
+        : saved?.orderAllocations
+          ? { ...saved.orderAllocations }
+          : null,
   }
 }
 /** 展示预览也按分分摊，尾差固定给排序后的首批单据；最终以服务端结果为准。 */

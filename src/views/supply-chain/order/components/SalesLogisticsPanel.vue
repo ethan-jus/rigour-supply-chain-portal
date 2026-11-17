@@ -15,7 +15,7 @@
           ><span
             >本单分摊费用 <strong>{{ money(context.allocatedAmount) }}</strong> 元</span
           ><span
-            >已确认成本 <strong>{{ money(context.confirmedAmount) }}</strong> 元</span
+            >计入运输成本 <strong>{{ money(context.confirmedAmount) }}</strong> 元</span
           >
         </div>
         <el-button
@@ -35,13 +35,9 @@
         <el-table-column label="快递单号" min-width="200"
           ><template #default="{ row }">{{ no(row as TransportDetail) }}</template></el-table-column
         >
-        <el-table-column label="发货时间" min-width="160"
+        <el-table-column label="下单／发货时间" min-width="190"
           ><template #default="{ row }">{{
-            displayDateTime(
-              row.shipments?.[0]?.latest.shipTime ||
-                row.platform?.source.order.useTime ||
-                row.record.data.costDate,
-            )
+            transportTimeOf(row.record, row.platform, row.shipments)
           }}</template></el-table-column
         >
         <el-table-column label="收货方" min-width="180"
@@ -56,7 +52,7 @@
         >
         <el-table-column label="单据状态" width="110"
           ><template #default="{ row }">{{
-            statusName(row.record.statusCode)
+            statusName(row.record.statusCode, row.record.businessStatusCode)
           }}</template></el-table-column
         >
         <el-table-column label="操作" width="100" fixed="right"
@@ -88,13 +84,13 @@
 </template>
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { displayDateTime } from '@/utils/business-date'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getSalesLogistics, type SalesLogisticsContext } from '@/api/core/sales-logistics'
 import { getTransport, type TransportDetail } from '@/api/core/transport-records'
 import {
   money,
+  transportTimeOf,
   receiversOf,
   statusName,
   frozenTransportSources,

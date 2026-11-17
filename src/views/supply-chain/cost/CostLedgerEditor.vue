@@ -1,6 +1,6 @@
 <template>
   <el-form label-position="top" class="ledger-editor">
-    <section v-if="logistics" class="ledger-panel">
+    <section v-if="logistics && !feesOnly" class="ledger-panel">
       <h3><span class="required">*</span> 运输类型</h3>
       <CostDictSelect
         v-model="plan.transportPurposeCode"
@@ -20,7 +20,7 @@
         type="warning"
         :closable="false"
       />
-      <section class="ledger-panel">
+      <section v-if="!feesOnly" class="ledger-panel">
         <h3>{{ logistics ? '运输信息' : '仓储信息' }}</h3>
         <div class="field-grid">
           <el-form-item :label="logistics ? '运输日期' : '登记日期'" required
@@ -144,7 +144,7 @@
       </section>
 
       <template v-if="logistics">
-        <section class="ledger-panel">
+        <section v-if="!feesOnly" class="ledger-panel">
           <h3>发货信息</h3>
           <el-form-item v-if="manualSalesWarehouse" label="发货仓库" required>
             <CostLedgerPartySelect
@@ -165,7 +165,7 @@
           </dl>
           <CostLedgerPartyFields v-else v-model="plan.sender" :cities="cities" />
         </section>
-        <section class="ledger-panel">
+        <section v-if="!feesOnly" class="ledger-panel">
           <div class="section-toolbar">
             <h3><span class="required">*</span> 收货信息</h3>
             <el-button
@@ -273,7 +273,7 @@
                   maxlength="500"
                   placeholder="费用说明" /></template
             ></el-table-column>
-            <el-table-column label="操作" width="75"
+            <el-table-column v-if="!feesOnly" label="操作" width="75"
               ><template #default="{ row }"
                 ><el-button link type="danger" @click="removeFee(row.feeKey)"
                   >移除</el-button
@@ -301,10 +301,12 @@
           <div class="section-toolbar">
             <h3>关联单据</h3>
             <div>
-              <el-button v-if="plan.transportPurposeCode === 'OTHER'" @click="addNoSource"
+              <el-button
+                v-if="!feesOnly && plan.transportPurposeCode === 'OTHER'"
+                @click="addNoSource"
                 >无关联单据</el-button
               ><el-button
-                v-if="!salesDelivery && plan.transportPurposeCode === 'OTHER'"
+                v-if="!feesOnly && !salesDelivery && plan.transportPurposeCode === 'OTHER'"
                 type="primary"
                 plain
                 @click="picker = true"
@@ -331,6 +333,7 @@
               ><template #default="{ row }"
                 ><el-select
                   v-model="row.linkRoleCode"
+                  :disabled="feesOnly"
                   @change="sourceRoleChanged(row as LedgerSource)"
                   ><el-option label="成本归属" value="COST" /><el-option
                     label="仅业务追溯"
@@ -346,7 +349,7 @@
                 /><span v-else>—</span></template
               ></el-table-column
             >
-            <el-table-column label="操作" width="75"
+            <el-table-column v-if="!feesOnly" label="操作" width="75"
               ><template #default="{ $index }"
                 ><el-button link type="danger" @click="plan.sources.splice($index, 1)"
                   >移除</el-button
@@ -410,7 +413,7 @@
                   :precision="2"
                   :controls="false" /></template
             ></el-table-column>
-            <el-table-column label="操作" width="75"
+            <el-table-column v-if="!feesOnly" label="操作" width="75"
               ><template #default="{ row }"
                 ><el-button link type="danger" @click="row.source.allocations.splice(row.index, 1)"
                   >移除</el-button
@@ -586,12 +589,12 @@
             :rows="2"
             maxlength="1000"
             show-word-limit /></el-form-item
-        ><el-form-item label="变更原因" :required="confirmed"
+        ><el-form-item label="变更原因" :required="!logistics && confirmed"
           ><el-input
             v-model="form.reason"
             maxlength="500"
             :placeholder="
-              confirmed
+              !logistics && confirmed
                 ? '修改已确认费用必须填写原因，保存后重新确认'
                 : '补充登记或更正说明（选填）'
             "
@@ -634,6 +637,7 @@ const props = defineProps<{
   warehouseName?: string | null
   confirmed?: boolean
   carrierLocked?: boolean
+  feesOnly?: boolean
 }>()
 const plan = computed(() => form.value.ledger!)
 const warehouse = computed(() => form.value.warehouseLedger!)

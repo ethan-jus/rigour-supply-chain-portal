@@ -1,9 +1,8 @@
 <template>
   <div class="sales-shipment-page supply-page supply-page--business-main">
     <div class="page-heading">
-      <DhbPageSyncButton scope="SHIPMENT" label="发货" @completed="loadRows" />
+      <DhbPageSyncButton scope="SHIPMENT" label="发货" @completed="loadRows" @repaired="loadRows" />
       <div>
-        <span class="supply-page__eyebrow">Order · 履约中心</span>
         <div class="list-heading-title">
           <SupplyPageTitle>发货单</SupplyPageTitle>
           <SupplyPageHelp>查看销售订单对应的客户发货、物流单号和发货商品明细。</SupplyPageHelp>
@@ -11,61 +10,64 @@
       </div>
     </div>
 
-    <el-card class="filter-card" shadow="never">
-      <el-form :model="filters" inline @submit.prevent="loadRows">
-        <el-form-item label="发货单号">
+    <OrderRegisterFilterCard
+      class="order-register-filter--compact"
+      :loading="loading"
+      @search="searchRows"
+      @reset="resetFilters"
+    >
+      <template #primary>
+        <div class="list-filter-field list-filter-field--text">
           <el-input
             v-model="filters.shipmentNo"
-            clearable
+            aria-label="发货单号"
             placeholder="发货单号"
-            style="width: 170px"
+            clearable
+            @keyup.enter="searchRows"
           />
-        </el-form-item>
-        <el-form-item label="销售订单号">
+        </div>
+        <div class="list-filter-field list-filter-field--text">
           <el-input
             v-model="filters.salesOrderNo"
-            clearable
+            aria-label="销售订单号"
             placeholder="销售订单号"
-            style="width: 170px"
+            clearable
+            @keyup.enter="searchRows"
           />
-        </el-form-item>
-        <el-form-item label="客户名称">
+        </div>
+        <div class="list-filter-field list-filter-field--text">
           <el-input
             v-model="filters.customerName"
-            clearable
+            aria-label="客户名称"
             placeholder="客户名称"
-            style="width: 200px"
+            clearable
+            @keyup.enter="searchRows"
           />
-        </el-form-item>
-        <el-form-item label="物流单号">
+        </div>
+        <div class="list-filter-field list-filter-field--text">
           <el-input
             v-model="filters.trackingNo"
+            aria-label="快递单号"
+            placeholder="快递单号"
             clearable
-            placeholder="物流/配送单号"
-            style="width: 180px"
+            @keyup.enter="searchRows"
           />
-        </el-form-item>
-        <el-form-item label="发货状态">
+        </div>
+        <div class="list-filter-field list-filter-field--select">
           <el-select
             v-model="filters.shipmentStatusCode"
+            aria-label="发货状态"
+            placeholder="发货状态"
             clearable
-            placeholder="全部状态"
-            style="width: 140px"
-          >
-            <el-option
+            ><el-option
               v-for="item in shipmentStatusOptions"
               :key="item.value"
               :label="item.label"
               :value="item.value"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item class="filter-actions">
-          <el-button type="primary" :loading="loading" native-type="submit">查询</el-button>
-          <el-button @click="resetFilters">重置</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+          /></el-select>
+        </div>
+      </template>
+    </OrderRegisterFilterCard>
 
     <div class="result-heading">
       <div class="result-title-line">
@@ -93,8 +95,16 @@
             fixed="left"
             :index="tableRowIndex"
           />
-          <el-table-column prop="shipmentNo" label="发货单号" width="170" show-overflow-tooltip>
-            <template #default="scope">{{ scope.row.shipmentNo || '-' }}</template>
+          <el-table-column
+            prop="shipmentNo"
+            label="发货单号"
+            width="190"
+            fixed="left"
+            show-overflow-tooltip
+          >
+            <template #default="scope">{{
+              scope.row.sourceDocumentNo || scope.row.shipmentNo || '-'
+            }}</template>
           </el-table-column>
           <el-table-column
             prop="salesOrderNoSnapshot"
@@ -114,10 +124,11 @@
               <span class="record-name">{{ scope.row.customerNameSnapshot || '-' }}</span>
             </template>
           </el-table-column>
+          <!-- @vue-generic {SalesShipmentSummary} -->
           <el-table-column prop="shipmentStatusCode" label="发货状态" width="120">
             <template #default="scope">
               <el-tag :type="shipmentStatusTag(scope.row.shipmentStatusCode)" effect="light">
-                {{ shipmentStatusLabel(scope.row.shipmentStatusCode) }}
+                {{ shipmentStatusLabel(scope.row.shipmentStatusCode, isExternalSource(scope.row)) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -135,7 +146,21 @@
           <el-table-column prop="totalQuantity" label="发货数量" width="120" align="right">
             <template #default="scope">{{ formatNumber(scope.row.totalQuantity) }}</template>
           </el-table-column>
-          <el-table-column prop="shipTime" label="发货时间" width="180">
+          <el-table-column
+            prop="sourceWarehouseName"
+            label="发货仓库"
+            width="130"
+            show-overflow-tooltip
+            ><template #default="scope">{{
+              scope.row.sourceWarehouseName || '-'
+            }}</template></el-table-column
+          >
+          <el-table-column prop="stockOutTime" label="出库时间" width="190"
+            ><template #default="scope">{{
+              formatTime(scope.row.stockOutTime)
+            }}</template></el-table-column
+          >
+          <el-table-column prop="shipTime" label="发货时间" width="190">
             <template #default="scope">{{ formatTime(scope.row.shipTime) }}</template>
           </el-table-column>
           <!-- @vue-generic {SalesShipmentSummary} -->
@@ -154,17 +179,14 @@
           <template #empty><el-empty description="暂无发货单" /></template>
         </el-table>
       </div>
-      <div class="pagination-row">
-        <el-pagination
+      <ListTableFooter
+        ><CompactPagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
-          layout="total, sizes, prev, pager, next"
-          :page-sizes="[20, 50, 100]"
           :total="pageData.total"
           @current-change="loadRows"
           @size-change="handleSizeChange"
-        />
-      </div>
+      /></ListTableFooter>
     </el-card>
 
     <el-drawer
@@ -177,10 +199,10 @@
         <header class="detail-hero">
           <div>
             <span>发货单详情</span>
-            <h2>{{ detail.shipmentNo }}</h2>
+            <h2>{{ detail.sourceDocumentNo || detail.shipmentNo }}</h2>
             <p>
               {{ detail.salesOrderNoSnapshot || '-' }} ·
-              {{ shipmentStatusLabel(detail.shipmentStatusCode) }}
+              {{ shipmentStatusLabel(detail.shipmentStatusCode, isExternalSource(detail)) }}
             </p>
           </div>
           <el-button circle plain aria-label="关闭发货单详情" @click="detailVisible = false"
@@ -189,7 +211,9 @@
         </header>
         <div class="detail-content">
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="发货单号">{{ detail.shipmentNo }}</el-descriptions-item>
+            <el-descriptions-item label="发货单号">{{
+              detail.sourceDocumentNo || detail.shipmentNo
+            }}</el-descriptions-item>
             <el-descriptions-item label="销售订单号">{{
               detail.salesOrderNoSnapshot || '-'
             }}</el-descriptions-item>
@@ -200,7 +224,7 @@
               detail.contactPhoneSnapshot || '-'
             }}</el-descriptions-item>
             <el-descriptions-item label="发货状态">{{
-              shipmentStatusLabel(detail.shipmentStatusCode)
+              shipmentStatusLabel(detail.shipmentStatusCode, isExternalSource(detail))
             }}</el-descriptions-item>
             <el-descriptions-item label="发货数量">{{
               formatNumber(detail.totalQuantity)
@@ -213,6 +237,12 @@
             }}</el-descriptions-item>
             <el-descriptions-item label="ERP出库单号">{{
               detail.stockOutNo || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="发货仓库">{{
+              detail.sourceWarehouseName || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="出库时间">{{
+              formatTime(detail.stockOutTime)
             }}</el-descriptions-item>
             <el-descriptions-item label="发货时间">{{
               formatTime(detail.shipTime)
@@ -272,6 +302,9 @@
 </template>
 
 <script setup lang="ts">
+import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
+import CompactPagination from '@/components/supply/CompactPagination.vue'
+import ListTableFooter from '@/components/supply/ListTableFooter.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
@@ -299,6 +332,10 @@ const shipmentStatusOptions = computed(() =>
   businessDictionaryOptions('ORDER', 'SALES_SHIPMENT_STATUS'),
 )
 
+function searchRows() {
+  currentPage.value = 1
+  void loadRows()
+}
 const loading = ref(false)
 const detailVisible = ref(false)
 const detail = ref<SalesShipmentDetail | null>(null)
@@ -317,6 +354,7 @@ const filters = reactive({
 onMounted(() => {
   void loadBusinessDictionaries([
     { moduleCode: 'ORDER', code: 'SALES_SHIPMENT_STATUS' },
+    { moduleCode: 'ORDER', code: 'DHB_SHIPMENT_STATUS' },
     { moduleCode: 'COMMON', code: 'PRODUCT_UNIT' },
   ])
   void loadRows()
@@ -394,11 +432,24 @@ async function deleteRow(row: SalesShipmentSummary) {
   }
 }
 
-function isExternalSource(row: Pick<SalesShipmentSummary, 'sourceSystemCode'>) {
+function isExternalSource(row: { sourceSystemCode?: string | null }) {
   return Boolean(row.sourceSystemCode && row.sourceSystemCode.trim())
 }
 
-function shipmentStatusLabel(value: string | null | undefined) {
+function shipmentStatusLabel(value: string | null | undefined, external = false) {
+  if (external) {
+    const source = (
+      {
+        CREATED: 'shipped',
+        SHIPPED: 'receivedin',
+        SIGNED: 'received',
+        CANCELLED: 'cancelled',
+      } as Record<string, string>
+    )[value || '']
+    return source
+      ? businessDictionaryLabel('ORDER', 'DHB_SHIPMENT_STATUS', source, '发货状态')
+      : '-'
+  }
   return businessDictionaryLabel('ORDER', 'SALES_SHIPMENT_STATUS', value, '发货状态')
 }
 

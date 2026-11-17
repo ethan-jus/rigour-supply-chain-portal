@@ -12,6 +12,22 @@ import {
   parseCostCsv,
 } from '@/views/supply-chain/bi/cost/cost-report-export'
 describe('cost Excel export', () => {
+  it('运输保存后的有效状态在导出中保持可读，其他费用保留确认口径', async () => {
+    const row = {
+      categoryCode: 'LOGISTICS',
+      statusCode: 'ACTIVE',
+      documentNo: 'LC001',
+      data: { amount: 18.5 },
+    } as unknown as CostRecord
+    const headers = costExportHeaders('logistics')
+    const fields = costExportFields(row)
+    const book = await buildCostWorkbook('物流运输记录', headers, [
+      headers.map((header) => fields.find((field) => field.label === header)?.value ?? ''),
+    ])
+    expect(headers).not.toContain('确认状态')
+    expect(book.worksheets[0]!.getCell(2, headers.indexOf('单据状态') + 1).value).toBe('有效')
+    expect(costExportHeaders('marketing')).toContain('确认状态')
+  })
   it('行驶路段保留完整顺序，收货点数写入可计算的数字单元格', async () => {
     const route = '武汉仓 → 同名门店（一号路） → 同名门店（二号路）'
     const book = await buildCostWorkbook('物流运输记录', ['行驶路段', '收货点数'], [[route, 2]])
@@ -137,6 +153,27 @@ describe('cost Excel export', () => {
     expect(sheet.getCell('D2').value).toBe(4.500001)
     expect(sheet.getCell('E2').value).toBe('待补金额')
   })
+  it('同一运输时间列保留手工日期与平台完整时间的不同精度', async () => {
+    const workbook = await buildCostWorkbook(
+      '物流运输记录',
+      ['下单／发货时间', '计入运输成本（元）'],
+      [
+        ['2026-11-16', 2.34],
+        ['2026-11-16 01:00:00', 3.5],
+        ['-', null],
+      ],
+    )
+    const restored = new Workbook()
+    await restored.xlsx.load(await workbook.xlsx.writeBuffer())
+    const sheet = restored.worksheets[0]!
+    expect(sheet.getCell('A2').value).toEqual(new Date('2026-11-16T00:00:00Z'))
+    expect(sheet.getCell('A2').numFmt).toBe('yyyy-mm-dd')
+    expect(sheet.getCell('A3').value).toEqual(new Date('2026-11-16T01:00:00Z'))
+    expect(sheet.getCell('A3').numFmt).toBe('yyyy-mm-dd hh:mm:ss')
+    expect(sheet.getCell('A4').value).toBe('-')
+    expect(sheet.getCell('B2').numFmt).toBe('#,##0.00')
+    expect(sheet.getCell('B4').value).toBeNull()
+  })
   const csv = (records: string[][]) =>
     '\uFEFF' +
     records
@@ -244,6 +281,7 @@ describe('cost Excel export', () => {
     expect(sheet.getCell('B2').value).toBe('运输,含"装卸"\n送达')
     expect(sheet.getCell('B3').value).toBe('=1+1')
     expect(sheet.getCell('G2').value).toBe(60.1)
+    expect(sheet.getCell('H2').value).toBe('已完善')
     expect(sheet.getCell('H3').value).toBe('已确认')
     expect(sheet.getCell('I3').value).toBe('未付款')
     expect(sheet.getCell('G4').value).toBeNull()
@@ -257,7 +295,7 @@ describe('cost Excel export', () => {
       '费用日期',
       '费用所属月份',
       '单据金额（元）',
-      '确认状态',
+      '单据状态',
       '付款状态',
     ])
     expect(restored.worksheets).toHaveLength(2)

@@ -1,5 +1,9 @@
 <template>
-  <section class="transport-evidence" aria-label="业务凭证">
+  <section
+    v-if="!hideEmpty || !readonly || loading || loadError || count > 0"
+    class="transport-evidence"
+    aria-label="业务凭证"
+  >
     <component :is="embedded ? 'h4' : 'h3'"
       ><span v-if="!readonly && required" class="required">*</span
       >{{ required ? '业务凭证' : '补充业务凭证' }}</component
@@ -12,7 +16,7 @@
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <el-button v-if="loadError" @click="load">重新加载凭证</el-button>
     <div v-loading="loading" class="evidence-groups">
-      <section v-for="category in evidenceCategories" :key="category.code" class="evidence-group">
+      <section v-for="category in shownCategories" :key="category.code" class="evidence-group">
         <div class="group-heading">
           <h4>{{ category.label }}</h4>
           <el-button
@@ -96,6 +100,7 @@ const props = defineProps<{
   disabled: boolean
   required: boolean
   embedded?: boolean
+  hideEmpty?: boolean
 }>()
 const changes = defineModel<CostAttachmentDraft[]>({ required: true })
 const emit = defineEmits<{ busy: [value: boolean]; count: [value: number] }>()
@@ -119,6 +124,11 @@ const remaining = computed(() =>
 )
 const count = computed(
   () => remaining.value.length + changes.value.filter((change) => !change.removing).length,
+)
+const shownCategories = computed(() =>
+  props.hideEmpty && props.readonly
+    ? evidenceCategories.filter((category) => visibleFiles(category.code).length > 0)
+    : evidenceCategories,
 )
 type Item = {
   id: string

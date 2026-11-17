@@ -14,9 +14,17 @@
         issue?.requiredSourceId
       }}</el-descriptions-item>
     </el-descriptions>
-    <p>先在对应业务页面补录资料，再返回选择已补录的记录。保存只建立关联，继续使用原运输记录。</p>
-    <p v-if="kind === 'SALES_ORDER'">销售订单需先提交，再选择关联。</p>
-    <el-button :disabled="saving" @click="goCreate">去{{ label }}页面补录</el-button>
+    <el-button
+      v-if="kind === 'SALES_ORDER'"
+      :disabled="saving || !can('order:create') || !can('order:submit')"
+      @click="salesEntryVisible = true"
+      >补录销售订单</el-button
+    >
+    <el-button v-else :disabled="saving" @click="goCreate">去{{ label }}页面补录</el-button>
+    <p v-if="kind === 'SALES_ORDER' && (!can('order:create') || !can('order:submit'))">
+      补录销售订单需要新增及提交权限，请联系有权限的人员处理。
+    </p>
+    <el-alert v-if="createdMessage" :title="createdMessage" type="success" :closable="false" />
     <el-form label-position="top" style="margin-top: 16px">
       <el-form-item :label="`选择本系统${kind === 'PRODUCT_SKU' ? '商品' : label}`" required>
         <el-select
@@ -61,15 +69,44 @@
       ></template
     >
   </el-dialog>
+  <SalesOrderEntry
+    v-if="salesEntryVisible"
+    entry-only
+    :source-order-no="issue?.relatedSalesOrderNo || issue?.requiredSourceId || ''"
+    @created="onSalesCreated"
+    @closed="salesEntryVisible = false"
+  />
 </template>
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getSalesOrders } from '@/api/core/order-sales'
+import { getSalesOrders, type SalesOrderDetail } from '@/api/core/order-sales'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { getInternalCrmCustomers } from '@/api/core/crm'
 import { getErpInventoryWarehouses } from '@/api/core/erp-internal'
 import { getErpManagedProducts, type ErpManagedProductVariant } from '@/api/core/erp-product'
 import { linkDhbDependency, type DhbSyncOpenIssueItem } from '@/api/core/dhb-orchestration'
+const SalesOrderEntry = defineAsyncComponent(
+  () => import('@/views/supply-chain/order/SalesOrderView.vue'),
+)
+const { can } = useSupplyPermissions()
+const salesEntryVisible = ref(false)
+const createdMessage = ref('')
+function onSalesCreated(order: SalesOrderDetail) {
+  salesEntryVisible.value = false
+  if (['DRAFT', 'CANCELLED', 'DELETED'].includes(order.orderStatusCode)) {
+    error.value = '销售订单需提交后才能关联'
+    return
+  }
+  const id = String(order.id)
+  options.value = [
+    { id, label: `${order.orderNo} · ${order.customerNameSnapshot || ''}` },
+    ...options.value.filter((row) => row.id !== id),
+  ]
+  selected.value = id
+  createdMessage.value = `销售订单 ${order.orderNo} 已提交，请核对后保存资料关联。`
+  error.value = ''
+}
 const emit = defineEmits<{ saved: [] }>()
 const router = useRouter(),
   visible = ref(false),
@@ -91,7 +128,6 @@ const names: Record<string, string> = {
 const label = computed(() => names[kind.value] || '资料')
 const variants = computed(() => options.value.find((o) => o.id === selected.value)?.variants || [])
 const routes: Record<string, string> = {
-  SALES_ORDER: '/supply-chain/order/sales-orders',
   CUSTOMER: '/supply-chain/crm/customers/profiles',
   WAREHOUSE: '/supply-chain/erp/inventory/warehouses',
   PRODUCT_SPU: '/supply-chain/erp/master-data/products',
@@ -116,8 +152,13 @@ async function open(value: DhbSyncOpenIssueItem) {
   variant.value = ''
   options.value = []
   error.value = ''
+  createdMessage.value = ''
   visible.value = true
-  await search('')
+  await search(
+    value.requiredDataType === 'SALES_ORDER'
+      ? value.relatedSalesOrderNo || value.requiredSourceId || ''
+      : '',
+  )
 }
 async function search(text: string) {
   if (saving.value) return
@@ -157,7 +198,8 @@ async function search(text: string) {
       }))
     if (version === generation) {
       const chosen = options.value.find((item) => item.id === selected.value)
-      options.value = chosen && !rows.some((item) => item.id === chosen.id) ? [chosen, ...rows] : rows
+      options.value =
+        chosen && !rows.some((item) => item.id === chosen.id) ? [chosen, ...rows] : rows
     }
   } catch {
     if (version === generation) error.value = '资料暂时无法读取或无查看权限，请核对后重试。'

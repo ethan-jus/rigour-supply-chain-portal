@@ -38,7 +38,7 @@ describe('成本看板支出明细', () => {
       '费用归属',
       '费用日期',
       '金额（元）',
-      '确认状态',
+      '单据状态',
       '付款状态',
       '操作',
     ])
@@ -56,6 +56,23 @@ describe('成本看板支出明细', () => {
     await rendered[1]!.get('button').trigger('click')
     expect(wrapper.emitted('detail')).toEqual([[rows[1]]])
     wrapper.unmount()
+  })
+
+  it('运输以资料完整度展示，付款状态独立，其他类别保留确认口径', () => {
+    const rows = ['CONFIRMED', 'DRAFT', 'VOID'].map((status) => ({
+      ...row('UNPAID', status),
+      source: 'ORDER',
+      category: 'freight',
+      status,
+    })) as CostRecord[]
+    const w = mount(CostRecordsTable, { props: { rows } })
+    expect(w.findAll('tbody tr').map((r) => r.findAll('td')[7]!.text())).toEqual([
+      '已完善',
+      '待完善',
+      '已作废',
+    ])
+    expect(w.findAll('tbody tr').every((r) => r.findAll('td')[8]!.text() === '未付款')).toBe(true)
+    w.unmount()
   })
 
   it('发生日不被当作所属月，空结果保留完整十列表格', () => {

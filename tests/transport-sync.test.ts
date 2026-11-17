@@ -83,7 +83,7 @@ describe('运输列表同步完成后刷新', () => {
       documentNo: 'LC1',
       revision: 1,
       categoryCode: 'LOGISTICS',
-      statusCode: 'DRAFT',
+      statusCode: 'ACTIVE',
       data: { typeCode: 'DELIVERY', logistics: {}, ledger: null },
       sources: [],
     }
@@ -101,8 +101,8 @@ describe('运输列表同步完成后刷新', () => {
         stubs: {
           TransportRecordEditor: defineComponent({
             props: ['detail', 'readonly'],
-              setup: (props) => ({ openedRevision: ref(props.detail.record.revision) }),
-              template: '<div data-test="opened-detail">{{ openedRevision }}</div>',
+            setup: (props) => ({ openedRevision: ref(props.detail.record.revision) }),
+            template: '<div data-test="opened-detail">{{ openedRevision }}</div>',
           }),
         },
       },

@@ -3,7 +3,7 @@
     <el-alert v-if="notice" :title="notice" type="warning" :closable="false" />
     <template v-if="job">
       <el-alert :title="job.stage" :type="alertType" :closable="false" />
-      <p>状态：{{ statusLabel }} · 已用时 {{ elapsed }} · 任务 {{ job.jobId || '待确认' }}</p>
+      <p>状态：{{ statusLabel }} · 已用时 {{ elapsed }}</p>
       <p v-if="active">可以关闭弹窗继续操作。再次点击同步按钮会查看原任务，不会重复启动。</p>
       <p v-if="job.status === 'UNKNOWN'">任务状态待核实，不代表执行失败；请勿重复提交。</p>
     </template>

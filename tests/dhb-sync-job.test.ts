@@ -55,7 +55,10 @@ describe('后台同步状态恢复', () => {
     expect(state.job.value?.scope).toBe('VOUCHER_BACKFILL')
     const result = { status: 'SUCCEEDED_WITH_WARNINGS', tenants: [] }
     api.get.mockResolvedValue({
-      ...running, scope: voucherCommand.scope, status: 'SUCCEEDED', result,
+      ...running,
+      scope: voucherCommand.scope,
+      status: 'SUCCEEDED',
+      result,
       stage: '已检查1笔，已达本轮上限',
     })
     await vi.advanceTimersByTimeAsync(2000)
@@ -63,6 +66,32 @@ describe('后台同步状态恢复', () => {
     expect(state.notice.value).toBe('')
     expect(completed).toHaveBeenCalledWith(result)
     expect(api.start).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('发货保留指定时间窗口，后台运行和再次点击不会重复启动', async () => {
+    const shipment = {
+      ...command,
+      scope: 'SHIPMENT' as const,
+      incremental: false,
+      from: '2026-11-15T16:00:00Z',
+      to: '2026-11-16T11:00:00Z',
+    }
+    api.start.mockResolvedValue({ ...running, scope: 'SHIPMENT' })
+    const { state, wrapper, completed } = setup()
+    await state.start(shipment)
+    await state.start(shipment)
+    expect(api.start).toHaveBeenCalledTimes(1)
+    expect(api.start).toHaveBeenCalledWith(expect.any(String), shipment)
+    expect(state.busy.value).toBe(true)
+    api.get.mockResolvedValue({
+      ...running,
+      scope: 'SHIPMENT',
+      status: 'SUCCEEDED',
+      result: { status: 'SUCCEEDED', tenants: [] },
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(completed).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })
 

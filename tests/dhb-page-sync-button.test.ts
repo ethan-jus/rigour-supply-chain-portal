@@ -4,7 +4,7 @@ import ElementPlus from 'element-plus'
 import Button from '@/components/supply/DhbPageSyncButton.vue'
 const mocks = vi.hoisted(() => ({ allowed: true, tasks: vi.fn(), sync: vi.fn() }))
 vi.mock('@/components/supply/DhbShipmentSyncIssues.vue', () => ({
-  default: { template: '<div data-testid="shipment-issues" />' },
+  default: { name: 'DhbShipmentSyncIssues', template: '<div data-testid="shipment-issues" />' },
 }))
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => mocks.allowed }),
@@ -14,10 +14,10 @@ vi.mock('@/api/core/dhb-page-sync', () => ({
   syncDhbPage: mocks.sync,
   latestDhbPageSyncJob: vi.fn().mockResolvedValue(null),
   getDhbPageSyncJob: vi.fn(),
-  startDhbPageSyncJob: async (id: string, command: unknown) => ({
+  startDhbPageSyncJob: async (id: string, command: { scope: string; connectorId: string }) => ({
     jobId: id,
-    connectorId: 'connector-1',
-    scope: 'CUSTOMER',
+    connectorId: command.connectorId,
+    scope: command.scope,
     status: 'SUCCEEDED',
     stage: '结束',
     startedAt: new Date().toISOString(),
@@ -28,9 +28,77 @@ vi.mock('@/api/core/dhb-page-sync', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.allowed = true
-  mocks.tasks.mockResolvedValue([{ connectorId: 'connector-1' }])
+  mocks.tasks.mockResolvedValue([
+    { connectorId: 'connector-1', objectType: 'ORDER', status: 'IDLE' },
+  ])
 })
 describe('逐页手动同步', () => {
+  it('有多个发货来源时保留名称选择，不改变选择所用的来源标识', async () => {
+    mocks.tasks.mockResolvedValue([
+      {
+        connectorId: 'source-a',
+        connectorName: '订货宝总公司',
+        objectType: 'ORDER',
+        status: 'IDLE',
+      },
+      {
+        connectorId: 'source-b',
+        connectorName: '订货宝分公司',
+        objectType: 'ORDER',
+        status: 'IDLE',
+      },
+    ])
+    const w = mount(Button, {
+      props: { scope: 'SHIPMENT', label: '发货' },
+      global: { plugins: [ElementPlus] },
+    })
+    await w.get('button').trigger('click')
+    await flushPromises()
+    const select = w.findComponent({ name: 'ElSelect' })
+    expect(select.exists()).toBe(true)
+    const options = select.findAllComponents({ name: 'ElOption' })
+    expect(options.map((option) => option.props('label'))).toEqual(['订货宝总公司', '订货宝分公司'])
+    expect(options.map((option) => option.props('value'))).toEqual(['source-a', 'source-b'])
+    w.unmount()
+  })
+  it('读取配置不冒充正在同步；发货只显示可用订单来源及名称', async () => {
+    let resolve!: (tasks: unknown) => void
+    mocks.tasks.mockReturnValue(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    const w = mount(Button, {
+      props: { scope: 'SHIPMENT', label: '发货' },
+      global: { plugins: [ElementPlus] },
+    })
+    await w.get('button').trigger('click')
+    expect(w.text()).toContain('正在加载')
+    expect(w.text()).not.toContain('正在同步发货')
+    resolve([
+      {
+        connectorId: 'actual-source',
+        connectorName: '订货宝企业账号',
+        objectType: 'ORDER',
+        status: 'IDLE',
+      },
+      { connectorId: 'staff-only', connectorName: '人员账号', objectType: 'STAFF', status: 'IDLE' },
+      { connectorId: 'paused', objectType: 'ORDER', status: 'PAUSED' },
+    ])
+    await flushPromises()
+    expect(w.text()).not.toContain('同步来源')
+    expect(w.text()).not.toContain('先核对原销售单')
+    expect(w.text()).toContain('发货单更新时间')
+    expect(w.text()).not.toContain('actual-source')
+    expect(w.text()).not.toContain('人员账号')
+    expect(w.find('[data-testid="shipment-issues"]').exists()).toBe(true)
+    const issues = w.findComponent({ name: 'DhbShipmentSyncIssues' })
+    issues.vm.$emit('repaired')
+    expect(w.emitted('repaired')).toHaveLength(1)
+    expect(mocks.sync).not.toHaveBeenCalled()
+    w.unmount()
+  })
+
   it('打开即可处理已有发货问题，无需先执行整批同步', async () => {
     const w = mount(Button, {
       props: { scope: 'SHIPMENT', label: '发货' },
@@ -74,6 +142,15 @@ describe('逐页手动同步', () => {
     expect(w.text()).toContain('补齐资料后可重试未完成单据')
     expect(w.text()).not.toContain('checkpoint')
     expect(w.text()).not.toContain('SHIPMENT')
+    expect(mocks.sync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'SHIPMENT',
+        incremental: false,
+        from: expect.any(String),
+        to: expect.any(String),
+      }),
+    )
+    expect(w.text()).not.toContain('任务 ')
     w.unmount()
   })
   it.each(['SUPPLIER', 'PURCHASE_ORDER', 'WAREHOUSE'] as const)(

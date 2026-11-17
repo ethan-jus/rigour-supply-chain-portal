@@ -58,7 +58,7 @@ export const loadCostDictionaries = (category?: string, force = false) => {
 }
 export const costOptions = (code: string) => businessDictionaryOptions('', code)
 export const costLabel = (code: string, value: string | null | undefined) =>
-  businessDictionaryLabel('', code, value)
+  code === 'COST_STATUS' && value === 'ACTIVE' ? '有效' : businessDictionaryLabel('', code, value)
 export const costMoney = (value: number | null | undefined) =>
   value == null
     ? '待补金额'

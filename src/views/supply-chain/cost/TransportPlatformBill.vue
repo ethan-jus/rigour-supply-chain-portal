@@ -6,7 +6,7 @@
         v-if="changed"
         type="warning"
         :closable="false"
-        :title="`平台账单已更新，已确认成本仍为 ¥${money(confirmedAmount)}，请核对后处理。`"
+        :title="`平台账单与本系统成本不同，本系统成本为 ¥${money(confirmedAmount)}，请核对后处理。`"
       />
       <div class="bill-totals">
         <div v-for="metric in metrics" :key="metric.label">
@@ -150,7 +150,11 @@ const props = withDefaults(
 )
 const source = computed(() => currentSource(props.platform.source))
 const facts = computed(() => source.value.facts)
-const changed = computed(() => props.confirmed && props.platform.source.sourceDifference)
+const changed = computed(() => {
+  const cost = props.confirmedAmount
+  const bill = source.value.facts?.billAmount
+  return cost != null && bill != null && Math.round(cost * 100) !== Math.round(Number(bill) * 100)
+})
 const metrics = computed(() => [
   { label: '账单总计（元）', value: facts.value?.billAmount },
   { label: '已支付（元）', value: source.value.paidAmount },

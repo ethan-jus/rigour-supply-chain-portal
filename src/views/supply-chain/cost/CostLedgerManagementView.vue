@@ -57,8 +57,10 @@
               range-separator="至"
           /></el-form-item>
           <el-form-item label="单据状态"
-            ><CostDictSelect v-model="filters.statusCode" code="COST_STATUS" clearable
-          /></el-form-item>
+            ><el-select v-model="filters.statusCode" clearable>
+              <el-option label="有效" value="ACTIVE" />
+              <el-option label="已作废" value="VOID" /> </el-select
+          ></el-form-item>
           <template v-if="moreFilters">
             <el-form-item label="订单类型"
               ><el-select v-model="filters.orderTypeCode" clearable
@@ -196,11 +198,11 @@
       </div>
       <div class="metrics" aria-label="筛选结果汇总" :aria-busy="loading">
         <div class="metric primary">
-          <span>{{ logistics ? '已确认我方费用' : '本期已确认归属费用' }}</span
+          <span>{{ logistics ? '计入运输成本' : '本期已确认归属费用' }}</span
           ><strong>{{ summaryMoney(result.confirmedAmount) }}</strong>
         </div>
         <div class="metric green">
-          <span>{{ logistics ? '待确认我方费用' : '本期待确认归属费用' }}</span
+          <span>{{ logistics ? '待补金额记录' : '本期待确认归属费用' }}</span
           ><strong>{{ summaryMoney(pendingAmount) }}</strong>
         </div>
         <div class="metric amber">
@@ -417,26 +419,37 @@
           ><template #default="{ row }"
             ><el-button link type="primary" @click="view(row as CostRecord)">查看</el-button
             ><el-button
-              v-if="!purchaseHistory && row.statusCode === 'DRAFT' && can(permission + ':write')"
+              v-if="
+                !purchaseHistory &&
+                row.statusCode === (logistics ? 'ACTIVE' : 'DRAFT') &&
+                can(permission + ':write')
+              "
               link
               type="primary"
               :disabled="!referencesReady"
               @click="edit(row as CostRecord)"
               >编辑</el-button
             ><el-button
-              v-if="!purchaseHistory && row.statusCode === 'DRAFT' && can(permission + ':confirm')"
+              v-if="
+                !logistics &&
+                !purchaseHistory &&
+                row.statusCode === 'DRAFT' &&
+                can(permission + ':confirm')
+              "
               link
               type="primary"
               @click="act(row as CostRecord, 'confirm')"
               >确认</el-button
             ><el-button
-              v-if="row.statusCode === 'DRAFT' && can(permission + ':void')"
+              v-if="
+                row.statusCode === (logistics ? 'ACTIVE' : 'DRAFT') && can(permission + ':void')
+              "
               link
               type="danger"
               @click="act(row as CostRecord, 'void')"
               >作废</el-button
             ><el-button
-              v-if="row.statusCode === 'CONFIRMED' && can(permission + ':confirm')"
+              v-if="!logistics && row.statusCode === 'CONFIRMED' && can(permission + ':confirm')"
               link
               type="primary"
               @click="act(row as CostRecord, 'revoke')"
@@ -967,7 +980,7 @@ async function edit(row?: CostRecord) {
   try {
     const current = row ? await getCost(selectedCategory, row.id) : null
     if (token !== interaction || selectedCategory !== category.value) return
-    if (current && current.statusCode !== 'DRAFT')
+    if (current && current.statusCode !== (logistics.value ? 'ACTIVE' : 'DRAFT'))
       throw new Error('只有待确认费用可编辑，已确认费用请先撤销')
     const draft =
       current?.data.ledger || current?.data.warehouseLedger
@@ -1115,7 +1128,7 @@ async function save() {
     )
     initialSignature = JSON.stringify(form.value)
     editorOpen.value = false
-    ElMessage.success('费用已保存，待确认')
+    ElMessage.success(logistics.value ? '运输记录已保存并生效' : '费用已保存，待确认')
     await load()
     if (detail.value?.id === saved.id) detail.value = saved
   } catch (e) {

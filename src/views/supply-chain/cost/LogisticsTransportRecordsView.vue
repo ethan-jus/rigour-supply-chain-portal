@@ -66,9 +66,9 @@
             clearable
             placeholder="单据状态"
             aria-label="单据状态"
-            ><el-option label="待确认" value="DRAFT" /><el-option
-              label="已确认"
-              value="CONFIRMED" /><el-option label="已作废" value="VOID"
+            ><el-option label="待完善" value="INCOMPLETE" /><el-option
+              label="已完善"
+              value="COMPLETE" /><el-option label="已作废" value="VOID"
           /></el-select>
         </div>
         <div class="list-filter-field list-filter-field--select">
@@ -123,7 +123,7 @@
             aria-label="收货方"
           />
         </div>
-        <div class="list-filter-field list-filter-field--person">
+        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--person">
           <el-input
             v-model="filters.platformEmployeeName"
             clearable
@@ -131,7 +131,7 @@
             aria-label="货拉拉下单员工"
           />
         </div>
-        <div class="list-filter-field list-filter-field--select">
+        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--select">
           <el-select
             v-model="filters.employeeRelationState"
             clearable
@@ -140,7 +140,7 @@
             ><el-option label="已关联" value="LINKED" /><el-option label="未关联" value="UNLINKED"
           /></el-select>
         </div>
-        <div class="list-filter-field list-filter-field--person">
+        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--person">
           <el-select
             v-model="filters.mappedEmployeeCode"
             clearable
@@ -227,13 +227,20 @@
               ><el-tag
                 v-else-if="col.key === 'status'"
                 :type="
-                  row.statusCode === 'CONFIRMED'
+                  row.businessStatusCode === 'COMPLETE'
                     ? 'success'
                     : row.statusCode === 'VOID'
                       ? 'info'
                       : 'warning'
                 "
-                >{{ statusName(row.statusCode) }}</el-tag
+                >{{ statusName(row.statusCode, row.businessStatusCode) }}</el-tag
+              ><span
+                v-else-if="
+                  col.key === 'amount' &&
+                  amountOf(row as CostRecord, platformOf(row as CostRecord)) == null
+                "
+                class="unfilled-amount"
+                >待补金额</span
               ><span v-else :class="{ 'money-cell': col.numeric }">{{
                 value(row as CostRecord, col.key)
               }}</span></template
@@ -255,7 +262,19 @@
             >员工关联</el-button
           ><el-button v-if="can('integration:huolala:read')" @click="connection('runs')"
             >同步记录</el-button
-          ><TableColumnSettings
+          ><el-button v-if="can('order:logistics-cost:write')" @click="feeImportOpen = true"
+            >批量补录运费</el-button
+          >
+          <el-button
+            v-if="
+              can('order:logistics-cost:void') && selected.some((r) => r.statusCode === 'ACTIVE')
+            "
+            :loading="batchVoiding"
+            :disabled="loading || batchVoiding"
+            @click="voidSelected"
+            >作废选中记录</el-button
+          >
+          <TableColumnSettings
             label="显示列"
             :columns="columnOptions"
             :visibility="visibility"
@@ -310,6 +329,7 @@
       v-model="exportOpen"
       v-model:fields="exportFields"
       :columns="exportColumns"
+      :sections="exportSections"
       :scope="
         exportIds.length
           ? `已选 ${exportIds.length} 条运输记录`
@@ -340,6 +360,7 @@
         ><el-button type="primary" :loading="syncing" @click="sync">开始同步</el-button></template
       ></el-dialog
     >
+    <TransportFeeImportDialog v-if="feeImportOpen" v-model="feeImportOpen" @saved="load" />
     <el-dialog v-model="importOpen" title="历史货拉拉报表补录" width="min(1200px, 95vw)"
       ><CostCarrierOrdersPanel
         v-if="importOpen"
@@ -354,6 +375,7 @@
 <script setup lang="ts">
 import {
   computed,
+  nextTick,
   onMounted,
   onBeforeUnmount,
   onActivated,
@@ -379,7 +401,6 @@ import {
 import {
   getTransportRecords,
   getTransport,
-  confirmTransport,
   exportSelectedTransport,
   type TransportDetail,
   type TransportPage,
@@ -396,6 +417,7 @@ import {
   routeOf,
   routeText,
   vehicleOf,
+  transportTimeOf,
   statusName,
   transportTypes,
   typeName,
@@ -407,6 +429,8 @@ import TransportRecordEditor from './TransportRecordEditor.vue'
 import TransportRecordActions from './TransportRecordActions.vue'
 import TransportRouteSummary from './TransportRouteSummary.vue'
 import CostCarrierOrdersPanel from './CostCarrierOrdersPanel.vue'
+import TransportFeeImportDialog from './TransportFeeImportDialog.vue'
+const feeImportOpen = ref(false)
 import { exportCostRows } from './cost-export'
 import { collectCostExportRows, selectedCostColumns } from './custom-cost-export'
 import { savedTransportAllocations } from './transport-allocation'
@@ -428,16 +452,19 @@ const table = ref<TableInstance>(),
   selected = ref<CostRecord[]>([])
 let applied: TransportQuery = { begin: 0, step: 20 },
   serial = 0
+const showPlatformFilters = computed(
+  () => !filters.value.sourceSystem || filters.value.sourceSystem === 'HUOLALA',
+)
 const columns = [
   { key: 'platformNo', label: '快递单号', width: 200 },
   { key: 'carrier', label: '物流公司', width: 120 },
-  { key: 'vehicle', label: '车型', width: 110 },
-  { key: 'orderedAt', label: '下单时间', width: 190 },
+  { key: 'orderedAt', label: '下单／发货时间', width: 190 },
+  { key: 'amount', label: '运输费用（元）', width: 150, numeric: true },
+  { key: 'status', label: '单据状态', width: 104 },
   { key: 'route', label: '行驶路段', width: 280 },
   { key: 'stopCount', label: '收货点数', width: 96 },
   { key: 'type', label: '运输类型', width: 140 },
-  { key: 'amount', label: '运输费用（元）', width: 150, numeric: true },
-  { key: 'status', label: '单据状态', width: 104 },
+  { key: 'vehicle', label: '车型', width: 110 },
   { key: 'creator', label: '创建人', width: 110 },
   { key: 'relation', label: '订单关联状态', width: 130, optional: true },
   { key: 'date', label: '运输日期', width: 106, optional: true },
@@ -475,17 +502,18 @@ function lines(r: CostRecord, key: string) {
       ? ordersOf(r, platformOf(r))
       : ['-']
 }
-function value(r: CostRecord, key: string, sources = result.value.platformRecords): string {
+function value(
+  r: CostRecord,
+  key: string,
+  sources = result.value.platformRecords,
+  shipments = result.value.shipmentRecords || {},
+): string {
   const platform = sources[r.id],
     source = platform ? currentSource(platform.source) : null
   const vals: Record<string, unknown> = {
     route: routeText(routeOf(r, platform)),
     stopCount: routeOf(r, platform).receivers.length || '-',
-    source: platform
-      ? '货拉拉同步'
-      : result.value.shipmentRecords?.[r.id]?.length
-        ? '订货宝同步'
-        : '手动录入',
+    source: platform ? '货拉拉同步' : shipments[r.id]?.length ? '订货宝同步' : '手动录入',
     type: typeName(
       platform?.draft?.transportType ||
         r.data.ledger?.transportPurposeCode ||
@@ -493,21 +521,20 @@ function value(r: CostRecord, key: string, sources = result.value.platformRecord
         r.data.logistics?.legCode,
     ),
     date: source?.useTime.slice(0, 10) || r.data.costDate,
-    orderedAt: source?.raw['下单时间']?.trim() || '-',
+    orderedAt: transportTimeOf(r, platform, shipments[r.id]),
     platformNo:
       source?.orderNo ||
-      result.value.shipmentRecords?.[r.id]?.flatMap((s) => s.latest.trackingNumbers).join('、') ||
+      shipments[r.id]?.flatMap((s) => s.latest.trackingNumbers).join('、') ||
       r.data.ledger?.platformOrderNo ||
       '-',
     amount: money(amountOf(r, platform)),
-    status: statusName(r.statusCode),
+    status: statusName(r.statusCode, r.businessStatusCode),
     creator: platform ? '系统同步' : displayRecordActor(r.createdBy),
     carrier: platform
       ? '货拉拉'
       : r.data.ledger?.carrierCode
         ? costLabel('COST_CARRIER', r.data.ledger.carrierCode)
-        : result.value.shipmentRecords?.[r.id]?.[0]?.latest.carrierName ||
-          r.data.logistics?.carrierName,
+        : shipments[r.id]?.[0]?.latest.carrierName || r.data.logistics?.carrierName,
     vehicle: vehicleOf(platform),
     platformStatus: source?.status,
     platformEmployee: source?.facts?.sourceEmployeeName,
@@ -554,7 +581,12 @@ async function load() {
       begin: (page.value - 1) * step.value,
       step: step.value,
     })
-    if (request === serial) result.value = data
+    if (request === serial) {
+      result.value = data
+      await nextTick()
+      // 查询、分页和同步刷新后从首条展示；保留横向阅读位置和首尾固定列。
+      if (request === serial) table.value?.setScrollTop(0)
+    }
   } catch (e) {
     if (request === serial) {
       result.value = {
@@ -570,6 +602,13 @@ async function load() {
 function search() {
   applied = {
     ...filters.value,
+    ...(showPlatformFilters.value
+      ? {}
+      : {
+          platformEmployeeName: undefined,
+          employeeRelationState: undefined,
+          mappedEmployeeCode: undefined,
+        }),
     begin: 0,
     step: step.value,
     dateFrom: dates.value?.[0],
@@ -618,24 +657,22 @@ async function open(r: CostRecord, mode: boolean, section = '') {
 }
 const view = (r: CostRecord) => open(r, true),
   edit = (r: CostRecord) => open(r, false)
-async function act(row: CostRecord, action: 'confirm' | 'revoke' | 'void' | 'delete') {
+async function act(row: CostRecord, action: 'void' | 'delete') {
   try {
-    const label = { confirm: '确认', revoke: '撤销', void: '作废', delete: '删除' }[action]
-    const hint =
-      action === 'confirm'
-        ? `确认运输费用 ¥${money(amountOf(row, platformOf(row)))}，并按关联订单计入成本？`
-        : `${label}该运输记录，请填写原因。`
-    const answer = await ElMessageBox.prompt(hint, `${label}运输记录`, {
-      inputType: 'textarea',
-      inputPlaceholder: action === 'confirm' ? '确认说明（可选）' : `${label}原因`,
-      inputValidator: (v) =>
-        ((action === 'confirm' || !!v?.trim()) && (v?.length || 0) <= 500) ||
-        '请填写不超过500字的原因',
-      confirmButtonText: label,
-      cancelButtonText: '取消',
-    })
-    if (action === 'confirm') await confirmTransport(row, answer.value || '')
-    else await changeCostStatus('logistics', row, action, answer.value || '')
+    const label = { void: '作废', delete: '删除' }[action]
+    const answer = await ElMessageBox.prompt(
+      `${label}该运输记录，请填写原因。`,
+      `${label}运输记录`,
+      {
+        inputType: 'textarea',
+        inputPlaceholder: `${label}原因`,
+        inputValidator: (v) =>
+          (!!v?.trim() && (v?.length || 0) <= 500) || '请填写不超过500字的原因',
+        confirmButtonText: label,
+        cancelButtonText: '取消',
+      },
+    )
+    await changeCostStatus('logistics', row, action, answer.value || '')
     ElMessage.success(`已${label}`)
     table.value?.clearSelection()
     await load()
@@ -645,6 +682,49 @@ async function act(row: CostRecord, action: 'confirm' | 'revoke' | 'void' | 'del
     }
   } catch (e) {
     if (e !== 'cancel' && e !== 'close') ElMessage.error(errorMessage(e, '操作失败'))
+  }
+}
+const batchVoiding = ref(false)
+async function voidSelected() {
+  if (batchVoiding.value) return
+  const targets = selected.value.filter((r) => r.statusCode === 'ACTIVE')
+  if (!targets.length) return
+  batchVoiding.value = true
+  let done = 0
+  const failed: string[] = []
+  try {
+    const answer = await ElMessageBox.prompt(
+      `作废选中的 ${targets.length} 笔运输记录，请填写原因。`,
+      '作废运输记录',
+      {
+        inputType: 'textarea',
+        inputPlaceholder: '作废原因',
+        inputValidator: (v) =>
+          (!!v?.trim() && (v?.length || 0) <= 500) || '请填写不超过500字的原因',
+        confirmButtonText: '作废',
+        cancelButtonText: '取消',
+      },
+    )
+    for (const row of targets) {
+      try {
+        await changeCostStatus('logistics', row, 'void', answer.value || '')
+        done++
+      } catch (e) {
+        failed.push(`${row.documentNo}：${errorMessage(e, '未完成')}`)
+      }
+    }
+    table.value?.clearSelection()
+    await load()
+    if (failed.length)
+      ElMessageBox.alert(
+        `已作废 ${done} 笔，${failed.length} 笔未完成。${failed.slice(0, 5).join('；')}`,
+        '处理结果',
+      )
+    else ElMessage.success(`已作废 ${done} 笔运输记录`)
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(errorMessage(e, '操作未完成，请刷新核对'))
+  } finally {
+    batchVoiding.value = false
   }
 }
 function connection(tab: string, staffId?: string) {
@@ -803,20 +883,79 @@ const exportOpen = ref(false),
   exportFields = ref<string[]>([]),
   exportCount = ref(0),
   exporting = ref(false),
-  exportError = ref('')
-const exportColumns = [
+  exportError = ref(''),
+  exportPlatformOnly = ref(false)
+const exportSummaryKeys = new Set([
+  'documentNo',
+  'platformNo',
+  'carrier',
+  'orderedAt',
+  'route',
+  'stopCount',
+  'type',
+  'amount',
+  'status',
+])
+const exportBusinessKeys = new Set([
+  ...exportSummaryKeys,
+  'vehicle',
+  'creator',
+  'relation',
+  'orders',
+  'employee',
+  'department',
+  'billItems',
+  'payment',
+  'source',
+])
+const platformExportKeys = new Set([
+  'platformStatus',
+  'platformEmployee',
+  'paid',
+  'unpaid',
+  'refund',
+])
+const exportColumns = computed(() => [
   { key: 'documentNo', label: '费用单号' },
-  ...columns.map((c) => ({ key: c.key, label: c.label })),
-  { key: 'confirmed', label: '已确认运输成本（元）' },
+  ...columns
+    .filter(
+      (c) =>
+        exportBusinessKeys.has(c.key) ||
+        (exportPlatformOnly.value && platformExportKeys.has(c.key)),
+    )
+    .map((c) => ({ key: c.key, label: c.label })),
+  { key: 'confirmed', label: '计入运输成本（元）' },
   { key: 'orderAllocations', label: '订单分摊费用（元）' },
-]
+])
+const exportSections = computed(() => [
+  { label: '运输摘要', keys: [...exportSummaryKeys, 'vehicle'] },
+  {
+    label: '业务明细',
+    keys: exportColumns.value
+      .map((c) => c.key)
+      .filter(
+        (key) => !exportSummaryKeys.has(key) && key !== 'vehicle' && !platformExportKeys.has(key),
+      ),
+  },
+  { label: '货拉拉资料', keys: [...platformExportKeys] },
+])
 let exportQuery: TransportQuery = { begin: 0, step: 200 },
   exportSequence = 0
 function openExport() {
   exportIds.value = selected.value.map((r) => r.id)
   exportCount.value = result.value.page.total
   exportQuery = { ...applied, begin: 0, step: 200 }
-  exportFields.value = exportColumns.map((c) => c.key)
+  // 仅明确全部为货拉拉的范围提供专属字段；混合范围使用通用业务字段。
+  exportPlatformOnly.value = selected.value.length
+    ? selected.value.every((r) => !!result.value.platformRecords[r.id])
+    : applied.sourceSystem === 'HUOLALA' ||
+      (result.value.page.items.length === result.value.page.total &&
+        result.value.page.items.every((r) => !!result.value.platformRecords[r.id]))
+  exportFields.value = exportColumns.value
+    .filter(
+      (c) => exportSummaryKeys.has(c.key) || (exportPlatformOnly.value && c.key === 'vehicle'),
+    )
+    .map((c) => c.key)
   exportError.value = ''
   exportOpen.value = true
 }
@@ -826,7 +965,6 @@ async function doExport() {
   exportError.value = ''
   const version = ++exportSequence
   try {
-    const chosen = selectedCostColumns(exportColumns, exportFields.value)
     const rows = exportIds.value.length
       ? await exportSelectedTransport(exportIds.value)
       : await collectCostExportRows<TransportDetail>({
@@ -837,6 +975,7 @@ async function doExport() {
               items: r.page.items.map((record) => ({
                 record,
                 platform: r.platformRecords[record.id] || null,
+                shipments: r.shipmentRecords?.[record.id] || [],
               })),
             }
           },
@@ -844,6 +983,11 @@ async function doExport() {
           current: () => version === exportSequence,
         })
     if (!rows || version !== exportSequence) return
+    const platformOnly = rows.length > 0 && rows.every((r) => !!r.platform)
+    const chosen = selectedCostColumns(exportColumns.value, exportFields.value).filter(
+      (c) => platformOnly || !platformExportKeys.has(c.key),
+    )
+    if (!chosen.length) throw new Error('请选择适用于当前运输记录的导出字段')
     await exportCostRows(
       '物流运输记录',
       chosen.map((c) => c.label),
@@ -851,7 +995,7 @@ async function doExport() {
         const { record: r, platform: p } = detail
         return chosen.map((c) => {
           if (c.key === 'documentNo') return r.documentNo
-          if (c.key === 'confirmed') return r.statusCode === 'CONFIRMED' ? r.data.amount : null
+          if (c.key === 'confirmed') return r.statusCode === 'ACTIVE' ? r.data.amount : null
           if (c.key === 'receivers') return receiversOf(r, p).join('\n')
           if (c.key === 'route') return routeText(routeOf(r, p))
           if (c.key === 'stopCount') return routeOf(r, p).receivers.length || null
@@ -864,7 +1008,7 @@ async function doExport() {
             const amount = amountOf(r, p)
             return amount == null ? null : Number(amount)
           }
-          return value(r, c.key, p ? { [r.id]: p } : {})
+          return value(r, c.key, p ? { [r.id]: p } : {}, { [r.id]: detail.shipments || [] })
         })
       }),
     )
@@ -994,6 +1138,10 @@ onBeforeUnmount(() => {
 .money-cell {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  white-space: nowrap;
+}
+.unfilled-amount {
+  color: var(--el-text-color-secondary);
   white-space: nowrap;
 }
 .list-table-footer {

@@ -14,13 +14,13 @@
           <span class="heading-label">费用单号</span><strong>{{ detail.record.documentNo }}</strong
           ><el-tag
             :type="
-              detail.record.statusCode === 'CONFIRMED'
+              detail.record.businessStatusCode === 'COMPLETE'
                 ? 'success'
                 : detail.record.statusCode === 'VOID'
                   ? 'info'
                   : 'warning'
             "
-            >{{ statusName(detail.record.statusCode) }}</el-tag
+            >{{ statusName(detail.record.statusCode, detail.record.businessStatusCode) }}</el-tag
           >
         </div>
         <div v-if="readonly && actionsEnabled !== false" class="heading-actions">
@@ -72,17 +72,27 @@
               ><span>{{ type?.orderLabel || '-' }}</span></el-form-item
             >
             <el-form-item
-              label="发货日期"
+              :label="platform ? '下单时间' : '发货时间'"
               :required="!readonly && !shippingLocked"
               :error="fieldErrors.date"
-              ><span v-if="readonly || shippingLocked">{{ form.date || '-' }}</span
+              ><span v-if="readonly || shippingLocked">{{
+                detail ? transportTimeOf(detail.record, platform, shipmentSources) : '-'
+              }}</span
               ><el-date-picker
                 v-else
-                v-model="form.date"
-                type="date"
-                value-format="YYYY-MM-DD"
-                placeholder="请选择运输日期"
-            /></el-form-item>
+                v-model="form.shippingTime"
+                type="datetime"
+                value-format="YYYY-MM-DDTHH:mm:ss"
+                format="YYYY-MM-DD HH:mm:ss"
+                placeholder="请选择发货时间"
+                @update:model-value="form.date = form.shippingTime?.slice(0, 10) || ''"
+              />
+              <span
+                v-if="detail && !shippingLocked && !detail.record.data.ledger?.shippingTime"
+                class="legacy-time-note"
+                >原记录未登记具体时间，可编辑补齐</span
+              >
+            </el-form-item>
             <el-form-item
               label="配送方式"
               :required="!readonly && !shippingLocked"
@@ -137,7 +147,7 @@
                 placeholder="填写快递单号"
             /></el-form-item>
             <Info label="车型" :value="vehicleOf(platform)" />
-            <Info label="下单时间" :value="order?.raw['下单时间']" />
+            <Info v-if="platform" label="下单时间" :value="order?.raw['下单时间']" />
           </div>
         </section>
         <section class="transport-section">
@@ -147,7 +157,7 @@
               v-if="
                 readonly &&
                 actionsEnabled !== false &&
-                detail?.record.statusCode === 'DRAFT' &&
+                detail?.record.statusCode === 'ACTIVE' &&
                 can('order:logistics-cost:write')
               "
               link
@@ -213,10 +223,9 @@
           >
           <div class="form-grid" :class="{ 'manual-bill-summary': !platform }">
             <el-form-item label="运输费用（元）" :error="fieldErrors.amount"
-              ><span
-                v-if="readonly || platform || advanced || form.manualBillItems?.length"
-                class="amount"
-                >{{ money(form.amount) }}</span
+              ><span v-if="readonly || advanced || form.manualBillItems?.length" class="amount">{{
+                money(form.amount)
+              }}</span
               ><el-input-number
                 v-else
                 v-model="form.amount"
@@ -224,9 +233,9 @@
                 :min="0"
                 :max="999999999999"
                 :controls="false"
-                placeholder="确认前填写运输费用"
+                placeholder="填写本次运输费用"
               /><span v-if="!readonly && !platform" class="optional-label"
-                >确认前必填</span
+                >金额、订单归属及凭证补齐后，计入成本看板统计</span
               ></el-form-item
             ><el-form-item label="费用负责人"
               ><span v-if="readonly">{{ ownerName }}</span
@@ -251,9 +260,12 @@
                   :value="o.value"
                 />
               </el-select> </el-form-item
-            ><el-form-item label="已确认运输成本（元）"
+            ><el-form-item label="计入运输成本（元）"
               ><strong>{{
-                detail?.record.statusCode === 'CONFIRMED' ? money(detail.record.data.amount) : '-'
+                detail?.record.statusCode !== 'VOID' &&
+                detail?.record.businessStatusCode === 'COMPLETE'
+                  ? money(detail.record.data.amount)
+                  : '-'
               }}</strong></el-form-item
             ><el-form-item label="费用归属城市"
               ><span v-if="readonly">{{
@@ -415,7 +427,7 @@
             view="bill"
             :record-id="detail!.record.id"
             :platform="platform"
-            :confirmed="detail!.record.statusCode === 'CONFIRMED'"
+            :confirmed="detail!.record.statusCode === 'ACTIVE'"
             :confirmed-amount="detail!.record.data.amount"
           />
         </section>
@@ -569,7 +581,7 @@
             view="evidence"
             :record-id="detail!.record.id"
             :platform="platform"
-            :confirmed="detail!.record.statusCode === 'CONFIRMED'"
+            :confirmed="detail!.record.statusCode === 'ACTIVE'"
             :confirmed-amount="detail!.record.data.amount"
           />
           <TransportEvidence
@@ -579,6 +591,7 @@
             :readonly="readonly"
             :disabled="saving"
             :required="!platform"
+            hide-empty
             @busy="attachmentBusy = $event"
             @count="attachmentCount = $event"
           />
@@ -614,7 +627,7 @@
       />
       <section v-if="detail" class="transport-section">
         <h3>操作记录</h3>
-        <el-table :data="history" border empty-text="暂无操作记录"
+        <el-table :data="businessHistory" border empty-text="暂无操作记录"
           ><el-table-column label="时间" min-width="190"
             ><template #default="{ row }">{{
               displayRecordDateTime(row.occurredTime)
@@ -625,8 +638,12 @@
             ><template #default="{ row }">{{
               displayRecordActor(row.actorId)
             }}</template></el-table-column
-          ><el-table-column prop="reason" label="说明" min-width="240"
-        /></el-table>
+          ><el-table-column label="说明" min-width="240"
+            ><template #default="{ row }">{{
+              row.action.startsWith('ATTACHMENT_') ? '—' : row.reason || '—'
+            }}</template></el-table-column
+          ></el-table
+        >
       </section>
     </div>
     <template #footer
@@ -650,6 +667,8 @@
         v-if="advancedData && advancedOpen"
         v-model="advancedData"
         logistics
+        :fees-only="!!platform"
+        :carrier-locked="!!platform"
         :cities="cities"
         :employees="employees"
       /><template #footer
@@ -685,6 +704,7 @@ import {
   frozenTransportSources,
   frozenTransportReceivers,
   vehicleOf,
+  transportTimeOf,
 } from './transport-records'
 import {
   allocationError,
@@ -731,7 +751,7 @@ const visible = defineModel<boolean>({ required: true })
 const emit = defineEmits<{
   saved: []
   edit: [section: string]
-  action: [action: 'confirm' | 'revoke' | 'void' | 'delete']
+  action: [action: 'void' | 'delete']
   sync: []
   'associate-employee': []
 }>()
@@ -758,9 +778,7 @@ const fieldErrors = ref<TransportErrors>({})
 const advancedData = ref<CostCommand | null>(
   detail.value ? structuredClone(toRaw(detail.value.record.data)) : null,
 )
-const advanced = computed(
-  () => !platform.value && complexTransportLedger(advancedData.value?.ledger),
-)
+const advanced = computed(() => complexTransportLedger(advancedData.value?.ledger))
 const advancedOpen = ref(false),
   cities = ref<{ code: string; name: string }[]>([])
 function applyAdvanced() {
@@ -773,6 +791,9 @@ const type = computed(() => transportTypes.find((t) => t.value === form.value.tr
 const selected = ref<CostSource[]>([]),
   employees = ref<CostEmployee[]>([]),
   history = ref<CostAudit[]>([])
+const businessHistory = computed(() =>
+  history.value.filter((row) => row.action !== 'STATE_UPGRADE'),
+)
 const picker = ref(false),
   loading = ref(false),
   saving = ref(false),
@@ -1118,6 +1139,7 @@ async function save() {
                   carrierCode: form.value.carrierCode,
                   trackingNo: form.value.trackingNo || '',
                   platformOrderNo: form.value.platformOrderNo || null,
+                  shippingTime: form.value.shippingTime,
                 }
               : null,
             remark: form.value.remark,

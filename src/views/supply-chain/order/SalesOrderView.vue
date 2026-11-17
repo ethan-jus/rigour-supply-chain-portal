@@ -1,9 +1,16 @@
 <template>
-  <div class="sales-order-page supply-page supply-page--business-main">
+  <div
+    class="sales-order-page supply-page supply-page--business-main"
+    :style="entryOnly ? { display: 'contents' } : undefined"
+  >
+    <template v-if="!entryOnly">
     <div class="page-heading">
       <div class="list-heading-title">
         <SupplyPageTitle>销售订单</SupplyPageTitle>
-        <SupplyPageHelp>新增订单时选择客户与商品；提交后进入可出库状态；从订单已确认仓库确认出库后生成出库单，由 ERP 扣减库存。</SupplyPageHelp>
+        <SupplyPageHelp
+          >新增订单时选择客户与商品；提交后进入可出库状态；从订单已确认仓库确认出库后生成出库单，由
+          ERP 扣减库存。</SupplyPageHelp
+        >
       </div>
       <div class="heading-actions">
         <HistoryOrderReview />
@@ -13,7 +20,6 @@
         >
       </div>
     </div>
-
 
     <el-card class="filter-card" shadow="never">
       <el-form :model="filters" inline @submit.prevent="loadOrders">
@@ -232,7 +238,12 @@
               <strong>{{ scope.row.orderNo }}</strong>
             </template>
           </el-table-column>
-          <el-table-column prop="sourceOrderNo" label="来源单号" width="180" show-overflow-tooltip>
+          <el-table-column
+            prop="sourceOrderNo"
+            label="来源单号"
+            width="180"
+            show-overflow-tooltip
+          >
             <template #default="scope">{{ scope.row.sourceOrderNo || '-' }}</template>
           </el-table-column>
           <!-- @vue-generic {SalesOrderSummary} -->
@@ -380,10 +391,7 @@
                 v-if="can('order:attribution:read')"
                 link
                 type="primary"
-                @click.stop="
-                  attributionOrderId = scope.row.id;
-                  attributionVisible = true
-                "
+                @click.stop="attributionOrderId = scope.row.id; attributionVisible = true"
                 >归属复核</el-button
               >
               <el-button
@@ -470,7 +478,8 @@
             <span>销售订单详情</span>
             <h2>{{ detail.orderNo }}</h2>
             <p>
-              {{ detail.customerNameSnapshot || '客户待补齐' }} · {{ formatTime(detail.orderDate) }}
+              {{ detail.customerNameSnapshot || '客户待补齐' }} ·
+              {{ formatTime(detail.orderDate) }}
             </p>
             <div class="detail-tags">
               <el-tag :type="orderStatusTag(detail.orderStatusCode)" effect="light">{{
@@ -521,7 +530,8 @@
               <span>实际小计</span><strong>{{ formatMoney(detail.payableAmount) }}</strong>
             </div>
             <div>
-              <span>优惠金额</span><strong>{{ formatMoney(displayDiscountAmount(detail)) }}</strong>
+              <span>优惠金额</span
+              ><strong>{{ formatMoney(displayDiscountAmount(detail)) }}</strong>
             </div>
             <div>
               <span>已收金额</span><strong>{{ formatMoney(detail.paidAmount) }}</strong>
@@ -673,7 +683,10 @@
                 }}</strong>
               </div>
             </div>
-            <div v-if="orderPaymentAttachmentItems(detail).length" class="payment-attachment-panel">
+            <div
+              v-if="orderPaymentAttachmentItems(detail).length"
+              class="payment-attachment-panel"
+            >
               <span>回款凭证</span>
               <FundAttachmentPreviewList :attachments="orderPaymentAttachmentItems(detail)" />
             </div>
@@ -685,7 +698,9 @@
                 <h3>关联回款记录</h3>
                 <span>回款记录 {{ detailPayments.length }} 条</span>
               </div>
-              <el-button link type="primary" @click="openPayments(detail)">打开回款记录</el-button>
+              <el-button link type="primary" @click="openPayments(detail)"
+                >打开回款记录</el-button
+              >
             </div>
             <el-table
               class="supply-scroll-table detail-table"
@@ -791,17 +806,29 @@
       </div>
       <el-skeleton v-else :rows="8" animated />
     </el-drawer>
-
+    </template>
     <el-dialog
       v-model="editorVisible"
-      :title="editingId ? '编辑销售订单' : '新增销售订单'"
+      :title="entryOnly ? '补录销售订单' : editingId ? '编辑销售订单' : '新增销售订单'"
       width="min(1040px, 94vw)"
       destroy-on-close
+      :close-on-click-modal="!entryOnly"
+      :close-on-press-escape="!saving"
+      :show-close="!saving"
+      @closed="entryOnly && emit('closed')"
+      @opened="resetEntryScroll"
     >
-      <el-form :model="form" label-width="110px" class="sales-order-form">
+      <el-alert
+        v-if="entryOnly"
+        type="info"
+        :closable="false"
+        style="margin-bottom: 16px"
+        :title="`原销售单号：${sourceOrderNo || '-'}。请按原单填写客户、下单时间和商品，提交后返回资料关联。`"
+      />
+      <el-form ref="entryForm" :model="form" :label-width="entryOnly ? 'auto' : '110px'" :label-position="entryOnly ? 'top' : 'right'" class="sales-order-form" :class="{ 'sales-order-form--entry': entryOnly }">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="客户">
+            <el-form-item label="客户" :required="entryOnly">
               <el-select
                 v-model="form.customerId"
                 filterable
@@ -823,21 +850,22 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="下单时间">
+            <el-form-item label="下单时间" :required="entryOnly">
               <el-date-picker
                 v-model="form.orderDate"
                 type="datetime"
-                placeholder="默认当前时间"
+                :placeholder="entryOnly ? '选择原单下单时间' : '默认当前时间'"
                 style="width: 100%"
               />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="客户名称快照">
+            <el-form-item :label="entryOnly ? '客户名称' : '客户名称快照'">
               <el-input
                 v-model="form.customerNameSnapshot"
+                :readonly="entryOnly"
                 clearable
-                placeholder="导入缺客户映射时可先保留名称"
+                :placeholder="entryOnly ? '选择客户后带出' : '导入缺客户映射时可先保留名称'"
               />
             </el-form-item>
           </el-col>
@@ -927,104 +955,42 @@
         </el-row>
 
         <div class="form-section-title">
-          <h3>商品明细</h3>
-          <el-button @click="addLine">添加商品</el-button>
+          <h3>商品明细<span class="product-count">{{ form.lines.length }} 项</span></h3>
+          <el-button type="primary" plain :disabled="saving" @click="productPickerOpen = true">添加商品</el-button>
         </div>
-        <div v-for="(line, index) in form.lines" :key="line.localId" class="line-editor">
-          <el-row :gutter="12">
-            <el-col :span="7">
-              <el-form-item :label="`商品${index + 1}`">
-                <el-select
-                  v-model="line.productId"
-                  filterable
-                  remote
-                  reserve-keyword
-                  placeholder="搜索商品"
-                  :remote-method="searchProducts"
-                  :loading="productLoading"
-                  style="width: 100%"
-                  @change="selectProduct(line)"
-                >
-                  <el-option
-                    v-for="item in productOptions"
-                    :key="item.id"
-                    :label="item.productName"
-                    :value="item.id"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="5">
-              <el-form-item label="规格">
-                <el-select
-                  v-model="line.productVariantId"
-                  placeholder="选择规格"
-                  style="width: 100%"
-                  @change="selectVariant(line)"
-                >
-                  <el-option
-                    v-for="item in line.variants"
-                    :key="item.id"
-                    :label="variantLabel(item)"
-                    :value="item.id"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="5">
-              <el-form-item label="商品名称快照">
-                <el-input
-                  v-model="line.productNameSnapshot"
-                  clearable
-                  placeholder="飞书导入商品名"
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :span="4">
-              <el-form-item label="商品单位">
-                <el-select v-model="line.unitCode" clearable filterable placeholder="选择单位">
-                  <el-option
-                    v-for="option in productUnitOptions"
-                    :key="option.value"
-                    :value="option.value"
-                    :label="option.label"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="3"
-              ><el-form-item label="数量"
-                ><el-input-number
-                  v-model="line.quantity"
-                  :min="0.000001"
-                  :precision="2"
-                  style="width: 100%" /></el-form-item
-            ></el-col>
-            <el-col :span="3"
-              ><el-form-item label="单价"
-                ><el-input-number
-                  v-model="line.unitPrice"
-                  :min="0"
-                  :precision="2"
-                  style="width: 100%" /></el-form-item
-            ></el-col>
-            <el-col :span="3"
-              ><el-form-item label="优惠"
-                ><el-input-number
-                  v-model="line.discountAmount"
-                  :min="0"
-                  :precision="2"
-                  style="width: 100%" /></el-form-item
-            ></el-col>
-            <el-col :span="3" class="line-actions"
-              ><el-button type="danger" link @click="removeLine(index)">删除</el-button></el-col
-            >
-          </el-row>
-        </div>
+        <el-table :data="form.lines" row-key="localId" border class="sales-entry-lines"
+          empty-text="请点击“添加商品”，在弹窗中选择商品和规格">
+          <el-table-column type="index" label="序号" width="56" />
+          <el-table-column prop="productCodeSnapshot" label="商品编码" width="140" show-overflow-tooltip />
+          <el-table-column prop="productNameSnapshot" label="商品名称" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="specificationSnapshot" label="规格" min-width="150" show-overflow-tooltip />
+          <el-table-column label="单位 *" width="110"><template #default="{ row }">
+            <el-select v-model="row.unitCode" aria-label="商品单位" placeholder="选择单位">
+              <el-option v-for="option in productUnitOptions" :key="option.value" :value="option.value" :label="option.label" />
+            </el-select>
+          </template></el-table-column>
+          <el-table-column label="数量 *" width="140"><template #default="{ row }">
+            <el-input-number v-model="row.quantity" aria-label="商品数量" :controls="false" :min="0.01" :precision="2" />
+          </template></el-table-column>
+          <el-table-column label="单价（元）*" width="140"><template #default="{ row }">
+            <el-input-number v-model="row.unitPrice" aria-label="商品单价" :controls="false" :min="0" :precision="2" placeholder="填写单价" />
+          </template></el-table-column>
+          <el-table-column label="优惠（元）" width="140"><template #default="{ row }">
+            <el-input-number v-model="row.discountAmount" aria-label="商品优惠" :controls="false" :min="0" :precision="2" />
+          </template></el-table-column>
+          <el-table-column label="小计（元）" width="130" align="right"><template #default="{ row }">
+            {{ row.unitPrice == null || row.quantity == null ? '-' : formatMoney(row.quantity * row.unitPrice - (row.discountAmount || 0)) }}
+          </template></el-table-column>
+          <el-table-column label="操作" width="70" fixed="right"><template #default="{ $index }">
+            <el-button type="danger" link :disabled="saving" @click="removeLine($index)">删除</el-button>
+          </template></el-table-column>
+        </el-table>
       </el-form>
       <template #footer>
-        <el-button @click="editorVisible = false">取消</el-button>
-        <el-button :loading="saving" @click="saveOrder(false)">保存草稿</el-button>
+        <el-button :disabled="saving" @click="editorVisible = false">取消</el-button>
+        <el-button v-if="!entryOnly" :loading="saving" @click="saveOrder(false)"
+          >保存草稿</el-button
+        >
         <el-button
           v-if="can('order:submit')"
           type="primary"
@@ -1035,6 +1001,10 @@
       </template>
     </el-dialog>
 
+    <SalesOrderProductPicker v-model="productPickerOpen"
+      :excluded-keys="form.lines.filter(l => l.productId && l.productVariantId).map(l => `${l.productId}:${l.productVariantId}`)"
+      @selected="addSelectedProducts" />
+    <template v-if="!entryOnly">
     <el-dialog
       v-model="stockOutVisible"
       :title="fulfillmentMode === 'SELECT' ? '选择订单仓库' : '确认销售出库'"
@@ -1102,6 +1072,7 @@
         >
       </template>
     </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -1117,6 +1088,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FundAttachmentPreviewList from '@/components/supply/FundAttachmentPreviewList.vue'
 import OrderProductRepairDialog from './components/OrderProductRepairDialog.vue'
+import SalesOrderProductPicker, { type SalesProductChoice } from './components/SalesOrderProductPicker.vue'
 import OrderAttributionReviewDialog from './components/OrderAttributionReviewDialog.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import {
@@ -1151,9 +1123,6 @@ import {
 } from '@/api/core/crm'
 import { getHrEmployees, type HrEmployeeRecord } from '@/api/core/hr'
 import {
-  getErpManagedProduct,
-  getErpManagedProducts,
-  type ErpManagedProductSummary,
   type ErpManagedProductVariant,
 } from '@/api/core/erp-product'
 import {
@@ -1161,13 +1130,16 @@ import {
   businessDictionaryOptions,
   loadBusinessDictionaries,
 } from '@/utils/business-dictionary'
-import {
-  pickRegionMatchedWarehouse,
-  warehouseOptionLabel,
-} from '@/utils/warehouse-region-match'
+import { pickRegionMatchedWarehouse, warehouseOptionLabel } from '@/utils/warehouse-region-match'
 import { orderLifecycleOptions } from '@/utils/order-register-status'
 import { formatOrderStatus as formatDhbOrderStatus } from '@/utils/dhb-order-status'
 import { auditActorLabel } from '@/utils/audit-actor'
+
+const props = withDefaults(defineProps<{ entryOnly?: boolean; sourceOrderNo?: string }>(), {
+  entryOnly: false,
+  sourceOrderNo: '',
+})
+const emit = defineEmits<{ created: [order: SalesOrderDetail]; closed: [] }>()
 
 const productUnitOptions = computed(() => businessDictionaryOptions('COMMON', 'PRODUCT_UNIT'))
 const orderStatusOptions = computed(orderLifecycleOptions)
@@ -1324,7 +1296,7 @@ interface SalesOrderLineForm {
   specificationSnapshot: string | null
   unitCode: string
   quantity: number
-  unitPrice: number
+  unitPrice: number | null
   discountAmount: number
   remark: string | null
   variants: ErpManagedProductVariant[]
@@ -1371,11 +1343,12 @@ function tableRowIndex(index: number): number {
 
 const customerLoading = ref(false)
 const employeeLoading = ref(false)
-const productLoading = ref(false)
 const warehouseLoading = ref(false)
 const customerOptions = ref<InternalCrmCustomerSummary[]>([])
 const employeeOptions = ref<HrEmployeeRecord[]>([])
-const productOptions = ref<ErpManagedProductSummary[]>([])
+const productPickerOpen = ref(false)
+const entryForm = ref<{ $el: HTMLElement }>()
+function resetEntryScroll() { if (props.entryOnly) entryForm.value?.$el.scrollTo({ top: 0, left: 0 }) }
 const warehouseOptions = ref<OrderWarehouseOption[]>([])
 
 onMounted(() => {
@@ -1389,25 +1362,34 @@ onMounted(() => {
     { moduleCode: 'ORDER', code: 'SALES_SHIPMENT_STATUS' },
     { moduleCode: 'ORDER', code: 'SALES_ORDER_TYPE' },
     { moduleCode: 'ORDER', code: 'PAYMENT_METHOD' },
-  ])
+  ].filter(item => !props.entryOnly || ['REGION', 'PRODUCT_UNIT', 'PAYMENT_METHOD'].includes(item.code)))
+  if (props.entryOnly) {
+    if (can('order:create') && can('order:submit')) openCreate()
+    else emit('closed')
+    void Promise.all([
+      loadCustomerAreas(),
+      searchCustomers(''),
+      searchSalesEmployees(''),
+    ])
+    return
+  }
   applyRouteQuery()
   void Promise.all([
     loadCustomerAreas(),
     loadOrders(),
     searchCustomers(''),
     searchSalesEmployees(''),
-    searchProducts(''),
   ])
 })
 
 onActivated(() => {
-  if (!customerAreaOptions.value.length) void loadCustomerAreas()
+  if (!props.entryOnly && !customerAreaOptions.value.length) void loadCustomerAreas()
 })
 
 watch(
   () => route.query,
   () => {
-    if (!applyRouteQuery()) return
+    if (props.entryOnly || !applyRouteQuery()) return
     currentPage.value = 1
     void loadOrders()
   },
@@ -1612,7 +1594,7 @@ async function loadDetailPayments(order: SalesOrderDetail) {
 function openCreate() {
   editingId.value = null
   resetForm()
-  addLine()
+  if (props.entryOnly) form.orderDate = null
   editorVisible.value = true
 }
 
@@ -1662,6 +1644,7 @@ async function openEdit(row: SalesOrderSummary) {
 }
 
 async function saveOrder(submit: boolean) {
+  if (saving.value) return
   const command = buildCommand(submit)
   if (!command) return
   saving.value = true
@@ -1670,11 +1653,12 @@ async function saveOrder(submit: boolean) {
       await updateSalesOrder(editingId.value, command)
       ElMessage.success(submit ? '销售订单已保存并提交' : '销售订单已保存')
     } else {
-      await createSalesOrder(command)
+      const created = await createSalesOrder(command)
+      if (props.entryOnly) emit('created', created)
       ElMessage.success(submit ? '销售订单已创建并提交' : '销售订单草稿已创建')
     }
     editorVisible.value = false
-    await loadOrders()
+    if (!props.entryOnly) await loadOrders()
   } catch (reason) {
     ElMessage.error(errorMessage(reason, '销售订单保存失败'))
   } finally {
@@ -2021,52 +2005,6 @@ function ensureEmployeeOption(employeeCode: string, employeeName: string) {
   ]
 }
 
-async function searchProducts(query: string) {
-  productLoading.value = true
-  try {
-    const result = await getErpManagedProducts({
-      begin: 0,
-      step: 20,
-      productName: empty(query),
-      shelfStatusCode: 'ON_SHELF',
-      submitStatusCode: 'SUBMITTED',
-    })
-    productOptions.value = result.items
-  } finally {
-    productLoading.value = false
-  }
-}
-
-async function selectProduct(line: SalesOrderLineForm) {
-  if (!line.productId) return
-  try {
-    const product = await getErpManagedProduct(line.productId)
-    line.productCodeSnapshot = product.productCode
-    line.productNameSnapshot = product.productName
-    line.unitCode = product.unitCode || ''
-    line.variants = product.variants
-    const variant = product.variants.find((item) => item.defaultFlag) || product.variants[0]
-    if (variant) {
-      line.productVariantId = variant.id
-      applyVariant(line, variant)
-    }
-  } catch (reason) {
-    ElMessage.error(errorMessage(reason, '商品详情加载失败'))
-  }
-}
-
-function selectVariant(line: SalesOrderLineForm) {
-  const variant = line.variants.find((item) => String(item.id) === String(line.productVariantId))
-  if (variant) applyVariant(line, variant)
-}
-
-function applyVariant(line: SalesOrderLineForm, variant: ErpManagedProductVariant) {
-  line.skuCodeSnapshot = variant.variantCode
-  line.specificationSnapshot = variant.specificationSnapshot
-  line.unitCode = variant.unitCode || line.unitCode
-  line.unitPrice = Number(variant.salePrice || 0)
-}
-
 async function searchWarehouses(query: string) {
   warehouseLoading.value = true
   try {
@@ -2086,36 +2024,38 @@ async function searchWarehouses(query: string) {
   }
 }
 
-function addLine() {
-  form.lines.push({
-    localId: randomId(),
-    productId: null,
-    productVariantId: null,
-    productCodeSnapshot: null,
-    skuCodeSnapshot: null,
-    productNameSnapshot: '',
-    specificationSnapshot: null,
-    unitCode: '',
-    quantity: 1,
-    unitPrice: 0,
-    discountAmount: 0,
-    remark: null,
-    variants: [],
-  })
-}
-
-function removeLine(index: number) {
-  if (form.lines.length === 1) {
-    ElMessage.warning('销售订单至少需要一条商品明细')
-    return
+function addSelectedProducts(products: SalesProductChoice[]) {
+  const existing = new Set(form.lines.map(l => `${l.productId}:${l.productVariantId}`))
+  for (const product of products) {
+    if (existing.has(product.key)) continue
+    form.lines.push({
+      localId: randomId(), productId: product.productId, productVariantId: product.variantId,
+      productCodeSnapshot: product.productCode, skuCodeSnapshot: product.variantCode,
+      productNameSnapshot: product.productName, specificationSnapshot: product.specification,
+      unitCode: product.unitCode || '', quantity: 1, unitPrice: product.salePrice,
+      discountAmount: 0, remark: null, variants: product.variants,
+    })
+    existing.add(product.key)
   }
-  form.lines.splice(index, 1)
 }
+function removeLine(index: number) { form.lines.splice(index, 1) }
 
 function buildCommand(submit: boolean): SalesOrderCommand | null {
+  if (props.entryOnly && !form.orderDate) {
+    ElMessage.warning('请选择原销售单的下单时间')
+    return null
+  }
   const allowPartialDraft = isFeishuRepairForm() && !submit
   if (!allowPartialDraft && (!form.customerId || !form.customerNameSnapshot)) {
     ElMessage.warning('请选择客户')
+    return null
+  }
+  if (!form.lines.length) {
+    ElMessage.warning('请先添加至少一项商品')
+    return null
+  }
+  if (form.lines.some(line => line.unitPrice == null)) {
+    ElMessage.warning('请填写原单商品的单价；没有参考价时不能自动按零元保存')
     return null
   }
   const lines = form.lines.map((line) => ({
@@ -2127,10 +2067,10 @@ function buildCommand(submit: boolean): SalesOrderCommand | null {
     specificationSnapshot: line.specificationSnapshot,
     unitCode: empty(line.unitCode) || null,
     quantity: line.quantity,
-    unitPrice: line.unitPrice,
+    unitPrice: line.unitPrice!,
     discountAmount: line.discountAmount || 0,
     remark: line.remark,
-      sourceLineId: line.sourceLineId,
+    sourceLineId: line.sourceLineId,
   }))
   if (
     !allowPartialDraft &&
@@ -2140,6 +2080,11 @@ function buildCommand(submit: boolean): SalesOrderCommand | null {
     )
   ) {
     ElMessage.warning('请完善商品、规格和单位')
+    return null
+  }
+  if (!allowPartialDraft && lines.some(line => !Number.isFinite(line.quantity) || line.quantity <= 0 ||
+    line.unitPrice == null || !Number.isFinite(line.unitPrice) || line.unitPrice < 0 || line.discountAmount < 0 || line.discountAmount > line.quantity * line.unitPrice)) {
+    ElMessage.warning('请填写有效的数量、单价和优惠金额')
     return null
   }
   return {
@@ -2299,9 +2244,6 @@ function percent(value: number | null | undefined) {
   return `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}%`
 }
 
-function variantLabel(value: ErpManagedProductVariant) {
-  return [value.variantCode, value.specificationSnapshot].filter(Boolean).join(' · ') || value.id
-}
 
 function formatMoney(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '-'
@@ -2609,10 +2551,19 @@ function errorMessage(reason: unknown, fallback: string) {
   color: var(--el-text-color-secondary);
 }
 
+.product-count { margin-left: 10px; font-size: 13px; font-weight: 400; color: var(--el-text-color-secondary); }
+.sales-entry-lines { width: 100%; }
+.sales-entry-lines :deep(.el-input-number) { width: 100%; }
+.sales-order-form--entry {
+  :deep(.el-col), :deep(.el-form-item__content) { min-width: 0; }
+  :deep(.el-form-item__label) { white-space: nowrap; }
+}
+
 .sales-order-form {
   max-height: min(640px, 68vh);
-  overflow: auto;
-  padding-right: 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 6px 2px 2px;
 }
 
 @media (max-width: 900px) {

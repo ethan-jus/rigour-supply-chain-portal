@@ -183,6 +183,7 @@ export interface CostCommand {
   reason: string
 }
 export interface CostRecord {
+  businessStatusCode?: string | null
   procurementReference?: { orderId: number; orderCode: string; lineId: number | null } | null
   periodAmount?: number | null
   id: string

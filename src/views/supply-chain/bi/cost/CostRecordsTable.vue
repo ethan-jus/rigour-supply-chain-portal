@@ -27,7 +27,7 @@
           <th scope="col">费用归属</th>
           <th scope="col">费用日期</th>
           <th scope="col" class="numeric">金额（元）</th>
-          <th scope="col" class="record-status">确认状态</th>
+          <th scope="col" class="record-status">单据状态</th>
           <th scope="col" class="record-status">付款状态</th>
           <th scope="col" class="record-actions">操作</th>
         </tr>
@@ -47,7 +47,7 @@
           <td class="numeric">
             {{ row.amount === null ? '未填' : money(row.amount) }}
           </td>
-          <td class="record-status">{{ statusName(row.status) }}</td>
+          <td class="record-status">{{ recordStatusName(row) }}</td>
           <td class="record-status">{{ statusName(row.payment) }}</td>
           <td class="record-actions">
             <button class="text-button" @click="emit('detail', row)">查看详情</button>
@@ -62,7 +62,7 @@
 </template>
 <script setup lang="ts">
 import type { CostRecord } from '@/api/core/bi-cost-dashboard'
-import { categories, money, statusName, recordItem } from './cost-presentation'
+import { categories, money, statusName, recordStatusName, recordItem } from './cost-presentation'
 defineProps<{ rows: CostRecord[] }>()
 const emit = defineEmits<{ detail: [record: CostRecord] }>()
 </script>

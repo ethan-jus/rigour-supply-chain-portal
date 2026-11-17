@@ -67,7 +67,12 @@ const columns = [
 export const costDashboardExportColumns = [...columns, '费用项目'].map((key) => ({
   key,
   label:
-    { '金额（元）': '单据金额（元）', 费用所属月: '费用所属月份', 城市: '费用归属' }[key] ?? key,
+    {
+      '金额（元）': '单据金额（元）',
+      费用所属月: '费用所属月份',
+      城市: '费用归属',
+      确认状态: '单据状态',
+    }[key] ?? key,
 }))
 
 export async function buildCostDashboardWorkbook(
@@ -101,6 +106,11 @@ export async function buildCostDashboardWorkbook(
       let value = get(row, label)
       // CSV 的前缀只用于防公式注入；XLSX 明确以字符串存储，可还原业务原文。
       if (/^'[\s]*[=+@-]|^'[\t\r]/.test(value)) value = value.slice(1)
+      if (
+        label === '确认状态' &&
+        (get(row, '来源服务') === 'ORDER' || get(row, '费用类别') === '物流运输费用')
+      )
+        return { 已确认: '已完善', 待确认: '待完善' }[value] || value
       return label === '费用项目' ? dictionaryValue(value) : value
     }),
   )
@@ -112,6 +122,7 @@ export async function buildCostDashboardWorkbook(
           '金额（元）': '单据金额（元）',
           费用所属月: '费用所属月份',
           城市: '费用归属',
+          确认状态: '单据状态',
         })[label] ?? label,
     ),
     rows,
@@ -121,10 +132,10 @@ export async function buildCostDashboardWorkbook(
     ...['本期', '可比期', '匹配笔数', '已确认金额']
       .filter((key) => metadata.has(key))
       .map((key) => [
-        key,
+        key === '已确认金额' ? '统计金额' : key,
         `${metadata.get(key)}${key === '已确认金额' ? ' 元' : key === '匹配笔数' ? ' 笔' : ''}`,
       ]),
-    ['纳入范围', '仅已确认且实际计入汇总的费用，关联报销不重复计入。'],
+    ['纳入范围', '运输记录仅统计已完善单据；其他成本沿用各自确认口径，关联报销不重复计入。'],
     [
       '付款状态',
       '薪酬按月度薪酬发放登记，其他费用按原单登记；未付款金额不代表银行流水或工资待发净额。',

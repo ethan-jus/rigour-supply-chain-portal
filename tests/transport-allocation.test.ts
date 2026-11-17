@@ -47,10 +47,10 @@ describe('统一运输分摊', () => {
     for (const invalid of invalidShares)
       expect(allocationError(137.64, ['S1', 'S2'], invalid)).not.toBe('')
   })
-  it('待确认货拉拉分摊在销售摘要可读，已确认则始终读冻结金额', () => {
+  it('平台账单更新不覆盖已保存分摊，保存金额为唯一成本依据', () => {
     const detail = {
       record: {
-        statusCode: 'DRAFT',
+        statusCode: 'ACTIVE',
         data: {
           amount: 137.64,
           ledger: {
@@ -63,14 +63,14 @@ describe('统一运输分摊', () => {
         draft: { orderCodes: ['S1', 'S2'], orderAllocations: { S1: 80, S2: 57.64 } },
       },
     } as unknown as TransportDetail
-    expect(savedTransportAllocations(detail, sources)[0]!.amount).toBe(80)
-    detail.record.statusCode = 'CONFIRMED'
+    expect(savedTransportAllocations(detail, sources)[0]!.amount).toBe(82.58)
+    detail.record.statusCode = 'ACTIVE'
     detail.platform!.source.order.facts!.billAmount = 142.64
     expect(savedTransportAllocations(detail, sources)[0]!.amount).toBe(82.58)
   })
   it('平台金额变化后不静默重算人工分摊，也不把分摊异常显示为0', () => {
     const detail = {
-      record: { statusCode: 'DRAFT', data: {} },
+      record: { statusCode: 'ACTIVE', data: {} },
       platform: {
         source: { order: { facts: { billAmount: 142.64 } } },
         draft: { orderCodes: ['S1', 'S2'], orderAllocations: { S1: 80, S2: 57.64 } },

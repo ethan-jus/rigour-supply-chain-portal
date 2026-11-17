@@ -83,6 +83,8 @@ export interface DhbSyncTask {
   id: string
   tenantId: string
   connectorId: string
+  connectorName?: string | null
+  connectorStatus?: string | null
   code: string
   objectType: string
   status: string

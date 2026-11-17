@@ -128,6 +128,7 @@
               (!!row.referenceIssue && !allowIncomplete)
             "
             :aria-label="`选择${row.documentNo}`"
+            :title="row.referenceIssue || undefined"
             @change="(value) => toggle(row as PickedLedgerSource, !!value)" /></template
       ></el-table-column>
       <el-table-column prop="documentNo" label="单据编号" min-width="220" /><el-table-column
@@ -165,23 +166,9 @@
         prop="receiverName"
         label="收货方"
         min-width="200"
-      /><el-table-column label="来源状态" width="130"
-        ><template #default="{ row }">{{ sourceStatus(row.statusCode) }}</template></el-table-column
-      >
-      <el-table-column
-        v-if="query.orderTypeCode === 'SALES_ORDER'"
-        label="关联检查"
-        min-width="240"
-      >
-        <template #default="{ row }"
-          ><span :class="{ 'reference-issue': row.referenceIssue }">{{
-            row.referenceIssue || (row.senderCode ? '可关联' : '选择后补充发货仓库')
-          }}</span></template
-        >
-      </el-table-column>
+      />
     </el-table>
     <div class="picker-toolbar">
-      <span>已添加的单据不可重复选择。</span>
       <div>
         <el-button :disabled="loading || offset === 0" @click="page(-1)">上一页</el-button
         ><el-button :disabled="loading || rows.length < 50" @click="page(1)">下一页</el-button>
@@ -216,17 +203,6 @@ const props = defineProps<{
 }>()
 export type PickedLedgerSource = CostSource & { orderTypeCode: string }
 const emit = defineEmits<{ selected: [rows: PickedLedgerSource[]] }>()
-const sourceStatus = (status: string) =>
-  ({
-    CONFIRMED: '已确认',
-    OUT_CONFIRMED: '已出库',
-    IN_CONFIRMED: '已入库',
-    SUBMITTED: '已提交',
-    APPROVED: '已审核',
-    COMPLETED: '已完成',
-    DELIVERED: '已送达',
-    SHIPPED: '已发货',
-  })[status] || '可引用'
 const types = logisticsOrderTypes
 const query = ref<LedgerSourceQuery>({ orderTypeCode: 'TRANSFER_ORDER', begin: 0 })
 const rows = ref<PickedLedgerSource[]>([]),

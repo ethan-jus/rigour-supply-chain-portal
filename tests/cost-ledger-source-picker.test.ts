@@ -46,13 +46,9 @@ describe('物流关联单据选择', () => {
       '销售单',
       '其他订单',
     ])
-    const fields = w.findAll('.el-form-item')
-    await fields[1]!.get('input').setValue('TR20261103')
-    await fields[2]!.get('input').setValue('武汉仓')
-    await w
-      .findAll('button')
-      .find((b) => b.text() === '查询')!
-      .trigger('click')
+    await w.get('input[aria-label="单据编号"]').setValue('TR20261103')
+    await w.get('input[aria-label="客户或收货方"]').setValue('武汉仓')
+    await w.get('form').trigger('submit')
     await flushPromises()
     expect(api.sources).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -99,8 +95,8 @@ describe('物流关联单据选择', () => {
   })
 })
 
-describe('销售配送锁定单据类型与候选推荐', () => {
-  it('逐单显示资料问题，全选和手动勾选均不会带回不可关联的单据', async () => {
+describe('销售配送单据选择与校验', () => {
+  it('不常驻展示内部检查列，全选和手动勾选仍不能带回资料无效的单据', async () => {
     api.sources.mockResolvedValue([
       { id: 1, documentNo: 'SO_VALID', statusCode: 'CONFIRMED' },
       {
@@ -126,7 +122,10 @@ describe('销售配送锁定单据类型与候选推荐', () => {
       .findAllComponents(ElCheckbox)
       .find((c) => c.attributes('aria-label') === '选择SO_PENDING')!
     expect(pending.props('disabled')).toBe(true)
-    expect(w.text()).toContain('销售订单归属城市未配置')
+    expect(pending.attributes('title')).toBe('销售订单归属城市未配置')
+    expect(w.text()).not.toContain('来源状态')
+    expect(w.text()).not.toContain('关联检查')
+    expect(w.text()).not.toContain('选择后补充发货仓库')
     pending.vm.$emit('change', true)
     w.findAllComponents(ElCheckbox)
       .find((c) => c.attributes('aria-label') === '勾选本页单据')!
@@ -169,7 +168,9 @@ describe('销售配送锁定单据类型与候选推荐', () => {
     expect(w.text()).toContain('已选 0 张单据')
     expect(w.text()).toContain('业务员')
     expect(w.text()).toContain('订货宝销售单号')
-    expect(w.text()).toContain('客户名称')
+    expect(w.get('input[aria-label="客户或收货方"]').attributes('placeholder')).toBe(
+      '客户／收货方名称',
+    )
     expect(w.emitted('selected')).toBeUndefined()
     w.unmount()
   })

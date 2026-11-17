@@ -2,11 +2,11 @@
   <section>
     <h3>{{ title || '附件' }}</h3>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <p v-if="editable && row.statusCode === 'DRAFT'">
+    <p v-if="editable && ['DRAFT', 'ACTIVE'].includes(row.statusCode)">
       可选：PNG、JPEG、PDF，每个不超过 10 MB，最多 20 个。上传后保留上传人和时间。
     </p>
     <input
-      v-if="editable && row.statusCode === 'DRAFT'"
+      v-if="editable && ['DRAFT', 'ACTIVE'].includes(row.statusCode)"
       type="file"
       accept="image/png,image/jpeg,application/pdf"
       :disabled="loading"
