@@ -123,12 +123,12 @@
             aria-label="收货方"
           />
         </div>
-        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--person">
+        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--employee">
           <el-input
             v-model="filters.platformEmployeeName"
             clearable
-            placeholder="货拉拉下单员工"
-            aria-label="货拉拉下单员工"
+            placeholder="下单员工"
+            aria-label="下单员工"
           />
         </div>
         <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--select">
@@ -140,13 +140,13 @@
             ><el-option label="已关联" value="LINKED" /><el-option label="未关联" value="UNLINKED"
           /></el-select>
         </div>
-        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--person">
+        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--employee">
           <el-select
             v-model="filters.mappedEmployeeCode"
             clearable
             filterable
-            placeholder="本系统关联员工"
-            aria-label="本系统关联员工"
+            placeholder="本公司员工"
+            aria-label="本公司员工"
             ><el-option
               v-for="employee in importEmployees"
               :key="employee.employeeCode"
@@ -470,9 +470,9 @@ const columns = [
   { key: 'date', label: '运输日期', width: 106, optional: true },
   { key: 'receivers', label: '收货方', width: 150, optional: true },
   { key: 'source', label: '数据来源', width: 96, optional: true },
-  { key: 'platformStatus', label: '货拉拉订单状态', width: 155, optional: true },
-  { key: 'platformEmployee', label: '货拉拉下单员工', width: 150, optional: true },
-  { key: 'mappedEmployee', label: '本系统关联员工', width: 150, optional: true },
+  { key: 'platformStatus', label: '运输状态', width: 155, optional: true },
+  { key: 'platformEmployee', label: '下单员工', width: 150, optional: true },
+  { key: 'mappedEmployee', label: '本公司员工', width: 150, optional: true },
   { key: 'employeeRelation', label: '员工关联状态', width: 130, optional: true },
   { key: 'orders', label: '已关联业务单号', width: 220, optional: true },
   { key: 'employee', label: '业务员', width: 130, optional: true },
@@ -937,7 +937,7 @@ const exportSections = computed(() => [
         (key) => !exportSummaryKeys.has(key) && key !== 'vehicle' && !platformExportKeys.has(key),
       ),
   },
-  { label: '货拉拉资料', keys: [...platformExportKeys] },
+  { label: '运输资料', keys: [...platformExportKeys] },
 ])
 let exportQuery: TransportQuery = { begin: 0, step: 200 },
   exportSequence = 0

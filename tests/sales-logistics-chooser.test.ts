@@ -73,9 +73,63 @@ it('货拉拉选择使用本地已同步运输列表，筛选区域与已选信�
   expect(api.list).toHaveBeenCalledWith(
     expect.objectContaining({ sourceSystem: 'HUOLALA', carrierCode: 'HLL', step: 50 }),
   )
-  expect(wrapper.text()).toContain('筛选运输记录')
+  expect(wrapper.text()).toContain('运输记录')
   expect(wrapper.text()).not.toContain('推荐依据')
   expect(wrapper.findAll('button').some((b) => b.text() === '手工录入物流')).toBe(false)
+  expect(api.link).not.toHaveBeenCalled()
+  wrapper.unmount()
+})
+
+it('选择物流同时保留待完善和已完善记录，排除已作废记录且不能选中已有的作废关联', async () => {
+  const record = (id: string, status: string, business: string) => ({
+    id,
+    documentNo: id,
+    revision: 1,
+    statusCode: status,
+    businessStatusCode: business,
+    data: { typeCode: 'DELIVERY', amount: 10, ledger: null },
+    sources: [],
+  })
+  const platform = (id: string) => ({
+    source: {
+      order: { orderNo: id, status: '已完成', raw: {}, facts: { billAmount: 10, stops: [] } },
+    },
+    draft: { orderCodes: id === 'LC-VOID' ? ['SO001'] : [] },
+  })
+  const voidRecord = record('LC-VOID', 'VOID', 'VOID')
+  api.list.mockResolvedValue({
+    page: {
+      items: [
+        record('LC-PENDING', 'ACTIVE', 'INCOMPLETE'),
+        record('LC-COMPLETE', 'ACTIVE', 'COMPLETE'),
+        voidRecord,
+      ],
+      total: 3,
+    },
+    platformRecords: Object.fromEntries(
+      ['LC-PENDING', 'LC-COMPLETE', 'LC-VOID'].map((id) => [id, platform(id)]),
+    ),
+  })
+  const wrapper = mount(Chooser, { props: { modelValue: true, orderId: 11, context }, global })
+  const carrier = wrapper.findAllComponents({ name: 'ElSelect' })[1]!
+  carrier.vm.$emit('update:modelValue', 'HLL')
+  carrier.vm.$emit('change', 'HLL')
+  await flushPromises()
+  expect(wrapper.text()).toContain('LC-PENDING')
+  expect(wrapper.text()).toContain('LC-COMPLETE')
+  expect(wrapper.text()).not.toContain('单据状态')
+  expect(wrapper.text()).not.toContain('待完善')
+  expect(wrapper.text()).not.toContain('已完善')
+  expect(wrapper.text()).not.toContain('LC-VOID')
+  expect(wrapper.text()).not.toContain('已作废')
+  wrapper.findComponent({ name: 'ElTable' }).vm.$emit('row-click', {
+    record: voidRecord,
+    platform: platform('LC-VOID'),
+  })
+  await flushPromises()
+  expect(wrapper.find('[aria-label="已选物流信息"]').exists()).toBe(false)
+  const save = wrapper.findAll('button').find((button) => button.text() === '保存关联')!
+  expect(save.attributes('disabled')).toBeDefined()
   expect(api.link).not.toHaveBeenCalled()
   wrapper.unmount()
 })
@@ -137,7 +191,12 @@ it('自动带入物流优先展示订货宝保存的公司与快递单号，不�
         ...context,
         transports: [
           {
-            record: { id: 'DHB1', documentNo: 'LC-DHB1', data: { ledger: null } },
+            record: {
+              id: 'DHB1',
+              documentNo: 'LC-DHB1',
+              statusCode: 'ACTIVE',
+              data: { ledger: null },
+            },
             platform: null,
             shipments: [
               { latest: { carrierName: '极兔速递', trackingNumbers: ['JT001', 'JT002'] } },
@@ -153,5 +212,29 @@ it('自动带入物流优先展示订货宝保存的公司与快递单号，不�
   expect(wrapper.text()).toContain('极兔速递')
   expect(wrapper.text()).toContain('JT001、JT002')
   expect(api.list).not.toHaveBeenCalled()
+  wrapper.unmount()
+})
+
+it('已作废的订货宝物流不再显示为自动带入记录', async () => {
+  const wrapper = mount(Chooser, {
+    props: {
+      modelValue: true,
+      orderId: 11,
+      context: {
+        ...context,
+        transports: [
+          {
+            record: { id: 'VOID1', documentNo: 'LC-VOID', statusCode: 'VOID' },
+            shipments: [{ latest: { carrierName: '顺丰', trackingNumbers: ['SF-VOID'] } }],
+          },
+        ],
+      } as unknown as SalesLogisticsContext,
+    },
+    global,
+  })
+  await flushPromises()
+  expect(wrapper.text()).not.toContain('已自动带入')
+  expect(wrapper.text()).not.toContain('LC-VOID')
+  expect(wrapper.text()).not.toContain('SF-VOID')
   wrapper.unmount()
 })

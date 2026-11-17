@@ -4,6 +4,7 @@
     title="批量补录运费"
     width="min(1100px, 96vw)"
     top="5vh"
+    class="transport-fee-import-dialog"
     :close-on-click-modal="false"
     :close-on-press-escape="!busy"
     :show-close="!busy"
@@ -12,29 +13,40 @@
       按快递单号匹配已有运输记录，仅补录尚未填写的运费。已填写运费、重复或匹配不明确的记录，请逐笔核对。
     </p>
     <div class="import-controls">
-      <el-select
-        v-model="carrier"
-        clearable
-        placeholder="物流公司（可选）"
-        aria-label="导入物流公司"
-        :disabled="busy"
-        @change="invalidate"
-      >
-        <el-option
-          v-for="c in costOptions('COST_CARRIER')"
-          :key="c.value"
-          :value="c.value"
-          :label="c.label"
-        />
-      </el-select>
-      <label class="file-picker"
-        >选择 Excel 文件<input type="file" accept=".xlsx" :disabled="busy" @change="choose"
-      /></label>
-      <span>{{ file?.name || '未选择文件' }}</span>
-      <el-button :disabled="busy" @click="template">下载模板</el-button>
-      <el-button :disabled="!file || busy" :loading="checking" @click="check">{{
-        result ? '重新匹配' : '核对文件'
-      }}</el-button>
+      <div class="import-carrier">
+        <span>物流公司（可选）</span>
+        <el-select
+          v-model="carrier"
+          clearable
+          placeholder="物流公司（可选）"
+          aria-label="导入物流公司"
+          :disabled="busy"
+          @change="invalidate"
+        >
+          <el-option
+            v-for="c in costOptions('COST_CARRIER')"
+            :key="c.value"
+            :value="c.value"
+            :label="c.label"
+          />
+        </el-select>
+      </div>
+      <div class="import-file">
+        <span>Excel 文件</span>
+        <div class="file-selection">
+          <label class="file-picker">
+            选择文件
+            <input type="file" accept=".xlsx" :disabled="busy" @change="choose" />
+          </label>
+          <span class="file-name" aria-live="polite">{{ file?.name || '未选择文件' }}</span>
+        </div>
+      </div>
+      <div class="import-actions">
+        <el-button :disabled="busy" @click="template">下载模板</el-button>
+        <el-button type="primary" :disabled="!file || busy" :loading="checking" @click="check">{{
+          result ? '重新匹配' : '核对文件'
+        }}</el-button>
+      </div>
     </div>
     <p class="import-help">
       必填：快递单号、运费（元）。零元运费须填写备注。一次最多500条，文件不超过10MB；完整原文件独立归档，每笔运输的费用凭证仅包含本笔明细。
@@ -201,35 +213,98 @@ async function template() {
 }
 </script>
 <style scoped>
+:global(.transport-fee-import-dialog.el-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-height: 90dvh;
+}
+:global(.transport-fee-import-dialog > .el-dialog__body) {
+  min-height: 0;
+  overflow-y: auto;
+}
+:global(.transport-fee-import-dialog > .el-dialog__header),
+:global(.transport-fee-import-dialog > .el-dialog__footer) {
+  flex-shrink: 0;
+}
 .import-description,
 .import-help {
-  color: #667085;
+  color: var(--el-text-color-secondary);
   line-height: 1.7;
   margin: 0 0 16px;
 }
 .import-controls {
+  display: grid;
+  grid-template-columns: 180px minmax(240px, 1fr) auto;
+  align-items: end;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+}
+.import-carrier,
+.import-file {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.import-carrier > span,
+.import-file > span {
+  color: var(--el-text-color-regular);
+}
+.import-carrier .el-select {
+  width: 100%;
+  min-width: 0;
+}
+.file-selection {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 12px;
-}
-.import-controls .el-select {
-  width: 180px;
+  min-height: 32px;
 }
 .file-picker {
-  cursor: pointer;
-  padding: 7px 14px;
-  border: 1px solid #d0d5dd;
+  position: relative;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  line-height: 18px;
+  border: 1px solid var(--el-border-color);
   border-radius: 4px;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  cursor: pointer;
+}
+.file-picker:focus-within {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 .file-picker input {
-  display: block;
-  width: 220px;
-  margin-top: 4px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.file-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--el-text-color-secondary);
+}
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.import-actions .el-button + .el-button {
+  margin-left: 0;
 }
 .import-summary {
   padding: 12px 0;
   font-weight: 600;
+}
+@media (max-width: 800px) {
+  .import-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

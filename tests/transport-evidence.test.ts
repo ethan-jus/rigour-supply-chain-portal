@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { getCostAttachments, getCostAttachmentUrl, getTransportPdfContent } from '@/api/core/cost'
-import { saveTransportWithEvidence, type TransportDraft } from '@/api/core/transport-records'
+import {
+  saveTransportWithEvidence,
+  getTransportVoucher,
+  getTransportEvidenceContent,
+  type TransportDraft,
+} from '@/api/core/transport-records'
 import { TransportEvidenceSaveSession } from '@/views/supply-chain/cost/transport-evidence'
 import { appendCostAttachmentFiles } from '@/views/supply-chain/cost/cost-attachment-draft'
 import Evidence from '@/views/supply-chain/cost/TransportEvidence.vue'
@@ -14,15 +19,17 @@ vi.mock('@/api/core/cost', () => ({
 }))
 vi.mock('@/api/core/transport-records', () => ({
   saveTransportWithEvidence: vi.fn(),
-  getTransportAttachmentDownloadUrl: vi.fn(),
+  getTransportEvidenceContent: vi.fn(),
+  getTransportVoucher: vi.fn(),
 }))
 const pdf = () => new File(['%PDF-1.7 voucher'], '运费凭证.pdf', { type: 'application/pdf' })
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(getCostAttachments).mockResolvedValue([])
+  vi.mocked(getTransportEvidenceContent).mockResolvedValue(new Blob(['file']))
 })
 describe('手工运输凭证整体保存', () => {
-  it('平台详情不显示空补充区，已有文件仍显示，编辑仍保留四类上传', async () => {
+  it('详情不显示空补充区，已有文件仍显示，编辑统一提供四类上传', async () => {
     const w = mount(Evidence, {
       props: {
         modelValue: [],
@@ -53,8 +60,187 @@ describe('手工运输凭证整体保存', () => {
     expect(w.text()).not.toContain('暂无运输回单')
     expect(w.findAll('.evidence-group')).toHaveLength(1)
     await w.setProps({ readonly: false })
-    expect(w.findAll('.evidence-group')).toHaveLength(4)
-    expect(w.text()).toContain('上传运输回单')
+    expect(w.findAll('.evidence-group')).toHaveLength(1)
+    expect(
+      w.findAllComponents({ name: 'ElDropdownItem' }).map((item) => item.props('command')),
+    ).toEqual(['EXPENSE_VOUCHER', 'RECEIPT', 'LOADING', 'UNLOADING'])
+    w.unmount()
+  })
+  it('货拉拉和人工附件按分类合并，空分类不占卡片，平台文件只读且仍能查看下载', async () => {
+    vi.mocked(getCostAttachments).mockResolvedValue([
+      {
+        id: 'M1',
+        fileName: '人工补充卸货.jpg',
+        contentType: 'image/jpeg',
+        categoryCode: 'UNLOADING',
+        size: 10,
+        createdBy: 'user',
+        createdTime: '2026-11-17T03:00:00Z',
+      },
+    ])
+    vi.mocked(getTransportVoucher).mockResolvedValue({
+      url: 'https://our-cos.example/temporary.jpg',
+    } as never)
+    const platform = {
+      source: {
+        order: {
+          raw: {},
+          facts: {
+            fees: [],
+            receipts: [],
+            billVouchers: [],
+            receiptInfo: {
+              type: 3,
+              status: 3,
+              backType: 2,
+              expressNo: 'SF001',
+              remark: '纸质回单',
+            },
+            stopPhotos: [
+              {
+                stopIndex: 0,
+                name: '总部仓',
+                phase: '装货照片',
+                vouchers: [{ id: 'L1', name: '平台装货.jpg', state: 'READY' }],
+              },
+              {
+                stopIndex: 1,
+                name: '门店',
+                phase: '卸货照片',
+                vouchers: [{ id: 'U1', name: '平台卸货.jpg', state: 'READY' }],
+              },
+            ],
+          },
+        },
+      },
+      billHistory: [],
+    } as never
+    const w = mount(Evidence, {
+      props: {
+        modelValue: [],
+        row: { id: 'C1', data: {} } as never,
+        platform,
+        readonly: false,
+        disabled: false,
+        required: false,
+        embedded: true,
+        hideEmpty: true,
+      },
+      global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
+    })
+    await flushPromises()
+    expect(w.findAll('.evidence-group h4').map((h) => h.text())).toEqual([
+      '运输回单',
+      '装货照片',
+      '卸货照片',
+    ])
+    for (const name of ['平台装货.jpg', '平台卸货.jpg', '人工补充卸货.jpg']) {
+      expect(w.text().split(name)).toHaveLength(2)
+    }
+    expect(w.text()).not.toContain('补充业务凭证')
+    expect(w.text()).not.toContain('暂无费用凭证')
+    const unloading = w
+      .findAll('.evidence-group')
+      .find((group) => group.get('h4').text() === '卸货照片')!
+    expect(unloading.findAll('tbody tr')).toHaveLength(2)
+    expect(unloading.text()).toContain('平台卸货.jpg')
+    expect(unloading.text()).toContain('人工补充卸货.jpg')
+    expect(unloading.text()).toContain('2026-11-17 11:00:00')
+    expect(unloading.find('ul').exists()).toBe(false)
+
+    expect(w.text()).toContain('SF001')
+    expect(w.findAll('button').filter((b) => b.text() === '移除')).toHaveLength(1)
+    await w
+      .findAll('button')
+      .find((b) => b.text() === '查看')!
+      .trigger('click')
+    await flushPromises()
+    expect(getTransportVoucher).toHaveBeenLastCalledWith('C1', 'L1')
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const objectUrl = vi.fn().mockReturnValue('blob:download')
+    vi.stubGlobal('URL', { createObjectURL: objectUrl, revokeObjectURL: vi.fn() })
+    await w
+      .findAll('button')
+      .find((b) => b.text() === '下载')!
+      .trigger('click')
+    await flushPromises()
+    expect(getTransportEvidenceContent).toHaveBeenLastCalledWith('C1', 'L1', true)
+    const manual = unloading
+      .findAll('tbody tr')
+      .find((row) => row.text().includes('人工补充卸货.jpg'))!
+    await manual
+      .findAll('button')
+      .find((button) => button.text() === '下载')!
+      .trigger('click')
+    await flushPromises()
+    expect(getTransportEvidenceContent).toHaveBeenLastCalledWith('C1', 'M1')
+    expect(getTransportVoucher).toHaveBeenCalledTimes(1)
+    expect(objectUrl).toHaveBeenCalledTimes(2)
+    click.mockRestore()
+    vi.unstubAllGlobals()
+    await w.setProps({ readonly: true })
+    expect(w.findAll('.evidence-group h4').map((h) => h.text())).toEqual([
+      '运输回单',
+      '装货照片',
+      '卸货照片',
+    ])
+    expect(w.findAll('button').some((b) => b.text() === '移除')).toBe(false)
+    expect(w.text()).toContain('人工补充卸货.jpg')
+    await w.setProps({ readonly: false })
+    w.getComponent({ name: 'ElDropdown' }).vm.$emit('command', 'EXPENSE_VOUCHER')
+    await flushPromises()
+    const input = w.get('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [pdf()], configurable: true })
+    await input.trigger('change')
+    await vi.waitFor(() => expect(w.emitted('update:modelValue')).toBeDefined())
+    const additions = w.emitted('update:modelValue')!.at(-1)![0] as never[]
+    await w.setProps({ modelValue: additions })
+    expect(w.findAll('.evidence-group h4').map((h) => h.text())).toEqual([
+      '费用凭证',
+      '运输回单',
+      '装货照片',
+      '卸货照片',
+    ])
+    expect(w.text()).toContain('运费凭证.pdf')
+    // 四份平台资料不计入人工上传份数，原有一份人工文件加本次新增的一份。
+    expect(w.emitted('count')?.at(-1)).toEqual([2])
+    w.unmount()
+  })
+  it('未知照片类型仍保留，失败附件展示重试状态，不误归类为装货或卸货', async () => {
+    const w = mount(Evidence, {
+      props: {
+        modelValue: [],
+        row: { id: 'C1', data: {} } as never,
+        readonly: true,
+        disabled: false,
+        required: false,
+        platform: {
+          source: {
+            order: {
+              raw: {},
+              facts: {
+                fees: [],
+                stopPhotos: [
+                  {
+                    stopIndex: 1,
+                    name: '中转点',
+                    phase: '其他照片',
+                    vouchers: [{ id: 'X1', name: '途中照片.jpg', state: 'FAILED' }],
+                  },
+                ],
+              },
+            },
+          },
+          billHistory: [],
+        } as never,
+      },
+      global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
+    })
+    await flushPromises()
+    expect(w.findAll('.evidence-group h4').map((h) => h.text())).toEqual(['其他运输照片'])
+    expect(w.text()).toContain('途中照片.jpg')
+    expect(w.text()).toContain('获取失败，将自动重试')
+    expect(w.findAll('button').some((b) => b.text() === '下载')).toBe(false)
     w.unmount()
   })
   it('精简平台补充区时仍显示读取失败和重试入口', async () => {
@@ -102,7 +288,7 @@ describe('手工运输凭证整体保存', () => {
       await flushPromises()
       await w
         .findAll('button')
-        .find((b) => b.text() === '回单.pdf')!
+        .find((b) => b.text() === '查看')!
         .trigger('click')
       await flushPromises()
       expect(getTransportPdfContent).toHaveBeenCalledWith('C1', 'F1')
@@ -167,8 +353,10 @@ describe('手工运输凭证整体保存', () => {
       global: { plugins: [ElementPlus] },
     })
     await flushPromises()
-    for (const text of ['费用凭证', '运输回单', '装货照片', '卸货照片'])
-      expect(w.text()).toContain(text)
+    expect(
+      w.findAllComponents({ name: 'ElDropdownItem' }).map((item) => item.props('command')),
+    ).toEqual(['EXPENSE_VOUCHER', 'RECEIPT', 'LOADING', 'UNLOADING'])
+    expect(w.text()).toContain('卸货.jpg')
     expect(w.emitted('count')?.at(-1)).toEqual([1])
     await w
       .findAll('button')

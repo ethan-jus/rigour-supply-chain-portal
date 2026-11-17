@@ -1,15 +1,14 @@
 <template>
-  <section class="transport-section platform-details" aria-label="货拉拉运输资料">
-    <h3>货拉拉运输资料 <el-tag type="info" size="small">只读</el-tag></h3>
+  <section class="transport-section platform-details" aria-label="运输资料">
+    <h3>运输资料 <el-tag type="info" size="small">只读</el-tag></h3>
     <div class="details-grid">
-      <Field label="平台订单状态" :value="order.status" />
+      <Field label="运输状态" :value="order.status" />
       <Field label="用车时间" :value="platformDateTime(order.useTime)" />
       <Field label="完成时间" :value="platformDateTime(order.facts?.completeTime)" />
       <Field label="下单联系人" :value="raw['下单联系人']" />
       <Field label="下单联系电话" :value="raw['下单联系电话']" />
       <Field label="服务产品" :value="raw['服务产品']" />
       <Field label="用车原因" :value="raw['用车原由']" />
-      <Field class="wide" label="平台订单备注" :value="raw['订单备注']" />
     </div>
     <h4>司机与车辆</h4>
     <div class="details-grid">
@@ -22,7 +21,7 @@
       <Field label="实际行驶里程（公里）" :value="raw['实际行驶里程（公里）']" />
     </div>
     <div class="section-heading">
-      <h4>下单员工关联</h4>
+      <h4>员工关联</h4>
       <el-button
         v-if="can('integration:huolala:read')"
         link
@@ -32,10 +31,10 @@
       >
     </div>
     <div class="details-grid">
-      <Field label="货拉拉下单员工" :value="order.facts?.sourceEmployeeName" />
+      <Field label="下单员工" :value="order.facts?.sourceEmployeeName" />
       <Field label="下单员工手机号" :value="raw['下单员工手机号']" />
-      <Field label="本系统关联员工" :value="employee?.employeeName" />
-      <Field label="本系统所属部门" :value="employee?.departmentName" />
+      <Field label="本公司员工" :value="employee?.employeeName" />
+      <Field label="员工所属部门" :value="employee?.departmentName" />
       <Field label="员工关联状态" :value="order.facts?.mappedEmployeeCode ? '已关联' : '未关联'" />
     </div>
     <h4>支付、开票与保价</h4>
@@ -86,6 +85,7 @@ const Field = defineComponent({
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
   font-size: 16px;
   margin: 0 0 22px;
 }
@@ -93,9 +93,6 @@ const Field = defineComponent({
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 22px 24px;
-}
-.wide {
-  grid-column: 1/-1;
 }
 .detail-field {
   min-width: 0;
@@ -122,13 +119,14 @@ h4 {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
-@media (max-width: 1000px) {
+@container transport-record (max-width: 1000px) {
   .details-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (max-width: 600px) {
+@container transport-record (max-width: 600px) {
   .details-grid {
     grid-template-columns: 1fr;
   }

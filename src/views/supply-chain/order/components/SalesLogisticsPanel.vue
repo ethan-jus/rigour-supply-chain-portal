@@ -8,9 +8,7 @@
         <div class="logistics-summary">
           <span
             >已关联
-            <strong>{{
-              context.transports.filter((r) => r.record.statusCode !== 'VOID').length
-            }}</strong>
+            <strong>{{ activeTransports.length }}</strong>
             笔</span
           ><span
             >本单分摊费用 <strong>{{ money(context.allocatedAmount) }}</strong> 元</span
@@ -25,8 +23,20 @@
           >选择物流</el-button
         >
       </div>
-      <el-table :data="context.transports" border empty-text="暂未关联物流">
-        <el-table-column prop="record.documentNo" label="费用单号" min-width="220" />
+      <el-table
+        :data="activeTransports"
+        border
+        scrollbar-always-on
+        max-height="clamp(260px, 48dvh, 560px)"
+        empty-text="暂未关联物流"
+      >
+        <el-table-column
+          prop="record.documentNo"
+          label="费用单号"
+          min-width="240"
+          show-overflow-tooltip
+          fixed="left"
+        />
         <el-table-column label="物流公司" min-width="120"
           ><template #default="{ row }">{{
             carrier(row as TransportDetail)
@@ -40,21 +50,16 @@
             transportTimeOf(row.record, row.platform, row.shipments)
           }}</template></el-table-column
         >
-        <el-table-column label="收货方" min-width="180"
-          ><template #default="{ row }">{{
-            receiversOf(row.record, row.platform).join('、')
-          }}</template></el-table-column
-        >
         <el-table-column label="本单分摊费用（元）" min-width="170" align="right"
           ><template #default="{ row }">{{
             money(allocated(row as TransportDetail))
           }}</template></el-table-column
         >
-        <el-table-column label="单据状态" width="110"
-          ><template #default="{ row }">{{
-            statusName(row.record.statusCode, row.record.businessStatusCode)
-          }}</template></el-table-column
-        >
+        <el-table-column label="行驶路段" min-width="260">
+          <template #default="{ row }">
+            <TransportRouteSummary :route="routeOf(row.record, row.platform)" />
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="100" fixed="right"
           ><template #default="{ row }"
             ><el-button link type="primary" @click="view(row.record.id)"
@@ -83,7 +88,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getSalesLogistics, type SalesLogisticsContext } from '@/api/core/sales-logistics'
@@ -91,8 +96,7 @@ import { getTransport, type TransportDetail } from '@/api/core/transport-records
 import {
   money,
   transportTimeOf,
-  receiversOf,
-  statusName,
+  routeOf,
   frozenTransportSources,
 } from '../../cost/transport-records'
 import { savedTransportAllocations } from '../../cost/transport-allocation'
@@ -101,6 +105,7 @@ import { currentSource } from '../../cost/huolala-source'
 import { errorMessage } from '@/api/core/error'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import TransportRecordEditor from '../../cost/TransportRecordEditor.vue'
+import TransportRouteSummary from '../../cost/TransportRouteSummary.vue'
 import SalesLogisticsChooser from './SalesLogisticsChooser.vue'
 const props = defineProps<{ orderId: string | number; openChooser?: boolean }>()
 const emit = defineEmits<{ changed: [] }>()
@@ -112,6 +117,9 @@ const context = ref<SalesLogisticsContext | null>(null),
   chooser = ref(false)
 const opened = ref(false),
   detail = ref<TransportDetail | null>(null)
+const activeTransports = computed(() =>
+  (context.value?.transports || []).filter((transport) => transport.record.statusCode === 'ACTIVE'),
+)
 const carrier = (r: TransportDetail) =>
   r.platform
     ? '货拉拉'
@@ -183,6 +191,10 @@ watch(
 )
 </script>
 <style scoped>
+.sales-logistics {
+  min-width: 0;
+  container: sales-logistics / inline-size;
+}
 .logistics-header {
   display: flex;
   gap: 16px;
@@ -192,9 +204,32 @@ watch(
   margin-bottom: 16px;
 }
 .logistics-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  flex: 1 1 600px;
+  gap: 12px 24px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+}
+.logistics-summary > span {
   display: flex;
+  align-items: baseline;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 4px 8px;
+  min-width: 0;
+  color: var(--el-text-color-secondary);
+}
+.logistics-summary strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+@container sales-logistics (max-width: 600px) {
+  .logistics-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .logistics-summary strong {
   color: var(--el-color-primary);

@@ -3,6 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import View from '@/views/supply-chain/cost/LogisticsTransportRecordsView.vue'
 import Bill from '@/views/supply-chain/cost/TransportPlatformBill.vue'
+import Evidence from '@/views/supply-chain/cost/TransportEvidence.vue'
 import PlatformDetails from '@/views/supply-chain/cost/TransportPlatformDetails.vue'
 import type {
   TransportPage,
@@ -25,6 +26,7 @@ const api = vi.hoisted(() => ({
   workbook: vi.fn(),
   dictionaries: vi.fn(),
   getVoucher: vi.fn(),
+  getEvidenceContent: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -37,6 +39,7 @@ vi.mock('@/api/core/transport-records', () => ({
   getTransportRecords: api.list,
   exportSelectedTransport: api.selected,
   getTransportVoucher: api.getVoucher,
+  getTransportEvidenceContent: api.getEvidenceContent,
   getTransport: vi.fn(),
   saveTransport: vi.fn(),
   confirmTransport: vi.fn(),
@@ -45,6 +48,9 @@ vi.mock('@/api/core/cost', () => ({
   changeCostStatus: vi.fn(),
   getCostCities: vi.fn(),
   getCostEmployees: vi.fn(),
+  getCostAttachments: vi.fn().mockResolvedValue([]),
+  getCostAttachmentUrl: vi.fn(),
+  getTransportPdfContent: vi.fn(),
 }))
 vi.mock('@/views/supply-chain/cost/cost-export', () => ({ exportCostRows: api.workbook }))
 vi.mock('@/utils/business-dictionary', () => ({
@@ -160,33 +166,18 @@ async function startExport(allFields = false) {
   await flushPromises()
 }
 describe('统一运输记录 V2.6', () => {
-  it.each(['bill', 'evidence'] as const)(
-    '平台%s区域各司其职且只读，回单和装卸货资料没有被删除',
-    async (view) => {
-      wrapper = mount(Bill, {
-        props: {
-          recordId: 'C1',
-          platform: platform(),
-          confirmed: true,
-          confirmedAmount: 137.64,
-          view,
-        },
-        global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
-      })
-      await flushPromises()
-      if (view === 'bill') {
-        expect(wrapper.text()).toContain('账单总计')
-        expect(wrapper.text()).toContain('费用明细')
-        expect(wrapper.text()).not.toContain('运输回单')
-        expect(wrapper.text()).not.toContain('装卸货照片')
-      } else {
-        for (const label of ['平台费用凭证', '运输回单', '装卸货照片'])
-          expect(wrapper.text()).toContain(label)
-        expect(wrapper.text()).not.toContain('账单总计')
-      }
-      expect(wrapper.findAll('input')).toHaveLength(0)
-    },
-  )
+  it('平台账单仅展示金额和费用，凭证资料由统一凭证区域展示', async () => {
+    wrapper = mount(Bill, {
+      props: { recordId: 'C1', platform: platform(), confirmedAmount: 137.64 },
+      global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('账单总计')
+    expect(wrapper.text()).toContain('费用明细')
+    expect(wrapper.text()).not.toContain('运输回单')
+    expect(wrapper.text()).not.toContain('装卸货照片')
+    expect(wrapper.findAll('input')).toHaveLength(0)
+  })
   it('平台业务资料保持实际来源，联系人、下单员工与本系统员工部门分别展示', async () => {
     const p = platform()
     p.source.order.facts!.mappedEmployeeCode = 'EMP1'
@@ -338,16 +329,16 @@ describe('统一运输记录 V2.6', () => {
       global: { plugins: [ElementPlus], stubs: { TransportRecordEditor: true } },
     })
     await flushPromises()
-    await wrapper.get('input[aria-label="货拉拉下单员工"]').setValue('下单员工')
+    await wrapper.get('input[aria-label="下单员工"]').setValue('下单员工')
     const select = (placeholder: string) =>
       wrapper!
         .findAllComponents({ name: 'ElSelect' })
         .find((c) => c.props('placeholder') === placeholder)!
     select('员工关联状态').vm.$emit('update:modelValue', 'UNLINKED')
-    select('本系统关联员工').vm.$emit('update:modelValue', 'EMP1')
+    select('本公司员工').vm.$emit('update:modelValue', 'EMP1')
     select('数据来源').vm.$emit('update:modelValue', 'MANUAL_ENTRY')
     await flushPromises()
-    expect(wrapper.find('input[aria-label="货拉拉下单员工"]').exists()).toBe(false)
+    expect(wrapper.find('input[aria-label="下单员工"]').exists()).toBe(false)
     expect(wrapper.find('input[aria-label="联系电话"]').exists()).toBe(true)
     await wrapper.get('form[aria-label="查询条件"]').trigger('submit')
     await flushPromises()
@@ -429,7 +420,7 @@ describe('统一运输记录 V2.6', () => {
   })
   it('平台账单四项分别展示，明细和凭证只读，确认金额不随新账单变动', async () => {
     wrapper = mount(Bill, {
-      props: { recordId: 'C1', platform: platform(), confirmed: true, confirmedAmount: 137.64 },
+      props: { recordId: 'C1', platform: platform(), confirmedAmount: 137.64 },
       global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
     })
     await flushPromises()
@@ -474,11 +465,11 @@ describe('统一运输记录 V2.6', () => {
     expect(labels).not.toContain('收货方')
     expect(labels).not.toContain('已支付（元）')
     expect(labels).not.toContain('付款状态')
-    expect(labels).not.toContain('货拉拉下单员工')
+    expect(labels).not.toContain('下单员工')
     expect(headers).toContain('付款状态')
     expect(headers.length).toBeGreaterThan(15)
     expect(headers).toContain('计入运输成本（元）')
-    expect(headers).not.toContain('本系统关联员工')
+    expect(headers).not.toContain('本公司员工')
     expect(headers).not.toContain('员工关联状态')
     expect(headers).not.toContain('最近同步时间')
     expect(headers).not.toContain('运单号')
@@ -509,14 +500,8 @@ describe('统一运输记录 V2.6', () => {
     await flushPromises()
     const dialog = wrapper.findComponent({ name: 'CostExportDialog' })
     const optionLabels = dialog.props('columns').map((c: { label: string }) => c.label)
-    expect(optionLabels).not.toEqual(expect.arrayContaining(['货拉拉订单状态', '货拉拉下单员工']))
-    for (const label of [
-      '货拉拉订单状态',
-      '货拉拉下单员工',
-      '员工关联状态',
-      '最近同步时间',
-      '本系统关联员工',
-    ])
+    expect(optionLabels).not.toEqual(expect.arrayContaining(['运输状态', '下单员工']))
+    for (const label of ['运输状态', '下单员工', '员工关联状态', '最近同步时间', '本公司员工'])
       expect(optionLabels).not.toContain(label)
     expect(dialog.props('fields')).toHaveLength(9)
     await button('开始导出').trigger('click')
@@ -551,14 +536,14 @@ describe('统一运输记录 V2.6', () => {
     wrapper.findComponent({ name: 'ElTable' }).vm.$emit('selection-change', [record(), manual])
     await startExport(true)
     let [, headers] = api.workbook.mock.calls[0]!
-    expect(headers).not.toContain('货拉拉订单状态')
-    expect(headers).not.toContain('货拉拉下单员工')
+    expect(headers).not.toContain('运输状态')
+    expect(headers).not.toContain('下单员工')
     api.selected.mockResolvedValue([{ record: manual, platform: null }])
     wrapper.findComponent({ name: 'ElTable' }).vm.$emit('selection-change', [record()])
     await startExport(true)
     ;[, headers] = api.workbook.mock.calls[1]!
-    expect(headers).not.toContain('货拉拉订单状态')
-    expect(headers).not.toContain('货拉拉下单员工')
+    expect(headers).not.toContain('运输状态')
+    expect(headers).not.toContain('下单员工')
   })
   it('已勾选只导出选择记录，不能回退成整批；单据状态在创建人之前', async () => {
     api.selected.mockResolvedValue([{ record: record(), platform: platform() }])
@@ -619,13 +604,21 @@ describe('平台回单、票据和装卸货照片', () => {
     return p
   }
   async function renderEvidence() {
-    wrapper = mount(Bill, {
-      props: { recordId: 'C1', platform: evidence(), confirmed: true, confirmedAmount: 137.64 },
+    wrapper = mount(Evidence, {
+      props: {
+        row: record(),
+        platform: evidence(),
+        modelValue: [],
+        readonly: true,
+        required: false,
+        disabled: false,
+        embedded: true,
+      },
       global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
     })
     await flushPromises()
   }
-  it('纸质回单独立展示寄回快递号，逐站显示照片和失败重试状态，金额及账单只读', async () => {
+  it('统一凭证保留纸质回单寄回快递号、逐站照片和失败重试状态，平台文件只读', async () => {
     await renderEvidence()
     const text = wrapper!.text()
     for (const value of [
@@ -635,26 +628,21 @@ describe('平台回单、票据和装卸货照片', () => {
       '回单寄回快递单号',
       'SF987654321000',
       '纸质回单已寄回',
-      '2026-11-08 16:00:00',
-      '第1站 武汉仓 · 装货照片',
-      '第3站 长江门店 · 卸货照片',
+      '第1站 武汉仓',
+      '第3站 长江门店',
       '获取失败，将自动重试',
     ])
       expect(text).toContain(value)
     expect(wrapper!.findAll('input, textarea, select')).toHaveLength(0)
-    expect(wrapper!.findAll('.bill-totals strong').map((n) => n.text())).toEqual([
-      '142.64',
-      '142.64',
-      '0.00',
-      '0.00',
-    ])
     expect(wrapper!.findAll('button').filter((b) => b.text() === '下载')).toHaveLength(2)
   })
-  it('照片查看与下载分别请求鉴权地址，下载不直接使用货拉拉源地址', async () => {
+  it('照片下载读取本系统鉴权文件并通过本地文件链接保存，不跳转第三方地址', async () => {
     api.getVoucher.mockResolvedValue({
       url: 'https://our-private-cos.example/temporary-signed-url',
     })
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    api.getEvidenceContent.mockResolvedValue(new Blob(['file']))
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:download', revokeObjectURL: vi.fn() })
     await renderEvidence()
     await wrapper!
       .findAll('button')
@@ -667,10 +655,11 @@ describe('平台回单、票据和装卸货照片', () => {
       .find((b) => b.text() === '下载')!
       .trigger('click')
     await flushPromises()
-    expect(api.getVoucher).toHaveBeenLastCalledWith('C1', 'R1', true)
+    expect(api.getEvidenceContent).toHaveBeenLastCalledWith('C1', 'R1', true)
     expect(click).toHaveBeenCalledTimes(1)
     expect(document.querySelector('a[download]')).toBeNull()
     click.mockRestore()
+    vi.unstubAllGlobals()
   })
   it('保留无法寄回原因，未知状态不伪装已确认', async () => {
     const p = evidence()
@@ -679,8 +668,16 @@ describe('平台回单、票据和装卸货照片', () => {
       unableToReturn: 1,
       unableReason: '收货方未提供纸质单据',
     })
-    wrapper = mount(Bill, {
-      props: { recordId: 'C1', platform: p, confirmed: false },
+    wrapper = mount(Evidence, {
+      props: {
+        row: record(),
+        platform: p,
+        modelValue: [],
+        readonly: true,
+        required: false,
+        disabled: false,
+        embedded: true,
+      },
       global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
     })
     await flushPromises()

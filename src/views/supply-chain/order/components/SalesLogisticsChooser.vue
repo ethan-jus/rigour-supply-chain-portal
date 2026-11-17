@@ -4,36 +4,50 @@
     title="选择物流"
     width="min(1280px, 96vw)"
     top="3vh"
+    class="sales-logistics-dialog"
     append-to-body
     :close-on-click-modal="false"
   >
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-descriptions :column="3" border class="sales-context">
-      <el-descriptions-item label="销售订单号">{{
-        context.salesOrder.documentNo
-      }}</el-descriptions-item>
-      <el-descriptions-item label="客户">{{
-        context.salesOrder.receiverName || '-'
-      }}</el-descriptions-item>
-      <el-descriptions-item label="业务员／部门"
-        >{{ context.salesOrder.employeeName || '-' }}／{{
-          context.salesOrder.departmentName || '-'
-        }}</el-descriptions-item
-      >
-      <el-descriptions-item label="收货联系人">{{
-        context.salesOrder.contactName || '-'
-      }}</el-descriptions-item>
-      <el-descriptions-item label="联系电话">{{
-        context.salesOrder.contactPhone || '-'
-      }}</el-descriptions-item>
-      <el-descriptions-item label="收货地址">{{
-        context.salesOrder.destinationAddress || '-'
-      }}</el-descriptions-item>
-    </el-descriptions>
-    <section class="chooser-section">
-      <el-form inline label-position="top">
+    <dl class="sales-context" aria-label="销售订单信息">
+      <div class="context-main">
+        <dt>销售订单号</dt>
+        <dd>{{ context.salesOrder.documentNo }}</dd>
+      </div>
+      <div class="context-main">
+        <dt>客户</dt>
+        <dd>{{ context.salesOrder.receiverName || '-' }}</dd>
+      </div>
+      <div class="context-main">
+        <dt>业务员／部门</dt>
+        <dd>
+          {{ context.salesOrder.employeeName || '-' }}／{{
+            context.salesOrder.departmentName || '-'
+          }}
+        </dd>
+      </div>
+      <div class="context-contact">
+        <dt>收货人</dt>
+        <dd>
+          <span>{{ context.salesOrder.contactName || '-' }}</span>
+          <span class="contact-phone" aria-label="联系电话">{{
+            context.salesOrder.contactPhone || '-'
+          }}</span>
+        </dd>
+      </div>
+      <div class="context-address">
+        <dt>收货地址</dt>
+        <dd>{{ context.salesOrder.destinationAddress || '-' }}</dd>
+      </div>
+    </dl>
+    <section class="chooser-delivery" aria-label="配送信息">
+      <el-form class="delivery-form" label-position="left" label-width="80px" @submit.prevent>
         <el-form-item label="配送方式" required
-          ><el-select v-model="mode" placeholder="请选择配送方式" @change="selectionChanged"
+          ><el-select
+            v-model="mode"
+            aria-label="配送方式"
+            placeholder="请选择配送方式"
+            @change="selectionChanged"
             ><el-option
               v-for="o in modeOptions"
               :key="o.value"
@@ -43,6 +57,7 @@
         <el-form-item v-if="mode !== 'SELF'" label="物流公司" required
           ><el-select
             v-model="carrier"
+            aria-label="物流公司"
             placeholder="请选择物流公司"
             filterable
             @change="selectionChanged"
@@ -52,163 +67,158 @@
               :label="o.label"
               :value="o.value" /></el-select
         ></el-form-item>
-      </el-form>
-      <template v-if="mode === 'SELF' || (carrier && carrier !== 'HLL')">
-        <el-button
-          type="primary"
-          :disabled="!context.canAssociate || !supportedMode"
-          @click="manualOpen = true"
-          >手工录入物流</el-button
-        >
-        <p v-if="!supportedMode">该配送方式尚未配置运输处理规则。</p>
-      </template>
-      <template v-else-if="carrier === 'HLL'">
-        <h3>筛选运输记录</h3>
-        <OrderRegisterFilterCard
-          class="order-register-filter--compact"
-          :loading="loading"
-          @search="load"
-          @reset="resetFilters"
-        >
-          <template #primary>
-            <div class="list-filter-field">
-              <el-input
-                v-model="query.platformOrderNo"
-                placeholder="快递单号"
-                aria-label="快递单号"
-                clearable
-              />
-            </div>
-            <div class="list-filter-field list-filter-field--person">
-              <el-input
-                v-model="query.platformEmployeeName"
-                placeholder="货拉拉下单员工"
-                aria-label="货拉拉下单员工"
-                clearable
-              />
-            </div>
-            <div class="list-filter-field">
-              <el-input
-                v-model="query.receiverName"
-                placeholder="收货地"
-                aria-label="收货地"
-                clearable
-              />
-            </div>
-            <div class="list-filter-field list-filter-field--date-range">
-              <el-date-picker
-                v-model="dates"
-                type="daterange"
-                value-format="YYYY-MM-DD"
-                start-placeholder="运输开始日期"
-                end-placeholder="运输结束日期"
-                aria-label="运输日期"
-              />
-            </div>
-            <div class="list-filter-field list-filter-field--select">
-              <el-select
-                v-model="query.relationState"
-                placeholder="销售关联状态"
-                aria-label="销售关联状态"
-                clearable
-                ><el-option label="未关联销售单" value="UNLINKED" /><el-option
-                  label="已关联销售单"
-                  value="LINKED"
-              /></el-select>
-            </div>
-          </template>
-        </OrderRegisterFilterCard>
-        <el-table
-          v-loading="loading"
-          :data="rows"
-          border
-          max-height="340"
-          empty-text="暂无符合条件的已完成货拉拉运输"
-          row-key="record.id"
-          @row-click="select"
-        >
-          <el-table-column label="选择" width="65"
-            ><template #default="{ row }"
-              ><el-radio
-                :model-value="selected?.record.id"
-                :value="row.record.id"
-                :aria-label="`选择${no(row as TransportDetail)}`"
-                :disabled="
-                  row.record.statusCode !== 'ACTIVE' && !alreadyLinked(row as TransportDetail)
-                "
-                @change="select(row as TransportDetail)"
-                ><span /></el-radio></template
-          ></el-table-column>
-          <el-table-column label="快递单号／费用单号" min-width="220"
-            ><template #default="{ row }"
-              >{{ no(row as TransportDetail) }}
-              <div class="secondary">{{ row.record.documentNo }}</div></template
-            ></el-table-column
+        <div v-if="mode === 'SELF' || (carrier && carrier !== 'HLL')" class="manual-entry">
+          <el-button
+            type="primary"
+            :disabled="!context.canAssociate || !supportedMode"
+            @click="manualOpen = true"
+            >手工录入物流</el-button
           >
-          <el-table-column label="下单时间" width="180"
-            ><template #default="{ row }">{{
-              orderedAt(row as TransportDetail) || '-'
-            }}</template></el-table-column
-          >
-          <el-table-column label="车型" width="100"
-            ><template #default="{ row }">{{ vehicleOf(row.platform) }}</template></el-table-column
-          >
-          <el-table-column label="行驶路段" min-width="230"
-            ><template #default="{ row }"
-              ><TransportRouteSummary :route="routeOf(row.record, row.platform)" /></template
-          ></el-table-column>
-          <el-table-column label="运输费用（元）" width="140" align="right"
-            ><template #default="{ row }">{{
-              money(amountOf(row.record, row.platform))
-            }}</template></el-table-column
-          >
-          <el-table-column label="已关联销售单" min-width="180"
-            ><template #default="{ row }">{{
-              ordersOf(row.record, row.platform).join('、') || '-'
-            }}</template></el-table-column
-          >
-          <el-table-column label="单据状态" width="110"
-            ><template #default="{ row }">{{
-              statusName(row.record.statusCode, row.record.businessStatusCode)
-            }}</template></el-table-column
-          >
-        </el-table>
-        <div class="chooser-pager">
-          <el-button :disabled="offset === 0 || loading" @click="page(-1)">上一页</el-button
-          ><el-button :disabled="!hasNext || loading" @click="page(1)">下一页</el-button>
         </div>
-        <section v-if="selected" class="chooser-section selected-preview" aria-label="已选物流信息">
-          <h3>已选物流信息</h3>
-          <el-descriptions :column="2" border
-            ><el-descriptions-item label="快递单号">{{ no(selected) }}</el-descriptions-item
-            ><el-descriptions-item label="物流公司">货拉拉</el-descriptions-item
-            ><el-descriptions-item label="运输费用">{{
-              money(amountOf(selected.record, selected.platform))
+      </el-form>
+      <p v-if="(mode === 'SELF' || (carrier && carrier !== 'HLL')) && !supportedMode">
+        该配送方式尚未配置运输处理规则。
+      </p>
+    </section>
+    <section v-if="carrier === 'HLL' && mode !== 'SELF'" class="chooser-results">
+      <h3>运输记录</h3>
+      <OrderRegisterFilterCard
+        class="order-register-filter--compact"
+        :loading="loading"
+        @search="load"
+        @reset="resetFilters"
+      >
+        <template #primary>
+          <div class="list-filter-field">
+            <el-input
+              v-model="query.platformOrderNo"
+              placeholder="快递单号"
+              aria-label="快递单号"
+              clearable
+            />
+          </div>
+          <div class="list-filter-field list-filter-field--employee">
+            <el-input
+              v-model="query.platformEmployeeName"
+              placeholder="下单员工"
+              aria-label="下单员工"
+              clearable
+            />
+          </div>
+          <div class="list-filter-field">
+            <el-input
+              v-model="query.receiverName"
+              placeholder="收货地"
+              aria-label="收货地"
+              clearable
+            />
+          </div>
+          <div class="list-filter-field list-filter-field--date-range">
+            <el-date-picker
+              v-model="dates"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              start-placeholder="运输开始日期"
+              end-placeholder="运输结束日期"
+              aria-label="运输日期"
+            />
+          </div>
+          <div class="list-filter-field list-filter-field--select">
+            <el-select
+              v-model="query.relationState"
+              placeholder="销售关联状态"
+              aria-label="销售关联状态"
+              clearable
+              ><el-option label="未关联销售单" value="UNLINKED" /><el-option
+                label="已关联销售单"
+                value="LINKED"
+            /></el-select>
+          </div>
+        </template>
+      </OrderRegisterFilterCard>
+      <el-table
+        v-loading="loading"
+        :data="rows"
+        border
+        max-height="clamp(260px, calc(94dvh - 460px), 560px)"
+        empty-text="暂无符合条件的已完成运输记录"
+        row-key="record.id"
+        @row-click="select"
+      >
+        <el-table-column label="选择" width="65" fixed="left"
+          ><template #default="{ row }"
+            ><el-radio
+              :model-value="selected?.record.id"
+              :value="row.record.id"
+              :aria-label="`选择${no(row as TransportDetail)}`"
+              :disabled="row.record.statusCode !== 'ACTIVE'"
+              @change="select(row as TransportDetail)"
+              ><span /></el-radio></template
+        ></el-table-column>
+        <el-table-column label="快递单号／费用单号" min-width="220"
+          ><template #default="{ row }"
+            >{{ no(row as TransportDetail) }}
+            <div class="secondary">{{ row.record.documentNo }}</div></template
+          ></el-table-column
+        >
+        <el-table-column label="下单时间" width="180"
+          ><template #default="{ row }">{{
+            orderedAt(row as TransportDetail) || '-'
+          }}</template></el-table-column
+        >
+        <el-table-column label="车型" width="100"
+          ><template #default="{ row }">{{ vehicleOf(row.platform) }}</template></el-table-column
+        >
+        <el-table-column label="行驶路段" min-width="230"
+          ><template #default="{ row }"
+            ><TransportRouteSummary :route="routeOf(row.record, row.platform)" /></template
+        ></el-table-column>
+        <el-table-column label="运输费用（元）" width="140" align="right"
+          ><template #default="{ row }">{{
+            money(amountOf(row.record, row.platform))
+          }}</template></el-table-column
+        >
+        <el-table-column label="已关联销售单" min-width="180" fixed="right"
+          ><template #default="{ row }">{{
+            ordersOf(row.record, row.platform).join('、') || '-'
+          }}</template></el-table-column
+        >
+      </el-table>
+      <div class="chooser-pager">
+        <el-button :disabled="offset === 0 || loading" @click="page(-1)">上一页</el-button
+        ><el-button :disabled="!hasNext || loading" @click="page(1)">下一页</el-button>
+      </div>
+      <section v-if="selected" class="chooser-section selected-preview" aria-label="已选物流信息">
+        <h3>已选物流信息</h3>
+        <el-descriptions :column="2" border
+          ><el-descriptions-item label="快递单号">{{ no(selected) }}</el-descriptions-item
+          ><el-descriptions-item label="物流公司">货拉拉</el-descriptions-item
+          ><el-descriptions-item label="运输费用">{{
+            money(amountOf(selected.record, selected.platform))
+          }}</el-descriptions-item
+          ><el-descriptions-item label="下单时间">{{
+            orderedAt(selected) || '-'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="车型">{{
+            vehicleOf(selected.platform)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="行驶路段"
+            ><TransportRouteSummary :route="routeOf(selected.record, selected.platform)"
+          /></el-descriptions-item>
+          <el-descriptions-item label="本次关联归属"
+            >{{ context.salesOrder.employeeName || '-' }}／{{
+              context.salesOrder.departmentName || '-'
             }}</el-descriptions-item
-            ><el-descriptions-item label="下单时间">{{
-              orderedAt(selected) || '-'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="车型">{{
-              vehicleOf(selected.platform)
-            }}</el-descriptions-item>
-            <el-descriptions-item label="行驶路段"
-              ><TransportRouteSummary :route="routeOf(selected.record, selected.platform)"
-            /></el-descriptions-item>
-            <el-descriptions-item label="本次关联归属"
-              >{{ context.salesOrder.employeeName || '-' }}／{{
-                context.salesOrder.departmentName || '-'
-              }}</el-descriptions-item
-            ></el-descriptions
-          >
-          <h3 class="allocation-heading">关联后分摊预览</h3>
-          <el-table :data="allocationPreview" border>
-            <el-table-column prop="code" label="销售订单号" min-width="180" />
-            <el-table-column label="分摊运输费用（元）" align="right" min-width="160">
-              <template #default="{ row }">{{ money(row.amount) }}</template>
-            </el-table-column>
-          </el-table>
-        </section>
-      </template>
+          ></el-descriptions
+        >
+        <h3 class="allocation-heading">关联后分摊预览</h3>
+        <el-table :data="allocationPreview" border>
+          <el-table-column prop="code" label="销售订单号" min-width="180" />
+          <el-table-column label="分摊运输费用（元）" align="right" min-width="160">
+            <template #default="{ row }">{{ money(row.amount) }}</template>
+          </el-table-column>
+        </el-table>
+      </section>
     </section>
     <section v-if="automatic.length" class="chooser-section">
       <h3>已自动带入</h3>
@@ -266,7 +276,6 @@ import {
   money,
   ordersOf,
   routeOf,
-  statusName,
   transportTimeOf,
   vehicleOf,
 } from '../../cost/transport-records'
@@ -308,7 +317,9 @@ const allocationPreview = computed(() => {
     props.context.salesOrder,
   ])
 })
-const automatic = computed(() => props.context.transports.filter((r) => !!r.shipments?.length))
+const automatic = computed(() =>
+  props.context.transports.filter((r) => r.record.statusCode === 'ACTIVE' && !!r.shipments?.length),
+)
 const modeOptions = computed(() => costOptions('COST_DELIVERY_MODE'))
 const carrierOptions = computed(() => costOptions('COST_CARRIER'))
 const supportedMode = computed(() =>
@@ -329,7 +340,7 @@ const orderedAt = (r: TransportDetail) => transportTimeOf(r.record, r.platform, 
 const alreadyLinked = (r: TransportDetail) =>
   ordersOf(r.record, r.platform).includes(props.context.salesOrder.documentNo)
 function select(r: TransportDetail) {
-  if (r.record.statusCode === 'ACTIVE' || alreadyLinked(r)) selected.value = r
+  if (r.record.statusCode === 'ACTIVE') selected.value = r
 }
 function resetFilters() {
   query.value = {
@@ -366,7 +377,7 @@ async function load() {
           (r) =>
             r.platform &&
             currentSource(r.platform.source).status === '已完成' &&
-            r.record.statusCode !== 'VOID' &&
+            r.record.statusCode === 'ACTIVE' &&
             (!r.record.data.typeCode || r.record.data.typeCode === 'DELIVERY'),
         )
     }
@@ -413,14 +424,89 @@ function manualSaved() {
 }
 </script>
 <style scoped>
+:global(.sales-logistics-dialog.el-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-height: 94dvh;
+}
+:global(.sales-logistics-dialog > .el-dialog__body) {
+  min-height: 0;
+  overflow-y: auto;
+}
+:global(.sales-logistics-dialog > .el-dialog__header),
+:global(.sales-logistics-dialog > .el-dialog__footer) {
+  flex-shrink: 0;
+}
 .sales-context {
-  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 16px;
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+}
+.sales-context > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+.context-address {
+  grid-column: span 2;
+}
+.sales-context dt {
+  flex: 0 0 80px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+.sales-context dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--el-text-color-primary);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.context-contact dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.contact-phone {
+  white-space: nowrap;
+}
+.chooser-delivery {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.delivery-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 280px) minmax(280px, 340px) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px 24px;
+}
+.delivery-form :deep(.el-form-item),
+.delivery-form :deep(.el-form-item__content) {
+  min-width: 0;
+  margin: 0;
+}
+.delivery-form :deep(.el-select) {
+  width: 100%;
+}
+.chooser-results {
+  margin-top: 16px;
+}
+.chooser-results > .order-register-filter {
+  margin-bottom: 16px;
 }
 .chooser-section {
-  padding: 20px 0;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
 }
 h3 {
-  margin: 0 0 16px;
+  margin: 0 0 12px;
   font-size: 16px;
 }
 .allocation-heading {
@@ -435,5 +521,29 @@ h3 {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
+}
+@media (max-width: 900px) {
+  .sales-context {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+  }
+  .context-address {
+    grid-column: 1 / -1;
+  }
+  .delivery-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .manual-entry {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 600px) {
+  .sales-context,
+  .delivery-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sales-context {
+    padding: 12px;
+  }
 }
 </style>

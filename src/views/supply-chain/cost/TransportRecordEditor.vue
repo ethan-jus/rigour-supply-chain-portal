@@ -147,7 +147,6 @@
                 placeholder="填写快递单号"
             /></el-form-item>
             <Info label="车型" :value="vehicleOf(platform)" />
-            <Info v-if="platform" label="下单时间" :value="order?.raw['下单时间']" />
           </div>
         </section>
         <section class="transport-section">
@@ -174,10 +173,13 @@
               >选择{{ type?.orderLabel || '业务订单' }}</el-button
             >
           </div>
-          <el-table :data="selected" border empty-text="暂未关联业务订单"
-            ><el-table-column prop="documentNo" label="业务单号" min-width="205" /><el-table-column
-              label="客户／收货仓库"
-              min-width="180"
+          <el-table :data="selected" border scrollbar-always-on empty-text="暂未关联业务订单"
+            ><el-table-column
+              prop="documentNo"
+              label="业务单号"
+              min-width="205"
+              fixed="left"
+            /><el-table-column label="客户／收货仓库" min-width="180"
               ><template #default="{ row }">{{
                 row.receiverName || '-'
               }}</template></el-table-column
@@ -205,6 +207,7 @@
               v-if="!readonly && !advanced && !salesOrderId && !shipmentSources.length"
               label="操作"
               width="80"
+              fixed="right"
               ><template #default="{ row }"
                 ><el-button link type="danger" @click="removeOrder(row.documentNo)"
                   >移除</el-button
@@ -234,7 +237,11 @@
                 :max="999999999999"
                 :controls="false"
                 placeholder="填写本次运输费用"
-              /><span v-if="!readonly && !platform" class="optional-label"
+              /><span
+                v-if="!readonly && !advanced && form.manualBillItems?.length"
+                class="optional-label"
+                >按下方费用明细自动合计</span
+              ><span v-if="!readonly && !platform" class="optional-label"
                 >金额、订单归属及凭证补齐后，计入成本看板统计</span
               ></el-form-item
             ><el-form-item label="费用负责人"
@@ -246,7 +253,7 @@
                 filterable
                 placeholder="请选择费用负责人"
                 ><el-option
-                  v-for="e in employees"
+                  v-for="e in ownerOptions"
                   :key="e.employeeCode"
                   :label="e.employeeName + (e.departmentName ? `（${e.departmentName}）` : '')"
                   :value="e.employeeCode" /></el-select></el-form-item
@@ -295,6 +302,12 @@
                 账单明细<span v-if="!readonly && !advanced" class="optional-label">（选填）</span>
               </h4>
               <el-button
+                v-if="!readonly && !advanced && form.manualBillItems?.length"
+                link
+                @click="useTotalOnly"
+                >改为只填总额</el-button
+              >
+              <el-button
                 v-if="!readonly && !advanced"
                 link
                 type="primary"
@@ -303,7 +316,12 @@
                 >添加费用项目</el-button
               >
             </div>
-            <el-table v-if="form.manualBillItems?.length" :data="form.manualBillItems" border>
+            <el-table
+              v-if="form.manualBillItems?.length"
+              :data="form.manualBillItems"
+              border
+              scrollbar-always-on
+            >
               <el-table-column label="费用项目" min-width="180"
                 ><template #default="{ row }">
                   <span v-if="readonly || advanced">{{ row.name }}</span>
@@ -385,7 +403,7 @@
               >均分</el-button
             >
           </div>
-          <el-table v-if="allocations.length" :data="allocations" border
+          <el-table v-if="allocations.length" :data="allocations" border scrollbar-always-on
             ><el-table-column prop="code" label="业务单号" min-width="170" />
             <el-table-column v-if="allocations.length > 1" label="业务单金额（元）" align="right"
               ><template #default="{ row }">{{
@@ -424,10 +442,8 @@
           />
           <TransportPlatformBill
             v-if="platform"
-            view="bill"
             :record-id="detail!.record.id"
             :platform="platform"
-            :confirmed="detail!.record.statusCode === 'ACTIVE'"
             :confirmed-amount="detail!.record.data.amount"
           />
         </section>
@@ -444,7 +460,7 @@
               </div>
             </div>
             <p v-if="!platformSenders.length" class="empty-text">暂无发货信息</p>
-            <el-form-item label="本系统发货仓库"
+            <el-form-item label="发货仓库"
               ><span v-if="readonly">{{ warehouseName }}</span
               ><CostLedgerPartySelect
                 v-else
@@ -576,18 +592,11 @@
         </section>
         <section class="transport-section" aria-label="凭证与运输影像">
           <h3>凭证与运输影像</h3>
-          <TransportPlatformBill
-            v-if="platform"
-            view="evidence"
-            :record-id="detail!.record.id"
-            :platform="platform"
-            :confirmed="detail!.record.statusCode === 'ACTIVE'"
-            :confirmed-amount="detail!.record.data.amount"
-          />
           <TransportEvidence
             embedded
             v-model="attachmentDrafts"
             :row="detail?.record || null"
+            :platform="platform"
             :readonly="readonly"
             :disabled="saving"
             :required="!platform"
@@ -595,18 +604,33 @@
             @busy="attachmentBusy = $event"
             @count="attachmentCount = $event"
           />
+          <p
+            v-if="readonly && !platform && !attachmentBusy && attachmentCount === 0"
+            class="empty-text"
+          >
+            暂无凭证与运输影像
+          </p>
         </section>
-        <section class="transport-section">
+        <section class="transport-section" aria-label="运输备注">
           <h3>备注</h3>
-          <span v-if="readonly" class="remark">{{ form.remark || '-' }}</span
+          <div v-if="platform" class="platform-remark">
+            <div class="section-heading">
+              <h4>物流订单备注</h4>
+              <el-tag type="info" size="small">只读</el-tag>
+            </div>
+            <p class="remark">{{ displayValue(order?.raw['订单备注']) }}</p>
+          </div>
+          <h4 v-if="platform">补充备注</h4>
+          <span v-if="readonly" class="remark">{{ displayValue(form.remark) }}</span
           ><el-input
             v-else
             v-model="form.remark"
             type="textarea"
+            :aria-label="platform ? '补充备注' : '备注'"
             :rows="3"
             maxlength="1000"
             show-word-limit
-            placeholder="填写本次运输的业务备注"
+            placeholder="填写备注"
           /><el-form-item
             v-if="!readonly && detail && hadLinks"
             label="变更原因"
@@ -659,6 +683,8 @@
     >
     <el-dialog
       v-model="advancedOpen"
+      class="transport-allocation-dialog"
+      top="3vh"
       title="费用与分摊明细"
       width="min(1250px, 94vw)"
       append-to-body
@@ -731,7 +757,7 @@ import { validateManualTransport, type TransportErrors } from './transport-valid
 import { costOptions, costLabel } from './cost-dictionaries'
 import { errorMessage } from '@/api/core/error'
 import { auditLabel } from './cost-audit'
-import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
+import { displayRecordActor, displayRecordDateTime, displayValue } from '@/utils/business-display'
 const props = withDefaults(
   defineProps<{
     detail: TransportDetail | null
@@ -801,7 +827,14 @@ const picker = ref(false),
   senderTouched = ref(!!detail.value)
 function addBillItem() {
   form.value.manualBillItems ||= []
-  form.value.manualBillItems.push({ name: '', amount: null })
+  const first = form.value.manualBillItems.length === 0
+  form.value.manualBillItems.push({
+    name: first && form.value.amount != null ? '运费' : '',
+    amount: first ? form.value.amount : null,
+  })
+}
+function useTotalOnly() {
+  form.value.manualBillItems = []
 }
 watch(
   () => form.value.manualBillItems,
@@ -932,11 +965,29 @@ const paymentName = computed(() =>
     ? platformPaymentStatus(order.value)
     : costLabel('COST_PAYMENT_STATUS', form.value.paymentStatusCode),
 )
+const ownerOptions = computed<CostEmployee[]>(() => {
+  const code = form.value.ownerEmployeeCode
+  if (!code || employees.value.some((employee) => employee.employeeCode === code))
+    return employees.value
+  const source = selected.value.find((item) => item.employeeCode === code)
+  const savedName =
+    detail.value?.record.data.ownerEmployeeCode === code
+      ? detail.value.record.ownerEmployeeName
+      : null
+  return [
+    ...employees.value,
+    {
+      employeeCode: code,
+      employeeName: savedName || source?.employeeName || '负责人待核对',
+      departmentId: null,
+      departmentName: source?.departmentName || null,
+    },
+  ]
+})
 const ownerName = computed(
   () =>
-    employees.value.find((e) => e.employeeCode === form.value.ownerEmployeeCode)?.employeeName ||
-    detail.value?.record.ownerEmployeeName ||
-    '-',
+    ownerOptions.value.find((employee) => employee.employeeCode === form.value.ownerEmployeeCode)
+      ?.employeeName || '-',
 )
 const Info = defineComponent({
   props: {
@@ -1175,6 +1226,30 @@ async function save() {
 }
 </script>
 <style scoped>
+:global(.transport-dialog.el-dialog),
+:global(.transport-allocation-dialog.el-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-height: 94dvh;
+  overflow: hidden;
+}
+:global(.transport-dialog > .el-dialog__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+:global(.transport-allocation-dialog > .el-dialog__body) {
+  min-height: 0;
+  overflow: auto;
+}
+:global(.transport-dialog > .el-dialog__header),
+:global(.transport-dialog > .el-dialog__footer),
+:global(.transport-allocation-dialog > .el-dialog__header),
+:global(.transport-allocation-dialog > .el-dialog__footer) {
+  flex-shrink: 0;
+}
+
 .heading-label {
   display: block;
   color: var(--el-text-color-secondary);
@@ -1182,6 +1257,7 @@ async function save() {
   margin-bottom: 5px;
 }
 .record-heading > div:first-child {
+  min-width: 0;
   display: grid;
   justify-items: start;
   gap: 5px;
@@ -1194,13 +1270,17 @@ async function save() {
 }
 
 .transport-content {
-  max-height: calc(88vh - 120px);
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  container: transport-record / inline-size;
   background: var(--el-fill-color-lighter);
-  padding: 18px;
+  padding: 16px;
 }
 .record-heading {
   display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
   justify-content: space-between;
   align-items: center;
   padding: 0 4px 18px;
@@ -1210,10 +1290,11 @@ async function save() {
   overflow-wrap: anywhere;
 }
 .transport-section {
+  min-width: 0;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
-  padding: 22px;
+  padding: 20px;
   margin-bottom: 16px;
 }
 .bill-heading {
@@ -1234,6 +1315,8 @@ h4 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 16px;
 }
 .section-heading h3 {
@@ -1249,6 +1332,10 @@ h4 {
 }
 .wide {
   grid-column: 1/-1;
+}
+.form-grid > *,
+.form-grid :deep(.el-form-item__content) {
+  min-width: 0;
 }
 .form-grid :deep(.el-select),
 .form-grid :deep(.el-input-number),
@@ -1271,6 +1358,11 @@ h4 {
   font-size: 13px;
   margin-bottom: 8px;
 }
+:deep(.el-form-item__content) > span,
+:deep(.el-form-item__content) > strong {
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
 :deep(.info-field) > div {
   line-height: 1.7;
   white-space: pre-wrap;
@@ -1281,6 +1373,23 @@ h4 {
 }
 .remark {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.platform-remark {
+  padding: 16px;
+  margin-bottom: 18px;
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+}
+.platform-remark h4,
+.platform-remark p {
+  margin: 0;
+}
+.platform-remark p {
+  margin-top: 12px;
+}
+.platform-remark .section-heading {
+  justify-content: flex-start;
 }
 .change-reason {
   margin-top: 20px;
@@ -1289,19 +1398,16 @@ h4 {
   font-size: 20px;
   font-weight: 600;
 }
-@media (max-width: 1000px) {
+@container transport-record (max-width: 1000px) {
   .form-grid,
   .manual-bill-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (max-width: 600px) {
+@container transport-record (max-width: 600px) {
   .form-grid,
   .manual-bill-summary {
     grid-template-columns: 1fr;
-  }
-  .transport-content {
-    padding: 8px;
   }
   .transport-section {
     padding: 16px;
@@ -1343,6 +1449,7 @@ h4 {
 }
 .allocation-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   margin: 16px 0 8px;
@@ -1352,7 +1459,12 @@ h4 {
   margin: 8px 0;
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 600px) {
+@container transport-record (max-width: 900px) {
+  .receiver-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@container transport-record (max-width: 600px) {
   .receiver-grid,
   .receiver-grid .form-grid {
     grid-template-columns: 1fr;

@@ -751,6 +751,7 @@
     <el-dialog
       v-model="salesLogisticsOpen"
       title="物流发货"
+      class="sales-logistics-panel-dialog"
       width="min(1320px, 96vw)"
       top="3vh"
       destroy-on-close
@@ -759,7 +760,9 @@
         :order-id="salesLogisticsOrderId"
         open-chooser
         @changed="refreshLogisticsCounts"
-    /></el-dialog>
+      />
+      <template #footer><el-button @click="salesLogisticsOpen = false">关闭</el-button></template>
+    </el-dialog>
     <OrderRegisterDetailDrawer
       v-model="detailVisible"
       :order-id="detailOrderId"
@@ -1252,6 +1255,22 @@ watch(
 </script>
 
 <style scoped>
+:global(.sales-logistics-panel-dialog.el-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-height: 94dvh;
+  overflow: hidden;
+}
+:global(.sales-logistics-panel-dialog > .el-dialog__body) {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:global(.sales-logistics-panel-dialog > .el-dialog__header),
+:global(.sales-logistics-panel-dialog > .el-dialog__footer) {
+  flex-shrink: 0;
+}
+
 .monthly-export-note {
   color: #64748b;
   font-size: var(--app-font-size-base);

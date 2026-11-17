@@ -122,10 +122,10 @@ export const saveTransportWithEvidence = (
     { ...options, headers: { 'Content-Type': 'multipart/form-data' } },
   )
 }
-export const getTransportAttachmentDownloadUrl = (id: string, file: string) =>
-  apiClient.get<string>(
-    `${base}/${encodeURIComponent(id)}/attachments/${encodeURIComponent(file)}/download-url`,
-    options,
+export const getTransportEvidenceContent = (id: string, file: string, platform = false) =>
+  apiClient.get<Blob>(
+    `${base}/${encodeURIComponent(id)}/${platform ? 'vouchers' : 'attachments'}/${encodeURIComponent(file)}/content`,
+    { ...options, responseType: 'blob' },
   )
 
 export interface TransportFeeImportItem {

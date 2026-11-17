@@ -10,6 +10,13 @@ export const evidenceCategories = [
   { code: 'UNLOADING', label: '卸货照片' },
 ] as const
 
+/** 保留未知类型的照片，避免归并分类时漏掉源文件。 */
+export function stopPhotoCategory(phase: string) {
+  if (phase === '卸货照片' || /^unloading$/i.test(phase)) return 'UNLOADING'
+  if (phase === '装货照片' || /^loading$/i.test(phase)) return 'LOADING'
+  return 'OTHER_PHOTO'
+}
+
 /** 整单失败后保留同一提交标识；修改表单或文件后重新生成，不复用已提交内容。 */
 export class TransportEvidenceSaveSession {
   private signature = ''

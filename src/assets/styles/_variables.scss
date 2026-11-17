@@ -42,6 +42,8 @@ $topbar-height: 48px;
 $list-filter-widths: (
   text: 160px,
   person: 120px,
+  // 带平台／关联角色说明的人员查询
+  employee: 180px,
   select: 140px,
   date-range: 248px,
   product: 180px,

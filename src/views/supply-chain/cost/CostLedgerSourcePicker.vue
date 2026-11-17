@@ -28,9 +28,7 @@
         <div class="list-filter-field">
           <el-input
             v-model="query.documentNo"
-            :placeholder="
-              query.orderTypeCode === 'SALES_ORDER' ? '销售单号／订货宝单号' : '单据编号'
-            "
+            :placeholder="query.orderTypeCode === 'SALES_ORDER' ? '销售／订货宝单号' : '单据编号'"
             aria-label="单据编号"
             clearable
           />

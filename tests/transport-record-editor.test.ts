@@ -4,7 +4,7 @@ import ElementPlus from 'element-plus'
 import { defineComponent } from 'vue'
 import Editor from '@/views/supply-chain/cost/TransportRecordEditor.vue'
 import type { TransportDetail } from '@/api/core/transport-records'
-import type { CostSource } from '@/api/core/cost'
+import type { CostEmployee, CostSource } from '@/api/core/cost'
 import { createLedgerCommand } from '@/views/supply-chain/cost/cost-ledger'
 
 vi.mock('@/composables/useSupplyPermissions', () => ({
@@ -354,6 +354,63 @@ function validManualLedger() {
   return ledger
 }
 describe('通用手工账单', () => {
+  it('添加明细保留已填总额，切回只填总额后可直接修改并保存', async () => {
+    const d = detail()
+    d.record.statusCode = 'ACTIVE'
+    d.record.data.ledger = validManualLedger()
+    Object.assign(d.record.data.ledger, {
+      carrierCode: 'SF',
+      transportPurposeCode: 'DELIVERY',
+      feeItems: [{ ...d.record.data.ledger.feeItems[0], allocationMethodCode: 'EQUAL' }],
+      sources: [
+        { orderCode: 'SO1', orderTypeCode: 'SALES_ORDER', linkRoleCode: 'COST', allocations: [] },
+      ],
+      manualBillItems: [],
+    })
+    d.record.data.amount = 35.27
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: false, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    await w
+      .findAll('button')
+      .find((b) => b.text() === '添加费用项目')!
+      .trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('按下方费用明细自动合计')
+    const billAmount = w
+      .findAllComponents({ name: 'ElInputNumber' })
+      .find((input) => input.props('placeholder') === '填写金额')!
+    expect(billAmount.props('modelValue')).toBe(35.27)
+    await w
+      .findAll('button')
+      .find((b) => b.text() === '改为只填总额')!
+      .trigger('click')
+    await flushPromises()
+    const total = w
+      .findAllComponents({ name: 'ElInputNumber' })
+      .find((input) => input.props('placeholder') === '填写本次运输费用')!
+    expect(total.props('modelValue')).toBe(35.27)
+    total.vm.$emit('update:modelValue', 36.28)
+    await flushPromises()
+    await w
+      .findAll('button')
+      .find((b) => b.text() === '保存运输记录')!
+      .trigger('click')
+    await flushPromises()
+    expect(api.save).toHaveBeenCalledWith(
+      'C1',
+      expect.objectContaining({
+        draft: expect.objectContaining({ amount: 36.28, manualBillItems: [] }),
+      }),
+      [],
+    )
+    w.unmount()
+    document.body.innerHTML = ''
+  })
+
   it.each(['SF', 'JT_NEW'])(
     '%s 用快递单号编辑原平台单号，保留隐藏的历史运单号、付款状态和费用分项',
     async (carrier) => {
@@ -515,6 +572,123 @@ describe('通用手工账单', () => {
 })
 
 describe('物流详情的信息优先级', () => {
+  it('负责人档案未返回时先显示原单姓名，返回后更新姓名，界面不显示员工编码', async () => {
+    let finish!: (rows: CostEmployee[]) => void
+    api.employees.mockReturnValue(
+      new Promise<CostEmployee[]>((resolve) => {
+        finish = resolve
+      }),
+    )
+    const source = {
+      ...detail().record.sources[0]!,
+      employeeCode: 'INTERNAL-EMP-1',
+      employeeName: '原单姓名',
+      departmentName: '金华市',
+    }
+    const w = mount(Editor, {
+      props: {
+        modelValue: true,
+        readonly: false,
+        detail: null,
+        salesSource: source,
+        salesOrderId: 'SO1',
+      },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const field = w
+      .findAllComponents({ name: 'ElFormItem' })
+      .find((item) => item.props('label') === '费用负责人')!
+    expect(field.text()).toContain('原单姓名（金华市）')
+    expect(field.text()).not.toContain('INTERNAL-EMP-1')
+    finish([
+      {
+        employeeCode: 'INTERNAL-EMP-1',
+        employeeName: '档案姓名',
+        departmentName: '金华市',
+        departmentId: 1,
+      },
+    ])
+    await flushPromises()
+    expect(field.text()).toContain('档案姓名（金华市）')
+    expect(field.text()).not.toContain('INTERNAL-EMP-1')
+    w.unmount()
+    document.body.innerHTML = ''
+  })
+  it.each([null, '', '  \n  '])('手工记录空备注 %s 统一显示短横线', async (remark) => {
+    const d = detail()
+    Object.assign(d.record.data, { remark })
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const notes = w.get('[aria-label="运输备注"]')
+    expect(notes.get('.remark').text()).toBe('-')
+    expect(notes.find('.platform-remark').exists()).toBe(false)
+    w.unmount()
+    document.body.innerHTML = ''
+  })
+  it('平台最新备注与人工补充集中展示且不互相覆盖，编辑和查看仅各显示一次', async () => {
+    const d = detail()
+    d.record.data.remark = '人工补充：收货前联系店长'
+    const sourceOrder = {
+      enterpriseId: 'E1',
+      orderNo: 'HL001',
+      status: '已完成',
+      paidAmount: 100.01,
+      useTime: '2026-11-10 10:00:00',
+      salesOrderNos: [],
+      line: 0,
+      raw: { 订单备注: '旧平台备注' },
+    }
+    d.platform = {
+      source: {
+        id: 'P1',
+        costId: 'C1',
+        revision: 1,
+        fileName: '接口',
+        state: 'GENERATED',
+        order: sourceOrder,
+        latestOrder: { ...sourceOrder, raw: { 订单备注: '两箱货，送货单签字后拍照' } },
+      },
+      draft: null,
+      billHistory: [],
+    }
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: false, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const notes = w.get('[aria-label="运输备注"]')
+    expect(notes.text()).toContain('物流订单备注')
+    expect(notes.text()).toContain('补充备注')
+    expect(notes.text().split('两箱货，送货单签字后拍照')).toHaveLength(2)
+    expect(w.text()).not.toContain('旧平台备注')
+    expect(notes.get('textarea').element.value).toBe('人工补充：收货前联系店长')
+    expect(w.find('.platform-details').text()).not.toContain('平台订单备注')
+    await w.setProps({ readonly: true })
+    expect(notes.find('textarea').exists()).toBe(false)
+    expect(notes.text()).toContain('人工补充：收货前联系店长')
+    expect(notes.text()).toContain('两箱货，送货单签字后拍照')
+    expect(d.record.data.remark).toBe('人工补充：收货前联系店长')
+    w.unmount()
+    d.platform.source.latestOrder!.raw['订单备注'] = '  '
+    const empty = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    expect(empty.get('.platform-remark p').text()).toBe('-')
+    expect(empty.text()).not.toContain('未填写订单备注')
+    expect(empty.text()).not.toContain('旧平台备注')
+    empty.unmount()
+    document.body.innerHTML = ''
+  })
   it('费用与快递单号前置，平台确认成本不被新账单替代，多收货点按需展开且资料不丢失', async () => {
     const d = detail()
     d.platform = {
@@ -573,6 +747,10 @@ describe('物流详情的信息优先级', () => {
     await flushPromises()
     const sections = Array.from(document.body.querySelectorAll('.transport-section'))
     expect(sections[0]!.querySelector('h3')?.textContent).toBe('基本信息')
+    const timeLabels = [
+      ...sections[0]!.querySelectorAll('.el-form-item__label, .info-field > span'),
+    ].filter((e) => e.textContent?.trim() === '下单时间')
+    expect(timeLabels).toHaveLength(1)
     expect(document.body.textContent).not.toContain('运输概览')
     const fees = sections.find((s) => s.querySelector('h3')?.textContent === '费用信息')!
     expect(fees.textContent).toContain('120.00')
