@@ -1,3 +1,4 @@
+import { QueryFlights, stableQueryKey } from './query-flights'
 import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
 import type { ApiResponse } from '@/types'
 import { getAuthorizationHeader, removeToken } from '@/utils/token'
@@ -17,11 +18,19 @@ declare module 'axios' {
     deferSessionRecovery?: boolean
     /** 仅供会话复核请求使用，防止/me 401递归触发恢复。 */
     skipSessionRecovery?: boolean
+    /** 手动刷新读取，跳过业务查询缓存。 */
+    cacheBypass?: boolean
     /** 同一请求最多在刷新成功后重试一次。 */
     tokenRefreshRetried?: boolean
     tokenSessionGeneration?: number
   }
 }
+
+const queryFlights = new QueryFlights()
+const cachedReadPath = /(?:\/orders\/register\/(?:orders|lines|payments)|\/crm\/stores(?:\/map(?:\/stores)?|\/coverage)?|\/analytics\/supply\/dashboard\/(?:overview|operating-analysis|sales-analysis|payment-risk|filter-options))$/
+const mutation = (method?: string, url?: string) =>
+  !['get', 'head', 'options'].includes((method || 'get').toLowerCase())
+  && !url?.endsWith('/sales-analysis/summary')
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
@@ -194,6 +203,8 @@ function createClient(): ApiClient {
 
   /** 请求拦截器：注入认证、租户、追踪头 */
   client.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+    if (mutation(config.method, config.url)) queryFlights.invalidate()
+    if (config.cacheBypass) config.headers.set('Cache-Control', 'no-cache')
     config.tokenSessionGeneration ??= getSessionGeneration()
     try {
       await ensureAccessToken()
@@ -236,6 +247,7 @@ function createClient(): ApiClient {
         status: response.status,
         url: response.config.url,
       })
+      if (mutation(response.config.method, response.config.url)) queryFlights.invalidate()
       const body = response.data
       if (!isApiResponse(body)) return body
       if (body.code !== 'OK') {
@@ -330,7 +342,15 @@ function createClient(): ApiClient {
     if (!(failure instanceof ApiError && failure.silent)) publishRequestFailure(failure)
     return Promise.reject(failure)
   })
-  return client as ApiClient
+  const result = client as ApiClient
+  const get = result.get.bind(result)
+  result.get = <T = unknown, R = T, D = unknown>(url: string, config?: AxiosRequestConfig<D>): Promise<R> => {
+    if (!cachedReadPath.test(url) || config?.signal || config?.cacheBypass || config?.responseType === 'blob')
+      return get<T, R, D>(url, config)
+    const key = stableQueryKey([getSessionGeneration(), url, config])
+    return queryFlights.run(key, () => get<T, R, D>(url, config))
+  }
+  return result
 }
 
 export const apiClient = createClient()

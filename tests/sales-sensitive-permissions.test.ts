@@ -214,8 +214,8 @@ describe('销售精确轨迹权限', () => {
     vi.clearAllMocks()
     authPermissions.clear()
     api.get.mockImplementation((url: string) => {
-      if (url === '/sales/management/dashboard') {
-        return Promise.resolve({ people: [{ salesProfileId: 'profile-1', salesNo: 'S001' }] })
+      if (url === '/sales/management/fieldwork') {
+        return Promise.resolve({ items: [{ salesProfileId: 'profile-1', salesNo: 'S001',employeeName:'测试销售' }],total:1 })
       }
       if (url.includes('/track')) {
         return Promise.resolve({
@@ -255,7 +255,7 @@ describe('销售精确轨迹权限', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('无精确轨迹查看权限')
-    expect(api.get).toHaveBeenCalledWith('/sales/management/dashboard', expect.any(Object))
+    expect(api.get).toHaveBeenCalledWith('/sales/management/fieldwork', expect.any(Object))
     expect(api.get).toHaveBeenCalledWith(
       '/sales/management/profiles/profile-1/track',
       expect.objectContaining({ params: expect.objectContaining({ date: expect.any(String) }) }),

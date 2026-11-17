@@ -47,9 +47,10 @@ export const getPaymentRisk = (params: {
   ownerStaffCode?: string
   productCategoryIds?: string[]
   riskLevel?: PaymentRiskLevel
-}) =>
+}, cacheBypass = false) =>
   apiClient.get<PaymentRiskData>('/analytics/supply/dashboard/payment-risk', {
     params,
+    cacheBypass,
     paramsSerializer: { indexes: null },
     stayOnUnauthorized: true,
   })

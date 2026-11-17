@@ -1,21 +1,5 @@
 <template>
-  <div class="supply-page">
-    <header class="heading">
-      <div class="list-heading-title">
-        <SupplyPageTitle>用户管理</SupplyPageTitle>
-        <SupplyPageHelp>关联 HR 员工并分配角色，菜单、按钮及数据范围随角色生效。</SupplyPageHelp>
-      </div>
-      <div>
-        <el-button
-          v-if="access.can('supply:user:assign-role')"
-          :disabled="!selected.length"
-          @click="openBatch"
-          >批量设置角色</el-button
-        ><el-button v-if="access.can('supply:user:create')" type="primary" @click="edit()"
-          >新增用户</el-button
-        >
-      </div>
-    </header>
+  <div class="supply-page user-management-page">
     <div class="user-directory-layout">
       <DepartmentSidebar
         :departments="departmentChoices"
@@ -24,140 +8,199 @@
       />
       <section class="user-results">
         <el-alert v-if="directoryError" :title="directoryError" type="error" :closable="false" />
-        <el-form inline @submit.prevent="search"
-          ><el-form-item
-            ><el-input
-              v-model="keyword"
-              clearable
-              placeholder="登录账号 / 员工编码"
-              style="width: 280px" /></el-form-item
-          ><el-button type="primary" native-type="submit">查询</el-button></el-form
-        >
-        <el-table
-          v-loading="loading"
-          :data="rows"
-          row-key="id"
-          @selection-change="selected = $event"
-          ><el-table-column type="selection" width="48" :selectable="selectable" /><el-table-column
-            prop="username"
-            label="登录账号"
-            min-width="150"
-          /><el-table-column prop="name" label="员工姓名" min-width="120" /><el-table-column
-            label="部门 / 岗位"
-            min-width="200"
-            ><template #default="{ row }"
-              >{{ row.employee?.departmentName || '—' }} /
-              {{ row.employee?.positionName || '—' }}</template
-            ></el-table-column
-          ><el-table-column label="角色" min-width="200"
-            ><template #default="{ row }"
-              ><el-tag v-for="r in row.roles" :key="r.roleId" style="margin: 2px">{{
-                roleName(r.roleId)
-              }}</el-tag></template
-            ></el-table-column
-          ><el-table-column label="账号状态" min-width="220"
-            ><template #default="{ row }"
-              ><el-tag :type="row.usable ? 'success' : 'info'">{{
-                row.kind === 'PROTECTED' ? '受保护账号' : row.status === 'ACTIVE' ? '启用' : '禁用'
-              }}</el-tag>
-              <div v-if="row.unavailableReason" class="reason">
-                {{ row.unavailableReason }}
-              </div></template
-            ></el-table-column
+        <div class="user-query-toolbar">
+          <OrderRegisterFilterCard
+            class="order-register-filter--compact user-filters"
+            :loading="loading"
+            @search="search"
+            @reset="resetFilters"
           >
-          <el-table-column label="创建人" min-width="130"
-            ><template #default="{ row }">{{
-              row.createdByName || '未记录'
-            }}</template></el-table-column
-          >
-          <el-table-column label="创建时间" width="185"
-            ><template #default="{ row }">{{
-              displayDateTime(row.createdTime)
-            }}</template></el-table-column
-          >
-          <el-table-column label="修改人" min-width="130"
-            ><template #default="{ row }">{{
-              row.updatedByName || '未记录'
-            }}</template></el-table-column
-          >
-          <el-table-column label="修改时间" width="185"
-            ><template #default="{ row }">{{
-              displayDateTime(row.updatedTime)
-            }}</template></el-table-column
-          >
-          <!-- @vue-generic {SupplyMember} -->
-          <el-table-column label="操作" width="340" fixed="right"
-            ><template #default="{ row }"
-              ><el-button
-                v-if="access.can('supply:role:grant')"
-                link
-                type="primary"
-                @click="previewPermissions(row.id)"
-                >权限预览</el-button
-              ><el-button
-                v-if="
-                  row.employeeCode &&
-                  (crmCan('crm:customer:read') || crmCan('crm:customer:assign-owner'))
-                "
-                link
-                type="primary"
-                @click="customersDrawer?.open(row)"
-                >负责客户</el-button
-              ><template v-if="row.kind !== 'PROTECTED'"
+            <template #primary>
+              <div class="list-filter-field list-filter-field--text">
+                <el-input
+                  v-model="keyword"
+                  clearable
+                  placeholder="登录账号 / 员工编码"
+                  aria-label="登录账号 / 员工编码"
+                />
+              </div>
+              <div class="list-filter-field list-filter-field--person">
+                <el-input
+                  v-model="employeeName"
+                  clearable
+                  placeholder="员工姓名"
+                  aria-label="员工姓名"
+                />
+              </div>
+              <div class="list-filter-field list-filter-field--select">
+                <el-select
+                  v-model="roleId"
+                  clearable
+                  filterable
+                  placeholder="角色"
+                  aria-label="角色"
+                >
+                  <el-option
+                    v-for="role in roles"
+                    :key="role.id"
+                    :value="role.id"
+                    :label="role.name"
+                  />
+                </el-select>
+              </div>
+              <div class="list-filter-field list-filter-field--select">
+                <el-input v-model="positionName" clearable placeholder="岗位" aria-label="岗位" />
+              </div>
+            </template>
+          </OrderRegisterFilterCard>
+          <div class="user-actions">
+            <el-button
+              v-if="access.can('supply:user:assign-role')"
+              :disabled="!selected.length"
+              @click="openBatch"
+              >批量设置角色</el-button
+            >
+            <el-button v-if="access.can('supply:user:create')" type="primary" @click="edit()"
+              >新增用户</el-button
+            >
+          </div>
+        </div>
+        <div class="user-table-viewport">
+          <el-table
+            height="100%"
+            v-loading="loading"
+            :data="rows"
+            row-key="id"
+            @selection-change="selected = $event"
+            ><el-table-column
+              type="selection"
+              width="48"
+              :selectable="selectable"
+            /><el-table-column prop="username" label="登录账号" min-width="150" /><el-table-column
+              prop="name"
+              label="员工姓名"
+              min-width="120"
+            /><el-table-column label="部门 / 岗位" min-width="200"
+              ><template #default="{ row }"
+                >{{ row.employee?.departmentName || '—' }} /
+                {{ row.employee?.positionName || '—' }}</template
+              ></el-table-column
+            ><el-table-column label="角色" min-width="200"
+              ><template #default="{ row }"
+                ><el-tag v-for="r in row.roles" :key="r.roleId" style="margin: 2px">{{
+                  roleName(r.roleId)
+                }}</el-tag></template
+              ></el-table-column
+            ><el-table-column label="账号状态" min-width="220"
+              ><template #default="{ row }"
+                ><el-tag :type="row.usable ? 'success' : 'info'">{{
+                  row.kind === 'PROTECTED'
+                    ? '受保护账号'
+                    : row.status === 'ACTIVE'
+                      ? '启用'
+                      : '禁用'
+                }}</el-tag>
+                <div v-if="row.unavailableReason" class="reason">
+                  {{ row.unavailableReason }}
+                </div></template
+              ></el-table-column
+            >
+            <el-table-column label="创建人" min-width="130"
+              ><template #default="{ row }">{{
+                row.createdByName || '未记录'
+              }}</template></el-table-column
+            >
+            <el-table-column label="创建时间" width="185"
+              ><template #default="{ row }">{{
+                displayDateTime(row.createdTime)
+              }}</template></el-table-column
+            >
+            <el-table-column label="修改人" min-width="130"
+              ><template #default="{ row }">{{
+                row.updatedByName || '未记录'
+              }}</template></el-table-column
+            >
+            <el-table-column label="修改时间" width="185"
+              ><template #default="{ row }">{{
+                displayDateTime(row.updatedTime)
+              }}</template></el-table-column
+            >
+            <!-- @vue-generic {SupplyMember} -->
+            <el-table-column label="操作" width="340" fixed="right"
+              ><template #default="{ row }"
                 ><el-button
-                  v-if="access.can('supply:user:update')"
+                  v-if="access.can('supply:role:grant')"
                   link
                   type="primary"
-                  @click="edit(row)"
-                  >编辑</el-button
+                  @click="previewPermissions(row.id)"
+                  >权限预览</el-button
                 ><el-button
-                  v-if="access.can('supply:user:disable')"
-                  :disabled="
-                    isSelf(row.id) ||
-                    (row.status !== 'ACTIVE' && !access.can('supply:user:assign-role'))
-                  "
-                  :title="
-                    isSelf(row.id)
-                      ? '不能禁用当前登录用户'
-                      : row.status !== 'ACTIVE' && !access.can('supply:user:assign-role')
-                        ? '重新启用需具备分配角色权限'
-                        : undefined
+                  v-if="
+                    row.employeeCode &&
+                    (crmCan('crm:customer:read') || crmCan('crm:customer:assign-owner'))
                   "
                   link
-                  @click="toggle(row)"
-                  >{{ row.status === 'ACTIVE' ? '禁用' : '启用' }}</el-button
-                ><el-button
-                  v-if="access.can('supply:user:reset-password')"
-                  link
-                  @click="password(row)"
-                  >重置密码</el-button
-                ><el-button
-                  v-if="access.can('supply:user:delete')"
-                  :disabled="isSelf(row.id) || row.status !== 'DISABLED'"
-                  :title="
-                    isSelf(row.id)
-                      ? '不能删除当前登录用户'
-                      : row.status !== 'DISABLED'
-                        ? '请先禁用用户，再删除'
-                        : undefined
-                  "
-                  link
-                  type="danger"
-                  @click="remove(row)"
-                  >删除</el-button
+                  type="primary"
+                  @click="customersDrawer?.open(row)"
+                  >负责客户</el-button
+                ><template v-if="row.kind !== 'PROTECTED'"
+                  ><el-button
+                    v-if="access.can('supply:user:update')"
+                    link
+                    type="primary"
+                    @click="edit(row)"
+                    >编辑</el-button
+                  ><el-button
+                    v-if="access.can('supply:user:disable')"
+                    :disabled="
+                      isSelf(row.id) ||
+                      (row.status !== 'ACTIVE' && !access.can('supply:user:assign-role'))
+                    "
+                    :title="
+                      isSelf(row.id)
+                        ? '不能禁用当前登录用户'
+                        : row.status !== 'ACTIVE' && !access.can('supply:user:assign-role')
+                          ? '重新启用需具备分配角色权限'
+                          : undefined
+                    "
+                    link
+                    @click="toggle(row)"
+                    >{{ row.status === 'ACTIVE' ? '禁用' : '启用' }}</el-button
+                  ><el-button
+                    v-if="access.can('supply:user:reset-password')"
+                    link
+                    @click="password(row)"
+                    >重置密码</el-button
+                  ><el-button
+                    v-if="access.can('supply:user:delete')"
+                    :disabled="isSelf(row.id) || row.status !== 'DISABLED'"
+                    :title="
+                      isSelf(row.id)
+                        ? '不能删除当前登录用户'
+                        : row.status !== 'DISABLED'
+                          ? '请先禁用用户，再删除'
+                          : undefined
+                    "
+                    link
+                    type="danger"
+                    @click="remove(row)"
+                    >删除</el-button
+                  ></template
                 ></template
-              ></template
-            ></el-table-column
-          > </el-table
-        ><el-pagination
-          v-model:current-page="page"
-          v-model:page-size="size"
-          :total="total"
-          :page-sizes="[20, 50, 100]"
-          layout="total,sizes,prev,pager,next"
-          @change="load"
-          style="margin-top: 20px"
-        />
+              ></el-table-column
+            >
+          </el-table>
+        </div>
+        <ListTableFooter>
+          <CompactPagination
+            v-model:current-page="page"
+            v-model:page-size="size"
+            :total="total"
+            :page-sizes="[20, 50, 100]"
+            @current-change="load"
+            @size-change="search"
+          />
+        </ListTableFooter>
       </section>
     </div>
     <el-dialog v-model="previewVisible" title="供应链权限预览" width="min(900px,96vw)">
@@ -370,12 +413,13 @@
   </div>
 </template>
 <script setup lang="ts">
-import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { errorMessage } from '@/api/core/error'
 import { MEMBER_PASSWORD_HINT, memberPasswordError } from '@/utils/member-password'
 import { displayDateTime } from '@/utils/business-date'
-import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
+import CompactPagination from '@/components/supply/CompactPagination.vue'
+import ListTableFooter from '@/components/supply/ListTableFooter.vue'
 import DepartmentSidebar from '@/components/supply/DepartmentSidebar.vue'
 import type { ScopeReference } from '@/api/core/supply-settings'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -441,6 +485,9 @@ const access = useSupplyAuthorizationStore(),
   saving = ref(false),
   visible = ref(false),
   keyword = ref(''),
+  employeeName = ref(''),
+  roleId = ref<string>(),
+  positionName = ref(''),
   page = ref(1),
   size = ref(20),
   total = ref(0),
@@ -478,7 +525,16 @@ function selectable(row: SupplyMember) {
 function roleName(id: string) {
   return roles.value.find((r) => r.id === id)?.name ?? '恢复管理角色'
 }
+function resetFilters() {
+  keyword.value = ''
+  employeeName.value = ''
+  positionName.value = ''
+  roleId.value = undefined
+  departmentId.value = null
+  search()
+}
 function search() {
+  selected.value = []
   page.value = 1
   void load()
 }
@@ -491,6 +547,11 @@ async function load() {
       page.value,
       size.value,
       departmentId.value ?? undefined,
+      {
+        roleId: roleId.value || undefined,
+        employeeName: employeeName.value.trim() || undefined,
+        positionName: positionName.value.trim() || undefined,
+      },
     )
     if (request !== listRequest) return
     rows.value = data.items
@@ -715,40 +776,112 @@ onMounted(async () => {
 })
 </script>
 <style scoped>
+.supply-page.user-management-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.user-query-toolbar {
+  display: flex;
+  align-items: flex-start;
+  flex: none;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.user-filters {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+}
+.user-filters :deep(.el-card__body) {
+  padding: 0;
+}
+.user-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  min-height: 34px;
+}
+.user-actions :deep(.el-button) {
+  margin-left: 0;
+}
+.user-table-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.list-table-footer {
+  flex: none;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
 .user-save-error {
   margin-bottom: 12px;
   text-align: left;
 }
 .user-directory-layout {
   display: flex;
+  flex: 1;
   gap: 18px;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.user-directory-layout :deep(.department-sidebar) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.user-directory-layout :deep(.department-search) {
+  flex: none;
+}
+.user-directory-layout :deep(.el-tree) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 .user-results {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
-  padding: 18px;
+  min-height: 0;
+  padding: 12px;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+  overflow: hidden;
+}
+.user-results > .el-alert {
+  flex: none;
+  margin-bottom: 12px;
 }
 @media (max-width: 900px) {
   .user-directory-layout {
     flex-direction: column;
+    gap: 12px;
+  }
+  .user-directory-layout :deep(.department-sidebar) {
+    flex: 0 0 160px;
   }
 }
-
-.heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+@media (max-width: 640px) {
+  .user-query-toolbar {
+    flex-wrap: wrap;
+  }
+  .user-filters {
+    flex-basis: 100%;
+  }
+  .user-actions {
+    margin-left: auto;
+  }
 }
-.heading p,
 .reason {
   color: #64748b;
-}
-.reason {
   font-size: var(--app-font-size-base);
   margin-top: 6px;
 }

@@ -17,6 +17,7 @@
         class="payment-detail__alert"
       />
       <template v-if="payment">
+        <el-alert v-if="!payment.id" title="已作废来源单，未入账，不计入统计。" type="info" :closable="false" />
         <div class="payment-detail__summary">
           <div class="summary-card summary-card--amount">
             <span class="summary-card__label">收款金额</span>
@@ -150,10 +151,11 @@ const attachmentItems = computed<Array<FundDocumentAttachment | string>>(() => {
 watch(
   () => [props.modelValue, props.payment?.id] as const,
   async ([visible, paymentId]) => {
+    detail.value = null
+    loadError.value = ''
+    loading.value = false
     if (!visible || !paymentId) return
     loading.value = true
-    loadError.value = ''
-    detail.value = null
     try {
       detail.value = await getSalesPayment(paymentId)
     } catch (reason) {

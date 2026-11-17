@@ -509,7 +509,7 @@
               >
                 <el-tag
                   class="order-status-tag"
-                  :type="orderStatusTone(row as OrderRegisterOrderItem)"
+                  :type="orderStatusTag(row.orderStatusCode)"
                   effect="light"
                 >
                   {{ orderStatusLabel(row.orderStatusCode) }}
@@ -869,7 +869,7 @@ const {
   areaLabel,
   departmentLabel,
   employeeLabel,
-} = useOrderRegisterOptions()
+} = useOrderRegisterOptions({ salesDepartmentsOnly: true })
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
   paymentOwnerEmployeeCode: '',
@@ -1143,10 +1143,6 @@ function openDetail(row: { id?: string | number }, tab = 'overview') {
 /** 资料待完善仅提示，不替代订单主状态。 */
 function needsCompletion(row: OrderRegisterOrderItem) {
   return row.orderStatusCode === 'DRAFT' && row.dataQualityStatusCode === 'NEEDS_REVIEW'
-}
-
-function orderStatusTone(row: OrderRegisterOrderItem) {
-  return needsCompletion(row) ? 'warning' : orderStatusTag(row.orderStatusCode)
 }
 
 function orderStatusHint(row: OrderRegisterOrderItem) {

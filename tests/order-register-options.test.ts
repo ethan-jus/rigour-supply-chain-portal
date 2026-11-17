@@ -82,6 +82,38 @@ describe('订单主数据选项级联', () => {
     expect(lastCall.cityName).toBeUndefined()
   })
 
+  it('销售部门选项去掉上级和职能部门，保留多层销售组织与原始部门编号', async () => {
+    const department = (id: number, parentId: number | null, departmentName: string, sortOrder = 0, statusCode = 'ACTIVE') =>
+      ({ id, parentId, departmentName, departmentCode: `D${id}`, sortOrder, statusCode })
+    mocks.getDepartments.mockResolvedValue([
+      department(1, null, '公司'), department(2, 1, '总经办'),
+      department(3, 2, '销售部'), department(4, 2, '财务部'),
+      department(5, 3, '浙江区域', 2), department(6, 5, '杭州市'),
+      department(7, 3, '北京市', 1), department(8, 4, '杭州市'),
+      department(9, 3, '已停用城市', 3, 'INACTIVE'),
+    ])
+    const sales = useOrderRegisterOptions({ salesDepartmentsOnly: true })
+    await sales.loadOptions()
+
+    expect(sales.departmentOptionsTree.value.map(row => row.id)).toEqual([7, 5])
+    expect(sales.departmentOptionsTree.value[1].children.map(row => row.id)).toEqual([6])
+    expect(sales.departmentLabel(4)).toBe('财务部')
+
+    const all = useOrderRegisterOptions()
+    await all.loadOptions()
+    expect(all.departmentOptionsTree.value.map(row => row.id)).toEqual([1])
+  })
+
+  it('没有销售部时不把其他部门作为销售查询选项', async () => {
+    mocks.getDepartments.mockResolvedValue([
+      { id: 1, parentId: null, departmentName: '公司', sortOrder: 0, statusCode: 'ACTIVE' },
+      { id: 2, parentId: 1, departmentName: '运营部', sortOrder: 0, statusCode: 'ACTIVE' },
+    ])
+    const options = useOrderRegisterOptions({ salesDepartmentsOnly: true })
+    await options.loadOptions()
+    expect(options.departmentOptionsTree.value).toEqual([])
+  })
+
   it.each([undefined, 'WH'])('搜索历史业务员包括已离职员工（地区：%s）', async (regionCode) => {
     const options = useOrderRegisterOptions()
     await options.loadOptions()

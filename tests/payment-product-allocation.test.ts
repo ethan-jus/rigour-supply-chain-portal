@@ -96,6 +96,20 @@ function mountPage() { return mount(PaymentRecordListView, { global: { plugins: 
   OrderRegisterDetailDrawer: true, PaymentDetailDrawer: true, PaymentCheckDialog: true,
 } } }) }
 describe('回款商品分摊', () => {
+  it('作废来源单使用独立行标识，不请求不存在的回款OCR或打开订单', async () => {
+    const page=paymentPage()
+    Object.assign(page.items[0]!, { id:null, orderId:null, paymentNo:'FR-VOID', sourceRecordId:'FR-VOID',
+      orderNo:'MISSING-ORDER', paymentStatusCode:'CANCELLED', productAllocations:[] })
+    mocks.getPayments.mockResolvedValue(page)
+    const wrapper=mountPage(); await flushPromises()
+    expect(wrapper.text()).toContain('FR-VOID')
+    expect(wrapper.text()).toContain('已作废')
+    expect(mocks.getAuditStates).not.toHaveBeenCalledWith(expect.arrayContaining(['null']))
+    const order=wrapper.findAll('a').find(a=>a.text()==='MISSING-ORDER')
+    expect(order?.classes()).toContain('is-disabled')
+    wrapper.unmount()
+  })
+
   it('财务无订单查看权限时不挂载订单详情，避免隐藏组件请求订单字典导致403', async () => {
     mocks.can.mockImplementation((permission?: string) => permission !== 'order:read')
     const wrapper = mountPage()

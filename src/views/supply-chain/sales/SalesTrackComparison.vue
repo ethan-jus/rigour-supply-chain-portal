@@ -18,8 +18,8 @@
 
     <el-alert
       v-if="!amapConfigured"
-      title="Scdp 未配置高德地图"
-      description="请在 Scdp 的 .env.local 配置 VITE_AMAP_JS_KEY 和 VITE_AMAP_SECURITY_CODE；精确轨迹接口不会因此降级为公开数据。"
+      title="地图暂不可用"
+      description="其他作业记录仍可查看。"
       type="warning"
       :closable="false"
       show-icon
@@ -29,13 +29,13 @@
     <div class="track-metrics">
       <article class="route-card route-card--a">
         <span><i />主路线 · {{ dateA }}</span>
-        <strong>{{ trackA ? formatDistance(trackA.totalDistanceMeters) : '--' }}</strong>
-        <p>{{ trackA ? `${trackA.visits.length} 家拜访 · 轨迹跨度 ${formatMinutes(trackA.trackedDurationMinutes)}` : errorA || '请选择后查看' }}</p>
+        <strong>{{ trackA?.distanceAvailable ? formatDistance(trackA.totalDistanceMeters) : '无法计算' }}</strong>
+        <p>{{ trackA ? `${trackA.visits.length} 家拜访 · 连续采样时长 ${formatMinutes(trackA.trackedDurationMinutes)}` : errorA || '请选择后查看' }}</p>
       </article>
       <article class="route-card route-card--b">
         <span><i />对比路线 · {{ dateB || '未选择' }}</span>
-        <strong>{{ trackB ? formatDistance(trackB.totalDistanceMeters) : '--' }}</strong>
-        <p>{{ trackB ? `${trackB.visits.length} 家拜访 · 轨迹跨度 ${formatMinutes(trackB.trackedDurationMinutes)}` : errorB || '可选择另一工作日叠加对比' }}</p>
+        <strong>{{ trackB?.distanceAvailable ? formatDistance(trackB.totalDistanceMeters) : '无法计算' }}</strong>
+        <p>{{ trackB ? `${trackB.visits.length} 家拜访 · 连续采样时长 ${formatMinutes(trackB.trackedDurationMinutes)}` : errorB || '可选择另一工作日叠加对比' }}</p>
       </article>
       <article class="route-card">
         <span>拜访门店重合</span>
@@ -89,7 +89,6 @@ import { useAuthStore } from '@/stores/auth'
 import { isAmapJsConfigured, loadAmapJsApi } from '@/utils/amap-js-api'
 
 interface Person { salesProfileId: string; salesNo: string }
-interface Dashboard { people: Person[] }
 interface TrackPoint { longitude: number; latitude: number; qualityStatus: string }
 interface TrackVisit {
   visitId: string; sequence: number; storeId: string | null; storeName: string
@@ -97,7 +96,7 @@ interface TrackVisit {
 }
 interface WorkDayTrack {
   workDayId: string; businessDate: string; status: string; totalDistanceMeters: number
-  trackedDurationMinutes: number; points: TrackPoint[]; visits: TrackVisit[]
+  trackedDurationMinutes: number; points: TrackPoint[]; visits: TrackVisit[]; distanceAvailable: boolean; legs: Array<{points: TrackPoint[]}>
 }
 interface MapInstance {
   add(overlays: unknown | unknown[]): void
@@ -170,10 +169,9 @@ function errorOf(error: unknown): string {
 
 async function loadPeople() {
   if (!canViewTracks.value) return
-  const monthStart = `${today.slice(0, 7)}-01`
   try {
-    const dashboard = await apiClient.get('/sales/management/dashboard', { params: { from: monthStart, to: today } }) as Dashboard
-    people.value = dashboard.people
+    const page = await apiClient.get('/sales/management/fieldwork', { params: { date: today, pageSize: 100 } }) as { items: Array<{salesProfileId:string;employeeName:string}> }
+    people.value = page.items.map(person => ({ salesProfileId: person.salesProfileId, salesNo: person.employeeName }))
     salesProfileId.value ||= people.value[0]?.salesProfileId || ''
   } catch (error) {
     errorMessage.value = errorOf(error)
@@ -222,8 +220,8 @@ async function renderMap() {
     if (!center) return
     map = new amap.Map(mapContainer.value, { zoom: 13, center })
     const overlays: unknown[] = []
-    addRoute(amap, routeA, '#2468f2', 'solid', overlays)
-    addRoute(amap, routeB, '#8b5cf6', 'dashed', overlays)
+    for (const leg of trackA.value?.legs || []) addRoute(amap, leg.points.map(p => [p.longitude, p.latitude]), '#2468f2', 'solid', overlays)
+    for (const leg of trackB.value?.legs || []) addRoute(amap, leg.points.map(p => [p.longitude, p.latitude]), '#8b5cf6', 'dashed', overlays)
     addVisitMarkers(amap, trackA.value, 'A', '#2468f2', overlays)
     addVisitMarkers(amap, trackB.value, 'B', '#8b5cf6', overlays)
     map.add(overlays)

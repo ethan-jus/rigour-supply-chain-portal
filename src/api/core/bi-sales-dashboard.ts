@@ -31,5 +31,20 @@ export interface SalesAnalysis {
   receiptSplit: { currentOrders: number; historicalOrders: number; otherOrders: number } | null
   productSyncedAt: string | null
 }
-export const getSalesDashboardAnalysis = (params: SupplyDashboardQuery) =>
-  apiClient.get<SalesAnalysis>('/analytics/supply/dashboard/sales-analysis', { params })
+export const getSalesDashboardAnalysis = (params: SupplyDashboardQuery, cacheBypass = false) =>
+  apiClient.get<SalesAnalysis>('/analytics/supply/dashboard/sales-analysis', { params, cacheBypass })
+
+export interface SalesDashboardSummary {
+  sales: number
+  receipts: number
+  customers: number
+  newCustomers: number
+  returningCustomers: number
+  annualReturningCustomers: number
+}
+export const getSalesDashboardSummary = (params: SupplyDashboardQuery, ownerStaffCodes: string[], cacheBypass = false) =>
+  apiClient.post<SalesDashboardSummary>(
+    '/analytics/supply/dashboard/sales-analysis/summary',
+    { ownerStaffCodes },
+    { params, cacheBypass },
+  )

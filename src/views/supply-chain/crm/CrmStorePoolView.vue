@@ -930,6 +930,9 @@
               }}</el-descriptions-item></el-descriptions
             >
           </el-tab-pane>
+          <el-tab-pane v-if="contactView" label="联系人" name="contacts">
+            <CrmStoreContacts v-if="detailTab === 'contacts'" :key="selected.id" :store-id="selected.id" :view="contactView" :editable="can('crm:store:manage') || (isOwnStore(selected) && can('crm:store:visit-write'))" />
+          </el-tab-pane>
           <el-tab-pane v-if="can('crm:store:history-read')" label="拜访记录" name="visits">
             <p class="muted">
               展示最近 100 条记录。有效拜访按门店累计编号，历任负责人的记录都会保留。
@@ -1104,6 +1107,8 @@ import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard
 import CrmStoreMap from './CrmStoreMap.vue'
 import CrmVisitEvidence from './CrmVisitEvidence.vue'
 import CrmStoreEditor from './CrmStoreEditor.vue'
+import CrmStoreContacts from './CrmStoreContacts.vue'
+import type { ContactView } from '@/api/core/crm-store-contacts'
 import CrmStoreIntake from './CrmStoreIntake.vue'
 import CrmStoreStatusEditor from './CrmStoreStatusEditor.vue'
 import CrmStoreLeadReview from './CrmStoreLeadReview.vue'
@@ -1254,6 +1259,13 @@ const isOwnStore = (row: StoreRow) =>
 const effectiveView = computed<StoreView>(() =>
   view.value === 'MINE' && team.value ? 'TEAM' : view.value,
 )
+const contactView = computed<ContactView | null>(() => {
+  if (!selected.value || effectiveView.value === 'PUBLIC') return null
+  if (can('crm:store:manage')) return 'ALL'
+  if (isOwnStore(selected.value) && can('crm:pool:private-read')) return 'MINE'
+  if (effectiveView.value === 'TEAM' && can('crm:pool:team-read')) return 'TEAM'
+  return null
+})
 const activityLabels: Record<string, string> = {
   ACTIVE: '活跃',
   DORMANT: '沉睡',
@@ -1664,7 +1676,7 @@ async function loadHistory() {
   const row = selected.value,
     tab = detailTab.value,
     generation = detailGeneration
-  if (!row || tab === 'profile') return
+  if (!row || tab === 'profile' || tab === 'contacts') return
   detailLoading.value = true
   try {
     if (tab === 'visits') {

@@ -10,13 +10,17 @@ const mocks = vi.hoisted(() => ({
   overview: vi.fn(),
   analysis: vi.fn(),
   sales: vi.fn(),
+  summary: vi.fn(),
 }))
 vi.mock('@/api/core/bi-access', () => ({ getBiEffectiveScope: mocks.access }))
 vi.mock('@/api/core/bi', () => ({
   getSupplyDashboardOverview: mocks.overview,
   getSupplyDashboardOperatingAnalysis: mocks.analysis,
 }))
-vi.mock('@/api/core/bi-sales-dashboard', () => ({ getSalesDashboardAnalysis: mocks.sales }))
+vi.mock('@/api/core/bi-sales-dashboard', () => ({
+  getSalesDashboardAnalysis: mocks.sales,
+  getSalesDashboardSummary: mocks.summary,
+}))
 const render = () =>
   mount(BiSalesMeetingPresentation, {
     props: {
@@ -41,6 +45,9 @@ const render = () =>
             'dayMode',
             'error',
             'detailError',
+            'filteredSummary',
+            'summaryLoading',
+            'summaryError',
           ],
           template: '<div/>',
         },
@@ -50,7 +57,7 @@ const render = () =>
 const board = (w: ReturnType<typeof render>) => w.getComponent({ name: 'BiSalesMeetingBoard' })
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
   vi.setSystemTime(new Date('2026-09-24T00:00:00Z'))
   const f = salesDashboardFixture()
   mocks.access.mockResolvedValue({ accessLevel: 'TENANT' })
@@ -60,6 +67,82 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 describe('销售看板查询入口', () => {
+  it('手动刷新同时回源看板和当前姓名筛选汇总', async () => {
+    mocks.summary.mockResolvedValue({ sales: 1, receipts: 0, customers: 1, newCustomers: 0, returningCustomers: 0, annualReturningCustomers: 0 })
+    const w = render()
+    await flushPromises()
+    board(w).vm.$emit('filter', ['S1'])
+    await vi.advanceTimersByTimeAsync(300)
+    await flushPromises()
+    mocks.sales.mockClear()
+    mocks.summary.mockClear()
+    board(w).vm.$emit('refresh')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(300)
+    await flushPromises()
+    expect(mocks.sales).toHaveBeenCalledWith(expect.any(Object), true)
+    expect(mocks.summary).toHaveBeenCalledWith(expect.any(Object), ['S1'], true)
+    w.unmount()
+  })
+  it('姓名汇总保留时间来源筛选，清空与无匹配不会请求全员总数', async () => {
+    const totals = {
+      sales: 234,
+      receipts: 0,
+      customers: 1,
+      newCustomers: 1,
+      returningCustomers: 0,
+      annualReturningCustomers: 0,
+    }
+    mocks.summary.mockResolvedValue(totals)
+    const w = render()
+    await flushPromises()
+    board(w).vm.$emit('filter', ['S1'])
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    expect(mocks.summary).toHaveBeenCalledTimes(2)
+    expect(mocks.summary).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceSystemCode: 'DHB', from: '2026-08-01T00:00:00+08:00' }),
+      ['S1'],
+      false,
+    )
+    expect(board(w).props('filteredSummary').current.sales).toBe(234)
+    board(w).vm.$emit('filter', [])
+    await flushPromises()
+    expect(board(w).props('filteredSummary').current.customers).toBe(0)
+    expect(mocks.summary).toHaveBeenCalledTimes(2)
+    board(w).vm.$emit('filter', null)
+    await flushPromises()
+    expect(board(w).props('filteredSummary')).toBeNull()
+    w.unmount()
+  })
+  it('旧搜索迟到和失败都不能重新显示其他范围的汇总', async () => {
+    const resolvers: ((data: unknown) => void)[] = []
+    mocks.summary.mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolvers.push(r)
+        }),
+    )
+    const w = render()
+    await flushPromises()
+    board(w).vm.$emit('filter', ['S1'])
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(250)
+    board(w).vm.$emit('filter', [])
+    await flushPromises()
+    resolvers.forEach((resolve) => resolve({ sales: 999 }))
+    await flushPromises()
+    expect(board(w).props('filteredSummary').current.sales).toBe(0)
+    mocks.summary.mockRejectedValue(new Error('网络错误'))
+    board(w).vm.$emit('filter', ['S2'])
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    expect(board(w).props('filteredSummary')).toBeNull()
+    expect(board(w).props('summaryError')).toBeTruthy()
+    w.unmount()
+  })
   it('保留业务筛选和自然月上期边界', async () => {
     const w = render()
     await flushPromises()
@@ -69,6 +152,7 @@ describe('销售看板查询入口', () => {
         from: '2026-07-01T00:00:00+08:00',
         to: '2026-07-31T23:59:59.999999+08:00',
       }),
+      false,
     )
     expect(board(w).props('snapshot')).not.toBeNull()
     w.unmount()
@@ -94,6 +178,7 @@ describe('销售看板查询入口', () => {
         from: '2025-01-01T00:00:00+08:00',
         to: '2025-01-24T23:59:59.999999+08:00',
       }),
+      false,
     )
     w.unmount()
   })
@@ -109,12 +194,14 @@ describe('销售看板查询入口', () => {
         from: '2026-08-12T00:00:00+08:00',
         to: '2026-08-12T23:59:59.999999+08:00',
       }),
+      false,
     )
     expect(mocks.sales).toHaveBeenCalledWith(
       expect.objectContaining({
         from: '2026-08-11T00:00:00+08:00',
         to: '2026-08-11T23:59:59.999999+08:00',
       }),
+      false,
     )
     w.unmount()
   })
@@ -130,6 +217,7 @@ describe('销售看板查询入口', () => {
     await flushPromises()
     expect(mocks.sales).toHaveBeenCalledWith(
       expect.objectContaining({ regionCode: 'HZ', ownerStaffCode: 'S1', sourceSystemCode: 'DHB' }),
+      false,
     )
     const detail = board(w).props('detail')
     expect(detail.current.collectionTrend[0].value).toBe(50)

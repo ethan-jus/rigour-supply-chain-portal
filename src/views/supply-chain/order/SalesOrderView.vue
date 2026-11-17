@@ -1079,6 +1079,7 @@
 <script setup lang="ts">
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
+import { orderStatusTag } from '@/utils/order-register-status'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import HistoryOrderReview from '@/components/supply/HistoryOrderReview.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
@@ -2211,12 +2212,6 @@ function regionLabel(value: string | null | undefined, displayName?: string | nu
 
 function unitLabel(value: string | null | undefined) {
   return businessDictionaryLabel('COMMON', 'PRODUCT_UNIT', value, '单位')
-}
-
-function orderStatusTag(value: string) {
-  if (value === 'SUBMITTED' || value === 'COMPLETED') return 'success'
-  if (value === 'CANCELLED' || value === 'DELETED') return 'info'
-  return 'warning'
 }
 
 function outboundStatusTag(value: string) {

@@ -233,10 +233,16 @@ export const supplyAccessApi = {
     apiClient.get<SupplyRoleImpact>(SUPPLY_SETTINGS_BASE + '/roles/' + id + '/impact'),
   deleteRole: (id: string, version: number) =>
     apiClient.delete(SUPPLY_SETTINGS_BASE + '/roles/' + id, { params: { version } }),
-  members: (keyword: string, page: number, pageSize: number, departmentId?: number) =>
+  members: (
+    keyword: string,
+    page: number,
+    pageSize: number,
+    departmentId?: number,
+    filters?: { roleId?: string; employeeName?: string; positionName?: string },
+  ) =>
     apiClient.get<{ items: SupplyMember[]; total: number; page: number; pageSize: number }>(
       SUPPLY_SETTINGS_BASE + '/users',
-      { params: { keyword, page, pageSize, departmentId } },
+      { params: { keyword, page, pageSize, departmentId, ...filters } },
     ),
   accounts: (keyword: string) =>
     apiClient.get<{ id: string; username: string; status: string }[]>(

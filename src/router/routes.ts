@@ -743,6 +743,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           requiresAuth: true,
           applicationCode: 'SUPPLY_CHAIN',
           pageKey: 'policies-visit',
+          permission: 'sales:policy:read',
         },
       },
       {

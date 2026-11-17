@@ -10,7 +10,7 @@ import { departmentTree, type DepartmentNode } from '@/utils/hr-department-tree'
  * 地区树、部门树、远程业务员、创建人下拉。
  * 加载失败只降级为对应选项不可用，不阻塞列表查询。
  */
-export function useOrderRegisterOptions() {
+export function useOrderRegisterOptions({ salesDepartmentsOnly = false }: { salesDepartmentsOnly?: boolean } = {}) {
   const areaOptions = ref<CrmDictionaryView[]>([])
   const departmentOptions = ref<HrDepartment[]>([])
   const employeeOptions = ref<HrEmployeeRecord[]>([])
@@ -19,7 +19,15 @@ export function useOrderRegisterOptions() {
   const optionError = ref('')
 
   const areaTree = computed(() => buildAreaTree(areaOptions.value))
-  const departmentOptionsTree = computed(() => departmentTree(departmentOptions.value))
+  const departmentOptionsTree = computed(() => {
+    const tree = departmentTree(departmentOptions.value)
+    if (!salesDepartmentsOnly) return tree
+    // 与 HR 销售组织口径一致，按真实父子关系保留销售部下级，不猜测城市名称。
+    const salesChildren = (nodes: DepartmentNode[]): DepartmentNode[] => nodes.flatMap((node) =>
+      node.departmentName.trim() === '销售部' ? node.children : salesChildren(node.children),
+    )
+    return salesChildren(tree)
+  })
 
   const areaTreeProps = { value: 'code', label: 'name', children: 'children' }
   const departmentTreeProps = { value: 'id', label: 'departmentName', children: 'children' }

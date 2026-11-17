@@ -546,7 +546,7 @@ const props = withDefaults(
   }>(),
   { loading: false, error: '', demo: false },
 )
-const emit = defineEmits<{ load: [months: [string, string]] }>()
+const emit = defineEmits<{ load: [months: [string, string], cacheBypass?: boolean] }>()
 const defaultRange: [string, string] = [...props.initialRange]
 const start = ref(props.initialRange[0])
 const end = ref(props.initialRange[1])
@@ -861,7 +861,7 @@ function resetQuery() {
   emit('load', [...defaultRange])
 }
 function refreshData() {
-  emit('load', [...props.initialRange])
+  emit('load', [...props.initialRange], true)
 }
 function reload() {
   if (!start.value || !end.value || start.value > end.value) {
