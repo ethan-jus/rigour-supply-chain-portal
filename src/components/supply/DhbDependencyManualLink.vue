@@ -107,7 +107,7 @@ function onSalesCreated(order: SalesOrderDetail) {
   createdMessage.value = `销售订单 ${order.orderNo} 已提交，请核对后保存资料关联。`
   error.value = ''
 }
-const emit = defineEmits<{ saved: [] }>()
+const emit = defineEmits<{ saved: [issue: DhbSyncOpenIssueItem] }>()
 const router = useRouter(),
   visible = ref(false),
   saving = ref(false),
@@ -231,7 +231,7 @@ async function save() {
       ...(kind.value === 'PRODUCT_SKU' ? { productId: selected.value } : {}),
     })
     visible.value = false
-    emit('saved')
+    emit('saved', value)
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '未取得关联结果，请刷新核对后再操作。'
   } finally {

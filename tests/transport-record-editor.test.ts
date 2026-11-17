@@ -354,6 +354,67 @@ function validManualLedger() {
   return ledger
 }
 describe('通用手工账单', () => {
+  it('全部费用和优惠合计后保存，修改与移除费用即时重算，不将合计再算一遍', async () => {
+    const d = detail()
+    d.record.statusCode = 'ACTIVE'
+    d.record.data.ledger = validManualLedger()
+    Object.assign(d.record.data.ledger, {
+      carrierCode: 'SF',
+      transportPurposeCode: 'DELIVERY',
+      feeItems: [{ ...d.record.data.ledger.feeItems[0], allocationMethodCode: 'EQUAL' }],
+      sources: [
+        { orderCode: 'SO1', orderTypeCode: 'SALES_ORDER', linkRoleCode: 'COST', allocations: [] },
+      ],
+      manualBillItems: [
+        { name: '基础运费', amount: 54 },
+        { name: '装卸费', amount: 10 },
+        { name: '燃油费', amount: 3.2 },
+        { name: '运输保险费', amount: 2.8 },
+        { name: '优惠', amount: -5 },
+      ],
+    })
+    d.record.data.amount = 65
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: false, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const summary = () => w.find('[aria-label="账单费用合计"]').text()
+    expect(summary()).toContain('费用小计 70.00 元')
+    expect(summary()).toContain('优惠及减免 -5.00 元')
+    expect(summary()).toContain('运输费用合计 65.00 元')
+    const amounts = w
+      .findAllComponents({ name: 'ElInputNumber' })
+      .filter((input) => input.props('placeholder') === '填写金额')
+    amounts[1]!.vm.$emit('update:modelValue', 12)
+    await flushPromises()
+    expect(summary()).toContain('运输费用合计 67.00 元')
+    await w
+      .findAll('tr')
+      .find((row) => row.text().includes('优惠') && row.find('button').exists())!
+      .find('button')
+      .trigger('click')
+    await flushPromises()
+    expect(summary()).toContain('运输费用合计 72.00 元')
+    await w
+      .findAll('button')
+      .find((b) => b.text() === '保存运输记录')!
+      .trigger('click')
+    await flushPromises()
+    expect(api.save).toHaveBeenCalledWith(
+      'C1',
+      expect.objectContaining({
+        draft: expect.objectContaining({
+          amount: 72,
+          manualBillItems: expect.arrayContaining([{ name: '装卸费', amount: 12 }]),
+        }),
+      }),
+      [],
+    )
+    w.unmount()
+    document.body.innerHTML = ''
+  })
   it('添加明细保留已填总额，切回只填总额后可直接修改并保存', async () => {
     const d = detail()
     d.record.statusCode = 'ACTIVE'
@@ -379,7 +440,7 @@ describe('通用手工账单', () => {
       .find((b) => b.text() === '添加费用项目')!
       .trigger('click')
     await flushPromises()
-    expect(w.text()).toContain('按下方费用明细自动合计')
+    expect(w.text()).toContain('全部费用减去优惠后的合计')
     const billAmount = w
       .findAllComponents({ name: 'ElInputNumber' })
       .find((input) => input.props('placeholder') === '填写金额')!

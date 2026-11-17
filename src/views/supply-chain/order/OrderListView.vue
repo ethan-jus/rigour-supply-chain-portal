@@ -297,7 +297,7 @@
           v-loading="loading"
           :data="pageData.items"
           row-key="id"
-          :default-sort="{ prop: 'createdTime', order: 'descending' }"
+          :default-sort="{ prop: 'orderDate', order: 'descending' }"
           @sort-change="changeSort"
         >
           <template #empty>
@@ -909,7 +909,7 @@ const sortBy = ref<
   | 'discountAmount'
   | 'discountRate'
   | 'paymentTime'
->('createdTime')
+>('orderDate')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 const pageData = ref<OrderRegisterOrderPage>({
   total: 0,
@@ -1098,7 +1098,7 @@ function clearFilters() {
   pageFilters.invoiceStatusCode = ''
   pageFilters.dhbLinked = ''
   pageFilters.dhbOrderNo = ''
-  sortBy.value = 'createdTime'
+  sortBy.value = 'orderDate'
   sortDirection.value = 'desc'
 }
 
@@ -1131,7 +1131,7 @@ function changeSort({ prop, order }: { prop: string | null; order: string | null
     sortBy.value = prop as typeof sortBy.value
     sortDirection.value = order === 'ascending' ? 'asc' : 'desc'
   } else {
-    sortBy.value = 'createdTime'
+    sortBy.value = 'orderDate'
     sortDirection.value = 'desc'
   }
   search()

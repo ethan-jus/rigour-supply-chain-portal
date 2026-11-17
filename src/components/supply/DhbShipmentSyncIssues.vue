@@ -4,6 +4,7 @@
       <strong>待处理发货</strong>
       <div>
         <el-button :disabled="!!retrying" :loading="loading" @click="load">刷新待处理项</el-button>
+        <DhbCustomerSourceReview :connector-id="connectorId" @saved="load" />
         <el-button @click="openCenter">查看全部待处理</el-button>
       </div>
     </div>
@@ -50,12 +51,13 @@
       </el-table-column>
     </el-table>
     <el-pagination
-      v-if="items.length > 20"
+      v-if="total > 20"
       v-model:current-page="page"
       :page-size="20"
-      :total="items.length"
+      :total="total"
       layout="total, prev, pager, next"
       class="shipment-issues__pagination"
+      @current-change="load"
     />
     <DhbDependencyManualLink ref="manualLink" @saved="onManualSaved" />
   </section>
@@ -64,8 +66,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DhbDependencyManualLink from './DhbDependencyManualLink.vue'
+import DhbCustomerSourceReview from './DhbCustomerSourceReview.vue'
 import {
-  getDhbOpenIssues,
+  getDhbShipmentIssues,
   getDhbSyncTasks,
   replayDhbOrderObject,
   type DhbSyncOpenIssueItem,
@@ -74,14 +77,13 @@ const props = defineProps<{ connectorId: string }>()
 const emit = defineEmits<{ repaired: [] }>()
 const router = useRouter()
 const manualLink = ref<InstanceType<typeof DhbDependencyManualLink>>()
-function onManualSaved() {
-  retrySucceeded.value = true
-  retryMessage.value = '关联已保存，可重试本发货单。'
-  void load()
+async function onManualSaved(item: DhbSyncOpenIssueItem) {
+  await retry(item)
 }
 const items = ref<DhbSyncOpenIssueItem[]>([])
-const page = ref(1)
-const pagedItems = computed(() => items.value.slice((page.value - 1) * 20, page.value * 20))
+const page = ref(1),
+  total = ref(0)
+const pagedItems = computed(() => items.value)
 const names: Record<string, string> = {
   SALES_ORDER: '销售单',
   CUSTOMER: '客户',
@@ -102,8 +104,9 @@ function issueSummary(item: DhbSyncOpenIssueItem) {
   }
   if (item.errorCode?.includes('BUSINESS_TIME_MISSING')) return '未取得发货时间'
   if (item.errorCode === 'DHB_SHIPMENT_ORDER_NO_MISSING') return '发货单缺少销售单号'
+  if (item.errorCode === 'DHB_SHIPMENT_LINE_UNIT_MISSING') return '商品单位待补齐'
   if (item.errorCode?.includes('IDENTITY_CONFLICT') || item.manualResolutionRequired)
-    return '发货资料关联冲突'
+    return item.errorMessage || '来源单据关联待核对'
   if (item.errorCode?.includes('WAREHOUSE') || item.errorMessage?.includes('缺少仓库映射'))
     return '发货仓库待关联'
   if (item.errorCode?.includes('ORDER_MAPPING') || item.errorCode?.includes('SOURCE_ORDER'))
@@ -124,10 +127,8 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const groups = await getDhbOpenIssues(500)
-    const sourceItems = groups
-      .flatMap((g) => g.items)
-      .filter((item) => item.connectorId === props.connectorId)
+    const result = await getDhbShipmentIssues(props.connectorId, (page.value - 1) * 20, 20)
+    const sourceItems = result.items.filter((item) => item.connectorId === props.connectorId)
     const salesIds = new Set(
       sourceItems
         .filter((item) => item.sourceObjectType === 'SALES_SHIPMENT')
@@ -159,7 +160,12 @@ async function load() {
       items.value = [...unique.values()].sort((a, b) =>
         (b.updatedAt || '').localeCompare(a.updatedAt || ''),
       )
-      page.value = Math.min(page.value, Math.max(1, Math.ceil(items.value.length / 20)))
+      total.value = result.total
+      const lastPage = Math.max(1, Math.ceil(result.total / 20))
+      if (page.value > lastPage) {
+        page.value = lastPage
+        await load()
+      }
     }
   } catch {
     if (version === generation) {
@@ -208,6 +214,7 @@ watch(
   () => props.connectorId,
   () => {
     items.value = []
+    page.value = 1
     void load()
   },
 )

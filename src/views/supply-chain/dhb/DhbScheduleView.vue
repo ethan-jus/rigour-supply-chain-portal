@@ -146,7 +146,7 @@ const canBi = computed(() => can('integration:dhb:write') && can('analytics:refr
 const steps = [
   { title: '业务员与员工关联', text: '先匹配员工，再补订货宝关联', icon: User },
   { title: '客户资料', text: '按客户编码同步门店与归属', icon: Document },
-  { title: '订单包', text: '订单 · 明细 · 回款', icon: Tickets },
+  { title: '订单与发货', text: '销售订单 · 发货物流 · 回付款', icon: Tickets },
 ]
 const connectors = ref<string[]>([]),
   connector = ref('')

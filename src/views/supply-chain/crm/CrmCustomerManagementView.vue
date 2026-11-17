@@ -142,6 +142,7 @@
                 @click="openCreate"
                 >新增客户</el-button
               >
+              <DhbCustomerSourceReview @saved="loadCustomers" />
               <DhbPageSyncButton
                 scope="CUSTOMER"
                 label="客户"
@@ -643,6 +644,7 @@ import CustomerShippingAddresses from './CustomerShippingAddresses.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import { displayDateTime } from '@/utils/business-date'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
+import DhbCustomerSourceReview from '@/components/supply/DhbCustomerSourceReview.vue'
 import {
   computed,
   nextTick,

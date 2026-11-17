@@ -2,6 +2,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ElementPlus from 'element-plus'
 import Issues from '@/components/supply/DhbShipmentSyncIssues.vue'
+vi.mock('@/components/supply/DhbCustomerSourceReview.vue', () => ({
+  default: { template: '<span />' },
+}))
 const mocks = vi.hoisted(() => ({
   issues: vi.fn(),
   tasks: vi.fn(),
@@ -13,7 +16,11 @@ vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => true }),
 }))
 vi.mock('@/api/core/dhb-orchestration', () => ({
-  getDhbOpenIssues: mocks.issues,
+  getDhbShipmentIssues: async (_connector: string, offset: number, limit: number) => {
+    const groups = await mocks.issues()
+    const rows = groups.flatMap((g: { items: unknown[] }) => g.items)
+    return { total: rows.length, items: rows.slice(offset, offset + limit) }
+  },
   getDhbSyncTasks: mocks.tasks,
   replayDhbOrderObject: mocks.replay,
 }))
@@ -110,6 +117,7 @@ describe('发货依赖待处理闭环', () => {
     await flushPromises()
     expect(w.findAll('button').filter((b) => b.text() === '重试')).toHaveLength(20)
     await w.findComponent({ name: 'ElPagination' }).vm.$emit('update:current-page', 2)
+    await w.findComponent({ name: 'ElPagination' }).vm.$emit('current-change', 2)
     await flushPromises()
     expect(w.findAll('button').filter((b) => b.text() === '重试')).toHaveLength(5)
     await w
@@ -185,6 +193,22 @@ describe('发货依赖待处理闭环', () => {
     expect(w.text()).toContain('同步设置异常')
     w.unmount()
   })
+  it('业务保存资料关联后自动处理原发货，无需再点重试', async () => {
+    const w = setup()
+    await flushPromises()
+    w.findComponent({ name: 'DhbDependencyManualLink' }).vm.$emit(
+      'saved',
+      row({ requiredDataType: 'SALES_ORDER', requiredSourceId: 'DH001' }),
+    )
+    await flushPromises()
+    expect(mocks.replay).toHaveBeenCalledTimes(1)
+    expect(mocks.replay).toHaveBeenCalledWith('t1', {
+      sourceObjectType: 'SALES_SHIPMENT',
+      sourceId: 'FH001',
+    })
+    expect(w.text()).toContain('已处理完成')
+    w.unmount()
+  })
   it('读取失败不能显示无问题，冲突记录不提供直接重试', async () => {
     mocks.issues.mockRejectedValueOnce(new Error('network'))
     const w = setup()
@@ -197,6 +221,8 @@ describe('发货依赖待处理闭环', () => {
       .trigger('click')
     await flushPromises()
     expect(w.findAll('button').some((b) => b.text() === '重试')).toBe(false)
+    expect(w.text()).toContain('销售单 DH001 的客户 CUS1 尚未关联')
+    expect(w.text()).not.toContain('发货资料关联冲突')
     await w
       .findAll('button')
       .find((b) => b.text() === '核对资料')!

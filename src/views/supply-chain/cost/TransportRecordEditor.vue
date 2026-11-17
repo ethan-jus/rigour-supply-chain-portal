@@ -240,7 +240,7 @@
               /><span
                 v-if="!readonly && !advanced && form.manualBillItems?.length"
                 class="optional-label"
-                >按下方费用明细自动合计</span
+                >全部费用减去优惠后的合计</span
               ><span v-if="!readonly && !platform" class="optional-label"
                 >金额、订单归属及凭证补齐后，计入成本看板统计</span
               ></el-form-item
@@ -316,54 +316,74 @@
                 >添加费用项目</el-button
               >
             </div>
-            <el-table
-              v-if="form.manualBillItems?.length"
-              :data="form.manualBillItems"
-              border
-              scrollbar-always-on
-            >
-              <el-table-column label="费用项目" min-width="180"
-                ><template #default="{ row }">
-                  <span v-if="readonly || advanced">{{ row.name }}</span>
-                  <el-select
-                    v-else
-                    v-model="row.name"
-                    filterable
-                    allow-create
-                    default-first-option
-                    placeholder="选择或填写费用项目"
-                    maxlength="100"
-                  >
-                    <el-option
-                      v-for="o in feeTypes"
-                      :key="o.value"
-                      :label="o.label"
-                      :value="o.label"
-                    />
-                    <el-option label="优惠" value="优惠" />
-                  </el-select> </template
-              ></el-table-column>
-              <el-table-column :label="'金额（元）'" min-width="230" align="right"
-                ><template #default="{ row }">
-                  <span v-if="readonly || advanced">{{ money(row.amount) }}</span>
-                  <el-input-number
-                    v-else
-                    v-model="row.amount"
-                    :precision="2"
-                    :min="-999999999999"
-                    :max="999999999999"
-                    :controls="false"
-                    placeholder="填写金额"
-                  /> </template
-              ></el-table-column>
-              <el-table-column v-if="!readonly && !advanced" label="操作" width="80"
-                ><template #default="{ $index }"
-                  ><el-button link type="danger" @click="form.manualBillItems?.splice($index, 1)"
-                    >移除</el-button
-                  ></template
-                ></el-table-column
+            <template v-if="form.manualBillItems?.length">
+              <el-table :data="form.manualBillItems" border scrollbar-always-on>
+                <el-table-column label="费用项目" min-width="180"
+                  ><template #default="{ row }">
+                    <span v-if="readonly || advanced">{{ row.name }}</span>
+                    <el-select
+                      v-else
+                      v-model="row.name"
+                      filterable
+                      allow-create
+                      default-first-option
+                      placeholder="选择或填写费用项目"
+                      maxlength="100"
+                    >
+                      <el-option
+                        v-for="o in feeTypes"
+                        :key="o.value"
+                        :label="o.label"
+                        :value="o.label"
+                      />
+                      <el-option label="优惠" value="优惠" />
+                    </el-select> </template
+                ></el-table-column>
+                <el-table-column :label="'金额（元）'" min-width="230" align="right"
+                  ><template #default="{ row }">
+                    <span v-if="readonly || advanced">{{ money(row.amount) }}</span>
+                    <el-input-number
+                      v-else
+                      v-model="row.amount"
+                      :precision="2"
+                      :min="-999999999999"
+                      :max="999999999999"
+                      :controls="false"
+                      placeholder="填写金额"
+                    /> </template
+                ></el-table-column>
+                <el-table-column v-if="!readonly && !advanced" label="操作" width="80"
+                  ><template #default="{ $index }"
+                    ><el-button link type="danger" @click="form.manualBillItems?.splice($index, 1)"
+                      >移除</el-button
+                    ></template
+                  ></el-table-column
+                >
+              </el-table>
+              <div
+                v-if="form.manualBillItems?.length"
+                class="bill-summary"
+                role="group"
+                aria-label="账单费用合计"
               >
-            </el-table>
+                <span
+                  >费用小计 <strong>{{ money(billSummary.charges) }}</strong> 元</span
+                >
+                <span
+                  >优惠及减免 <strong>{{ money(billSummary.deductions) }}</strong> 元</span
+                >
+                <span
+                  >运输费用合计
+                  <strong class="amount">{{ money(billSummary.total) }}</strong> 元</span
+                >
+              </div>
+              <p
+                v-if="!readonly && !advanced && form.manualBillItems?.length"
+                class="optional-label bill-hint"
+              >
+                基础运费、装卸费等逐项填写，优惠及减免填负数；所有项目自动合计，未填完整时不计算总额。
+              </p>
+            </template>
             <template
               v-else-if="
                 advanced &&
@@ -829,13 +849,24 @@ function addBillItem() {
   form.value.manualBillItems ||= []
   const first = form.value.manualBillItems.length === 0
   form.value.manualBillItems.push({
-    name: first && form.value.amount != null ? '运费' : '',
+    name: first && form.value.amount != null ? '基础运费' : '',
     amount: first ? form.value.amount : null,
   })
 }
 function useTotalOnly() {
   form.value.manualBillItems = []
 }
+const billSummary = computed(() => {
+  const items = form.value.manualBillItems || []
+  const total = manualBillTotal(items)
+  if (total == null) return { charges: null, deductions: null, total }
+  const charges = items.reduce((sum, item) => sum + Math.max(0, Math.round(item.amount! * 100)), 0)
+  const deductions = items.reduce(
+    (sum, item) => sum + Math.min(0, Math.round(item.amount! * 100)),
+    0,
+  )
+  return { charges: charges / 100, deductions: deductions / 100, total }
+})
 watch(
   () => form.value.manualBillItems,
   (items) => {
@@ -1329,6 +1360,26 @@ h4 {
 }
 .manual-bill-summary {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.bill-summary {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  padding: 16px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-top: 0;
+}
+.bill-summary > span {
+  white-space: nowrap;
+}
+.bill-hint {
+  margin: 10px 0 0;
+}
+.form-grid :deep(.el-form-item__content) > .optional-label {
+  flex-basis: 100%;
 }
 .wide {
   grid-column: 1/-1;

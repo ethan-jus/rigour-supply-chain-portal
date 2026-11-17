@@ -187,6 +187,16 @@ export function syncDhbOrchestration(command: DhbSyncOrchestrationCommand = {}) 
   )
 }
 
+export function getDhbShipmentIssues(connectorId: string, offset = 0, limit = 20) {
+  return apiClient.get<{ total: number; items: DhbSyncOpenIssueItem[] }>(
+    '/integration/dhb/sync-center/shipment-issues',
+    {
+      params: { connectorId, offset, limit },
+      ...controlRequest,
+    },
+  )
+}
+
 export function getDhbOpenIssues(limit = 500) {
   return apiClient.get<DhbSyncOpenIssueGroup[]>(DHB_SYNC_CENTER_OPEN_ISSUES_PATH, {
     params: { limit },

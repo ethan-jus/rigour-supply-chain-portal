@@ -29,6 +29,10 @@ vi.mock('@/api/core/order-register', () => ({
   applyOrderInvoice: mocks.applyInvoice,
 }))
 vi.mock('@/api/core/crm', () => ({ getAllCrmCustomerAreas: mocks.getAllAreas }))
+vi.mock('@/api/core/sales-logistics', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/api/core/sales-logistics')>(),
+  getSalesLogisticsCounts: vi.fn().mockResolvedValue({}),
+}))
 vi.mock('@/api/core/hr', () => ({
   getHrEmployees: mocks.getEmployees,
   hrOrganizationApi: { departments: mocks.getDepartments },
@@ -170,14 +174,14 @@ describe('订单列表页', () => {
     wrapper.unmount(); document.body.innerHTML = ''
   })
 
-  it('默认按创建时间倒序加载，汇总来自服务端 totals', async () => {
+  it('默认按下单时间倒序加载，汇总来自服务端 totals', async () => {
     const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
     expect(mocks.getOrders).toHaveBeenCalledTimes(1)
     expect(mocks.getOrders.mock.calls[0][0]).toMatchObject({
       begin: 0,
       step: 20,
-      sortBy: 'createdTime',
+      sortBy: 'orderDate',
       sortDirection: 'desc',
     })
     expect(wrapper.text()).toContain('3')
@@ -185,6 +189,22 @@ describe('订单列表页', () => {
     expect(wrapper.text()).toContain('收款金额')
     expect(wrapper.text()).toContain('待收金额')
     expect(wrapper.text()).toContain('已确认金额')
+    wrapper.unmount()
+  })
+
+  it('手动排序后重置或取消排序，均恢复按下单时间倒序', async () => {
+    const wrapper = mount(OrderListView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const table = wrapper.findAllComponents({ name: 'ElTable' })[0]!
+    table.vm.$emit('sort-change', { prop: 'createdTime', order: 'ascending' })
+    await flushPromises()
+    expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining({ sortBy: 'createdTime', sortDirection: 'asc' }))
+    await wrapper.findAll('button').find(button => button.text() === '重置')!.trigger('click')
+    await flushPromises()
+    expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining({ sortBy: 'orderDate', sortDirection: 'desc', begin: 0 }))
+    table.vm.$emit('sort-change', { prop: null, order: null })
+    await flushPromises()
+    expect(mocks.getOrders).toHaveBeenLastCalledWith(expect.objectContaining({ sortBy: 'orderDate', sortDirection: 'desc', begin: 0 }))
     wrapper.unmount()
   })
 
