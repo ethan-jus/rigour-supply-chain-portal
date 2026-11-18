@@ -2,7 +2,7 @@
   <div class="visit-policy" v-loading="loading">
     <header class="policy-heading">
       <div class="heading-line">
-        <div class="title-group"><h1>拜访规则</h1><el-radio-group v-model="ruleArea" class="rule-area-tabs" aria-label="规则类别"><el-radio-button value="visit">拜访采集</el-radio-button><el-radio-button v-if="auth.hasPermission('crm:store:manage')" value="pool">客户保护与回收</el-radio-button></el-radio-group><span v-if="loaded && ruleArea === 'visit'" class="published">{{ baseline?.publishStatus === 'PUBLISHED' ? '生效中' : '草稿' }} v{{ version }}</span></div>
+        <div class="title-group"><h1>拜访规则</h1><el-radio-group v-model="ruleArea" class="rule-area-tabs" aria-label="规则类别"><el-radio-button value="visit">拜访采集</el-radio-button><el-radio-button value="field">签到与轨迹</el-radio-button><el-radio-button v-if="auth.hasPermission('crm:store:manage')" value="pool">客户保护与回收</el-radio-button></el-radio-group><span v-if="loaded && ruleArea === 'visit'" class="published">{{ baseline?.publishStatus === 'PUBLISHED' ? '生效中' : '草稿' }} v{{ version }}</span></div>
         <div v-if="ruleArea === 'visit'" class="heading-actions">
           <el-button :icon="activeTab === 'settings' ? Clock : Back" :disabled="!loaded" @click="activeTab = activeTab === 'settings' ? 'history' : 'settings'">{{ activeTab === 'settings' ? '发布记录' : '返回规则' }}</el-button>
           <el-button :icon="Refresh" :disabled="saving || loading" aria-label="重新加载" title="重新加载" @click="reload" />
@@ -15,7 +15,7 @@
       </div>
     </header>
     <div ref="scrollArea" class="policy-scroll">
-      <KeepAlive><CrmPoolPolicyEditor v-if="ruleArea === 'pool'" /></KeepAlive>
+      <KeepAlive><CrmPoolPolicyEditor v-if="ruleArea === 'pool'" /><SalesFieldPolicy v-else-if="ruleArea === 'field'" /></KeepAlive>
       <template v-if="ruleArea === 'visit'">
       <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
       <el-alert v-if="notice" :title="notice" type="info" :closable="false" show-icon />
@@ -102,6 +102,7 @@ import { ArrowRight, Back, Camera, CircleCheck, Clock, Edit, InfoFilled, Locatio
 import { useAuthStore } from '@/stores/auth'
 import { salesVisitPolicyApi, type VisitPolicy, type VisitPolicyVersion } from '@/api/core/sales-visit-policy'
 import CrmPoolPolicyEditor from '../crm/CrmPoolPolicyEditor.vue'
+import SalesFieldPolicy from './SalesFieldPolicy.vue'
 import { copyVisitPolicy, policyChanges, policyFields, policyScope } from './visit-policy-editor'
 
 const ruleArea = ref('visit')

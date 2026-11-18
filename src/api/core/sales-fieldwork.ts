@@ -30,4 +30,4 @@ export function fieldClock(value: string | null | undefined): string {
   return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
 }
 export function fieldDistance(meters: number | null | undefined): string { return meters == null ? '无法计算' : `${(meters / 1000).toFixed(1)} km` }
-export function fieldStatus(status: string): string { return ({ ACTIVE: '外勤中', FINISHED: '已签退', NOT_STARTED: '未签到' } as Record<string, string>)[status] || '待核实' }
+export function fieldStatus(status: string): string { return ({ ACTIVE: '外勤中', FINISHED: '已签退', NOT_STARTED: '未签到', MISSING_CHECK_OUT: '缺签退' } as Record<string, string>)[status] || '待核实' }

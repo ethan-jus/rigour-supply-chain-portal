@@ -51,7 +51,6 @@ const ROUTES: Record<string, string | null> = {
   'supply.sales.exceptions.recording': '/supply-chain/sales/exceptions/recording',
   'supply.sales.exceptions.reviews': '/supply-chain/sales/exceptions/reviews',
   'supply.sales.policies.menu': null,
-  'supply.sales.policies.field': '/supply-chain/sales/policies/field',
   'supply.sales.policies.visit': '/supply-chain/sales/policies/visit',
   'supply.sales.policies.recording-ai': '/supply-chain/sales/policies/recording-ai',
   'supply.sales.policies.scopes': '/supply-chain/sales/policies/scopes',

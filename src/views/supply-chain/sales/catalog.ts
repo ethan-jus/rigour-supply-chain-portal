@@ -43,7 +43,6 @@ export const SALES_PAGES: Record<string, SalesPageDefinition> = {
   'exceptions-evidence': page('拜访证据异常', '异常与复核', '查看越界签到、停留不足和照片缺失。', 'Sales Work', '/api/v1/sales/management/exceptions?type=evidence', ['规则版本可追溯', '支持主管复核', '异常理由标准化']),
   'exceptions-recording': page('录音与AI异常', '异常与复核', '查看录音时长、重复、静音和AI低置信度风险。', 'Sales Work', '/api/v1/sales/management/exceptions?type=recording', ['录音播放独立授权', '服务端验证时长', 'AI不自动处罚']),
   'exceptions-reviews': page('拜访申诉', '异常与复核', '仅处理销售申诉。', 'CRM', '/api/v1/crm/visit-appeals', ['按数据范围过滤', '处理依据留痕']),
-  'policies-field': page('外勤规则', '规则配置', '配置签到窗口、业务日、工作时长、定位和补卡。', 'Sales Work', '/api/v1/sales/policies/field', ['发布版本不可修改', '影响考勤需HR审核', 'H5展示生效摘要']),
   'policies-visit': page('拜访规则', '规则配置', '配置目标范围、签到距离、停留、照片和录音阈值。', 'Sales Work', '/api/v1/sales/policies/visit', ['参数使用明确字段', '历史拜访固化版本', '不允许AI自动判无效']),
   'policies-recording-ai': page('录音与AI规则', '规则配置', '配置录音分片、ASR、摘要、相关性和复核阈值。', 'Sales Work', '/api/v1/sales/policies/recording-ai', ['模型配置归AI域', '业务采用结果归Sales Work', '敏感数据最小授权']),
   'policies-scopes': page('适用范围', '规则配置', '绑定租户、城市、团队和员工例外规则。', 'Sales Work', '/api/v1/sales/policies/scopes', ['员工例外需原因和期限', '优先级确定且可解释', '禁止重叠生效']),

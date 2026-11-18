@@ -724,17 +724,6 @@ export const constantRoutes: RouteRecordRaw[] = [
         },
       },
       {
-        path: 'sales/policies/field',
-        name: 'SupplySalesFieldPolicies',
-        component: () => import('@/views/supply-chain/sales/IndexView.vue'),
-        meta: {
-          title: '外勤规则',
-          requiresAuth: true,
-          applicationCode: 'SUPPLY_CHAIN',
-          pageKey: 'policies-field',
-        },
-      },
-      {
         path: 'sales/policies/visit',
         name: 'SupplySalesVisitPolicies',
         component: () => import('@/views/supply-chain/sales/IndexView.vue'),
