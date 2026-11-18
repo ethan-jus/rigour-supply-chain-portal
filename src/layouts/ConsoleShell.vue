@@ -233,9 +233,9 @@ async function closeWorkspaceTab(tab: WorkspaceTab) {
     const adjacentTab = workspaceTabs.value[index + 1] ?? workspaceTabs.value[index - 1]
     const fallbackPath = applicationHomePath(tab.applicationCode)
     if (adjacentTab) {
-      await router.push(adjacentTab.fullPath)
+      if (await router.push(adjacentTab.fullPath)) return
     } else if (fallbackPath && fallbackPath !== tab.path) {
-      await router.push(fallbackPath)
+      if (await router.push(fallbackPath)) return
     } else {
       return
     }

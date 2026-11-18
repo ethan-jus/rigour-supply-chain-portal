@@ -20,9 +20,8 @@ export interface StoreContact {
   personRevision: number
   methods: ContactMethod[]
   wecomRelations: {
-    identityScope: string
-    externalUserId: string
     employeeId: string
+    employeeName: string
     status: string
     addedAt: string
   }[]

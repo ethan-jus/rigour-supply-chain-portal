@@ -222,7 +222,7 @@ describe('store maintenance', () => {
   it('saves profile and closure in one command with evidence and an explicit cooldown notice', async () => {
     wrapper.findAllComponents(ElSelect).at(-1)!.vm.$emit('update:modelValue', 'CLOSED')
     await flushPromises()
-    expect(document.body.textContent).toContain('48小时认领冷却')
+    expect(document.body.textContent).toContain('原归属人按认领时规则进入冷却期')
     await click('保存并留痕')
     expect(crmStoreApi.update).not.toHaveBeenCalled()
     await input('维护详细地址', '核实后的门牌地址')

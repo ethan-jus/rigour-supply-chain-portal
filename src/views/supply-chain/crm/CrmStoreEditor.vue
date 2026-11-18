@@ -185,7 +185,7 @@
         </el-form-item>
         <el-alert
           v-if="statusChanged && form.businessStatus === 'CLOSED'"
-          title="已停业将结束当前归属，原归属人进入48小时认领冷却，停止认领及新作业；门店、拜访和成交历史保留。"
+          title="已停业将结束当前归属，原归属人按认领时规则进入冷却期，停止认领及新作业；门店、拜访和成交历史保留。"
           type="warning"
           :closable="false"
           show-icon
@@ -200,7 +200,7 @@
         />
         <el-alert
           v-else-if="statusChanged && store.businessStatus === 'CLOSED'"
-          title="恢复可作业状态后进入公海，不恢复历史归属；原归属人的48小时冷却继续生效。"
+          title="恢复可作业状态后进入公海，不恢复历史归属；原归属人的原冷却期限继续生效。"
           type="info"
           :closable="false"
           class="status-notice"

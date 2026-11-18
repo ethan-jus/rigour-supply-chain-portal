@@ -26,13 +26,13 @@
             v-if="node.children.some((child) => child.visible)"
             class="module-link"
             :class="{
-              'is-active': selected?.id === node.id,
+              'is-active': activeModule?.id === node.id,
               'module-link--utility': isUtility(node),
             }"
             type="button"
             :title="moduleName(node)"
             :aria-label="moduleName(node)"
-            :aria-pressed="selected?.id === node.id"
+            :aria-pressed="activeModule?.id === node.id"
             :aria-expanded="selected?.id === node.id && !workspace.collapsed"
             aria-controls="console-secondary-nav"
             :data-module-id="node.id"
@@ -230,6 +230,13 @@ const entries = computed(() => consoleEntries(props.nodes))
 const home = computed(() =>
   props.nodes.find((node) => node.visible && node.routePath === '/supply-chain'),
 )
+const activeModule = computed(() =>
+  roots.value.find(
+    (node) =>
+      node.routePath === route.path ||
+      consoleEntries(node.children).some((entry) => entry.path === route.path),
+  ),
+)
 const selected = computed(() => roots.value.find((node) => node.id === selectedId.value))
 const isHome = computed(() => selected.value?.routePath === '/supply-chain')
 const secondaryNodes = computed(() =>
@@ -319,12 +326,7 @@ watch(
     // 在线授权刷新会替换菜单对象；路径没变且所选模块仍获授权时，
     // 保留用户正在浏览的模块，避免二级菜单突然跳回当前业务页。
     if (path === previous?.[0] && roots.value.some((node) => node.id === selectedId.value)) return
-    const active = roots.value.find(
-      (node) =>
-        node.routePath === route.path ||
-        consoleEntries(node.children).some((entry) => entry.path === route.path),
-    )
-    selectedId.value = active?.id || roots.value[0]?.id || ''
+    selectedId.value = activeModule.value?.id || roots.value[0]?.id || ''
   },
   { immediate: true },
 )
@@ -337,6 +339,12 @@ watch(
     }
   },
   { immediate: true },
+)
+watch(
+  () => workspace.collapsed,
+  (collapsed) => {
+    if (collapsed) selectedId.value = activeModule.value?.id || roots.value[0]?.id || ''
+  },
 )
 const compactViewport = window.matchMedia?.('(max-width: 1100px)')
 function collapseForViewport() {

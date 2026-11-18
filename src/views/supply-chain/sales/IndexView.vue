@@ -1,6 +1,6 @@
 <template>
-  <section class="sales-page supply-page supply-page--sales">
-    <header class="page-header">
+  <section class="sales-page supply-page supply-page--sales" :class="{ 'sales-page--visit-policy': pageKey === 'policies-visit' }">
+    <header v-if="pageKey !== 'policies-visit'" class="page-header">
       <div>
         <SupplyPageTitle>{{ definition.title }}</SupplyPageTitle>
       </div>
@@ -9,7 +9,7 @@
     <SalesVisitPolicy v-if="pageKey === 'policies-visit'" />
     <SalesFieldwork v-else-if="pageKey === 'dashboard' || pageKey === 'attendance-today'" />
     <SalesVisitPlans v-else-if="pageKey === 'visit-plans'" />
-    <SalesReviewQueue v-else-if="isReviewPage" />
+    <SalesVisitAppeals v-else-if="isReviewPage" />
     <SalesTrackComparison v-else-if="isTrackPage" />
     <el-card v-else class="empty-feature-card" shadow="never">
       <el-empty description="功能暂未开放" />
@@ -25,7 +25,7 @@ import { SALES_PAGES } from './catalog'
 import SalesVisitPolicy from './SalesVisitPolicy.vue'
 import SalesFieldwork from './SalesFieldwork.vue'
 import SalesVisitPlans from './SalesVisitPlans.vue'
-import SalesReviewQueue from './SalesReviewQueue.vue'
+import SalesVisitAppeals from './SalesVisitAppeals.vue'
 import SalesTrackComparison from './SalesTrackComparison.vue'
 
 const route = useRoute()
@@ -40,6 +40,7 @@ const isTrackPage = computed(() => pageKey.value === 'exceptions-location')
 @use '@/assets/styles/variables' as *;
 
 .sales-page { display: flex; min-height: 0; flex-direction: column; gap: $spacing-sm; }
+.sales-page.supply-page--sales.sales-page--visit-policy { height: 100%; min-height: 0; overflow: hidden; }
 .page-header { display: flex; align-items: center; justify-content: space-between; gap: $spacing-sm; }
 .page-header h1 { margin: 0; font-size: 18px; line-height: 26px; }
 .empty-feature-card { display: grid; min-height: 360px; place-items: center; border-color: $color-border-base; box-shadow: none; }

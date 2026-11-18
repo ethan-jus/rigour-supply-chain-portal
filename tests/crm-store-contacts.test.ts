@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { crmWecomApi } from '@/api/core/crm-wecom'
 import CrmStoreContacts from '@/views/supply-chain/crm/CrmStoreContacts.vue'
 import { crmStoreContactsApi as api, type StoreContact } from '@/api/core/crm-store-contacts'
 
@@ -15,6 +16,7 @@ vi.mock('@/api/core/crm-store-contacts', () => ({
     changes: vi.fn(),
   },
 }))
+vi.mock('@/api/core/crm-wecom', () => ({ crmWecomApi: { storeSummary: vi.fn() } }))
 vi.mock('@/api/core/crm-store', () => ({ crmStoreApi: { list: vi.fn() } }))
 vi.mock('@/utils/audit-actor', () => ({ auditActorLabel: (id: string) => `操作人 ${id}` }))
 const person: StoreContact = {
@@ -42,6 +44,7 @@ const person: StoreContact = {
 let page: VueWrapper
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.mocked(crmWecomApi.storeSummary).mockResolvedValue({ contacts: 1, phoneContacts: 1, wecomContacts: null, dataStatus: 'NOT_CONNECTED' })
   vi.mocked(api.list).mockResolvedValue([person])
 })
 afterEach(() => {
@@ -66,16 +69,12 @@ it('团队只读联系人不会出现维护操作，查询使用对应权限视�
   expect(button('新增联系人')).toBeUndefined()
   expect(button('编辑关系')).toBeUndefined()
 })
-it('没有电话不能正式新建；网络失败重试保留同一请求', async () => {
+it('没有电话也能新建；网络失败重试保留同一请求', async () => {
   await setup()
   await button('新增联系人').trigger('click')
   await flushPromises()
   await page.find('input[aria-label="姓名或称呼"]').setValue('前台小李')
   await page.find('input[aria-label="本店角色"]').setValue('前台')
-  await button('保存').trigger('click')
-  await flushPromises()
-  expect(api.create).not.toHaveBeenCalled()
-  await page.find('input[aria-label="电话"]').setValue('13800000002')
   vi.mocked(api.create).mockRejectedValueOnce(new Error('网络中断')).mockResolvedValue(person)
   await button('保存').trigger('click')
   await flushPromises()
@@ -83,6 +82,7 @@ it('没有电话不能正式新建；网络失败重试保留同一请求', asyn
   await flushPromises()
   const calls = vi.mocked(api.create).mock.calls
   expect(calls[0][2]).toEqual(calls[1][2])
+  expect(calls[0][2]).toMatchObject({ phone: null })
   expect(calls[0].slice(0, 2)).toEqual(['100', 'ALL'])
 })
 it('关系失效仍保留电话和历史，并禁止继续核验或补电话', async () => {
@@ -110,4 +110,17 @@ it('切换门店后拒绝迟到的旧联系人响应', async () => {
   await flushPromises()
   expect(page.text()).not.toContain('王店长')
   expect(page.text()).toContain('尚未登记联系人')
+})
+
+it('无电话的企微联系人显示官方标识但不渲染电话占位行，重复销售关系只计一人', async () => {
+  const relation = { employeeId: '2', employeeName: '张三', status: 'ACTIVE', addedAt: '2026-11-17T08:00:00Z' }
+  vi.mocked(api.list).mockResolvedValue([{ ...person, methods: [], wecomRelations: [relation, { ...relation, employeeId: '3', employeeName: '李四' }] }])
+  vi.mocked(crmWecomApi.storeSummary).mockResolvedValue({ contacts: 1, phoneContacts: 0, wecomContacts: 1, dataStatus: 'PARTIAL' })
+  await setup()
+  expect(page.text()).not.toContain('未留电话')
+  expect(page.find('img.wecom-logo').exists()).toBe(true)
+  expect(page.find('.contact-filters').text()).toContain('企微 1')
+  expect(page.find('.contact-filters').text()).toContain('有电话 0')
+  expect(page.find('.contact').text()).toContain('张三')
+  expect(page.find('.contact').text()).toContain('李四')
 })

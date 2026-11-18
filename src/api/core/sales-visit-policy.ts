@@ -3,6 +3,7 @@ export interface CaptureRules {
   requireLocationOnOpen: boolean
   maximumLocationAccuracyMeters: number | null
   automaticRecording: boolean
+  automaticCheckoutRadiusMeters?: number | null
   automaticCheckout: boolean
   allowPhotoImport: boolean
   allowRecordingImport: boolean
@@ -22,14 +23,15 @@ export interface VisitPolicy {
   captureRules: CaptureRules
 }
 export interface VisitPolicyVersion { id: string; versionNo: number; policyCode: string; publishStatus: string; scopeType: string | null; scopeId: string | null; name: string; policy: VisitPolicy; createdAt: string; createdBy: string }
+export interface VisitPolicyPublication { policyId: string; policyVersionId: string; policyCode: string; versionNo: number; publishStatus: string; effectiveFrom: string | null }
 export const salesVisitPolicyApi = {
-  list: () => apiClient.get<VisitPolicyVersion[]>('/sales/admin/visit-policies', { stayOnUnauthorized: true }),
-  publish: (expectedVersion: number, policyCode: string, name: string, policy: VisitPolicy, scopeType: string, scopeId: string | null) => apiClient.put('/sales/admin/visit-policies', {
+  list: () => apiClient.get<VisitPolicyVersion[]>('/sales/admin/visit-policies', { stayOnUnauthorized: true, errorFeedback: 'inline' }),
+  publish: (expectedVersion: number, policyCode: string, name: string, policy: VisitPolicy, scopeType: string, scopeId: string | null) => apiClient.put<VisitPolicyPublication>('/sales/admin/visit-policies', {
     expectedVersion, policyCode, policyName: name, requireAssignedTarget: true, allowProspectTarget: false,
     checkInRadiusMeters: policy.radiusMeters, minimumDwellMinutes: policy.minimumDwellMinutes,
     requiredPhotoCount: policy.requiredPhotoCount, recordingEnabled: policy.recordingEnabled,
     minimumRecordingSeconds: policy.minimumRecordingSeconds, maximumClipGapSeconds: policy.maximumClipGapSeconds,
     aiAsrEnabled: policy.aiAsrEnabled, aiRelevanceEnabled: policy.aiRelevanceEnabled, aiDuplicateEnabled: policy.aiDuplicateEnabled,
     aiAutoConfirmThreshold: policy.aiAutoConfirmThreshold, captureRules: { ...policy.captureRules, requireLocationOnOpen: false }, scopeType, scopeId, publish: true,
-  }, { stayOnUnauthorized: true }),
+  }, { stayOnUnauthorized: true, errorFeedback: 'inline' }),
 }

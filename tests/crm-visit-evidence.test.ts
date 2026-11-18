@@ -3,6 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import Evidence from '@/views/supply-chain/crm/CrmVisitEvidence.vue'
 import { apiClient } from '@/api/core/client'
+vi.mock('@/stores/auth',()=>({useAuthStore:()=>({user:{tenantId:'tenant',id:'one',permissions:[]}})}))
 vi.mock('@/api/core/client', () => ({ apiClient: { get: vi.fn() } }))
 let wrapper: VueWrapper | undefined
 beforeEach(() => {
