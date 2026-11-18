@@ -31,6 +31,9 @@
             </button>
           </el-timeline-item>
         </el-timeline>
+        <p v-for="(stop, index) in matchedHiddenStops" :key="index" class="route-match">
+          收货地：{{ stop.name }}<span v-if="stop.address"> · {{ stop.address }}</span>
+        </p>
       </div>
     </template>
     <div class="route-details">
@@ -60,10 +63,24 @@
 import { computed } from 'vue'
 import type { TransportRoute } from './transport-records'
 
-const props = defineProps<{ route: TransportRoute }>()
+const props = defineProps<{ route: TransportRoute; search?: string }>()
 const destination = computed(() => props.route.receivers.at(-1))
 const middleCount = computed(() => Math.max(0, props.route.receivers.length - 1))
 const stops = computed(() => [props.route.origin, ...props.route.receivers])
+const matchedHiddenStops = computed(() => {
+  const keyword = props.search?.trim().toLocaleLowerCase()
+  if (!keyword) return []
+  return props.route.receivers.flatMap((stop, index) => {
+    const nameMatches = stop.name?.toLocaleLowerCase().includes(keyword)
+    const addressMatches = stop.address?.toLocaleLowerCase().includes(keyword)
+    if (
+      (!nameMatches && !addressMatches) ||
+      (index === props.route.receivers.length - 1 && nameMatches)
+    )
+      return []
+    return [{ name: stop.name, address: addressMatches && !nameMatches ? stop.address : undefined }]
+  })
+})
 const openLabel = computed(() => `查看完整行驶路段，共${props.route.receivers.length}个收货点`)
 const phase = (index: number) =>
   index === 0 ? '发货地' : index === stops.value.length - 1 ? '最终收货地' : `中途收货地 ${index}`
@@ -104,6 +121,13 @@ const phase = (index: number) =>
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+.route-match {
+  margin: 8px 0 0 21px;
+  color: var(--el-color-primary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
 }
 .route-stop {
   display: -webkit-box;

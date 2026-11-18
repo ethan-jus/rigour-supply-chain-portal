@@ -61,7 +61,7 @@ export const dimensionNames: Record<string, string> = {
   trip: '出差或报销事项',
   destination: '出差目的地',
 }
-export const palette = ['#77aaf4', '#70c9bc', '#aaa1ef', '#e5b473', '#8dbbde', '#a4adb9']
+export const palette = ['#3269df', '#00836c', '#7b61b5', '#b76a15', '#2486a5', '#69798b']
 export const categoryColor = (key: string, i: number) =>
   palette[Math.max(0, Object.keys(categories).indexOf(key)) % palette.length] ||
   palette[i % palette.length]
@@ -183,7 +183,7 @@ export function visibleDetailDimensions(
 }
 const theme = {
   color: palette,
-  textStyle: { color: '#91a8bf', fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif' },
+  textStyle: { color: '#475569', fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif' },
   animationDuration: 200,
 }
 function amountScale(values: number[]) {
@@ -197,12 +197,12 @@ function amountAxis(values: number[]) {
     min: 0,
     minInterval: 0.01,
     name: scale === 10000 ? '金额（万元）' : '金额（元）',
-    nameTextStyle: { color: '#8da4bb' },
+    nameTextStyle: { color: '#64748b' },
     axisLabel: {
-      color: '#8da4bb',
+      color: '#64748b',
       formatter: (value: number) => number.format(value / scale),
     },
-    splitLine: { lineStyle: { color: '#233b51' } },
+    splitLine: { lineStyle: { color: '#e2e8f0' } },
   }
 }
 export const ringOption = (groups: CostGroup[], category = false): EChartsCoreOption => ({
@@ -239,12 +239,12 @@ export function bars(groups: CostGroup[], comparable: boolean, limit = 8): EChar
       renderMode: 'richText',
       valueFormatter: (v: unknown) => `${money(String(v))} 元`,
     },
-    legend: { top: 0, bottom: 'auto', textStyle: { color: '#9bb0c7' }, selectedMode: false },
+    legend: { top: 0, bottom: 'auto', textStyle: { color: '#475569' }, selectedMode: false },
     grid: { left: 8, right: 16, bottom: 12, top: 40, containLabel: true },
     xAxis: {
       type: 'category',
       data: list.map((g) => g.label),
-      axisLabel: { color: '#a9bfd4', interval: 0, width: 72, overflow: 'break', lineHeight: 17 },
+      axisLabel: { color: '#475569', interval: 0, width: 72, overflow: 'break', lineHeight: 17 },
     },
     yAxis: amountAxis(
       list.flatMap((g) => [Number(g.current), ...(comparable ? [Number(g.previous)] : [])]),
@@ -254,7 +254,7 @@ export function bars(groups: CostGroup[], comparable: boolean, limit = 8): EChar
         name: '本期',
         type: 'bar',
         barMaxWidth: 24,
-        itemStyle: { color: '#78a9f0', borderRadius: [3, 3, 0, 0] },
+        itemStyle: { color: '#3269df', borderRadius: [3, 3, 0, 0] },
         data: list.map((g) => ({ value: Number(g.current), id: g.key })),
       },
       ...(comparable
@@ -263,7 +263,7 @@ export function bars(groups: CostGroup[], comparable: boolean, limit = 8): EChar
               name: '可比期',
               type: 'bar',
               barMaxWidth: 24,
-              itemStyle: { color: '#4d667e' },
+              itemStyle: { color: '#a4b4cc' },
               data: list.map((g) => (g.previous == null ? null : Number(g.previous))),
             },
           ]
@@ -279,13 +279,13 @@ export function line(report: CostReport): EChartsCoreOption {
       renderMode: 'richText',
       valueFormatter: (v: unknown) => `${money(String(v))} 元`,
     },
-    legend: { top: 0, bottom: 'auto', textStyle: { color: '#9bb0c7' }, selectedMode: false },
+    legend: { top: 0, bottom: 'auto', textStyle: { color: '#475569' }, selectedMode: false },
     grid: { left: 8, right: 14, top: 42, bottom: 12, containLabel: true },
     xAxis: {
       type: 'category',
       data: report.cumulative.map((p) => p.key),
       boundaryGap: false,
-      axisLabel: { color: '#8da4bb' },
+      axisLabel: { color: '#64748b' },
     },
     yAxis: amountAxis(
       report.cumulative.flatMap((p) => [
@@ -299,7 +299,7 @@ export function line(report: CostReport): EChartsCoreOption {
         type: 'line',
         showSymbol: false,
         data: report.cumulative.map((p) => (p.current == null ? null : Number(p.current))),
-        itemStyle: { color: '#7dafff' },
+        itemStyle: { color: '#3269df' },
         areaStyle: { opacity: 0.07 },
       },
       ...(report.meta.comparisonAvailable
@@ -310,7 +310,7 @@ export function line(report: CostReport): EChartsCoreOption {
               showSymbol: false,
               data: report.cumulative.map((p) => (p.previous == null ? null : Number(p.previous))),
               lineStyle: { type: 'dashed' },
-              itemStyle: { color: '#8b9eaf' },
+              itemStyle: { color: '#a4b4cc' },
             },
           ]
         : []),
@@ -328,12 +328,12 @@ export function monthlyTrend(months: CostMonth[]): EChartsCoreOption {
       renderMode: 'richText',
       valueFormatter: (v: unknown) => `${money(String(v))} 元`,
     },
-    legend: { top: 0, textStyle: { color: '#9bb0c7' }, selectedMode: false },
+    legend: { top: 0, textStyle: { color: '#475569' }, selectedMode: false },
     grid: { left: 8, right: 14, top: 42, bottom: 12, containLabel: true },
     xAxis: {
       type: 'category',
       data: months.map((m) => `${m.month}月${m.month === 1 ? `\n${m.year}` : ''}`),
-      axisLabel: { color: '#8da4bb' },
+      axisLabel: { color: '#64748b' },
     },
     yAxis: amountAxis(
       months.flatMap((m) => [
@@ -346,7 +346,7 @@ export function monthlyTrend(months: CostMonth[]): EChartsCoreOption {
         name: '本期',
         type: 'bar',
         barMaxWidth: 28,
-        itemStyle: { color: '#78a9f0', borderRadius: [3, 3, 0, 0] },
+        itemStyle: { color: '#3269df', borderRadius: [3, 3, 0, 0] },
         data: months.map((m) => ({ id: `${m.year}-${m.month}`, value: Number(m.current) })),
       },
       ...(comparable
@@ -358,7 +358,7 @@ export function monthlyTrend(months: CostMonth[]): EChartsCoreOption {
               showSymbol: true,
               symbolSize: 5,
               lineStyle: { type: 'dashed' },
-              itemStyle: { color: '#a9b8ca' },
+              itemStyle: { color: '#a4b4cc' },
               data: months.map((m) =>
                 m.previous === null
                   ? null

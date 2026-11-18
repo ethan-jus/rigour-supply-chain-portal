@@ -29,6 +29,7 @@ export interface Facts {
   stopPhotos?: { stopIndex: number; name: string; phase: string; vouchers: PlatformVoucher[] }[]
   completeTime?: string | null
   billUpdatedTime?: string | null
+  orderAmount?: Amount
   billAmount: Amount
   unpaidAmount: Amount
   refundAmount: Amount

@@ -5,20 +5,19 @@
       v-if="changed"
       type="warning"
       :closable="false"
-      :title="`平台账单与本系统成本不同，本系统成本为 ¥${money(confirmedAmount)}，请核对后处理。`"
+      :title="`账单金额 ¥${money(facts?.billAmount)} 与运输费用 ¥${money(confirmedAmount)} 不同，请核对。`"
     />
-    <div class="bill-totals">
-      <div v-for="metric in metrics" :key="metric.label">
-        <span>{{ metric.label }}</span
-        ><strong>{{ money(metric.value) }}</strong>
-      </div>
-    </div>
+    <TransportBillSummary v-if="!hideSummary" :items="metrics" />
     <dl class="bill-meta">
+      <div>
+        <dt>平台订单总价（元）</dt>
+        <dd>{{ money(facts?.orderAmount) }}</dd>
+      </div>
       <div>
         <dt>优惠金额（元）</dt>
         <dd>{{ money(facts?.couponAmount) }}</dd>
       </div>
-      <div>
+      <div v-if="!hidePaymentStatus">
         <dt>付款状态</dt>
         <dd>{{ platformPaymentStatus(source) }}</dd>
       </div>
@@ -85,6 +84,7 @@ import { computed, ref } from 'vue'
 import type { PlatformTransport } from '@/api/core/transport-records'
 import { getTransportVoucher } from '@/api/core/transport-records'
 import { currentSource, platformPaymentStatus, type PlatformVoucher } from './huolala-source'
+import TransportBillSummary from './TransportBillSummary.vue'
 import { money } from './transport-records'
 import CostFilePreview from './CostFilePreview.vue'
 import { errorMessage } from '@/api/core/error'
@@ -93,6 +93,8 @@ const props = defineProps<{
   recordId: string
   platform: PlatformTransport
   confirmedAmount?: number | null
+  hideSummary?: boolean
+  hidePaymentStatus?: boolean
 }>()
 const source = computed(() => currentSource(props.platform.source))
 const facts = computed(() => source.value.facts)
@@ -102,7 +104,7 @@ const changed = computed(() => {
   return cost != null && bill != null && Math.round(cost * 100) !== Math.round(Number(bill) * 100)
 })
 const metrics = computed(() => [
-  { label: '账单总计（元）', value: facts.value?.billAmount },
+  { label: '运输费用总额（元）', value: facts.value?.billAmount },
   { label: '已支付（元）', value: source.value.paidAmount },
   { label: '未支付（元）', value: facts.value?.unpaidAmount },
   { label: '退款（元）', value: facts.value?.refundAmount },
@@ -145,31 +147,9 @@ async function open(v: PlatformVoucher) {
   margin: 22px 0 12px;
   font-size: 15px;
 }
-.bill-totals {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin: 16px 0;
-}
-.bill-totals > div {
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-light);
-  padding: 16px;
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 12px;
-}
-.bill-totals span,
 dt {
   color: var(--el-text-color-secondary);
   font-size: 13px;
-}
-.bill-totals strong {
-  font-size: 23px;
-  overflow-wrap: anywhere;
-  font-variant-numeric: tabular-nums;
 }
 .bill-meta {
   display: grid;
@@ -184,15 +164,11 @@ dd {
   margin-top: 16px;
 }
 @container transport-record (max-width: 1000px) {
-  .bill-totals {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .bill-meta {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @container transport-record (max-width: 560px) {
-  .bill-totals,
   .bill-meta {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -174,10 +174,9 @@ describe('运输记录详情回填', () => {
       const columns = [...document.body.querySelectorAll('th')].map((e) => e.textContent)
       expect(columns).toContain('关联时间')
       for (const label of [
-        '运输费用（元）',
         '费用负责人',
         '付款状态',
-        '计入运输成本（元）',
+        '运输费用总额（元）',
         '发货仓库',
         '发货方',
         '收货单位',
@@ -279,9 +278,9 @@ describe('运输记录详情回填', () => {
     document.body.innerHTML = ''
   })
   it.each([
-    ['ACTIVE', ['编辑', '作废'], ['确认', '撤销', '删除']],
-    ['VOID', ['删除'], ['编辑', '确认', '作废', '撤销']],
-  ])('详情 %s 只提供允许的操作并从详情进入订单关联', async (status, allowed, forbidden) => {
+    ['ACTIVE', [], ['编辑', '作废', '确认', '撤销', '删除']],
+    ['VOID', [], ['删除', '编辑', '确认', '作废', '撤销']],
+  ])('详情 %s 只供查看，不允许编辑作废或改变订单关联', async (status, allowed, forbidden) => {
     const d = detail()
     d.record.statusCode = status as string
     const w = mount(Editor, {
@@ -297,11 +296,8 @@ describe('运输记录详情回填', () => {
     const link = Array.from(document.body.querySelectorAll('button')).find(
       (b) => b.textContent!.trim() === '更改关联',
     )
-    if (status === 'ACTIVE') {
-      link!.click()
-      await flushPromises()
-      expect(w.emitted('edit')).toEqual([['orders']])
-    } else expect(link).toBeUndefined()
+    expect(link).toBeUndefined()
+    expect(w.emitted('edit')).toBeUndefined()
     w.unmount()
     document.body.innerHTML = ''
   })
@@ -370,7 +366,7 @@ describe('通用手工账单', () => {
         { name: '装卸费', amount: 10 },
         { name: '燃油费', amount: 3.2 },
         { name: '运输保险费', amount: 2.8 },
-        { name: '优惠', amount: -5 },
+        { name: '优惠', amount: 5 },
       ],
     })
     d.record.data.amount = 65
@@ -380,23 +376,53 @@ describe('通用手工账单', () => {
       attachTo: document.body,
     })
     await flushPromises()
-    const summary = () => w.find('[aria-label="账单费用合计"]').text()
-    expect(summary()).toContain('费用小计 70.00 元')
-    expect(summary()).toContain('优惠及减免 -5.00 元')
-    expect(summary()).toContain('运输费用合计 65.00 元')
+    const summary = () => w.find('[aria-label="账单汇总"]').text()
+    expect(summary()).toContain('费用小计（元）70.00')
+    expect(summary()).toContain('优惠及减免（元）5.00')
+    expect(
+      w
+        .findAllComponents({ name: 'ElInputNumber' })
+        .find((i) => i.props('placeholder') === '填写本次运输费用')!
+        .props('modelValue'),
+    ).toBe(65)
     const amounts = w
       .findAllComponents({ name: 'ElInputNumber' })
       .filter((input) => input.props('placeholder') === '填写金额')
+    const totalInput = w
+      .findAllComponents({ name: 'ElInputNumber' })
+      .find((input) => input.props('placeholder') === '填写本次运输费用')!
+    await totalInput.find('input').setValue('72.25')
+    await totalInput.find('input').trigger('blur')
+    await flushPromises()
+    expect((totalInput.find('input').element as HTMLInputElement).value).toBe('72.25')
+    expect(amounts[0]!.props('modelValue')).toBe(61.25)
+    expect(amounts[1]!.props('modelValue')).toBe(10)
+    expect(amounts[4]!.props('modelValue')).toBe(5)
+    expect(summary()).toContain('费用小计（元）77.25')
+    expect(summary()).toContain('优惠及减免（元）5.00')
+    await totalInput.find('input').setValue('65')
+    await totalInput.find('input').trigger('blur')
+    await flushPromises()
     amounts[1]!.vm.$emit('update:modelValue', 12)
     await flushPromises()
-    expect(summary()).toContain('运输费用合计 67.00 元')
+    expect(
+      w
+        .findAllComponents({ name: 'ElInputNumber' })
+        .find((i) => i.props('placeholder') === '填写本次运输费用')!
+        .props('modelValue'),
+    ).toBe(67)
     await w
       .findAll('tr')
       .find((row) => row.text().includes('优惠') && row.find('button').exists())!
       .find('button')
       .trigger('click')
     await flushPromises()
-    expect(summary()).toContain('运输费用合计 72.00 元')
+    expect(
+      w
+        .findAllComponents({ name: 'ElInputNumber' })
+        .find((i) => i.props('placeholder') === '填写本次运输费用')!
+        .props('modelValue'),
+    ).toBe(72)
     await w
       .findAll('button')
       .find((b) => b.text() === '保存运输记录')!
@@ -454,7 +480,8 @@ describe('通用手工账单', () => {
       .findAllComponents({ name: 'ElInputNumber' })
       .find((input) => input.props('placeholder') === '填写本次运输费用')!
     expect(total.props('modelValue')).toBe(35.27)
-    total.vm.$emit('update:modelValue', 36.28)
+    await total.find('input').setValue('36.28')
+    await total.find('input').trigger('blur')
     await flushPromises()
     await w
       .findAll('button')
@@ -817,7 +844,7 @@ describe('物流详情的信息优先级', () => {
     expect(fees.textContent).toContain('120.00')
     expect(fees.textContent).toContain('100.01')
     expect(fees.textContent).toContain('已付款')
-    for (const text of ['快递单号', 'HL-ORDER-001', '微面', '2026-11-09 19:20:30', '本系统成本为'])
+    for (const text of ['快递单号', 'HL-ORDER-001', '微面', '2026-11-09 19:20:30', '与运输费用'])
       expect(document.body.textContent).toContain(text)
     expect(document.body.textContent).not.toContain('LEGACY-HIDDEN')
     expect(document.body.textContent).not.toContain('运单号')

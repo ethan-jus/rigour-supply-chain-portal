@@ -172,7 +172,7 @@ describe('统一运输记录 V2.6', () => {
       global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('账单总计')
+    expect(wrapper.text()).toContain('运输费用总额')
     expect(wrapper.text()).toContain('费用明细')
     expect(wrapper.text()).not.toContain('运输回单')
     expect(wrapper.text()).not.toContain('装卸货照片')
@@ -424,8 +424,8 @@ describe('统一运输记录 V2.6', () => {
       global: { plugins: [ElementPlus], stubs: { CostFilePreview: true } },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('本系统成本为 ¥137.64')
-    expect(wrapper.findAll('.bill-totals strong').map((s) => s.text())).toEqual([
+    expect(wrapper.text()).toContain('与运输费用 ¥137.64')
+    expect(wrapper.findAll('.transport-bill-summary strong').map((s) => s.text())).toEqual([
       '142.64',
       '142.64',
       '0.00',

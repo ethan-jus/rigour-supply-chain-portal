@@ -319,10 +319,7 @@
       :detail="active"
       :readonly="readonly"
       @saved="load"
-      @edit="(section) => open(active!.record, false, section)"
-      @action="(action) => act(active!.record, action)"
       @associate-employee="associateEmployee"
-      @sync="syncOne"
       :initial-section="initialSection"
     />
     <CostExportDialog
@@ -742,18 +739,6 @@ function associateEmployee() {
       : undefined,
   )
 }
-function syncOne() {
-  if (!active.value?.platform) return
-  if (syncing.value) {
-    syncOpen.value = true
-    return
-  }
-  const order = currentSource(active.value.platform.source)
-  syncNo.value = order.orderNo
-  syncDates.value = [order.useTime.slice(0, 10), order.useTime.slice(0, 10)]
-  syncOpen.value = true
-  syncMessage.value = ''
-}
 const localToday = () => new Date().toLocaleDateString('sv-SE')
 const syncOpen = ref(false),
   syncDates = ref<string[]>([localToday(), localToday()]),
@@ -1020,6 +1005,11 @@ async function doExport() {
   }
 }
 onMounted(async () => {
+  const status = route.query.statusCode
+  if (status === 'INCOMPLETE' || status === 'COMPLETE' || status === 'VOID') {
+    filters.value.statusCode = status
+    applied = { ...applied, statusCode: status }
+  }
   try {
     await loadCostDictionaries('logistics')
   } catch (e) {

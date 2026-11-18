@@ -13,7 +13,7 @@
       >
     </template>
     <el-button
-      v-if="record.statusCode === 'VOID' && can('order:logistics-cost:void')"
+      v-if="record.statusCode === 'VOID' && can('order:logistics-cost:delete')"
       :link="!detail"
       type="danger"
       @click="emit('action', 'delete')"

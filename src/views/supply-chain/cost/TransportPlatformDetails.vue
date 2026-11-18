@@ -23,7 +23,7 @@
     <div class="section-heading">
       <h4>员工关联</h4>
       <el-button
-        v-if="can('integration:huolala:read')"
+        v-if="!readonly && can('integration:huolala:read')"
         link
         type="primary"
         @click="$emit('associate-employee')"
@@ -65,7 +65,11 @@ import { currentSource } from './huolala-source'
 import { money } from './transport-records'
 import { platformDateTime, platformProgress } from './huolala-display'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
-const props = defineProps<{ platform: PlatformTransport; employees: CostEmployee[] }>()
+const props = defineProps<{
+  platform: PlatformTransport
+  employees: CostEmployee[]
+  readonly?: boolean
+}>()
 defineEmits<{ 'associate-employee': [] }>()
 const { can } = useSupplyPermissions()
 const order = computed(() => currentSource(props.platform.source))

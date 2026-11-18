@@ -296,9 +296,38 @@ export function allocationPreview(amount: number | null, codes: string[]) {
   }))
 }
 
-/** 分项按分相加，优惠为负数；未填写的分项金额保持未知。 */
-export function manualBillTotal(items: { amount: number | null }[]): number | null {
-  if (!items.length || items.some((item) => item.amount == null || !Number.isFinite(item.amount)))
-    return null
-  return items.reduce((cents, item) => cents + Math.round(Number(item.amount) * 100), 0) / 100
+/** 优惠按扣减处理，兼容历史负数金额；不重复扣减。 */
+export function manualBillAmount(item: { name?: unknown; amount?: unknown }): number | null {
+  if (item.amount == null || !Number.isFinite(Number(item.amount))) return null
+  return /优惠|减免|抵扣|折扣/.test(String(item.name || ''))
+    ? -Math.abs(Number(item.amount))
+    : Number(item.amount)
+}
+export function manualBillTotal(items: { name?: string; amount: number | null }[]): number | null {
+  const amounts = items.map(manualBillAmount)
+  if (!amounts.length || amounts.some((amount) => amount == null)) return null
+  return amounts.reduce<number>((cents, amount) => cents + Math.round(amount! * 100), 0) / 100
+}
+
+/** 总额编辑只调整一项基础运费，其他费用、优惠和原顺序保持不变。 */
+export function adjustManualBillTotal(
+  items: { name: string; amount: number | null }[],
+  total: number | null,
+): { name: string; amount: number | null }[] {
+  if (!items.length) return []
+  const next = items.map((item) => ({ ...item }))
+  let index = next.findIndex((item) =>
+    ['基础运费', '运费', '基础运输费'].includes(item.name.trim()),
+  )
+  if (index < 0) {
+    next.unshift({ name: '基础运费', amount: 0 })
+    index = 0
+  }
+  const others = next.filter((_, i) => i !== index)
+  const otherTotal = others.length ? manualBillTotal(others) : 0
+  if (otherTotal == null) throw new Error('请先填写其他费用项目的金额，再修改总额')
+  const base = total == null ? null : (Math.round(total * 100) - Math.round(otherTotal * 100)) / 100
+  if (base != null && base < 0) throw new Error('总额低于其他费用减去优惠后的金额，请先核对明细')
+  next[index]!.amount = base
+  return next
 }

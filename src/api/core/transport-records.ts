@@ -69,6 +69,7 @@ export interface TransportPage {
   shipmentRecords?: Record<string, ShipmentTransportSource[]>
 }
 export type TransportQuery = CostQuery & {
+  salesSelectable?: boolean
   relationState?: string
   platformOrderNo?: string
   platformEmployeeName?: string

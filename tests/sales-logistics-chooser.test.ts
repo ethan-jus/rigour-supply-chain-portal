@@ -71,7 +71,12 @@ it('货拉拉选择使用本地已同步运输列表，筛选区域与已选信�
   select.vm.$emit('change', 'HLL')
   await flushPromises()
   expect(api.list).toHaveBeenCalledWith(
-    expect.objectContaining({ sourceSystem: 'HUOLALA', carrierCode: 'HLL', step: 50 }),
+    expect.objectContaining({
+      sourceSystem: 'HUOLALA',
+      carrierCode: 'HLL',
+      step: 20,
+      salesSelectable: true,
+    }),
   )
   expect(wrapper.text()).toContain('运输记录')
   expect(wrapper.text()).not.toContain('推荐依据')

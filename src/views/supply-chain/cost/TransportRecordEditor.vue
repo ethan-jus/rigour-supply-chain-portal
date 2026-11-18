@@ -23,16 +23,6 @@
             >{{ statusName(detail.record.statusCode, detail.record.businessStatusCode) }}</el-tag
           >
         </div>
-        <div v-if="readonly && actionsEnabled !== false" class="heading-actions">
-          <TransportRecordActions
-            :record="detail.record"
-            detail
-            @edit="emit('edit', '')"
-            @action="(action) => emit('action', action)"
-          /><el-button v-if="platform && can('integration:huolala:sync')" @click="emit('sync')"
-            >同步此单</el-button
-          >
-        </div>
       </div>
       <el-alert v-if="error" :title="error" type="error" :closable="false" />
       <el-alert
@@ -90,7 +80,7 @@
               <span
                 v-if="detail && !shippingLocked && !detail.record.data.ledger?.shippingTime"
                 class="legacy-time-note"
-                >原记录未登记具体时间，可编辑补齐</span
+                >{{ readonly ? '原记录未登记具体时间' : '原记录未登记具体时间，可编辑补齐' }}</span
               >
             </el-form-item>
             <el-form-item
@@ -153,18 +143,6 @@
           <div ref="ordersSection" class="section-heading">
             <h3>关联业务订单</h3>
             <el-button
-              v-if="
-                readonly &&
-                actionsEnabled !== false &&
-                detail?.record.statusCode === 'ACTIVE' &&
-                can('order:logistics-cost:write')
-              "
-              link
-              type="primary"
-              @click="emit('edit', 'orders')"
-              >{{ selected.length ? '更改关联' : '关联订单' }}</el-button
-            >
-            <el-button
               v-if="!readonly && !advanced && !salesOrderId && !shipmentSources.length"
               type="primary"
               plain
@@ -224,27 +202,30 @@
             @click="advancedOpen = true"
             >维护费用与分摊明细</el-button
           >
-          <div class="form-grid" :class="{ 'manual-bill-summary': !platform }">
-            <el-form-item label="运输费用（元）" :error="fieldErrors.amount"
-              ><span v-if="readonly || advanced || form.manualBillItems?.length" class="amount">{{
-                money(form.amount)
-              }}</span
-              ><el-input-number
-                v-else
-                v-model="form.amount"
-                :precision="2"
-                :min="0"
-                :max="999999999999"
-                :controls="false"
-                placeholder="填写本次运输费用"
-              /><span
-                v-if="!readonly && !advanced && form.manualBillItems?.length"
-                class="optional-label"
-                >全部费用减去优惠后的合计</span
-              ><span v-if="!readonly && !platform" class="optional-label"
-                >金额、订单归属及凭证补齐后，计入成本看板统计</span
-              ></el-form-item
-            ><el-form-item label="费用负责人"
+          <TransportBillSummary :items="billMetrics">
+            <template #total>
+              <el-form-item class="bill-total-input" :error="fieldErrors.amount"
+                ><span v-if="readonly || advanced" class="amount">{{ money(form.amount) }}</span
+                ><el-input-number
+                  v-else
+                  v-model="amountInput"
+                  @change="changeAmount"
+                  :precision="2"
+                  :min="form.amount != null && form.amount < 0 ? undefined : 0"
+                  :max="999999999999"
+                  :controls="false"
+                  aria-label="运输费用总额"
+                  placeholder="填写本次运输费用"
+                /><span
+                  v-if="!readonly && !advanced && form.manualBillItems?.length"
+                  class="optional-label"
+                  >全部费用减去优惠后的合计；修改总额将调整基础运费</span
+                ></el-form-item
+              >
+            </template>
+          </TransportBillSummary>
+          <div class="form-grid">
+            <el-form-item label="费用负责人"
               ><span v-if="readonly">{{ ownerName }}</span
               ><el-select
                 v-else
@@ -267,13 +248,6 @@
                   :value="o.value"
                 />
               </el-select> </el-form-item
-            ><el-form-item label="计入运输成本（元）"
-              ><strong>{{
-                detail?.record.statusCode !== 'VOID' &&
-                detail?.record.businessStatusCode === 'COMPLETE'
-                  ? money(detail.record.data.amount)
-                  : '-'
-              }}</strong></el-form-item
             ><el-form-item label="费用归属城市"
               ><span v-if="readonly">{{
                 detail?.record.data.cityName || form.cityCode || '-'
@@ -341,7 +315,7 @@
                 ></el-table-column>
                 <el-table-column :label="'金额（元）'" min-width="230" align="right"
                   ><template #default="{ row }">
-                    <span v-if="readonly || advanced">{{ money(row.amount) }}</span>
+                    <span v-if="readonly || advanced">{{ money(manualBillAmount(row)) }}</span>
                     <el-input-number
                       v-else
                       v-model="row.amount"
@@ -349,6 +323,7 @@
                       :min="-999999999999"
                       :max="999999999999"
                       :controls="false"
+                      :aria-label="`${row.name || '费用项目'}金额`"
                       placeholder="填写金额"
                     /> </template
                 ></el-table-column>
@@ -360,28 +335,11 @@
                   ></el-table-column
                 >
               </el-table>
-              <div
-                v-if="form.manualBillItems?.length"
-                class="bill-summary"
-                role="group"
-                aria-label="账单费用合计"
-              >
-                <span
-                  >费用小计 <strong>{{ money(billSummary.charges) }}</strong> 元</span
-                >
-                <span
-                  >优惠及减免 <strong>{{ money(billSummary.deductions) }}</strong> 元</span
-                >
-                <span
-                  >运输费用合计
-                  <strong class="amount">{{ money(billSummary.total) }}</strong> 元</span
-                >
-              </div>
               <p
                 v-if="!readonly && !advanced && form.manualBillItems?.length"
                 class="optional-label bill-hint"
               >
-                基础运费、装卸费等逐项填写，优惠及减免填负数；所有项目自动合计，未填完整时不计算总额。
+                费用逐项合计，优惠金额自动扣减；直接修改总额时调整基础运费，其余项目保留。
               </p>
             </template>
             <template
@@ -465,6 +423,8 @@
             :record-id="detail!.record.id"
             :platform="platform"
             :confirmed-amount="detail!.record.data.amount"
+            hide-summary
+            hide-payment-status
           />
         </section>
         <section class="transport-section">
@@ -667,6 +627,7 @@
         v-if="platform"
         :platform="platform"
         :employees="employees"
+        :readonly="readonly"
         @associate-employee="emit('associate-employee')"
       />
       <section v-if="detail" class="transport-section">
@@ -717,6 +678,7 @@
         :carrier-locked="!!platform"
         :cities="cities"
         :employees="employees"
+        :readonly="readonly"
       /><template #footer
         ><el-button type="primary" @click="applyAdvanced">完成</el-button></template
       ></el-dialog
@@ -747,6 +709,8 @@ import {
   typeName,
   statusName,
   manualBillTotal,
+  manualBillAmount,
+  adjustManualBillTotal,
   frozenTransportSources,
   frozenTransportReceivers,
   vehicleOf,
@@ -762,11 +726,10 @@ import {
 import CostLedgerPartySelect from './CostLedgerPartySelect.vue'
 import CostLedgerSourcePicker, { type PickedLedgerSource } from './CostLedgerSourcePicker.vue'
 import CostCitySelect from './CostCitySelect.vue'
+import TransportBillSummary from './TransportBillSummary.vue'
 import TransportPlatformBill from './TransportPlatformBill.vue'
 import TransportPlatformDetails from './TransportPlatformDetails.vue'
-import TransportRecordActions from './TransportRecordActions.vue'
 import TransportRouteSummary from './TransportRouteSummary.vue'
-import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import CostLedgerEditor from './CostLedgerEditor.vue'
 import { totalFees } from './cost-ledger'
 import TransportEvidence from './TransportEvidence.vue'
@@ -778,27 +741,19 @@ import { costOptions, costLabel } from './cost-dictionaries'
 import { errorMessage } from '@/api/core/error'
 import { auditLabel } from './cost-audit'
 import { displayRecordActor, displayRecordDateTime, displayValue } from '@/utils/business-display'
-const props = withDefaults(
-  defineProps<{
-    detail: TransportDetail | null
-    readonly: boolean
-    initialSection?: string
-    actionsEnabled?: boolean
-    salesOrderId?: string | number | null
-    salesSource?: CostSource | null
-    initialCarrierCode?: string | null
-    initialDeliveryMode?: string
-  }>(),
-  { actionsEnabled: true },
-)
-const { can } = useSupplyPermissions()
+const props = defineProps<{
+  detail: TransportDetail | null
+  readonly: boolean
+  initialSection?: string
+  salesOrderId?: string | number | null
+  salesSource?: CostSource | null
+  initialCarrierCode?: string | null
+  initialDeliveryMode?: string
+}>()
 const ordersSection = ref<HTMLElement>()
 const visible = defineModel<boolean>({ required: true })
 const emit = defineEmits<{
   saved: []
-  edit: [section: string]
-  action: [action: 'void' | 'delete']
-  sync: []
   'associate-employee': []
 }>()
 const detail = ref(props.detail),
@@ -807,6 +762,11 @@ const shipmentSources = computed(() => detail.value?.shipments || [])
 const shippingLocked = computed(() => !!platform.value || !!shipmentSources.value.length)
 const order = computed(() => (platform.value ? currentSource(platform.value.source) : null))
 const form = ref(transportDraft(detail.value?.record, platform.value))
+const amountInput = ref(form.value.amount)
+watch(
+  () => form.value.amount,
+  (amount) => (amountInput.value = amount),
+)
 if (props.salesSource && !detail.value)
   Object.assign(form.value, {
     transportType: 'DELIVERY',
@@ -853,6 +813,17 @@ function addBillItem() {
     amount: first ? form.value.amount : null,
   })
 }
+function changeAmount(value: number | null | undefined) {
+  try {
+    if (form.value.manualBillItems?.length)
+      form.value.manualBillItems = adjustManualBillTotal(form.value.manualBillItems, value ?? null)
+    form.value.amount = value ?? null
+    error.value = ''
+  } catch (e) {
+    amountInput.value = form.value.amount
+    error.value = e instanceof Error ? e.message : '请核对费用明细'
+  }
+}
 function useTotalOnly() {
   form.value.manualBillItems = []
 }
@@ -860,9 +831,12 @@ const billSummary = computed(() => {
   const items = form.value.manualBillItems || []
   const total = manualBillTotal(items)
   if (total == null) return { charges: null, deductions: null, total }
-  const charges = items.reduce((sum, item) => sum + Math.max(0, Math.round(item.amount! * 100)), 0)
+  const charges = items.reduce(
+    (sum, item) => sum + Math.max(0, Math.round(manualBillAmount(item)! * 100)),
+    0,
+  )
   const deductions = items.reduce(
-    (sum, item) => sum + Math.min(0, Math.round(item.amount! * 100)),
+    (sum, item) => sum + Math.min(0, Math.round(manualBillAmount(item)! * 100)),
     0,
   )
   return { charges: charges / 100, deductions: deductions / 100, total }
@@ -875,6 +849,27 @@ watch(
   },
   { deep: true },
 )
+const billMetrics = computed(() => [
+  { label: '运输费用总额（元）', value: form.value.amount },
+  ...(platform.value
+    ? [
+        { label: '已支付（元）', value: order.value?.paidAmount },
+        { label: '未支付（元）', value: order.value?.facts?.unpaidAmount },
+        { label: '退款（元）', value: order.value?.facts?.refundAmount },
+      ]
+    : [
+        {
+          label: '费用小计（元）',
+          value: form.value.manualBillItems?.length ? billSummary.value.charges : form.value.amount,
+        },
+        {
+          label: '优惠及减免（元）',
+          value: form.value.manualBillItems?.length
+            ? Math.abs(billSummary.value.deductions ?? 0)
+            : 0,
+        },
+      ]),
+])
 const hadLinks = !!form.value.orderCodes.length
 const attachmentDrafts = ref<CostAttachmentDraft[]>([])
 const attachmentBusy = ref(false),
@@ -1238,6 +1233,10 @@ async function save() {
       detail.value?.record.id || null,
       {
         ...form.value,
+        manualBillItems: form.value.manualBillItems?.map((item) => ({
+          ...item,
+          amount: manualBillAmount(item),
+        })),
         revision: detail.value?.record.revision ?? null,
       },
       advancedCommand,

@@ -102,7 +102,6 @@ it('物流发货保留本单分摊口径，路线采用运输快照，查看复�
   expect(api.detail).toHaveBeenCalledWith('C1')
   expect(wrapper.findComponent({ name: 'TransportRecordEditor' }).props()).toMatchObject({
     readonly: true,
-    actionsEnabled: false,
     detail: transport,
   })
   wrapper.unmount()

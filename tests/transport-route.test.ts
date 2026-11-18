@@ -119,6 +119,25 @@ describe('行驶路段数据口径', () => {
 })
 
 describe('行驶路段摘要与展开', () => {
+  it('收货地查询命中中途点或仅命中地址时直接显示，避免筛选结果看似不匹配', async () => {
+    wrapper = mount(TransportRouteSummary, {
+      props: {
+        route: {
+          origin: stop('仓库'),
+          receivers: [stop('盛世门店'), stop('终点门店', '盛世路18号')],
+        },
+        search: '盛世',
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    expect(wrapper.findAll('.route-match').map((node) => node.text())).toEqual([
+      '收货地：盛世门店',
+      '收货地：终点门店 · 盛世路18号',
+    ])
+    await wrapper.setProps({ search: '' })
+    expect(wrapper.findAll('.route-match')).toHaveLength(0)
+  })
+
   it('多站列表仅展示起终点及中途数量，点击后可按序查看全部站点及地址', async () => {
     const route = routeOf(
       record(),

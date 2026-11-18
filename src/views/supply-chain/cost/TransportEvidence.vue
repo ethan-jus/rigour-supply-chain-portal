@@ -70,7 +70,9 @@
           />
           <el-table-column prop="status" label="文件状态" min-width="165" />
           <el-table-column label="上传／同步时间" min-width="190">
-            <template #default="{ row: item }">{{ dateTime(item.time) }}</template>
+            <template #default="{ row: item }">{{
+              item.draft && !item.time ? '保存后记录上传时间' : dateTime(item.time)
+            }}</template>
           </el-table-column>
           <el-table-column label="操作" :width="readonly ? 150 : 230" fixed="right">
             <template #default="{ row: item }">
@@ -298,6 +300,7 @@ function visibleFiles(code: string): Item[] {
         id: `draft:${file.id}`,
         name: file.file.name,
         draft: file,
+        time: file.attachment?.createdTime,
         context: '-',
         status: file.removing
           ? '待移除'

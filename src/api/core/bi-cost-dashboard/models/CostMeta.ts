@@ -14,4 +14,6 @@ export interface CostMeta {
   dataState: string
   exportAllowed: boolean
   availableCategories: CostCategory[]
+  /** 尚未计入成本的有效待完善单据数量，不包含金额。 */
+  pendingCounts?: Partial<Record<CostCategory, number>>
 }

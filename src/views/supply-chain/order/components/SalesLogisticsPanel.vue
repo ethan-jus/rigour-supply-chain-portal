@@ -82,7 +82,6 @@
       v-model="opened"
       :detail="detail"
       :readonly="true"
-      :actions-enabled="false"
       @associate-employee="associateEmployee"
     />
   </section>

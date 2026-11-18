@@ -3,7 +3,7 @@
     <header class="cost-header">
       <div>
         <h1>成本数据看板</h1>
-        <p class="board-subtitle">运输成本仅统计已完善单据；可查看部门分布和费用明细</p>
+        <p class="board-subtitle">按已生效的成本单据统计；运输记录仅统计已完善单据</p>
       </div>
       <div class="controls header-actions">
         <span v-if="report" class="updated-at">更新于 {{ updatedAt }}</span>
@@ -109,9 +109,9 @@
     <div v-if="loading" class="cost-message loading" role="status">正在读取费用数据…</div>
     <main v-else-if="report">
       <div v-if="report.meta.excludedScopes.length" class="cost-message notice" role="status">
-        当前未授权的原业务来源：{{
+        当前可查看范围不包含：{{
           report.meta.excludedScopes.join('、')
-        }}。报销按报销权限归集，两期均使用相同授权范围。
+        }}。本期和可比期使用相同的查看范围。
       </div>
       <div v-if="report.meta.dataState === 'STALE'" class="cost-message notice" role="alert">
         数据更新延迟，当前展示上次更新的费用数据。更新时间：{{ updatedAt }}。
@@ -122,6 +122,19 @@
         role="status"
       >
         待核对来源 {{ report.current.reviewCount }} 笔，暂未计入。请在对应原单核对。
+      </div>
+      <div
+        v-if="report.scope === 'opex' && report.meta.pendingCounts?.freight"
+        class="cost-message notice readiness-notice"
+        role="status"
+      >
+        <span
+          >本期有 {{ report.meta.pendingCounts.freight }} 笔运输记录待完善，尚未计入以下金额。</span
+        >
+        <router-link
+          :to="{ path: '/supply-chain/cost/logistics', query: { statusCode: 'INCOMPLETE' } }"
+          >去完善运输记录</router-link
+        >
       </div>
       <template v-if="section === 'overview'">
         <CostOverview

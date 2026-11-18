@@ -81,11 +81,14 @@
       </p>
     </section>
     <section v-if="carrier === 'HLL' && mode !== 'SELF'" class="chooser-results">
-      <h3>运输记录</h3>
+      <h3>选择已完成的运输记录</h3>
+      <p class="chooser-note">
+        上方为本次销售订单信息；下方按查询条件筛选已同步物流，选中后关联到当前销售单。
+      </p>
       <OrderRegisterFilterCard
         class="order-register-filter--compact"
         :loading="loading"
-        @search="load"
+        @search="search"
         @reset="resetFilters"
       >
         <template #primary>
@@ -97,7 +100,7 @@
               clearable
             />
           </div>
-          <div class="list-filter-field list-filter-field--employee">
+          <div class="list-filter-field list-filter-field--person">
             <el-input
               v-model="query.platformEmployeeName"
               placeholder="下单员工"
@@ -118,9 +121,9 @@
               v-model="dates"
               type="daterange"
               value-format="YYYY-MM-DD"
-              start-placeholder="运输开始日期"
-              end-placeholder="运输结束日期"
-              aria-label="运输日期"
+              start-placeholder="下单开始日期"
+              end-placeholder="下单结束日期"
+              aria-label="下单日期"
             />
           </div>
           <div class="list-filter-field list-filter-field--select">
@@ -166,12 +169,19 @@
             orderedAt(row as TransportDetail) || '-'
           }}</template></el-table-column
         >
+        <el-table-column label="下单员工" min-width="120">
+          <template #default="{ row }">{{
+            row.platform ? currentSource(row.platform.source).facts?.sourceEmployeeName || '-' : '-'
+          }}</template>
+        </el-table-column>
         <el-table-column label="车型" width="100"
           ><template #default="{ row }">{{ vehicleOf(row.platform) }}</template></el-table-column
         >
         <el-table-column label="行驶路段" min-width="230"
           ><template #default="{ row }"
-            ><TransportRouteSummary :route="routeOf(row.record, row.platform)" /></template
+            ><TransportRouteSummary
+              :route="routeOf(row.record, row.platform)"
+              :search="appliedReceiverName" /></template
         ></el-table-column>
         <el-table-column label="运输费用（元）" width="140" align="right"
           ><template #default="{ row }">{{
@@ -185,8 +195,14 @@
         >
       </el-table>
       <div class="chooser-pager">
-        <el-button :disabled="offset === 0 || loading" @click="page(-1)">上一页</el-button
-        ><el-button :disabled="!hasNext || loading" @click="page(1)">下一页</el-button>
+        <CompactPagination
+          :current-page="Math.floor(offset / pageSize) + 1"
+          :page-size="pageSize"
+          :total="total"
+          :page-sizes="[20, 50]"
+          @current-change="goPage"
+          @size-change="resizePage"
+        />
       </div>
       <section v-if="selected" class="chooser-section selected-preview" aria-label="已选物流信息">
         <h3>已选物流信息</h3>
@@ -281,6 +297,7 @@ import {
 } from '../../cost/transport-records'
 import { savedTransportAllocations, transportAllocations } from '../../cost/transport-allocation'
 import { currentSource } from '../../cost/huolala-source'
+import CompactPagination from '@/components/supply/CompactPagination.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import TransportRecordEditor from '../../cost/TransportRecordEditor.vue'
 import TransportRouteSummary from '../../cost/TransportRouteSummary.vue'
@@ -295,7 +312,8 @@ const manualOpen = ref(false),
   saving = ref(false),
   error = ref(''),
   offset = ref(0),
-  hasNext = ref(false)
+  total = ref(0),
+  pageSize = ref(20)
 const dates = ref<string[]>([]),
   query = ref({
     platformOrderNo: '',
@@ -304,7 +322,8 @@ const dates = ref<string[]>([]),
     relationState: '',
   })
 const rows = ref<TransportDetail[]>([]),
-  selected = ref<TransportDetail | null>(null)
+  selected = ref<TransportDetail | null>(null),
+  appliedReceiverName = ref('')
 const allocationPreview = computed(() => {
   if (!selected.value) return []
   const record = selected.value
@@ -360,17 +379,20 @@ async function load() {
   error.value = ''
   selected.value = null
   try {
+    const criteria = { ...query.value }
     const p = await getTransportRecords({
-      ...query.value,
+      ...criteria,
       dateFrom: dates.value?.[0],
       dateTo: dates.value?.[1],
       begin: offset.value,
-      step: 50,
+      step: pageSize.value,
+      salesSelectable: true,
       sourceSystem: 'HUOLALA',
       carrierCode: 'HLL',
     })
     if (run === serial) {
-      hasNext.value = offset.value + p.page.items.length < p.page.total
+      appliedReceiverName.value = criteria.receiverName
+      total.value = p.page.total
       rows.value = p.page.items
         .map((record) => ({ record, platform: p.platformRecords[record.id] || null }))
         .filter(
@@ -395,9 +417,17 @@ function selectionChanged() {
   offset.value = 0
   if (carrier.value === 'HLL' && mode.value !== 'SELF') void load()
 }
-function page(direction: number) {
-  offset.value = Math.max(0, offset.value + direction * 50)
+function search() {
+  offset.value = 0
   void load()
+}
+function goPage(page: number) {
+  offset.value = (page - 1) * pageSize.value
+  void load()
+}
+function resizePage(size: number) {
+  pageSize.value = size
+  search()
 }
 async function save() {
   if (!selected.value || saving.value) return
@@ -511,6 +541,11 @@ h3 {
 }
 .allocation-heading {
   margin-top: 20px;
+}
+.chooser-note {
+  color: var(--el-text-color-secondary);
+  margin: 0 0 12px;
+  font-size: 13px;
 }
 .secondary {
   color: var(--el-text-color-secondary);

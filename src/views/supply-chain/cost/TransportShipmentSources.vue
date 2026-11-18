@@ -59,7 +59,11 @@
             >
             <el-table-column label="单位" width="90"
               ><template #default="{ row }">{{
-                row.order_units_name || row.units_name || row.UnitsName || '-'
+                row.ships_units_name ||
+                row.order_units_name ||
+                row.units_name ||
+                row.UnitsName ||
+                '-'
               }}</template></el-table-column
             >
           </el-table>
@@ -74,8 +78,10 @@ import { displayRecordDateTime } from '@/utils/business-display'
 defineProps<{ sources: ShipmentTransportSource[] }>()
 const sourceNotice = (source: ShipmentTransportSource) =>
   source.issue?.includes('来源配送方式尚未映射')
-    ? '发货配送方式待核对，请联系管理员。'
-    : source.issue || '原发货信息已更新，请核对运输记录'
+    ? `配送方式“${source.latest.deliveryModeName || '-'}”尚未对应，请在数据字典的“来源映射”中选择配送方式后重新同步。`
+    : source.issue?.includes('来源物流公司尚未映射')
+      ? `物流公司“${source.latest.carrierName || '-'}”尚未对应，请在数据字典的“来源映射”中选择物流公司后重新同步。`
+      : source.issue || '原发货信息已更新，请核对运输记录'
 
 const sourceStatus = (s: string) =>
   ({ shipped: '待发货', receivedin: '待收货', received: '已收货', cancelled: '已取消' })[s] ||
