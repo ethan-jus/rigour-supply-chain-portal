@@ -11,22 +11,6 @@
           <dt>发货状态</dt>
           <dd>{{ sourceStatus(source.latest.sourceStatus) }}</dd>
         </div>
-        <div>
-          <dt>发货时间</dt>
-          <dd>{{ displayRecordDateTime(source.latest.shipTime) }}</dd>
-        </div>
-        <div>
-          <dt>物流公司</dt>
-          <dd>{{ source.latest.carrierName || '-' }}</dd>
-        </div>
-        <div>
-          <dt>快递单号</dt>
-          <dd>{{ source.latest.trackingNumbers.join('、') || '-' }}</dd>
-        </div>
-        <div>
-          <dt>配送方式</dt>
-          <dd>{{ source.latest.deliveryModeName || '-' }}</dd>
-        </div>
       </dl>
       <el-alert
         v-if="source.issue || source.differencePending"
@@ -74,13 +58,12 @@
 </template>
 <script setup lang="ts">
 import type { ShipmentTransportSource } from '@/api/core/transport-records'
-import { displayRecordDateTime } from '@/utils/business-display'
 defineProps<{ sources: ShipmentTransportSource[] }>()
 const sourceNotice = (source: ShipmentTransportSource) =>
   source.issue?.includes('来源配送方式尚未映射')
-    ? `配送方式“${source.latest.deliveryModeName || '-'}”尚未对应，请在数据字典的“来源映射”中选择配送方式后重新同步。`
+    ? `配送方式“${source.latest.deliveryModeName || '-'}”尚未对应，请在数据字典的“来源映射”中选择配送方式；保存后系统将在后续同步中自动更新原发货资料。`
     : source.issue?.includes('来源物流公司尚未映射')
-      ? `物流公司“${source.latest.carrierName || '-'}”尚未对应，请在数据字典的“来源映射”中选择物流公司后重新同步。`
+      ? `物流公司“${source.latest.carrierName || '-'}”尚未对应，请在数据字典的“来源映射”中选择物流公司；保存后系统将在后续同步中自动更新原发货资料。`
       : source.issue || '原发货信息已更新，请核对运输记录'
 
 const sourceStatus = (s: string) =>

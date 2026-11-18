@@ -99,7 +99,8 @@ import {
   frozenTransportSources,
 } from '../../cost/transport-records'
 import { savedTransportAllocations } from '../../cost/transport-allocation'
-import { costLabel, loadCostDictionaries } from '../../cost/cost-dictionaries'
+import { costLabel } from '../../cost/cost-dictionaries'
+import { loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { currentSource } from '../../cost/huolala-source'
 import { errorMessage } from '@/api/core/error'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
@@ -155,7 +156,11 @@ async function load() {
   try {
     const [data] = await Promise.all([
       getSalesLogistics(props.orderId),
-      loadCostDictionaries('logistics'),
+      // 选物流仅需要公司和配送方式，避免先等待整套成本录入字典。
+      loadBusinessDictionaries([
+        { moduleCode: '', code: 'COST_CARRIER' },
+        { moduleCode: '', code: 'COST_DELIVERY_MODE' },
+      ]),
     ])
     if (current === serial) {
       context.value = data

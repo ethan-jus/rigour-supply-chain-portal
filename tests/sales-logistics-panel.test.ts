@@ -7,7 +7,10 @@ import { createLedgerCommand } from '@/views/supply-chain/cost/cost-ledger'
 import type { SalesLogisticsContext } from '@/api/core/sales-logistics'
 import type { TransportDetail } from '@/api/core/transport-records'
 
-const api = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn() }))
+const api = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), dictionaries: vi.fn() }))
+vi.mock('@/utils/business-dictionary', () => ({
+  loadBusinessDictionaries: api.dictionaries,
+}))
 vi.mock('@/api/core/sales-logistics', () => ({ getSalesLogistics: api.list }))
 vi.mock('@/api/core/transport-records', () => ({ getTransport: api.detail }))
 vi.mock('@/composables/useSupplyPermissions', () => ({
@@ -81,6 +84,10 @@ it('物流发货保留本单分摊口径，路线采用运输快照，查看复�
     },
   })
   await flushPromises()
+  expect(api.dictionaries).toHaveBeenCalledWith([
+    { moduleCode: '', code: 'COST_CARRIER' },
+    { moduleCode: '', code: 'COST_DELIVERY_MODE' },
+  ])
   const summary = wrapper.get('.logistics-summary').text().replace(/\s+/g, '')
   expect(summary).toContain('已关联2笔')
   expect(summary).toContain('本单分摊费用40.00元')

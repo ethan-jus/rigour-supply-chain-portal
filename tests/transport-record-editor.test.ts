@@ -660,6 +660,56 @@ describe('通用手工账单', () => {
 })
 
 describe('物流详情的信息优先级', () => {
+  it('订货宝来源区只显示发货单、状态和商品，共用物流字段在基本信息展示一次', async () => {
+    const d = detail()
+    d.record.data.ledger = validManualLedger()
+    d.record.data.ledger.carrierCode = 'SF'
+    d.record.data.ledger.shippingTime = '2026-11-16T16:18:00'
+    d.shipments = [
+      {
+        id: 'SHIP1',
+        costId: 'C1',
+        issue: null,
+        differencePending: false,
+        latest: {
+          shipmentId: 'SHIP1',
+          shipmentNo: 'FH.20261116.0420',
+          salesOrderId: 'SO1',
+          sourceStatus: 'receivedin',
+          shipTime: '2026-11-16T08:18:00Z',
+          sourceUpdatedAt: null,
+          carrierCode: 'SF',
+          carrierName: '顺丰速运',
+          deliveryModeCode: 'THIRD_PARTY',
+          deliveryModeName: '快递',
+          trackingNumbers: ['SF1582052267166'],
+          receiver: null,
+          sourceFields: {},
+          goods: [{ goods_name: '球杆', ships_number: 2, units_name: '支' }],
+        },
+      },
+    ]
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const basic = w.findAll('.transport-section').find((s) => s.find('h3').text() === '基本信息')!
+    for (const value of ['发货时间', '配送方式', '物流公司', '快递单号', 'SF1582052267166'])
+      expect(basic.text()).toContain(value)
+    const source = w.get('[aria-label="订货宝发货信息"]')
+    expect(source.text()).toContain('FH.20261116.0420')
+    expect(source.text()).toContain('待收货')
+    expect(source.text()).toContain('发货商品')
+    for (const value of ['发货时间', '配送方式', '物流公司', '快递单号'])
+      expect(source.text()).not.toContain(value)
+    await source.get('.el-collapse-item__header').trigger('click')
+    await flushPromises()
+    expect(source.text()).toContain('球杆')
+    w.unmount()
+    document.body.innerHTML = ''
+  })
   it('负责人档案未返回时先显示原单姓名，返回后更新姓名，界面不显示员工编码', async () => {
     let finish!: (rows: CostEmployee[]) => void
     api.employees.mockReturnValue(

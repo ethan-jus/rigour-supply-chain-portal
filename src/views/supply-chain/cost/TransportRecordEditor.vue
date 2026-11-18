@@ -737,7 +737,7 @@ import TransportShipmentSources from './TransportShipmentSources.vue'
 import { TransportEvidenceSaveSession } from './transport-evidence'
 import { type CostAttachmentDraft } from './cost-attachment-draft'
 import { validateManualTransport, type TransportErrors } from './transport-validation'
-import { costOptions, costLabel } from './cost-dictionaries'
+import { costOptions, costLabel, loadCostDictionaries } from './cost-dictionaries'
 import { errorMessage } from '@/api/core/error'
 import { auditLabel } from './cost-audit'
 import { displayRecordActor, displayRecordDateTime, displayValue } from '@/utils/business-display'
@@ -1106,6 +1106,8 @@ async function addOrders(rows: PickedLedgerSource[]) {
   }
 }
 onMounted(async () => {
+  // 表单独立加载所需字典，不要求销售摘要提前等待全部成本配置。
+  void loadCostDictionaries('logistics')
   const frozen = detail.value ? frozenTransportSources(detail.value.record) : []
   selected.value = props.salesSource && !detail.value ? [props.salesSource] : frozen
   if (!props.readonly && !shippingLocked.value) updateReceiverDrafts()
