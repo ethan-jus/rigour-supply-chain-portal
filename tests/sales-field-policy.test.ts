@@ -46,3 +46,21 @@ it('keeps multi-scope policies from being silently narrowed',async()=>{
  mocks.list.mockResolvedValue([fixture,{...fixture,policy:{...fixture.policy,scopeId:'employee-2'}}])
  await start();await edit(1);expect(publishButton().attributes('disabled')).toBeDefined()
 })
+
+it('lets a new environment configure and publish its first rule', async () => {
+  mocks.list.mockResolvedValue([])
+  mocks.publish.mockResolvedValue({ versionNo: 1 })
+  await start(); await edit(2)
+  await wrapper.find('form').trigger('submit'); await flushPromises()
+  expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({
+    policyCode: 'FIELD-DEFAULT', expectedVersion: 0, businessDayCutoff: '06:00:00',
+    locationIntervalMinutes: 2, scopeType: 'ALL', scopeId: null,
+  }))
+  expect(wrapper.text()).toContain('已发布 v1，立即生效')
+})
+it('does not offer initial publication without permission', async () => {
+  mocks.list.mockResolvedValue([]); mocks.writable = false
+  await start()
+  expect(wrapper.find('form').exists()).toBe(false)
+  expect(mocks.publish).not.toHaveBeenCalled()
+})
