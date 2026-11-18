@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   crmStoreContactsApi as api,
@@ -8,6 +8,8 @@ import {
   type ContactMethod,
 } from '@/api/core/crm-store-contacts'
 import { crmStoreApi, type StoreRow } from '@/api/core/crm-store'
+import { crmWecomApi } from '@/api/core/crm-wecom'
+import wecomLogo from '@/assets/images/wecom-official.png'
 import { auditActorLabel } from '@/utils/audit-actor'
 
 const props = defineProps<{ storeId: string; view: ContactView; editable: boolean }>()
@@ -36,6 +38,12 @@ const sourceContacts = ref<StoreContact[]>([]),
   sourceContactId = ref('')
 const history = ref<Awaited<ReturnType<typeof api.changes>>>([])
 const requests = new Map<string, string>()
+const wecomCount = ref<number | null>(null)
+const filter = ref('all')
+const activeContacts = computed(() => contacts.value.filter(p => p.status === 'ACTIVE'))
+const wecomContacts = computed(() => activeContacts.value.filter(p => p.wecomRelations.some(r => r.status === 'ACTIVE')))
+const phoneContacts = computed(() => activeContacts.value.filter(p => p.methods.some(m => m.type === 'PHONE' && m.status !== 'INVALID')))
+const visibleContacts = computed(() => filter.value === 'wecom' ? wecomContacts.value : filter.value === 'phone' ? phoneContacts.value : contacts.value)
 let generation = 0
 const message = (e: unknown) => (e instanceof Error ? e.message : '操作失败，请重试')
 function command(body: object) {
@@ -48,9 +56,10 @@ async function load() {
   loading.value = true
   error.value = ''
   contacts.value = []
+  wecomCount.value = null
   try {
-    const result = await api.list(props.storeId, props.view)
-    if (version === generation) contacts.value = result
+    const [result, summary] = await Promise.all([api.list(props.storeId, props.view), crmWecomApi.storeSummary(props.storeId, props.view)])
+    if (version === generation) { contacts.value = result; wecomCount.value = summary.wecomContacts }
   } catch (e) {
     if (version === generation) error.value = message(e)
   } finally {
@@ -92,10 +101,6 @@ async function save() {
     ElMessage.warning('请填写姓名或称呼与本店角色')
     return
   }
-  if (mode.value === 'create' && !phone.value.trim()) {
-    ElMessage.warning('正式联系人需要电话；未留资可直接记录拜访')
-    return
-  }
   if (mode.value !== 'create' && !reason.value.trim()) {
     ElMessage.warning('请填写依据或原因')
     return
@@ -111,7 +116,7 @@ async function save() {
           name: name.value.trim(),
           role: role.value.trim(),
           primary: primary.value,
-          phone: phone.value.trim(),
+          phone: phone.value.trim() || null,
           wechatHint: wechat.value.trim(),
         }),
       )
@@ -224,9 +229,14 @@ onBeforeUnmount(() => {
 <template>
   <section v-loading="loading" class="store-contacts">
     <div class="contact-toolbar">
-      <span>联系人及联系方式</span
+      <span>门店联系人</span
       ><el-button v-if="editable" type="primary" @click="open('create')">新增联系人</el-button>
     </div>
+    <el-radio-group v-model="filter" class="contact-filters" aria-label="联系人渠道">
+      <el-radio-button value="all">全部 {{ loading || error ? '—' : contacts.length }}</el-radio-button>
+      <el-radio-button value="wecom"><img :src="wecomLogo" alt="企微" class="wecom-logo" />企微 {{ loading || error ? '—' : wecomCount ?? '—' }}</el-radio-button>
+      <el-radio-button value="phone">有电话 {{ loading || error ? '—' : phoneContacts.length }}</el-radio-button>
+    </el-radio-group>
     <p class="hint">
       角色、主要联系人及离职状态按门店维护；姓名和联系方式属于本人。电话保存后待核实，微信线索不代表企微已建联。
     </p>
@@ -236,7 +246,7 @@ onBeforeUnmount(() => {
       >重新加载</el-button
     >
     <el-empty v-else-if="!loading && !contacts.length" description="尚未登记联系人" />
-    <article v-for="person in contacts" :key="person.id" class="contact">
+    <article v-for="person in visibleContacts" :key="person.id" class="contact">
       <div class="contact-toolbar">
         <strong>{{ person.name }} · {{ person.role }}</strong
         ><span
@@ -244,6 +254,10 @@ onBeforeUnmount(() => {
           ><el-tag v-if="person.status === 'LEFT'" type="info">离职 / 关系失效</el-tag></span
         >
       </div>
+      <details v-if="person.wecomRelations.some(r => r.status === 'ACTIVE')" class="wecom-relations">
+        <summary><img :src="wecomLogo" alt="" class="wecom-logo" />企微联系人 · 查看跟进关系</summary>
+        <div v-for="relation in person.wecomRelations.filter(r => r.status === 'ACTIVE')" :key="relation.employeeId + relation.addedAt" class="contact-channel"><span>{{ relation.employeeName }}</span><small>{{ new Date(relation.addedAt).toLocaleDateString('zh-CN') }} 添加</small></div>
+      </details>
       <div v-for="channel in person.methods" :key="channel.id" class="contact-channel">
         <span
           >{{ channel.type === 'PHONE' ? '电话' : '微信线索' }} {{ channel.value
@@ -338,7 +352,7 @@ onBeforeUnmount(() => {
             placeholder="老板、店长、前台等"
             aria-label="本店角色"
         /></el-form-item>
-        <el-form-item v-if="mode === 'create'" label="电话" required
+        <el-form-item v-if="mode === 'create'" label="电话（选填）"
           ><el-input
             v-model="phone"
             maxlength="50"
@@ -437,4 +451,8 @@ small {
 .el-tag + .el-tag {
   margin-left: 6px;
 }
+.wecom-logo { width: 18px; height: 18px; vertical-align: middle; margin-right: 5px; }
+.contact-filters { margin-top: 12px; }
+.wecom-relations { margin: 12px 0; color: var(--el-color-primary); }
+.wecom-relations summary { cursor: pointer; }
 </style>

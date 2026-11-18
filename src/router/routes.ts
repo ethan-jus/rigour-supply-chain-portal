@@ -527,11 +527,11 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: 'SupplySalesVisitReviews',
         component: () => import('@/views/supply-chain/sales/IndexView.vue'),
         meta: {
-          title: '待复核',
+          title: '拜访申诉',
           requiresAuth: true,
           applicationCode: 'SUPPLY_CHAIN',
           pageKey: 'visit-reviews',
-          permission: 'sales:visit:review',
+          permission: 'crm:store:visit-review',
         },
       },
       {
@@ -716,11 +716,11 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: 'SupplySalesExceptionReviews',
         component: () => import('@/views/supply-chain/sales/IndexView.vue'),
         meta: {
-          title: '主管复核',
+          title: '拜访申诉',
           requiresAuth: true,
           applicationCode: 'SUPPLY_CHAIN',
           pageKey: 'exceptions-reviews',
-          permission: 'sales:visit:review',
+          permission: 'crm:store:visit-review',
         },
       },
       {

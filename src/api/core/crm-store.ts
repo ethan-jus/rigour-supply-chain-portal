@@ -265,6 +265,11 @@ export const crmStoreApi = {
       ...options,
       params: { view },
     }),
+  invalidateVisit: (store: string, visit: StoreVisit, reason: string) =>
+    apiClient.post<StoreVisit>(
+      `${base}/${encodeURIComponent(store)}/visits/${encodeURIComponent(visit.id)}/invalidate`,
+      { revision: visit.revision, reason }, options,
+    ),
   reviewVisit: (store: string, visit: StoreVisit, decision: string, reason: string) =>
     apiClient.post<StoreVisit>(
       `${base}/${encodeURIComponent(store)}/visits/${encodeURIComponent(visit.id)}/review`,
@@ -363,5 +368,4 @@ export const crmStoreApi = {
     ),
   coverage: (params: StoreQuery) =>
     apiClient.get<StoreCoverage>(`${base}/coverage`, { ...options, params }),
-  initializePolicy: () => apiClient.post<void>(`${base}/policy/initialize`, {}, options),
 }

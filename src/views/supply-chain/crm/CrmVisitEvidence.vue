@@ -3,7 +3,7 @@
     >查看采集证据</el-button
   >
   <el-dialog v-model="open" title="拜访采集证据" width="640px" append-to-body @closed="clear">
-    <p>照片、录音来自销售工作台原始采集记录，核验结论在 CRM 中处理。</p>
+
     <p v-if="loading">正在读取证据…</p>
     <p v-if="error" role="alert">{{ error }}</p>
     <section v-if="canPhoto && photos">
@@ -38,12 +38,15 @@
           >读取录音</el-button
         >
         <audio v-else :src="urls[clip.clipId]" controls preload="metadata" />
+        <div v-for="line in analysis?.clips.find(item=>item.clipId===clip.clipId)?.segments||[]" :key="`${line.startMs}-${line.endMs}`" class="transcript-line"><time>{{ audioClock(line.startMs) }}</time><strong v-if="line.speakerId!=null">{{ recordingSpeaker(line.speakerId,analysis?.speakers||[]) }}：</strong><span>{{ line.text }}</span></div>
       </div>
     </section>
   </el-dialog>
 </template>
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { visitAnalysis,audioClock,recordingSpeaker,type VisitAnalysis } from '@/api/core/sales-fieldwork-review'
 import { apiClient } from '@/api/core/client'
 const props = defineProps<{ captureId: string; permissions: string[] }>()
 interface Photos {
@@ -64,6 +67,7 @@ const allowed = (permission: string) =>
   props.permissions.includes(permission) || props.permissions.includes('*:*:*')
 const canPhoto = computed(() => allowed('sales:evidence:sensitive:read'))
 const canAudio = computed(() => allowed('sales:recording:sensitive:play'))
+const analysis=ref<VisitAnalysis|null>(null),auth=useAuthStore()
 const open = ref(false),
   loading = ref(false),
   loadingMedia = ref(''),
@@ -79,6 +83,7 @@ function clear() {
   generation++
   Object.values(urls.value).forEach((url) => URL.revokeObjectURL(url))
   urls.value = {}
+  analysis.value = null
   photos.value = null
   recordings.value = null
   loadingMedia.value = ''
@@ -103,6 +108,7 @@ async function openEvidence() {
         if (current === generation) recordings.value = v
       }),
     )
+  if(canAudio.value) jobs.push(visitAnalysis(props.captureId).then(value=>{if(current===generation)analysis.value=value}))
   const results = await Promise.allSettled(jobs)
   if (current !== generation) return
   error.value = results
@@ -129,9 +135,12 @@ async function loadMedia(id: string, kind: 'photo' | 'audio') {
     if (current === generation) loadingMedia.value = ''
   }
 }
+watch(()=>JSON.stringify([props.captureId,auth.user?.tenantId,auth.user?.id,props.permissions]),()=>{open.value=false;clear()})
 onBeforeUnmount(clear)
 </script>
 <style scoped>
+.transcript-line {display:flex;gap:8px;line-height:1.7;padding:8px 0;}
+.transcript-line time {color:var(--el-text-color-secondary);flex-shrink:0;}
 .evidence-item {
   margin: 12px 0;
   padding: 12px;

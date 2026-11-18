@@ -13,6 +13,7 @@ import {
   type StoreRow,
   type StoreMapResult,
   type StoreLead,
+  type StoreVisit,
 } from '@/api/core/crm-store'
 import { loadStoreMapSdk, storeMapPositions, type StoreMapSdk } from '@/utils/crm-store-map'
 import { sampleStore, sampleStores, storeContext } from './fixtures/crm-stores'
@@ -34,6 +35,7 @@ vi.mock('@/api/core/crm-store', () => ({
     detail: vi.fn(),
     visits: vi.fn(),
     reviewVisit: vi.fn(),
+    invalidateVisit: vi.fn(),
     release: vi.fn(),
   },
 }))
@@ -266,7 +268,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     expect(document.body.textContent).not.toContain('认领到我的客户')
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('基本资料')
   })
-  it('我的客户只保留跟进和释放，释放要求原因并提示本人48小时冷却', async () => {
+  it('我的客户只保留跟进和释放，释放要求原因并提示原归属规则冷却', async () => {
     const row = { ...sampleStore, poolType: 'PRIVATE', ownerEmployeeId: storeContext.employeeId }
     vi.mocked(crmStoreApi.context).mockResolvedValue({
       ...storeContext,
@@ -288,7 +290,7 @@ describe('门店列表、详情和地图的真实组件交互', () => {
       await wrapper!.find('.row-actions').findAll('button')[1].trigger('click')
       await flushPromises()
       expect(prompt).toHaveBeenCalledWith(
-        expect.stringContaining('本人48小时'),
+        expect.stringContaining('按认领时规则进入冷却期'),
         '释放到公海',
         expect.objectContaining({
           confirmButtonText: '确认释放',
@@ -948,6 +950,33 @@ describe('门店列表、详情和地图的真实组件交互', () => {
     expect(document.body.textContent).toContain('复访 · 第 2 次')
     expect(document.body.textContent).toContain('PREVIOUS')
     expect(document.body.textContent).not.toContain('撤销有效性')
+  })
+  it('有风控权限才能标记有效拜访无效，原因必填且提交期间防止重复', async () => {
+    vi.mocked(crmStoreApi.context).mockResolvedValue({ ...storeContext, permissions: [...storeContext.permissions, 'crm:store:history-read', 'crm:store:visit-review'] })
+    const visit: StoreVisit = { id: '51', storeId: sampleStore.id, ownershipId: '299', salespersonId: 'TEST-1', status: 'EFFECTIVE', visitedAt: '2026-11-17T00:00:00Z', submittedAt: '2026-11-17T00:20:00Z', qualifiedAt: '2026-11-17T00:00:00Z', resultSummary: '正常拜访', reviewReason: 'AUTO_EVIDENCE_COMPLETE', revision: 4, storeVisitNo: 1, employeeVisitNo: 1, ownershipVisitNo: 1, visitType: 'INITIAL' }
+    vi.mocked(crmStoreApi.visits).mockResolvedValue([visit])
+    const page = await mountPage()
+    await page.get('.store-name').trigger('click'); await flushPromises()
+    document.body.querySelector<HTMLElement>('#tab-visits')!.click(); await flushPromises()
+    const trigger = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(x => x.textContent?.trim() === '标记无效')!
+    expect(trigger).toBeTruthy(); expect(document.body.textContent).toContain('客观条件已满足')
+    trigger.click(); await flushPromises()
+    const confirm = () => document.body.querySelector<HTMLButtonElement>('.el-message-box__btns .el-button--primary')!
+    confirm().click(); await flushPromises()
+    expect(crmStoreApi.invalidateVisit).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('请填写1000字以内的无效原因')
+    const textarea = document.body.querySelector<HTMLTextAreaElement>('.el-message-box textarea')!
+    textarea.value = '核对现场证据不实'; textarea.dispatchEvent(new Event('input', { bubbles: true })); await flushPromises()
+    let finish!: (value: StoreVisit) => void
+    vi.mocked(crmStoreApi.invalidateVisit).mockReturnValue(new Promise(resolve => { finish = resolve }))
+    confirm().click(); await flushPromises(); confirm().click(); await flushPromises()
+    expect(crmStoreApi.invalidateVisit).toHaveBeenCalledExactlyOnceWith(sampleStore.id, visit, '核对现场证据不实')
+    vi.mocked(crmStoreApi.visits).mockResolvedValue([{ ...visit, status: 'INVALID', reviewReason: '核对现场证据不实', revision: 5 }])
+    finish({ ...visit, status: 'INVALID', revision: 5 }); await flushPromises()
+    expect(document.body.textContent).toContain('核对现场证据不实')
+    expect([...document.body.querySelectorAll('.el-timeline button')].filter(x => x.textContent?.trim() === '标记无效')).toHaveLength(0)
+    expect(crmStoreApi.visits).toHaveBeenCalledTimes(2)
+    ElMessageBox.close()
   })
   it('定位在页面内切到地图并聚焦原始自有坐标；切回列表保留筛选和数据', async () => {
     const page = await mountPage()

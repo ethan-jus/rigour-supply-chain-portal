@@ -27,6 +27,7 @@
         >
       </div>
       <div class="heading-actions">
+        <el-button v-if="view === 'MINE' || (view === 'ALL' && can('crm:store:manage'))" @click="wecomOpen = true">企微私域</el-button>
         <el-radio-group
           v-if="view === 'MINE' && can('crm:pool:team-read')"
           v-model="team"
@@ -43,8 +44,8 @@
             ><el-icon><MapLocation /></el-icon>地图</el-radio-button
           >
         </el-radio-group>
-        <el-button v-if="view === 'ALL' && can('crm:store:manage')" @click="initializePolicy"
-          >启用认领规则</el-button
+        <el-button v-if="view === 'ALL' && can('crm:store:manage')" @click="poolPolicyOpen = true"
+          >客户保护规则</el-button
         >
         <el-button
           v-if="['PUBLIC', 'ALL'].includes(view) && can('crm:lead:create')"
@@ -951,34 +952,13 @@
                 <p>员工 {{ item.salespersonId }} · {{ visitLabels[item.status] ?? item.status }}</p>
                 <p>{{ item.resultSummary || '尚未提交拜访结果' }}</p>
                 <p v-if="item.reviewReason">核验依据：{{ visitReviewReason(item.reviewReason) }}</p>
+                <el-button v-if="item.status === 'EFFECTIVE' && can('crm:store:visit-review')" link type="danger" :disabled="invalidatingVisit !== ''" @click="invalidateVisit(item)">标记无效</el-button>
                 <CrmVisitEvidence
                   v-if="item.captureRef"
                   :capture-id="item.captureRef"
                   :permissions="context?.permissions ?? []"
                 />
-                <template v-if="can('crm:store:visit-review')">
-                  <el-button
-                    v-if="item.status === 'SUBMITTED'"
-                    link
-                    type="primary"
-                    @click="reviewVisit(item, 'EFFECTIVE')"
-                    >确认有效</el-button
-                  >
-                  <el-button
-                    v-if="item.status === 'SUBMITTED'"
-                    link
-                    type="danger"
-                    @click="reviewVisit(item, 'INVALID')"
-                    >判定无效</el-button
-                  >
-                  <el-button
-                    v-if="item.status === 'EFFECTIVE'"
-                    link
-                    type="danger"
-                    @click="reviewVisit(item, 'VOID')"
-                    >撤销有效性</el-button
-                  >
-                </template>
+
               </el-timeline-item>
             </el-timeline>
             <el-empty v-if="!storeVisits.length" description="暂无拜访记录" />
@@ -1087,9 +1067,12 @@
       @saved="onStoreSaved"
     />
   </section>
+  <el-dialog v-model="wecomOpen" :title="view === 'MINE' ? '我的企微客户' : '企微私域概览'" width="1000px" destroy-on-close><CrmWecomOverview :view="view === 'MINE' ? 'MINE' : 'ALL'" /></el-dialog>
+  <el-dialog v-model="poolPolicyOpen" title="客户保护规则" width="900px" destroy-on-close :close-on-click-modal="false"><CrmPoolPolicyEditor /></el-dialog>
 </template>
 
 <script setup lang="ts">
+import CrmPoolPolicyEditor from './CrmPoolPolicyEditor.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -1108,6 +1091,7 @@ import CrmStoreMap from './CrmStoreMap.vue'
 import CrmVisitEvidence from './CrmVisitEvidence.vue'
 import CrmStoreEditor from './CrmStoreEditor.vue'
 import CrmStoreContacts from './CrmStoreContacts.vue'
+import CrmWecomOverview from './CrmWecomOverview.vue'
 import type { ContactView } from '@/api/core/crm-store-contacts'
 import CrmStoreIntake from './CrmStoreIntake.vue'
 import CrmStoreStatusEditor from './CrmStoreStatusEditor.vue'
@@ -1320,6 +1304,7 @@ const eventLabels: Record<string, string> = {
   VISIT_EFFECTIVE: '拜访有效',
   VISIT_INVALID: '拜访无效',
   VISIT_VOID: '撤销拜访有效性',
+  VISIT_INVALIDATED: '风控标记拜访无效',
   SUBMITTED: '提交门店',
   APPROVED: '审核通过',
   REJECTED: '审核驳回',
@@ -1331,12 +1316,14 @@ const holdLabels: Record<string, string> = {
 }
 function visitReviewReason(reason: string) {
   const labels: Record<string, string> = {
+    AUTO_EVIDENCE_COMPLETE: '客观条件已满足',
+    RECORDING_PENDING: '录音上传核验中',
     VISIT_TIME_INVALID: '到店、离店时间异常',
     RESULT_MISSING: '待提交拜访结果',
     CONTACT_NOT_CONFIRMED: '未确认接触负责人',
     DWELL_TOO_SHORT: '停留时长不足',
     STOREFRONT_PHOTO_MISSING: '缺少有效门头照',
-    RECORDING_UNVERIFIED: '录音待核验',
+    RECORDING_UNVERIFIED: '录音未通过技术校验',
     RECORDING_TOO_SHORT: '录音时长不足',
     AI_PENDING: '智能核验处理中',
     AI_REVIEW_REQUIRED: '智能核验发现异常',
@@ -1360,12 +1347,14 @@ const acquireLabels: Record<string, string> = {
   TRANSFER: '转移',
   INITIALIZATION: '初始化',
 }
+const poolPolicyOpen = ref(false)
+const wecomOpen = ref(false)
 const endReasonLabels: Record<string, string> = {
   VOLUNTARY_RETURN: '主动释放',
   STORE_CLOSED: '门店停业结束归属',
-  FIRST_VISIT_TIMEOUT: '24小时未首访或成交',
-  FOLLOWUP_TIMEOUT: '7天未复访或成交',
-  COOPERATION_TIMEOUT: '60天未拜访或复购',
+  FIRST_VISIT_TIMEOUT: '首访或成交超期',
+  FOLLOWUP_TIMEOUT: '跟进或成交超期',
+  COOPERATION_TIMEOUT: '合作维护超期',
 }
 const storeTypes = ref<DictItemView[]>([]),
   businessStatuses = ref<DictItemView[]>([])
@@ -1695,23 +1684,37 @@ async function loadHistory() {
     if (generation === detailGeneration) detailLoading.value = false
   }
 }
-async function reviewVisit(visit: StoreVisit, decision: string) {
-  if (!selected.value) return
+
+const invalidatingVisit = ref('')
+async function invalidateVisit(visit: StoreVisit) {
+  const row = selected.value
+  if (!row || invalidatingVisit.value || !can('crm:store:visit-review')) return
+  invalidatingVisit.value = visit.id
   try {
-    const { value } = await ElMessageBox.prompt(
-      '请填写核验依据。有效性变化会按原签到时间重算保护期。',
-      '核验拜访',
-      { inputValidator: (value) => !!value?.trim() || '请填写依据' },
-    )
-    await crmStoreApi.reviewVisit(selected.value.id, visit, decision, value)
-    selected.value = await crmStoreApi.detail(selected.value.id, effectiveView.value)
-    await loadHistory()
-    await search()
-    ElMessage.success('拜访核验已保存')
-  } catch (e) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error(message(e))
-  }
+    await ElMessageBox.prompt('该拜访将不再计入有效次数，销售可对此申诉。', '标记拜访无效', {
+      inputType: 'textarea', inputPlaceholder: '请填写无效原因',
+      confirmButtonText: '标记无效', cancelButtonText: '取消',
+      inputValidator: value => (!!value?.trim() && value.trim().length <= 1000) || '请填写1000字以内的无效原因',
+      beforeClose: async (action, instance, done) => {
+        if (instance.confirmButtonLoading) return
+        if (action !== 'confirm') { done(); return }
+        instance.confirmButtonLoading = true
+        try {
+          await crmStoreApi.invalidateVisit(row.id, visit, instance.inputValue.trim())
+          done()
+        } catch (error) { ElMessage.error(message(error)) }
+        finally { instance.confirmButtonLoading = false }
+      },
+    })
+    ElMessage.success('已标记为无效')
+    await Promise.all([loadHistory(), loadRows()])
+    const detail = await crmStoreApi.detail(row.id, effectiveView.value)
+    if (selected.value?.id === row.id) selected.value = detail
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(message(error))
+  } finally { invalidatingVisit.value = '' }
 }
+
 async function copy(value: string) {
   try {
     await navigator.clipboard.writeText(value)
@@ -1723,7 +1726,7 @@ async function copy(value: string) {
 async function release(row: StoreRow) {
   try {
     const { value } = await ElMessageBox.prompt(
-      '释放后门店进入公海，本人48小时内无法重新认领；拜访、成交和跟进历史保留。',
+      '释放后门店进入公海，原归属人按认领时规则进入冷却期；拜访、成交和跟进历史保留。',
       '释放到公海',
       {
         inputPlaceholder: '请填写释放原因',
@@ -1734,7 +1737,7 @@ async function release(row: StoreRow) {
       },
     )
     await crmStoreApi.release(row.id, row.revision, value)
-    ElMessage.success('已释放到公海，本人进入48小时认领冷却')
+    ElMessage.success('已释放到公海，本人按原规则进入认领冷却期')
     detailOpen.value = false
     await search()
   } catch (e) {
@@ -1862,18 +1865,6 @@ async function onStoreSaved() {
   editing.value = null
   if (row && detailOpen.value && selected.value?.id === row.id) await openDetail(row)
   await loadRows()
-}
-async function initializePolicy() {
-  try {
-    await ElMessageBox.confirm(
-      '启用已确认的24小时首访、7天跟进、本轮成交后60天维护及48小时冷却规则。仅用于新认领，不改变旧客户归属。',
-      '启用认领规则',
-    )
-    await crmStoreApi.initializePolicy()
-    ElMessage.success('认领规则已启用')
-  } catch (e) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error(message(e))
-  }
 }
 let activatedOnce = false
 watch(displayMode, (mode) => {

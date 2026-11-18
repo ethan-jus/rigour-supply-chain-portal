@@ -271,6 +271,20 @@ describe('ConsoleShell 工作页签', () => {
     wrapper.unmount()
   })
 
+  it('未保存表单取消离开后，关闭按钮不能移除当前页签和输入', async () => {
+    const { wrapper, router } = await mountConsole()
+    await wrapper.get('.sentinel-input').setValue('未发布规则 800 米')
+    const stop = router.beforeEach(() => false)
+    await tabByTitle(wrapper, '甲页面').get('.workspace-tab__close').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/supply-chain/alpha')
+    expect(tabByTitle(wrapper, '甲页面').exists()).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('.sentinel-input').element.value).toBe('未发布规则 800 米')
+    expect(lifecycle.unmounted.alpha).toBeUndefined()
+    stop()
+    wrapper.unmount()
+  })
+
   it('关闭页签会真正卸载缓存；关闭活动页时切到右侧相邻页，重新打开使用全新状态', async () => {
     const { wrapper, router } = await mountConsole()
     await router.push('/supply-chain/beta')

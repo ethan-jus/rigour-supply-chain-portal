@@ -1,0 +1,22 @@
+import { createRequire } from 'node:module'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import ElementPlus, { ElInputNumber } from 'element-plus'
+import Editor from '@/views/supply-chain/crm/CrmPoolPolicyEditor.vue'
+const mocks = vi.hoisted(() => ({ current: vi.fn(), history: vi.fn(), publish: vi.fn(), confirm: vi.fn(), success: vi.fn(), manage: true }))
+vi.mock('@/api/core/crm-pool-policy', () => ({ crmPoolPolicyApi: mocks }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ hasPermission: () => mocks.manage }) }))
+vi.mock('element-plus', () => ({ ...createRequire(import.meta.url)('element-plus'), ElMessage: { success: mocks.success }, ElMessageBox: { confirm: mocks.confirm } }))
+const policy = { id: '1', version: 1, firstVisitHours: 24, followupDays: 7, cooperatingDays: 60, returnCooldownHours: 48, activityDays: 60, dueSoonHours: 24, description: '已发布', publishedAt: '2026-11-17T06:00:00Z', publishedBy: 'admin' }
+let wrapper: VueWrapper
+async function start() { wrapper = mount(Editor, { attachTo: document.body, global: { plugins: [ElementPlus] } }); await flushPromises() }
+async function click(text: string) { const btn = [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === text || b.getAttribute('aria-label') === text); expect(btn).toBeTruthy(); btn!.click(); await flushPromises() }
+async function edit() { wrapper.findAllComponents(ElInputNumber)[0]!.vm.$emit('update:modelValue', 36); await wrapper.find('textarea').setValue('调整首访期限'); await flushPromises() }
+beforeEach(() => { vi.clearAllMocks(); mocks.manage = true; mocks.current.mockResolvedValue({ ...policy }); mocks.history.mockResolvedValue([{ ...policy }]); mocks.confirm.mockResolvedValue('confirm'); mocks.publish.mockResolvedValue({ ...policy, id: '2', version: 2, firstVisitHours: 36 }) })
+afterEach(() => { wrapper?.unmount(); document.body.innerHTML = '' })
+it('读取服务器值，发布差异且保留旧归属说明', async () => { await start(); expect(wrapper.findAllComponents(ElInputNumber).map(n => n.props('modelValue'))).toEqual([24,7,60,48,24,60]); await edit(); await click('查看变更并发布'); expect(document.body.textContent).toContain('24 → 36'); expect(document.body.textContent).toContain('已有私海继续沿用原规则'); await click('发布新版本'); expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ expectedVersion: 1, firstVisitHours: 36, description: '调整首访期限', requestId: expect.any(String) })); expect(wrapper.text()).toContain('生效中 v2') })
+it('缺失字段和修改说明准确拦截，不以默认值填补', async () => { mocks.current.mockResolvedValue(null); mocks.history.mockResolvedValue([]); await start(); expect(wrapper.findAllComponents(ElInputNumber).every(n => n.props('modelValue') == null)).toBe(true); wrapper.findAllComponents(ElInputNumber)[0]!.vm.$emit('update:modelValue', 36); await flushPromises(); await click('查看变更并发布'); await vi.waitFor(() => expect(wrapper.text()).toContain('未合作客户跟进保护须为')); await vi.waitFor(() => expect(wrapper.text()).toContain('请填写修改说明')); expect(mocks.publish).not.toHaveBeenCalled() })
+it('提交期间禁止重复发布，冲突后保留输入并要求重载', async () => { let reject!: (e: Error) => void; mocks.publish.mockReturnValue(new Promise((_, r) => { reject = r })); await start(); await edit(); await click('查看变更并发布'); await click('发布新版本'); await click('发布新版本'); expect(mocks.publish).toHaveBeenCalledTimes(1); reject(new Error('规则已被其他管理员更新，请重新加载后发布')); await flushPromises(); expect(document.body.textContent).toContain('重新加载后发布'); expect(wrapper.findAllComponents(ElInputNumber)[0]!.props('modelValue')).toBe(36); expect([...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === '发布新版本')!.disabled).toBe(true) })
+it('没有管理权限不能发布', async () => { mocks.manage = false; await start(); expect(wrapper.findAllComponents(ElInputNumber)[0]!.find('input').attributes('disabled')).toBeDefined(); expect(mocks.publish).not.toHaveBeenCalled() })
+
+it('重新加载还原草稿并清除旧校验提示', async () => { await start(); wrapper.findAllComponents(ElInputNumber)[0]!.vm.$emit('update:modelValue', 36); await flushPromises(); await click('查看变更并发布'); await vi.waitFor(() => expect(wrapper.text()).toContain('请填写修改说明')); await click('重新加载'); expect(wrapper.findAllComponents(ElInputNumber)[0]!.props('modelValue')).toBe(24); expect(wrapper.text()).not.toContain('请填写修改说明'); expect(mocks.publish).not.toHaveBeenCalled() })

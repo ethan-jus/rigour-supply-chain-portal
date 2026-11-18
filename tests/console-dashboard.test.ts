@@ -294,6 +294,54 @@ describe('供应链工作台', () => {
     await flushPromises()
     expect(sidebar.classes()).toContain('is-collapsed')
   })
+  it('悬停其他模块只预览菜单，移开收起后仍选中当前页面所属模块', async () => {
+    const sales = node('supply.sales.menu', '销售管理', null, [
+      node('supply.sales.dashboard', '销售管控台', '/supply-chain/sales'),
+    ])
+    const hr = node('supply.hr.menu', '人事管理', null, [
+      node('supply.hr.employees', '员工档案', '/supply-chain/hr/employees'),
+    ])
+    const nodes = [home, sales, hr]
+    const { global, router } = await render(nodes)
+    await router.push('/supply-chain/sales')
+    const sidebar = mount(ConsoleSidebar, { props: { nodes }, global })
+    wrappers.push(sidebar)
+    const salesButton = sidebar.get('button[aria-label="销售管理"]')
+    const hrButton = sidebar.get('button[aria-label="人事管理"]')
+
+    await hrButton.trigger('mouseenter')
+    expect(sidebar.get('.secondary-nav').text()).toContain('员工档案')
+    expect(hrButton.attributes('aria-expanded')).toBe('true')
+    expect(hrButton.attributes('aria-pressed')).toBe('false')
+    expect(salesButton.classes()).toContain('is-active')
+    await sidebar.trigger('mouseleave')
+    await vi.waitFor(() => expect(sidebar.classes()).toContain('is-collapsed'))
+    expect(hrButton.classes()).not.toContain('is-active')
+    expect(salesButton.attributes('aria-pressed')).toBe('true')
+    await sidebar.get('button[aria-label="展开二级菜单"]').trigger('click')
+    expect(sidebar.get('.secondary-nav').text()).toContain('销售管控台')
+    expect(router.currentRoute.value.path).toBe('/supply-chain/sales')
+  })
+  it.each(['auto', 'pinned'] as const)('%s 模式浏览其他菜单不改变当前高亮，实际切换页面才更新', async (mode) => {
+    const nodes = [home, node('supply.order.menu', '订单管理', null, [order, payments])]
+    const { global, workspace, router } = await render(nodes)
+    workspace.setNavigationMode(mode)
+    const sidebar = mount(ConsoleSidebar, { props: { nodes }, global })
+    wrappers.push(sidebar)
+    const orderButton = sidebar.get('button[aria-label="订单管理"]')
+    await orderButton.trigger('focus')
+    await orderButton.trigger('click')
+    expect(orderButton.attributes('aria-expanded')).toBe('true')
+    expect(orderButton.classes()).not.toContain('is-active')
+    expect(sidebar.findAll('.module-link.is-active')).toHaveLength(1)
+    await sidebar.trigger('keydown', { key: 'Escape' })
+    expect(orderButton.classes()).not.toContain('is-active')
+    await router.push(order.routePath!)
+    await flushPromises()
+    expect(orderButton.classes()).toContain('is-active')
+    expect(orderButton.attributes('aria-pressed')).toBe('true')
+    expect(sidebar.findAll('.module-link.is-active')).toHaveLength(1)
+  })
   it('窗口缩窄时折叠侧栏且卸载时移除监听', async () => {
     const media = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }
     vi.stubGlobal(

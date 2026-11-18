@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   remove: vi.fn(),
 }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: { customerCode: '34385' } }) }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: { customerCode: '34385' } }),
+  useRouter: () => ({ push: vi.fn() }),
+}))
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => true }),
 }))
@@ -190,7 +193,9 @@ it.each(['新增客户', '编辑'])('%s 的必填项缺失时不发送保存请�
     ]),
   )
   if (action === '新增客户') expect(editor.props('model').statusCode).toBe('ACTIVE')
-  const dialog = w.findComponent({ name: 'ElDialog' })
+  const dialog = w
+    .findAllComponents({ name: 'ElDialog' })
+    .find((component) => component.props('title') === (action === '编辑' ? '编辑客户' : '新增客户'))!
   await dialog
     .findAll('button')
     .find((b) => b.text() === '保存')!
