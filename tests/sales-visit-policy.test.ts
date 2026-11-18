@@ -194,3 +194,20 @@ describe('规则差异与复制', () => {
     expect(policyChanges(fixture.name, original, fixture.name, copy)).toEqual([expect.objectContaining({ key: 'checkout', previous: '开启', value: '关闭' }), expect.objectContaining({ key: 'departureRadius', previous: '1000 米', value: '未启用' })])
   })
 })
+
+it('首次配置通过相同发布接口创建 v1，并展示完整规则供核对', async () => {
+  mocks.list.mockResolvedValue([])
+  mocks.publish.mockResolvedValue({ policyId: 'p', policyVersionId: 'v1', policyCode: 'VISIT-DEFAULT', versionNo: 1, publishStatus: 'PUBLISHED', effectiveFrom: '2026-11-18T08:00:00Z' })
+  await start(); await button('创建首个拜访规则'); await editRadius(800)
+  const departure = wrapper.findAllComponents(ElInputNumber).find(item => item.find('input').attributes('aria-label') === '自动离店距离')!
+  departure.vm.$emit('update:modelValue', 800); await flushPromises()
+  await openReview(1)
+  expect(document.querySelector('.change-list')?.textContent).toContain('未配置')
+  await button('发布新版本')
+  expect(mocks.publish).toHaveBeenCalledWith(0, 'VISIT-DEFAULT', '默认拜访规则', expect.objectContaining({ radiusMeters: 800, minimumRecordingSeconds: 600 }), 'ALL', null)
+  expect(wrapper.text()).toContain('生效中 v1')
+})
+it('空环境中只读账号不能创建规则', async () => {
+  mocks.list.mockResolvedValue([]); mocks.writable = false
+  await start(); expect(wrapper.text()).not.toContain('创建首个拜访规则')
+})

@@ -2,16 +2,16 @@
   <div class="visit-policy" v-loading="loading">
     <header class="policy-heading">
       <div class="heading-line">
-        <div class="title-group"><h1>拜访规则</h1><el-radio-group v-model="ruleArea" class="rule-area-tabs" aria-label="规则类别"><el-radio-button value="visit">拜访采集</el-radio-button><el-radio-button value="field">签到与轨迹</el-radio-button><el-radio-button v-if="auth.hasPermission('crm:store:manage')" value="pool">客户保护与回收</el-radio-button></el-radio-group><span v-if="loaded && ruleArea === 'visit'" class="published">{{ baseline?.publishStatus === 'PUBLISHED' ? '生效中' : '草稿' }} v{{ version }}</span></div>
+        <div class="title-group"><h1>拜访规则</h1><el-radio-group v-model="ruleArea" class="rule-area-tabs" aria-label="规则类别"><el-radio-button value="visit">拜访采集</el-radio-button><el-radio-button value="field">签到与轨迹</el-radio-button><el-radio-button v-if="auth.hasPermission('crm:store:manage')" value="pool">客户保护与回收</el-radio-button></el-radio-group><span v-if="loaded && ruleArea === 'visit'" class="published">{{ baseline ? (baseline.publishStatus === 'PUBLISHED' ? '生效中 v' + version : '草稿 v' + version) : '待发布' }}</span></div>
         <div v-if="ruleArea === 'visit'" class="heading-actions">
-          <el-button :icon="activeTab === 'settings' ? Clock : Back" :disabled="!loaded" @click="activeTab = activeTab === 'settings' ? 'history' : 'settings'">{{ activeTab === 'settings' ? '发布记录' : '返回规则' }}</el-button>
+          <el-button :icon="activeTab === 'settings' ? Clock : Back" :disabled="!baseline" @click="activeTab = activeTab === 'settings' ? 'history' : 'settings'">{{ activeTab === 'settings' ? '发布记录' : '返回规则' }}</el-button>
           <el-button :icon="Refresh" :disabled="saving || loading" aria-label="重新加载" title="重新加载" @click="reload" />
         </div>
       </div>
       <div v-if="loaded && ruleArea === 'visit'" class="policy-identity">
-        <div class="rule-choice"><label for="visit-policy-choice">当前规则</label><el-select id="visit-policy-choice" :model-value="policyCode" :disabled="saving || loading" aria-label="当前规则" @change="changePolicy"><el-option v-for="item in policyChoices" :key="item.policyCode" :value="item.policyCode" :label="item.policyCode === policyCode ? model.name : item.name" /></el-select><el-button text :icon="Edit" :disabled="!canPublish || saving || loading" aria-label="编辑规则名称" title="编辑规则名称" @click="openRename" /></div>
+        <div class="rule-choice"><label for="visit-policy-choice">当前规则</label><span v-if="!baseline">{{ model.name }}</span><el-select v-else id="visit-policy-choice" :model-value="policyCode" :disabled="saving || loading" aria-label="当前规则" @change="changePolicy"><el-option v-for="item in policyChoices" :key="item.policyCode" :value="item.policyCode" :label="item.policyCode === policyCode ? model.name : item.name" /></el-select><el-button text :icon="Edit" :disabled="!canPublish || saving || loading" aria-label="编辑规则名称" title="编辑规则名称" @click="openRename" /></div>
         <span class="policy-scope"><el-icon><User /></el-icon>{{ scopeLabel }}<small v-if="scopeId">（{{ scopeId }}）</small></span>
-        <span class="policy-updated">最近发布 {{ formatTime(baseline?.createdAt) }}</span>
+        <span v-if="baseline" class="policy-updated">最近发布 {{ formatTime(baseline?.createdAt) }}</span>
       </div>
     </header>
     <div ref="scrollArea" class="policy-scroll">
@@ -19,7 +19,7 @@
       <template v-if="ruleArea === 'visit'">
       <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
       <el-alert v-if="notice" :title="notice" type="info" :closable="false" show-icon />
-      <el-empty v-if="!loaded && !loading" description="暂无可编辑规则，请重新加载或联系管理员配置规则。" />
+      <el-empty v-if="!loaded && !loading && !loadError" description="暂无拜访规则"><el-button v-if="canPublish" type="primary" @click="createPolicy">创建首个拜访规则</el-button></el-empty>
       <template v-if="loaded">
         <el-form v-show="activeTab === 'settings'" ref="formRef" class="policy-editor" :model="model" :rules="rules" label-position="top" hide-required-asterisk :disabled="!canPublish || saving || loading" scroll-to-error :scroll-into-view-options="{ block: 'center' }" @submit.prevent="review">
           <div class="rule-stack">
@@ -115,6 +115,7 @@ const history = ref<VisitPolicyVersion[]>([]), baseline = ref<VisitPolicyVersion
 const activeTab = ref('settings'), reviewOpen = ref(false), formRef = ref<FormInstance>(), scrollArea = ref<HTMLElement>()
 const renameOpen = ref(false), nameDraft = ref(''), nameError = ref('')
 const form = reactive<VisitPolicy>({ id: '', radiusMeters: 500, minimumDwellMinutes: 10, requiredPhotoCount: 1, recordingEnabled: true, minimumRecordingSeconds: 600, maximumClipGapSeconds: 30, aiAsrEnabled: true, aiRelevanceEnabled: true, aiDuplicateEnabled: true, aiAutoConfirmThreshold: null, captureRules: { requireLocationOnOpen: false, maximumLocationAccuracyMeters: 100, automaticRecording: true, allowPhotoImport: false, allowRecordingImport: false, automaticCheckout: true, automaticCheckoutRadiusMeters: 500 } })
+const initialPolicy = copyVisitPolicy(form)
 const minimumRecordingMinutes = computed({
   get: () => Number.isFinite(form.minimumRecordingSeconds) ? form.minimumRecordingSeconds / 60 : undefined,
   set: (minutes: number | undefined) => { form.minimumRecordingSeconds = minutes == null ? Number.NaN : Math.round(minutes * 60) },
@@ -127,7 +128,7 @@ const policyChoices = computed(() => {
   return [...latest.values()]
 })
 const selectedHistory = computed(() => history.value.filter(row => row.policyCode === policyCode.value).sort((a, b) => b.versionNo - a.versionNo))
-const changes = computed(() => baseline.value ? policyChanges(baseline.value.name, baseline.value.policy, model.name, form) : [])
+const changes = computed(() => baseline.value ? policyChanges(baseline.value.name, baseline.value.policy, model.name, form) : loaded.value ? policyFields(model.name, form).map(field => ({ ...field, previous: '未配置' })) : [])
 const dirty = computed(() => changes.value.length > 0)
 const numberRule = (min: number, max: number, required = true, integer = true) => ({ type: integer ? 'integer' as const : 'number' as const, required, min, max, message: `${required ? '请填写' : '请填写有效数值或留空：'}${min}–${max}${integer ? ' 的整数' : ' 之间的数值'}`, trigger: ['blur', 'change'] })
 const rules: FormRules = {
@@ -156,6 +157,12 @@ function selectPolicy(row: VisitPolicyVersion, preserveInput = false) {
   loaded.value = true; error.value = ''; needsRecheck.value = false; reviewOpen.value = false
   formRef.value?.clearValidate()
 }
+function createPolicy() {
+  if (!canPublish.value || loading.value || history.value.length || loadError.value) return
+  model.name = '默认拜访规则'; Object.assign(form, copyVisitPolicy(initialPolicy))
+  baseline.value = null; version.value = 0; policyCode.value = 'VISIT-DEFAULT'; scopeType.value = 'ALL'; scopeId.value = null
+  loaded.value = true; error.value = ''; needsRecheck.value = false
+}
 async function load(preserveInput = false) {
   if (loading.value) return
   loading.value = true; loadError.value = ''
@@ -163,7 +170,7 @@ async function load(preserveInput = false) {
     history.value = await salesVisitPolicyApi.list()
     const selected = policyChoices.value.find(row => row.policyCode === policyCode.value) ?? (!loaded.value ? policyChoices.value[0] : undefined)
     if (selected) { selectPolicy(selected, preserveInput); if (preserveInput) notice.value = `已取得最新版本 v${selected.versionNo}，你的输入已保留，请逐项核对后再发布。` }
-    else { loadError.value = '未找到所选规则，当前输入已保留，请联系管理员核对。'; needsRecheck.value = loaded.value }
+    else if (history.value.length || loaded.value) { loadError.value = '未找到所选规则，当前输入已保留，请联系管理员核对。'; needsRecheck.value = loaded.value }
   } catch (e) { loadError.value = e instanceof Error ? e.message : '读取拜访规则失败，请重新加载。' }
   finally { loading.value = false }
 }
@@ -176,7 +183,7 @@ async function allowDiscard(action: string) {
 async function reload() { if (await allowDiscard('重新加载')) { notice.value = ''; await load() } }
 async function recheck() { notice.value = ''; await load(true) }
 async function changePolicy(code: string) { if (code !== policyCode.value && await allowDiscard('切换规则')) { const row = policyChoices.value.find(item => item.policyCode === code); if (row) { selectPolicy(row); notice.value = '' } } }
-async function reset() { if (await allowDiscard('还原') && baseline.value) { selectPolicy(baseline.value); notice.value = '' } }
+async function reset() { if (await allowDiscard('还原')) { if (baseline.value) selectPolicy(baseline.value); else createPolicy(); notice.value = '' } }
 async function review() {
   if (!loaded.value || !dirty.value || !canPublish.value || saving.value || loading.value || needsRecheck.value) return
   if (!model.name.trim()) { openRename(); nameError.value = '请填写规则名称'; return }
