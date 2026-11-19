@@ -28,6 +28,7 @@ const api = vi.hoisted(() => ({
   dictionaries: vi.fn(),
   getVoucher: vi.fn(),
   getEvidenceContent: vi.fn(),
+  employees: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -51,7 +52,7 @@ vi.mock('@/api/core/huolala', () => ({
 vi.mock('@/api/core/cost', () => ({
   changeCostStatus: vi.fn(),
   getCostCities: vi.fn(),
-  getCostEmployees: vi.fn().mockResolvedValue([]),
+  getCostEmployees: api.employees,
   getCostAttachments: vi.fn().mockResolvedValue([]),
   getCostAttachmentUrl: vi.fn(),
   getTransportPdfContent: vi.fn(),
@@ -147,6 +148,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.dictionaries.mockResolvedValue(undefined)
   api.workbook.mockResolvedValue(undefined)
+  api.employees.mockResolvedValue([])
   api.list.mockResolvedValue({
     page: { total: 1, begin: 0, step: 20, items: [record()] },
     platformRecords: { C1: platform() },
@@ -272,6 +274,65 @@ describe('统一运输记录 V2.6', () => {
     } finally {
       finishDictionaries?.()
     }
+  })
+
+  it('列表默认列出实际下单人和所属部门，在运输类型后显示关联业务单号', async () => {
+    const current = platform()
+    current.source.order.facts!.sourceDepartmentName = '货拉拉平台部门'
+    current.source.order.facts!.mappedEmployeeCode = 'EMP1'
+    current.source.order.facts!.mappedDepartmentName = '本系统运营部'
+    const legacy = platform()
+    legacy.source.order.facts = null
+    legacy.source.order.raw['下单人(员工)'] = '旧单下单人'
+    const manual = { ...record(), id: 'MANUAL' }
+    const sale = { orderTypeCode: 'SALES_ORDER', linkRoleCode: 'COST', allocations: [] } as const
+    manual.data.ledger!.sources = [
+      { ...sale, allocations: [], orderCode: 'XS001', employeeName: '销售人员', departmentName: '销售部门' },
+      { ...sale, allocations: [], orderCode: 'XS002', employeeName: '第二位业务员', departmentName: '销售部门' },
+      { ...sale, allocations: [], orderCode: 'XS001' },
+    ]
+    const dhb = { ...record(), id: 'DHB' }
+    dhb.data.ledger!.sources = [
+      { ...sale, allocations: [], orderCode: 'DHB-S1', employeeName: '订货宝业务员', departmentName: '直营部' },
+    ]
+    api.list.mockResolvedValue({
+      page: {
+        total: 4,
+        begin: 0,
+        step: 20,
+        items: [record(), { ...record(), id: 'LEGACY' }, manual, dhb],
+      },
+      platformRecords: { C1: current, LEGACY: legacy },
+    } satisfies TransportPage)
+    wrapper = mount(View, {
+      global: { plugins: [ElementPlus], stubs: { TransportRecordEditor: true } },
+    })
+    await flushPromises()
+    const headers = wrapper.findAll('.el-table__header th').map((header) => header.text())
+    const column = (name: string) => headers.indexOf(name)
+    expect(column('下单人')).toBe(column('下单／发货时间') + 1)
+    expect(column('下单人所属部门')).toBe(column('下单人') + 1)
+    expect(column('业务单号')).toBe(column('运输类型') + 1)
+    expect(column('订单关联状态')).toBe(column('业务单号') + 1)
+    const rows = wrapper.findAll('.el-table__body tr.el-table__row')
+    const cell = (row: number, name: string) => rows[row]!.findAll('td')[column(name)]!
+    expect(cell(0, '下单人').text()).toBe('王先生')
+    expect(cell(0, '下单人所属部门').text()).toBe('本系统运营部')
+    expect(cell(0, '业务单号').text()).toBe('-')
+    expect(cell(0, '订单关联状态').text()).toBe('未关联')
+    expect(cell(1, '下单人').text()).toBe('旧单下单人')
+    expect(cell(1, '下单人所属部门').text()).toBe('-')
+    expect(cell(2, '下单人').text()).toBe('销售人员、第二位业务员')
+    expect(cell(2, '下单人所属部门').text()).toBe('销售部门')
+    expect(cell(2, '业务单号').findAll('.table-line').map((line) => line.text())).toEqual([
+      'XS001',
+      'XS002',
+    ])
+    expect(cell(3, '下单人').text()).toBe('订货宝业务员')
+    expect(cell(3, '下单人所属部门').text()).toBe('直营部')
+    expect(cell(3, '业务单号').text()).toBe('DHB-S1')
+    expect(cell(2, '订单关联状态').text()).toBe('已关联')
+    expect(cell(3, '订单关联状态').text()).toBe('已关联')
   })
 
   it('平台账单仅展示金额和费用，凭证资料由统一凭证区域展示', async () => {
@@ -432,26 +493,49 @@ describe('统一运输记录 V2.6', () => {
     expect(scroller.scrollTop).toBe(0)
     expect(scroller.scrollLeft).toBe(120)
   })
-  it('切换手工来源后不展示或提交货拉拉专属筛选，联系电话仍可查询', async () => {
+  it('按系统员工、部门和订单关联状态筛选，隐藏员工关联和联系电话筛选', async () => {
+    api.employees.mockResolvedValue([
+      { employeeCode: 'EMP1', employeeName: '同名员工', departmentName: '销售部' },
+      { employeeCode: 'EMP2', employeeName: '同名员工', departmentName: '销售部' },
+      { employeeCode: 'EMP3', employeeName: '其他员工', departmentName: '客服部' },
+    ])
     wrapper = mount(View, {
       global: { plugins: [ElementPlus], stubs: { TransportRecordEditor: true } },
     })
     await flushPromises()
-    await wrapper.get('input[aria-label="下单员工"]').setValue('下单员工')
+    await wrapper.get('input[aria-label="业务单号"]').setValue('XS001')
+    const employee = wrapper.findAllComponents({ name: 'ElSelectV2' })
+      .find((c) => c.props('placeholder') === '下单人')!
+    const department = wrapper.findAllComponents({ name: 'ElSelectV2' })
+      .find((c) => c.props('placeholder') === '下单人所属部门')!
+    expect(employee.props('options')).toEqual([
+      { label: '同名员工 · 销售部 · EMP1', value: 'EMP1' },
+      { label: '同名员工 · 销售部 · EMP2', value: 'EMP2' },
+      { label: '其他员工 · 客服部', value: 'EMP3' },
+    ])
+    expect(department.props('options')).toHaveLength(2)
+    employee.vm.$emit('update:modelValue', 'EMP2')
+    department.vm.$emit('update:modelValue', '销售部')
     const select = (placeholder: string) =>
       wrapper!
         .findAllComponents({ name: 'ElSelect' })
         .find((c) => c.props('placeholder') === placeholder)!
-    select('员工关联状态').vm.$emit('update:modelValue', 'UNLINKED')
-    select('本公司员工').vm.$emit('update:modelValue', 'EMP1')
+    expect(select('本公司员工')).toBeUndefined()
+    expect(select('员工关联状态')).toBeUndefined()
+    expect(wrapper.find('input[aria-label="联系电话"]').exists()).toBe(false)
+    select('订单关联状态').vm.$emit('update:modelValue', 'LINKED')
     select('数据来源').vm.$emit('update:modelValue', 'MANUAL_ENTRY')
     await flushPromises()
-    expect(wrapper.find('input[aria-label="下单员工"]').exists()).toBe(false)
-    expect(wrapper.find('input[aria-label="联系电话"]').exists()).toBe(true)
+    expect(employee.exists()).toBe(true)
     await wrapper.get('form[aria-label="查询条件"]').trigger('submit')
     await flushPromises()
     const query = api.list.mock.calls.at(-1)![0]
     expect(query.sourceSystem).toBe('MANUAL_ENTRY')
+    expect(query.orderPlacerEmployeeCode).toBe('EMP2')
+    expect(query.orderPlacerDepartment).toBe('销售部')
+    expect(query.businessOrderNo).toBe('XS001')
+    expect(query.relationState).toBe('LINKED')
+    expect(query.contactPhone).toBeUndefined()
     expect(query.platformEmployeeName).toBeUndefined()
     expect(query.employeeRelationState).toBeUndefined()
     expect(query.mappedEmployeeCode).toBeUndefined()
@@ -545,6 +629,12 @@ describe('统一运输记录 V2.6', () => {
     expect(wrapper.findAll('input')).toHaveLength(0)
   })
   it('货拉拉业务明细按需勾选导出，平台费用只取一次总额', async () => {
+    const p = platform()
+    p.source.order.facts!.mappedDepartmentName = '本系统运营部'
+    api.list.mockResolvedValue({
+      page: { total: 1, begin: 0, step: 20, items: [record()] },
+      platformRecords: { C1: p },
+    } satisfies TransportPage)
     wrapper = mount(View, {
       global: {
         plugins: [ElementPlus],
@@ -592,6 +682,8 @@ describe('统一运输记录 V2.6', () => {
       '武汉仓（仓储路1号） → 星河门店（沿江路18号） → 长江门店（江汉路20号）',
     )
     expect(rows[0][headers.indexOf('收货点数')]).toBe(2)
+    expect(rows[0][headers.indexOf('下单人')]).toBe('王先生')
+    expect(rows[0][headers.indexOf('下单人所属部门')]).toBe('本系统运营部')
     expect(headers).not.toContain('收货方')
   })
   it('手工物流默认只导出九项摘要，货拉拉专属字段不出现在选项或文件中', async () => {
@@ -608,8 +700,12 @@ describe('统一运输记录 V2.6', () => {
     await flushPromises()
     const dialog = wrapper.findComponent({ name: 'CostExportDialog' })
     const optionLabels = dialog.props('columns').map((c: { label: string }) => c.label)
-    expect(optionLabels).not.toEqual(expect.arrayContaining(['运输状态', '下单员工']))
-    for (const label of ['运输状态', '下单员工', '员工关联状态', '最近同步时间', '本公司员工'])
+    for (const label of [
+      '运输状态',
+      '员工关联状态',
+      '最近同步时间',
+      '本公司员工',
+    ])
       expect(optionLabels).not.toContain(label)
     expect(dialog.props('fields')).toHaveLength(9)
     await button('开始导出').trigger('click')
@@ -645,13 +741,15 @@ describe('统一运输记录 V2.6', () => {
     await startExport(true)
     let [, headers] = api.workbook.mock.calls[0]!
     expect(headers).not.toContain('运输状态')
-    expect(headers).not.toContain('下单员工')
+    expect(headers).toContain('下单人')
+    expect(headers).toContain('下单人所属部门')
     api.selected.mockResolvedValue([{ record: manual, platform: null }])
     wrapper.findComponent({ name: 'ElTable' }).vm.$emit('selection-change', [record()])
     await startExport(true)
     ;[, headers] = api.workbook.mock.calls[1]!
     expect(headers).not.toContain('运输状态')
-    expect(headers).not.toContain('下单员工')
+    expect(headers).toContain('下单人')
+    expect(headers).toContain('下单人所属部门')
   })
   it('已勾选只导出选择记录，不能回退成整批；单据状态在创建人之前', async () => {
     api.selected.mockResolvedValue([{ record: record(), platform: platform() }])

@@ -93,26 +93,36 @@
         </div>
         <div class="list-filter-field list-filter-field--text">
           <el-input
-            v-model="filters.sourceDocumentNo"
+            v-model="filters.businessOrderNo"
             clearable
-            placeholder="业务订单号"
-            aria-label="业务订单号"
+            placeholder="业务单号"
+            aria-label="业务单号"
           />
         </div>
-        <div class="list-filter-field list-filter-field--person">
-          <el-input
-            v-model="filters.sourceEmployeeName"
+        <div class="list-filter-field list-filter-field--employee">
+          <el-select-v2
+            v-model="filters.orderPlacerEmployeeCode"
             clearable
-            placeholder="业务员"
-            aria-label="业务员"
+            filterable
+            :options="employeeOptions"
+            :loading="employeeDirectoryLoading"
+            :no-data-text="employeeDirectoryError || '暂无员工'"
+            placeholder="下单人"
+            aria-label="下单人"
+            @visible-change="retryEmployeeDirectory"
           />
         </div>
-        <div class="list-filter-field list-filter-field--select">
-          <el-input
-            v-model="filters.sourceDepartmentName"
+        <div class="list-filter-field list-filter-field--employee">
+          <el-select-v2
+            v-model="filters.orderPlacerDepartment"
             clearable
-            placeholder="部门"
-            aria-label="部门"
+            filterable
+            :options="departmentOptions"
+            :loading="employeeDirectoryLoading"
+            :no-data-text="employeeDirectoryError || '暂无所属部门'"
+            placeholder="下单人所属部门"
+            aria-label="下单人所属部门"
+            @visible-change="retryEmployeeDirectory"
           />
         </div>
         <div class="list-filter-field list-filter-field--text">
@@ -121,45 +131,6 @@
             clearable
             placeholder="收货方"
             aria-label="收货方"
-          />
-        </div>
-        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--employee">
-          <el-input
-            v-model="filters.platformEmployeeName"
-            clearable
-            placeholder="下单员工"
-            aria-label="下单员工"
-          />
-        </div>
-        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--select">
-          <el-select
-            v-model="filters.employeeRelationState"
-            clearable
-            placeholder="员工关联状态"
-            aria-label="员工关联状态"
-            ><el-option label="已关联" value="LINKED" /><el-option label="未关联" value="UNLINKED"
-          /></el-select>
-        </div>
-        <div v-if="showPlatformFilters" class="list-filter-field list-filter-field--employee">
-          <el-select
-            v-model="filters.mappedEmployeeCode"
-            clearable
-            filterable
-            placeholder="本公司员工"
-            aria-label="本公司员工"
-            ><el-option
-              v-for="employee in importEmployees"
-              :key="employee.employeeCode"
-              :label="employee.employeeName"
-              :value="employee.employeeCode"
-          /></el-select>
-        </div>
-        <div class="list-filter-field list-filter-field--text">
-          <el-input
-            v-model="filters.contactPhone"
-            clearable
-            placeholder="联系电话"
-            aria-label="联系电话"
           />
         </div>
       </template>
@@ -236,8 +207,8 @@
                 :route="routeOf(row as CostRecord, platformOf(row as CostRecord))"
               /><template v-else-if="col.key === 'orders'"
                 ><div
-                  v-for="(text, i) in lines(row as CostRecord, col.key)"
-                  :key="i"
+                  v-for="text in businessOrderLines(row as CostRecord)"
+                  :key="text"
                   class="table-line"
                 >
                   {{ text }}
@@ -480,29 +451,27 @@ const table = ref<TableInstance>(),
   selected = ref<CostRecord[]>([])
 let applied: TransportQuery = { begin: 0, step: 20 },
   serial = 0
-const showPlatformFilters = computed(
-  () => !filters.value.sourceSystem || filters.value.sourceSystem === 'HUOLALA',
-)
 const columns = [
   { key: 'platformNo', label: '快递单号', width: 200 },
   { key: 'carrier', label: '物流公司', width: 120 },
   { key: 'orderedAt', label: '下单／发货时间', width: 190 },
+  { key: 'platformEmployee', label: '下单人', width: 130 },
+  { key: 'platformEmployeeDepartment', label: '下单人所属部门', width: 160 },
   { key: 'amount', label: '运输费用（元）', width: 150, numeric: true },
   { key: 'status', label: '单据状态', width: 104 },
   { key: 'route', label: '行驶路段', width: 280 },
   { key: 'stopCount', label: '收货点数', width: 96 },
   { key: 'type', label: '运输类型', width: 140 },
+  { key: 'orders', label: '业务单号', width: 220 },
+  { key: 'relation', label: '订单关联状态', width: 130 },
   { key: 'vehicle', label: '车型', width: 110 },
   { key: 'creator', label: '创建人', width: 110 },
-  { key: 'relation', label: '订单关联状态', width: 130, optional: true },
   { key: 'date', label: '运输日期', width: 106, optional: true },
   { key: 'receivers', label: '收货方', width: 150, optional: true },
   { key: 'source', label: '数据来源', width: 96, optional: true },
   { key: 'platformStatus', label: '运输状态', width: 155, optional: true },
-  { key: 'platformEmployee', label: '下单员工', width: 150, optional: true },
   { key: 'mappedEmployee', label: '本公司员工', width: 150, optional: true },
   { key: 'employeeRelation', label: '员工关联状态', width: 130, optional: true },
-  { key: 'orders', label: '已关联业务单号', width: 220, optional: true },
   { key: 'employee', label: '业务员', width: 130, optional: true },
   { key: 'department', label: '部门', width: 160, optional: true },
   { key: 'billItems', label: '账单费用明细', width: 240, optional: true },
@@ -523,12 +492,9 @@ function resetColumns() {
   for (const c of columns) visibility[c.key] = !c.optional
 }
 const platformOf = (r: CostRecord) => result.value.platformRecords[r.id]
-function lines(r: CostRecord, key: string) {
-  return key === 'receivers'
-    ? receiversOf(r, platformOf(r))
-    : ordersOf(r, platformOf(r)).length
-      ? ordersOf(r, platformOf(r))
-      : ['-']
+function businessOrderLines(r: CostRecord) {
+  const orderNos = [...new Set(ordersOf(r, platformOf(r)).filter(Boolean))]
+  return orderNos.length ? orderNos : ['-']
 }
 function value(
   r: CostRecord,
@@ -538,6 +504,22 @@ function value(
 ): string {
   const platform = sources[r.id],
     source = platform ? currentSource(platform.source) : null
+  if (key === 'platformEmployee' || key === 'platformEmployeeDepartment') {
+    const department = key === 'platformEmployeeDepartment'
+    if (source) {
+      return (
+        (department
+          ? source.facts?.mappedDepartmentName?.trim()
+          : source.facts?.sourceEmployeeName?.trim() || source.raw['下单人(员工)']?.trim()) || '-'
+      )
+    }
+    const ledgerSources = r.data.ledger?.sources
+    const sales = ledgerSources?.length
+      ? ledgerSources.filter((s) => s.orderTypeCode === 'SALES_ORDER' || s.orderTypeCode === 'DELIVERY')
+      : r.sources.filter((s) => s.sourceType === 'SALES_ORDER' || s.sourceType === 'DELIVERY')
+    const names = sales.map((s) => (department ? s.departmentName : s.employeeName)?.trim())
+    return [...new Set(names.filter(Boolean))].join('、') || '-'
+  }
   const vals: Record<string, unknown> = {
     route: routeText(routeOf(r, platform)),
     stopCount: routeOf(r, platform).receivers.length || '-',
@@ -565,12 +547,11 @@ function value(
         : shipments[r.id]?.[0]?.latest.carrierName || r.data.logistics?.carrierName,
     vehicle: vehicleOf(platform),
     platformStatus: source?.status,
-    platformEmployee: source?.facts?.sourceEmployeeName,
     mappedEmployee:
       importEmployees.value.find((e) => e.employeeCode === source?.facts?.mappedEmployeeCode)
         ?.employeeName || source?.facts?.mappedEmployeeCode,
     employeeRelation: source ? (source.facts?.mappedEmployeeCode ? '已关联' : '未关联') : '-',
-    relation: ordersOf(r, platform).length ? '已关联' : '未关联',
+    relation: ordersOf(r, platform).some((no) => no?.trim()) ? '已关联' : '未关联',
     employee: [
       ...new Set((r.data.ledger?.sources ?? r.sources).map((s) => s.employeeName).filter(Boolean)),
     ].join('、'),
@@ -630,13 +611,6 @@ async function load() {
 function search() {
   applied = {
     ...filters.value,
-    ...(showPlatformFilters.value
-      ? {}
-      : {
-          platformEmployeeName: undefined,
-          employeeRelationState: undefined,
-          mappedEmployeeCode: undefined,
-        }),
     begin: 0,
     step: step.value,
     dateFrom: dates.value?.[0],
@@ -882,6 +856,46 @@ async function sync() {
 const importCities = ref<{ code: string; name: string }[]>([]),
   importEmployees = ref<CostEmployee[]>([]),
   importReady = ref(false)
+const employeeDirectoryLoading = ref(false)
+const employeeDirectoryError = ref('')
+const employeeOptions = computed(() => {
+  const counts = new Map<string, number>()
+  for (const { employeeName } of importEmployees.value)
+    counts.set(employeeName, (counts.get(employeeName) ?? 0) + 1)
+  return importEmployees.value.map(({ employeeName, employeeCode, departmentName }) => ({
+    value: employeeCode,
+    label: [
+      employeeName,
+      departmentName,
+      (counts.get(employeeName) ?? 0) > 1 ? employeeCode : '',
+    ].filter(Boolean).join(' · '),
+  }))
+})
+const departmentOptions = computed(() => {
+  const departments = importEmployees.value.flatMap((employee) => {
+    const name = employee.departmentName?.trim()
+    return name ? [name] : []
+  })
+  return [...new Set(departments)]
+    .sort((left, right) => left.localeCompare(right, 'zh-CN'))
+    .map((name) => ({ label: name, value: name }))
+})
+async function loadEmployeeDirectory() {
+  employeeDirectoryLoading.value = true
+  employeeDirectoryError.value = ''
+  try {
+    const employees = await getCostEmployees('logistics')
+    if (!disposed) importEmployees.value = employees || []
+  } catch {
+    if (!disposed) employeeDirectoryError.value = '员工档案加载失败，请重新打开下拉框重试'
+  } finally {
+    if (!disposed) employeeDirectoryLoading.value = false
+  }
+}
+function retryEmployeeDirectory(open: boolean) {
+  if (open && employeeDirectoryError.value && !employeeDirectoryLoading.value)
+    void loadEmployeeDirectory()
+}
 async function openImport() {
   importOpen.value = true
   importReady.value = false
@@ -924,6 +938,8 @@ const exportBusinessKeys = new Set([
   'creator',
   'relation',
   'orders',
+  'platformEmployee',
+  'platformEmployeeDepartment',
   'employee',
   'department',
   'billItems',
@@ -932,7 +948,6 @@ const exportBusinessKeys = new Set([
 ])
 const platformExportKeys = new Set([
   'platformStatus',
-  'platformEmployee',
   'paid',
   'unpaid',
   'refund',
@@ -1078,14 +1093,7 @@ onMounted(async () => {
   }
   const initialLoad = load()
   void loadCostDictionaryCodes(['COST_CARRIER'], false, 'inline')
-  void getCostEmployees('logistics').then(
-    (employees) => {
-      if (!disposed) importEmployees.value = employees || []
-    },
-    () => {
-      /* 人员目录暂时不可用时，仍可查询已保存的运输记录。 */
-    },
-  )
+  void loadEmployeeDirectory()
   openTransportLink()
   await initialLoad
   initialized = true

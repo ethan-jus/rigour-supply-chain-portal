@@ -74,6 +74,9 @@ export type TransportQuery = CostQuery & {
   relationState?: string
   platformOrderNo?: string
   platformEmployeeName?: string
+  orderPlacerEmployeeCode?: string
+  orderPlacerDepartment?: string
+  businessOrderNo?: string
   employeeRelationState?: string
   contactPhone?: string
   mappedEmployeeCode?: string

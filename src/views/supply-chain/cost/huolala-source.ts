@@ -14,6 +14,7 @@ export interface Facts {
   sourceStaffId?: string | null
   sourceDepartmentName?: string | null
   mappedEmployeeCode: string | null
+  mappedDepartmentName?: string | null
   bonusAmount?: Amount
   receipts?: PlatformVoucher[]
   billVouchers?: PlatformVoucher[]
