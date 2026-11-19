@@ -104,6 +104,10 @@ export const huolalaApi = {
   issues: (id: string) =>
     apiClient.get<HuolalaIssue[]>(`${base}/runs/${encodeURIComponent(id)}/issues`, options),
   runs: () => apiClient.get<HuolalaRun[]>(`${base}/runs`, options),
-  sync: (scope: string, from: string, to: string, orderNo?: string) =>
-    apiClient.post<HuolalaRun>(`${base}/sync`, { scope, from, to, orderNo }, options),
+  sync: (scope: string, from?: string, to?: string, orderNo?: string) =>
+    apiClient.post<HuolalaRun>(
+      `${base}/sync`,
+      { scope, from, to, orderNo },
+      { ...options, errorFeedback: 'inline' },
+    ),
 }

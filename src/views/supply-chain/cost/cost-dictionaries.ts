@@ -7,7 +7,6 @@ import {
 export const COST_DICTIONARIES = [
   'MARKETING_EXPENSE_TYPE',
   'REIMBURSEMENT_EXPENSE_TYPE',
-  'COST_TRANSPORT_METHOD',
   'COST_TRANSPORT_KIND',
   'COST_LOGISTICS_LEG',
   'COST_PAYER',
@@ -23,12 +22,28 @@ export const COST_DICTIONARIES = [
   'COST_DELIVERY_MODE',
   'COST_WAREHOUSE_ALLOCATION_METHOD',
 ] as const
-export const loadCostDictionaries = (category?: string, force = false) => {
+export const loadCostDictionaryCodes = (
+  dictionaryCodes: Iterable<string>,
+  force = false,
+  errorFeedback?: 'inline',
+) => {
+  const codes = [...new Set(dictionaryCodes)]
+  return force
+    ? Promise.all(codes.map((code) => refreshBusinessDictionary(code, errorFeedback))).then(
+        () => undefined,
+      )
+    : loadBusinessDictionaries(codes.map((code) => ({ moduleCode: '', code })), errorFeedback)
+}
+
+export const loadCostDictionaries = (
+  category?: string,
+  force = false,
+  errorFeedback?: 'inline',
+) => {
   const byCategory: Record<string, string[]> = {
     logistics: [
       'COST_LOGISTICS_LEG',
       'COST_PAYER',
-      'COST_TRANSPORT_METHOD',
       'COST_TRANSPORT_KIND',
       'PRODUCT_UNIT',
       'WAREHOUSE_TYPE',
@@ -52,9 +67,7 @@ export const loadCostDictionaries = (category?: string, force = false) => {
   const codes = category
     ? ['COST_STATUS', 'COST_PAYMENT_STATUS', ...(byCategory[category] || [])]
     : COST_DICTIONARIES
-  return force
-    ? Promise.all(codes.map((code) => refreshBusinessDictionary(code))).then(() => undefined)
-    : loadBusinessDictionaries(codes.map((code) => ({ moduleCode: '', code })))
+  return loadCostDictionaryCodes(codes, force, errorFeedback)
 }
 export const costOptions = (code: string) => businessDictionaryOptions('', code)
 export const costLabel = (code: string, value: string | null | undefined) =>

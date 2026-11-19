@@ -107,7 +107,7 @@ import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import TransportRecordEditor from '../../cost/TransportRecordEditor.vue'
 import TransportRouteSummary from '../../cost/TransportRouteSummary.vue'
 import SalesLogisticsChooser from './SalesLogisticsChooser.vue'
-const props = defineProps<{ orderId: string | number; openChooser?: boolean }>()
+const props = defineProps<{ orderId: string | number }>()
 const emit = defineEmits<{ changed: [] }>()
 const { can } = useSupplyPermissions()
 const router = useRouter()
@@ -154,17 +154,10 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [data] = await Promise.all([
-      getSalesLogistics(props.orderId),
-      // 选物流仅需要公司和配送方式，避免先等待整套成本录入字典。
-      loadBusinessDictionaries([
-        { moduleCode: '', code: 'COST_CARRIER' },
-        { moduleCode: '', code: 'COST_DELIVERY_MODE' },
-      ]),
-    ])
+    void loadBusinessDictionaries([{ moduleCode: '', code: 'COST_CARRIER' }])
+    const data = await getSalesLogistics(props.orderId)
     if (current === serial) {
       context.value = data
-      if (props.openChooser && data.canAssociate) chooser.value = true
     }
   } catch (e) {
     if (current === serial) error.value = errorMessage(e, '物流发货加载失败')

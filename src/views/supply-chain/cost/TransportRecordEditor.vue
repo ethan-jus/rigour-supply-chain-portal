@@ -7,6 +7,7 @@
     class="transport-dialog"
     :close-on-click-modal="false"
     :before-close="close"
+    @opened="focusInitialSection"
   >
     <div v-loading="loading" class="transport-content">
       <div v-if="detail" class="record-heading">
@@ -88,12 +89,13 @@
               :required="!readonly && !shippingLocked"
               :error="fieldErrors.deliveryModeCode"
             >
-              <span v-if="readonly || shippingLocked">{{
-                costLabel('COST_DELIVERY_MODE', form.deliveryModeCode) !== '-'
-                  ? costLabel('COST_DELIVERY_MODE', form.deliveryModeCode)
-                  : shipmentSources[0]?.latest.deliveryModeName || '-'
-              }}</span>
-              <el-select v-else v-model="form.deliveryModeCode" placeholder="请选择配送方式">
+              <span v-if="readonly || shippingLocked">{{ deliveryModeName }}</span>
+              <el-select
+                v-else
+                v-model="form.deliveryModeCode"
+                placeholder="请选择配送方式"
+                @change="deliveryModeChanged"
+              >
                 <el-option
                   v-for="o in deliveryModes"
                   :key="o.value"
@@ -102,7 +104,30 @@
                 />
               </el-select>
             </el-form-item>
+            <el-form-item v-if="shipmentSources.length" label="订货宝发货方式">
+              <span>{{ shipmentDeliveryModeName }}</span>
+            </el-form-item>
+            <el-form-item v-else label="收货方式">
+              <span v-if="readonly || shippingLocked">{{ receivingMethodName }}</span>
+              <el-select
+                v-else
+                v-model="form.receivingMethodCode"
+                aria-label="收货方式"
+                placeholder="请选择收货方式"
+              >
+                <el-option
+                  v-for="option in receivingMethods"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item v-if="transportChannel" label="运输渠道">
+              <span>{{ transportChannelName }}</span>
+            </el-form-item>
             <el-form-item
+              v-if="!selfDelivery || (shippingLocked && (form.carrierCode || shipmentCarriers))"
               label="物流公司"
               :required="!readonly && !shippingLocked && form.deliveryModeCode !== 'SELF'"
               :error="fieldErrors.carrierCode"
@@ -110,9 +135,7 @@
               ><span v-else-if="readonly || shippingLocked">{{
                 form.carrierCode
                   ? costLabel('COST_CARRIER', form.carrierCode)
-                  : shipmentSources[0]?.latest.carrierName ||
-                    detail?.record.data.logistics?.carrierName ||
-                    '-'
+                  : shipmentCarriers || detail?.record.data.logistics?.carrierName || '-'
               }}</span
               ><el-select v-else v-model="form.carrierCode" placeholder="请选择物流公司"
                 ><el-option
@@ -122,12 +145,13 @@
                   :value="o.value" /></el-select
             ></el-form-item>
             <el-form-item
+              v-if="!selfDelivery || (shippingLocked && shipmentTrackingNumbers)"
               label="快递单号"
               :required="!readonly && !shippingLocked && form.deliveryModeCode !== 'SELF'"
               :error="fieldErrors.platformOrderNo"
               ><span v-if="readonly || shippingLocked">{{
                 shipmentSources.length
-                  ? shipmentSources.flatMap((s) => s.latest.trackingNumbers).join('、') || '-'
+                  ? shipmentTrackingNumbers || '-'
                   : form.platformOrderNo || '-'
               }}</span
               ><el-input
@@ -136,7 +160,7 @@
                 maxlength="80"
                 placeholder="填写快递单号"
             /></el-form-item>
-            <Info label="车型" :value="vehicleOf(platform)" />
+            <Info v-if="platform" label="车型" :value="vehicleOf(platform)" />
           </div>
         </section>
         <section class="transport-section">
@@ -169,7 +193,7 @@
               ><template #default="{ row }">{{
                 row.departmentName || '-'
               }}</template></el-table-column
-            ><el-table-column label="单据日期" width="125"
+            ><el-table-column label="业务单据日期" min-width="125"
               ><template #default="{ row }">{{
                 row.documentDate || '-'
               }}</template></el-table-column
@@ -177,10 +201,13 @@
               ><template #default="{ row }">{{
                 money(row.documentAmount)
               }}</template></el-table-column
-            ><el-table-column label="关联时间" min-width="180"
+            ><el-table-column label="订单关联时间" min-width="185"
               ><template #default="{ row }">{{
                 row.linkedAt ? displayRecordDateTime(row.linkedAt) : '-'
-              }}</template></el-table-column
+              }}</template>
+              <template #header>
+                <span title="这笔运输记录与该业务订单在系统中建立关联的时间">订单关联时间</span>
+              </template> </el-table-column
             ><el-table-column
               v-if="!readonly && !advanced && !salesOrderId && !shipmentSources.length"
               label="操作"
@@ -194,7 +221,7 @@
             ></el-table
           >
         </section>
-        <section class="transport-section">
+        <section ref="feesSection" class="transport-section">
           <h3>费用信息</h3>
           <el-button
             v-if="advanced && !readonly"
@@ -249,13 +276,10 @@
                 />
               </el-select> </el-form-item
             ><el-form-item label="费用归属城市"
-              ><span v-if="readonly">{{
-                detail?.record.data.cityName || form.cityCode || '-'
-              }}</span
+              ><span v-if="readonly || orderBasedCity">{{ expenseCityName }}</span
               ><CostCitySelect
                 v-else
                 v-model="form.cityCode"
-                :disabled="false"
                 action="order:logistics-cost:write" /></el-form-item
             ><el-form-item
               v-if="form.amount === 0"
@@ -395,6 +419,13 @@
                 }}</template
               ></el-table-column
             >
+            <el-table-column
+              v-if="expenseCityCodes.length > 1"
+              label="费用归属城市"
+              min-width="140"
+            >
+              <template #default="{ row }">{{ cityLabel(row.source?.cityCode) || '-' }}</template>
+            </el-table-column>
             <el-table-column label="分摊运输费用（元）" align="right" min-width="180"
               ><template #default="{ row }"
                 ><el-input-number
@@ -570,7 +601,7 @@
             {{ platform || readonly ? '暂无收货信息' : '选择业务订单后显示收货信息' }}
           </p>
         </section>
-        <section class="transport-section" aria-label="凭证与运输影像">
+        <section ref="evidenceSection" class="transport-section" aria-label="凭证与运输影像">
           <h3>凭证与运输影像</h3>
           <TransportEvidence
             embedded
@@ -593,20 +624,25 @@
         </section>
         <section class="transport-section" aria-label="运输备注">
           <h3>备注</h3>
-          <div v-if="platform" class="platform-remark">
+          <div v-if="shippingLocked" class="platform-remark">
             <div class="section-heading">
               <h4>物流订单备注</h4>
               <el-tag type="info" size="small">只读</el-tag>
             </div>
-            <p class="remark">{{ displayValue(order?.raw['订单备注']) }}</p>
+            <p v-for="note in sourceRemarks" :key="note.id" class="remark">
+              <strong v-if="sourceRemarks.length > 1">{{ note.documentNo }} · </strong>{{
+                note.text
+              }}
+            </p>
+            <p v-if="!sourceRemarks.length" class="remark">-</p>
           </div>
-          <h4 v-if="platform">补充备注</h4>
+          <h4 v-if="shippingLocked">补充备注</h4>
           <span v-if="readonly" class="remark">{{ displayValue(form.remark) }}</span
           ><el-input
             v-else
             v-model="form.remark"
             type="textarea"
-            :aria-label="platform ? '补充备注' : '备注'"
+            :aria-label="shippingLocked ? '补充备注' : '备注'"
             :rows="3"
             maxlength="1000"
             show-word-limit
@@ -622,7 +658,11 @@
           /></el-form-item>
         </section>
       </el-form>
-      <TransportShipmentSources v-if="shipmentSources.length" :sources="shipmentSources" />
+      <TransportShipmentSources
+        v-if="shipmentSources.length"
+        :sources="shipmentSources"
+        @open-mapping="visible = false"
+      />
       <TransportPlatformDetails
         v-if="platform"
         :platform="platform"
@@ -633,7 +673,7 @@
       <section v-if="detail" class="transport-section">
         <h3>操作记录</h3>
         <el-table :data="businessHistory" border empty-text="暂无操作记录"
-          ><el-table-column label="时间" min-width="190"
+          ><el-table-column label="操作时间" min-width="190"
             ><template #default="{ row }">{{
               displayRecordDateTime(row.occurredTime)
             }}</template></el-table-column
@@ -704,6 +744,9 @@ import { type TransportDetail } from '@/api/core/transport-records'
 import { currentSource, platformPaymentStatus } from './huolala-source'
 import {
   transportDraft,
+  transportReceivingMethod,
+  shipmentRemark,
+  receivingMethods,
   transportTypes,
   money,
   typeName,
@@ -737,7 +780,7 @@ import TransportShipmentSources from './TransportShipmentSources.vue'
 import { TransportEvidenceSaveSession } from './transport-evidence'
 import { type CostAttachmentDraft } from './cost-attachment-draft'
 import { validateManualTransport, type TransportErrors } from './transport-validation'
-import { costOptions, costLabel, loadCostDictionaries } from './cost-dictionaries'
+import { costOptions, costLabel, loadCostDictionaryCodes } from './cost-dictionaries'
 import { errorMessage } from '@/api/core/error'
 import { auditLabel } from './cost-audit'
 import { displayRecordActor, displayRecordDateTime, displayValue } from '@/utils/business-display'
@@ -751,6 +794,8 @@ const props = defineProps<{
   initialDeliveryMode?: string
 }>()
 const ordersSection = ref<HTMLElement>()
+const feesSection = ref<HTMLElement>()
+const evidenceSection = ref<HTMLElement>()
 const visible = defineModel<boolean>({ required: true })
 const emit = defineEmits<{
   saved: []
@@ -759,9 +804,54 @@ const emit = defineEmits<{
 const detail = ref(props.detail),
   platform = computed(() => detail.value?.platform)
 const shipmentSources = computed(() => detail.value?.shipments || [])
+const shipmentDeliveryModeName = computed(
+  () =>
+    [
+      ...new Set(
+        shipmentSources.value.map(({ latest }) => latest.deliveryModeName?.trim()).filter(Boolean),
+      ),
+    ].join('、') || '-',
+)
+const shipmentCarriers = computed(() =>
+  [...new Set(shipmentSources.value.map(({ latest }) => latest.carrierName).filter(Boolean))].join(
+    '、',
+  ),
+)
+const shipmentTrackingNumbers = computed(() =>
+  [...new Set(shipmentSources.value.flatMap(({ latest }) => latest.trackingNumbers))].join('、'),
+)
+const transportChannel = computed(
+  () => (shipmentSources.value.length ? null : detail.value?.record.data.ledger?.transportMethodCode),
+)
+const transportChannelName = computed(() => costLabel('COST_TRANSPORT_KIND', transportChannel.value))
 const shippingLocked = computed(() => !!platform.value || !!shipmentSources.value.length)
 const order = computed(() => (platform.value ? currentSource(platform.value.source) : null))
+const sourceRemarks = computed(() => {
+  const remarks = shipmentSources.value.flatMap(({ id, latest }) => {
+    const text = shipmentRemark(latest.sourceFields)
+    return text.trim() ? [{ id, documentNo: latest.shipmentNo, text }] : []
+  })
+  const platformOrder = order.value
+  const text = platformOrder?.raw['订单备注']
+  if (platformOrder && text?.trim())
+    remarks.unshift({ id: 'platform', documentNo: platformOrder.orderNo, text })
+  return remarks
+})
 const form = ref(transportDraft(detail.value?.record, platform.value))
+const selfDelivery = computed(() => form.value.deliveryModeCode === 'SELF')
+const receivingMethodName = computed(() =>
+  transportReceivingMethod(form.value.receivingMethodCode, platform.value),
+)
+const deliveryModeName = computed(() => {
+  if (!shipmentSources.value.length || platform.value)
+    return costLabel('COST_DELIVERY_MODE', form.value.deliveryModeCode)
+  const stored = detail.value?.record.data.ledger?.deliveryModeCode
+  if (stored) return costLabel('COST_DELIVERY_MODE', stored)
+  const codes = new Set(shipmentSources.value.map(({ latest }) => latest.deliveryModeCode))
+  return codes.size === 1 && !codes.has(null)
+    ? costLabel('COST_DELIVERY_MODE', shipmentSources.value[0]?.latest.deliveryModeCode)
+    : '待核对'
+})
 const amountInput = ref(form.value.amount)
 watch(
   () => form.value.amount,
@@ -797,6 +887,32 @@ const type = computed(() => transportTypes.find((t) => t.value === form.value.tr
 const selected = ref<CostSource[]>([]),
   employees = ref<CostEmployee[]>([]),
   history = ref<CostAudit[]>([])
+const orderBasedCity = computed(
+  () => form.value.transportType === 'DELIVERY' || form.value.transportType === 'TRANSFER',
+)
+const expenseCityCodes = computed(() => [
+  ...new Set(selected.value.flatMap((source) => (source.cityCode ? [source.cityCode] : []))),
+])
+function cityLabel(code: string | null | undefined) {
+  if (!code) return ''
+  return (
+    cities.value.find((city) => city.code === code)?.name ||
+    (code === detail.value?.record.data.cityCode ? detail.value.record.data.cityName || '' : '')
+  )
+}
+const expenseCityName = computed(() => {
+  if (expenseCityCodes.value.length > 1) return '按关联单据分摊'
+  if (props.readonly) return detail.value?.record.data.cityName || '-'
+  const code = expenseCityCodes.value[0]
+  return (
+    cityLabel(code) ||
+    (code
+      ? '按关联单据带出'
+      : form.value.transportType === 'TRANSFER'
+        ? '关联调拨单后带出'
+        : '关联销售订单后带出')
+  )
+})
 const businessHistory = computed(() =>
   history.value.filter((row) => row.action !== 'STATE_UPGRADE'),
 )
@@ -1033,10 +1149,19 @@ function close(done?: () => void) {
   if (done) done()
   else visible.value = false
 }
+function deliveryModeChanged(value: string) {
+  if (value !== 'SELF') return
+  form.value.carrierCode = null
+  form.value.trackingNo = null
+  form.value.platformOrderNo = null
+  delete fieldErrors.value.carrierCode
+  delete fieldErrors.value.platformOrderNo
+}
 function typeChanged() {
   selected.value = []
   form.value.orderCodes = []
   form.value.receivingPoints = []
+  form.value.cityCode = ''
 }
 function removeOrder(code: string) {
   const snapshot = receiverSnapshot()
@@ -1055,6 +1180,7 @@ function receiverSnapshot() {
 function updateReceiverDrafts(snapshot = receiverSnapshot()) {
   selected.value.sort((a, b) => a.documentNo.localeCompare(b.documentNo))
   form.value.orderCodes = selected.value.map((source) => source.documentNo)
+  if (orderBasedCity.value) form.value.cityCode = selected.value[0]?.cityCode || ''
   form.value.receivingPoints = selected.value.map((source, index) => {
     const saved = snapshot.get(source.documentNo)
     return {
@@ -1084,8 +1210,8 @@ async function selectWarehouse(w: LedgerPartyReference | null) {
     senderContact: w.contactName || '',
     senderPhone: w.phone || '',
     senderAddress: w.address || '',
-    cityCode: form.value.cityCode || w.cityCode || '',
   })
+  if (!orderBasedCity.value && !form.value.cityCode) form.value.cityCode = w.cityCode || ''
 }
 async function addOrders(rows: PickedLedgerSource[]) {
   const snapshot = receiverSnapshot()
@@ -1106,8 +1232,14 @@ async function addOrders(rows: PickedLedgerSource[]) {
   }
 }
 onMounted(async () => {
-  // 表单独立加载所需字典，不要求销售摘要提前等待全部成本配置。
-  void loadCostDictionaries('logistics')
+  const dictionaries = ['COST_DELIVERY_MODE', 'COST_CARRIER']
+  if (!platform.value) {
+    dictionaries.push('COST_PAYMENT_STATUS')
+    if (!props.readonly || (advanced.value && advancedData.value?.ledger?.feeItems.length))
+      dictionaries.push('COST_LOGISTICS_FEE_TYPE')
+  }
+  if (transportChannel.value) dictionaries.push('COST_TRANSPORT_KIND')
+  void loadCostDictionaryCodes(dictionaries, false, 'inline')
   const frozen = detail.value ? frozenTransportSources(detail.value.record) : []
   selected.value = props.salesSource && !detail.value ? [props.salesSource] : frozen
   if (!props.readonly && !shippingLocked.value) updateReceiverDrafts()
@@ -1119,8 +1251,8 @@ onMounted(async () => {
       .catch(() => {
         error.value = '费用负责人加载失败，请稍后重试'
       })
-  if (advanced.value && !props.readonly)
-    void getCostCities()
+  if (!props.readonly || expenseCityCodes.value.length > 1)
+    void getCostCities(props.readonly ? 'order:logistics-cost:read' : 'order:logistics-cost:write')
       .then((rows) => {
         cities.value = rows
       })
@@ -1146,11 +1278,15 @@ onMounted(async () => {
       loading.value = false
     }
   }
-  if (props.initialSection === 'orders' && !props.readonly && !props.salesOrderId) {
-    ordersSection.value?.scrollIntoView?.({ block: 'start' })
-    picker.value = true
-  }
 })
+function focusInitialSection() {
+  const section = props.initialSection
+  const sections = { orders: ordersSection, fees: feesSection, evidence: evidenceSection }
+  if (section === 'orders' || section === 'fees' || section === 'evidence')
+    sections[section].value?.scrollIntoView?.({ block: 'start' })
+  if (props.initialSection === 'orders' && !props.readonly && !props.salesOrderId)
+    picker.value = true
+}
 async function save() {
   if (saving.value || loading.value || attachmentBusy.value) return
   error.value = ''
@@ -1219,6 +1355,13 @@ async function save() {
                   trackingNo: form.value.trackingNo || '',
                   platformOrderNo: form.value.platformOrderNo || null,
                   shippingTime: form.value.shippingTime,
+                  ...(shippingLocked.value
+                    ? {}
+                    : {
+                        receivingMethodCode: form.value.receivingMethodCode,
+                        deliveryModeCode:
+                          form.value.deliveryModeCode || advancedData.value.ledger.deliveryModeCode,
+                      }),
                 }
               : null,
             remark: form.value.remark,

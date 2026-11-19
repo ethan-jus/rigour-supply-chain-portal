@@ -6,6 +6,7 @@ import type { CostCommand } from './cost'
 export interface TransportDraft {
   orderAllocations?: Record<string, number | null> | null
   deliveryModeCode?: string | null
+  receivingMethodCode?: string | null
   receivingPoints?: import('@/types/cost-ledger').LedgerParty[] | null
   revision: number | null
   requestId: string

@@ -748,21 +748,19 @@
         >
       </template>
     </el-dialog>
-    <el-dialog
+    <SalesLogisticsChooser
+      v-if="salesLogisticsOrderId && salesLogisticsOpen"
       v-model="salesLogisticsOpen"
-      title="物流发货"
-      class="sales-logistics-panel-dialog"
-      width="min(1320px, 96vw)"
-      top="3vh"
-      destroy-on-close
-      ><SalesLogisticsPanel
-        v-if="salesLogisticsOrderId && salesLogisticsOpen"
-        :order-id="salesLogisticsOrderId"
-        open-chooser
-        @changed="refreshLogisticsCounts"
-      />
-      <template #footer><el-button @click="salesLogisticsOpen = false">关闭</el-button></template>
-    </el-dialog>
+      :order-id="salesLogisticsOrderId"
+      @saved="refreshLogisticsCounts"
+      @view="viewSalesTransport"
+    />
+    <TransportRecordEditor
+      v-if="salesTransportOpen"
+      v-model="salesTransportOpen"
+      :detail="salesTransport"
+      readonly
+    />
     <OrderRegisterDetailDrawer
       v-model="detailVisible"
       :order-id="detailOrderId"
@@ -790,7 +788,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderPackageSyncButton from '@/components/supply/OrderPackageSyncButton.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
-import SalesLogisticsPanel from './components/SalesLogisticsPanel.vue'
+import SalesLogisticsChooser from './components/SalesLogisticsChooser.vue'
+import TransportRecordEditor from '../cost/TransportRecordEditor.vue'
+import { getTransport, type TransportDetail } from '@/api/core/transport-records'
 import { getSalesLogisticsCounts } from '@/api/core/sales-logistics'
 import OrderRegisterDetailDrawer from './components/OrderRegisterDetailDrawer.vue'
 import OrderInvoiceApplyDialog from './components/OrderInvoiceApplyDialog.vue'
@@ -965,6 +965,16 @@ async function exportMonthlyPerformance() {
 const logisticsCounts = ref<Record<string, number> | null>(null)
 const salesLogisticsOpen = ref(false),
   salesLogisticsOrderId = ref<string | number | null>(null)
+const salesTransportOpen = ref(false)
+const salesTransport = ref<TransportDetail | null>(null)
+async function viewSalesTransport(id: string) {
+  try {
+    salesTransport.value = await getTransport(id)
+    salesTransportOpen.value = true
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '运输详情加载失败'))
+  }
+}
 let logisticsCountSerial = 0
 function openSalesLogistics(row: OrderRegisterOrderItem) {
   salesLogisticsOrderId.value = row.id
@@ -1255,22 +1265,6 @@ watch(
 </script>
 
 <style scoped>
-:global(.sales-logistics-panel-dialog.el-dialog) {
-  display: flex;
-  flex-direction: column;
-  max-height: 94dvh;
-  overflow: hidden;
-}
-:global(.sales-logistics-panel-dialog > .el-dialog__body) {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-:global(.sales-logistics-panel-dialog > .el-dialog__header),
-:global(.sales-logistics-panel-dialog > .el-dialog__footer) {
-  flex-shrink: 0;
-}
-
 .monthly-export-note {
   color: #64748b;
   font-size: var(--app-font-size-base);

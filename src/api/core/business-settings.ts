@@ -97,10 +97,11 @@ export function getEffectiveBizDict(dictionaryCode: string) {
 }
 
 /** 解析历史业务数据；返回可用于历史记录显示的整本字典。 */
-export function resolveBizDict(dictionaryCode: string) {
+export function resolveBizDict(dictionaryCode: string, errorFeedback?: 'inline') {
   return apiClient.get<EffectiveDictView, EffectiveDictView>(`${BASE_PATH}/resolve`, {
     params: { dictionaryCode },
     stayOnUnauthorized: true,
+    errorFeedback,
   })
 }
 
@@ -171,4 +172,8 @@ export function updateDictionarySourceMapping(id: string, command: {
 export function rescanDictionarySources(dictionaryCode: string) {
   return apiClient.post<{ batches: number; rows: number; observedValues: number; pendingValues: number; truncated: boolean }>(
     '/integration/dictionary-mappings/rescan', null, { params: { dictionaryCode }, timeout: 120000 })
+}
+
+export function getMappedDhbCarrierValues(values: string[]) {
+  return apiClient.post<string[]>('/integration/dictionary-mappings/dhb-carrier-status', values)
 }

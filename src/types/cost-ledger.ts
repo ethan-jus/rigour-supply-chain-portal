@@ -43,6 +43,7 @@ export interface LedgerSource {
   noSourceReason?: string
 }
 export interface LogisticsLedger {
+  receivingMethodCode?: string | null
   shippingTime?: string | null
   manualBillItems?: { name: string; amount: number | null }[] | null
   platformOrderNo?: string | null

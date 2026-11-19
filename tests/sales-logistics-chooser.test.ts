@@ -3,9 +3,13 @@ import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import Chooser from '@/views/supply-chain/order/components/SalesLogisticsChooser.vue'
 import type { SalesLogisticsContext } from '@/api/core/sales-logistics'
-const api = vi.hoisted(() => ({ list: vi.fn(), link: vi.fn() }))
+const api = vi.hoisted(() => ({ list: vi.fn(), link: vi.fn(), selection: vi.fn() }))
 vi.mock('@/api/core/transport-records', () => ({ getTransportRecords: api.list }))
-vi.mock('@/api/core/sales-logistics', () => ({ linkSalesLogistics: api.link }))
+vi.mock('@/api/core/sales-logistics', () => ({
+  linkSalesLogistics: api.link,
+  getSalesLogisticsSelection: api.selection,
+}))
+vi.mock('@/utils/business-dictionary', () => ({ loadBusinessDictionaries: vi.fn(async () => {}) }))
 vi.mock('@/views/supply-chain/cost/cost-dictionaries', () => ({
   costOptions: (code: string) =>
     code === 'COST_DELIVERY_MODE'
@@ -45,6 +49,29 @@ const global = {
 beforeEach(() => {
   vi.clearAllMocks()
   api.list.mockResolvedValue({ page: { items: [], total: 0 }, platformRecords: {} })
+})
+it('订单列表直接打开选单，销售单资料加载时可选公司但不能提交', async () => {
+  let resolveOrder!: (value: SalesLogisticsContext) => void
+  api.selection.mockReturnValueOnce(
+    new Promise<SalesLogisticsContext>((resolve) => {
+      resolveOrder = resolve
+    }),
+  )
+  const wrapper = mount(Chooser, { props: { modelValue: true, orderId: 11 }, global })
+  await flushPromises()
+  expect(wrapper.text()).toContain('正在读取销售订单')
+  expect(wrapper.findAllComponents({ name: 'ElSelect' })).toHaveLength(2)
+  const carrier = wrapper.findAllComponents({ name: 'ElSelect' })[1]!
+  carrier.vm.$emit('update:modelValue', 'JT_NEW')
+  await flushPromises()
+  const manual = () => wrapper.findAll('button').find((button) => button.text() === '手工录入物流')!
+  expect(manual().attributes('disabled')).toBeDefined()
+  expect(api.selection).toHaveBeenCalledWith(11)
+  resolveOrder(context)
+  await flushPromises()
+  expect(wrapper.text()).toContain('SO001')
+  expect(manual().attributes('disabled')).toBeUndefined()
+  wrapper.unmount()
 })
 it('新增字典物流公司直接提供手工录入入口，并携带当前销售订单，不查询货拉拉候选', async () => {
   const wrapper = mount(Chooser, { props: { modelValue: true, orderId: 11, context }, global })

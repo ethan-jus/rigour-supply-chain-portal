@@ -45,6 +45,27 @@ export const getCostWorkspace = (params: CostQuery, signal?: AbortSignal) =>
     params,
     signal,
   })
+export interface PendingTransport {
+  id: string
+  documentNo: string
+  cityName: string
+  date: string
+  costMonth?: string
+  sourceSystem?: string
+  missing: string[]
+}
+
+export const getPendingTransports = (
+  params: CostQuery & { reason?: string },
+  signal?: AbortSignal,
+) =>
+  apiClient.get<{
+    total: number
+    scopeTotal: number
+    page: number
+    size: number
+    items: PendingTransport[]
+  }>(`${ROOT}/pending-transports`, { params, signal })
 export const getCostDetail = (
   source: string,
   id: string,

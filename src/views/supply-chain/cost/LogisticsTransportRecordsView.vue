@@ -170,6 +170,24 @@
         <div>
           <strong>物流运输记录</strong><el-tag round type="info">{{ result.page.total }} 条</el-tag
           ><span v-if="selected.length" class="selection">已选 {{ selected.length }} 条</span>
+          <span
+            v-if="result.page.registeredAmount != null"
+            class="freight-summary"
+            title="统计当前筛选下所有未作废记录的已录运费，含所有分页"
+          >
+            <span
+              >筛选运费合计
+              <b>{{
+                result.page.total > 0 && result.page.missingAmountCount === result.page.total
+                  ? '—'
+                  : money(result.page.registeredAmount)
+              }}</b>
+              元</span
+            >
+            <small v-if="result.page.missingAmountCount"
+              >{{ result.page.missingAmountCount }} 笔待补运费</small
+            >
+          </span>
         </div>
         <div class="list-toolbar">
           <el-button v-if="can('integration:huolala:sync')" @click="openSync"
@@ -235,10 +253,7 @@
                 "
                 >{{ statusName(row.statusCode, row.businessStatusCode) }}</el-tag
               ><span
-                v-else-if="
-                  col.key === 'amount' &&
-                  amountOf(row as CostRecord, platformOf(row as CostRecord)) == null
-                "
+                v-else-if="col.key === 'amount' && (row as CostRecord).data.amount == null"
                 class="unfilled-amount"
                 >待补金额</span
               ><span v-else :class="{ 'money-cell': col.numeric }">{{
@@ -258,11 +273,7 @@
       </div>
       <ListTableFooter>
         <template #actions>
-          <el-button v-if="can('integration:huolala:read')" @click="connection('employees')"
-            >员工关联</el-button
-          ><el-button v-if="can('integration:huolala:read')" @click="connection('runs')"
-            >同步记录</el-button
-          ><el-button v-if="can('order:logistics-cost:write')" @click="feeImportOpen = true"
+          <el-button v-if="can('order:logistics-cost:write')" @click="feeImportOpen = true"
             >批量补录运费</el-button
           >
           <el-button
@@ -287,6 +298,7 @@
             @click="openExport"
             >自定义导出</el-button
           ><el-dropdown
+            v-if="can('integration:huolala:read') || can('order:logistics-cost:manage-imports')"
             ><el-button
               >其他操作<el-icon><ArrowDown /></el-icon></el-button
             ><template #dropdown
@@ -294,7 +306,15 @@
                 ><el-dropdown-item
                   v-if="can('integration:huolala:read')"
                   @click="connection('connection')"
-                  >货拉拉连接</el-dropdown-item
+                  >货拉拉接入</el-dropdown-item
+                ><el-dropdown-item
+                  v-if="can('integration:huolala:read')"
+                  @click="connection('employees')"
+                  >货拉拉员工关联</el-dropdown-item
+                ><el-dropdown-item
+                  v-if="can('integration:huolala:read')"
+                  @click="connection('runs')"
+                  >货拉拉同步记录</el-dropdown-item
                 ><el-dropdown-item
                   v-if="can('order:logistics-cost:manage-imports')"
                   @click="openImport()"
@@ -336,27 +356,35 @@
       :error="exportError"
       @confirm="doExport"
     />
-    <el-dialog v-model="syncOpen" title="同步货拉拉订单" width="520px" :close-on-click-modal="false"
-      ><el-form label-position="top"
-        ><el-form-item label="运输日期"
-          ><el-date-picker
-            v-model="syncDates"
-            :disabled="syncing"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期" /></el-form-item
-        ><el-form-item label="指定货拉拉订单号"
-          ><el-input
+    <el-dialog
+      v-model="syncOpen"
+      title="同步货拉拉订单"
+      width="min(520px, 94vw)"
+      :close-on-click-modal="false"
+    >
+      <el-form label-position="top">
+        <HuolalaSyncDates
+          v-if="!syncNo.trim()"
+          v-model:from="syncFrom"
+          v-model:to="syncTo"
+          label="用车日期"
+          :disabled="syncing"
+        />
+        <el-form-item label="指定货拉拉订单号">
+          <el-input
             v-model="syncNo"
             :disabled="syncing"
-            placeholder="可选，填写后只同步此单" /></el-form-item></el-form
-      ><el-alert v-if="syncMessage" :title="syncMessage" type="info" :closable="false" /><template
-        #footer
-        ><el-button @click="syncOpen = false">关闭</el-button
-        ><el-button type="primary" :loading="syncing" @click="sync">开始同步</el-button></template
-      ></el-dialog
-    >
+            placeholder="可选，填写后只同步此单"
+          />
+        </el-form-item>
+      </el-form>
+      <el-alert v-if="syncError" :title="syncError" type="error" :closable="false" />
+      <el-alert v-else-if="syncMessage" :title="syncMessage" type="info" :closable="false" />
+      <template #footer>
+        <el-button @click="syncOpen = false">关闭</el-button>
+        <el-button type="primary" :loading="syncing" @click="sync">开始同步</el-button>
+      </template>
+    </el-dialog>
     <TransportFeeImportDialog v-if="feeImportOpen" v-model="feeImportOpen" @saved="load" />
     <el-dialog v-model="importOpen" title="历史货拉拉报表补录" width="min(1200px, 95vw)"
       ><CostCarrierOrdersPanel
@@ -379,6 +407,7 @@ import {
   onDeactivated,
   reactive,
   ref,
+  watch,
 } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
@@ -405,9 +434,10 @@ import {
 } from '@/api/core/transport-records'
 import { huolalaApi, type HuolalaRun } from '@/api/core/huolala'
 import { errorMessage } from '@/api/core/error'
+import { businessDate } from '@/utils/business-date'
 import { displayRecordActor, displayRecordDateTime } from '@/utils/business-display'
+import HuolalaSyncDates from '../huolala/HuolalaSyncDates.vue'
 import {
-  amountOf,
   money,
   ordersOf,
   receiversOf,
@@ -420,7 +450,7 @@ import {
   typeName,
 } from './transport-records'
 import { currentSource, platformPaymentStatus } from './huolala-source'
-import { costLabel, costOptions, loadCostDictionaries } from './cost-dictionaries'
+import { costLabel, costOptions, loadCostDictionaryCodes } from './cost-dictionaries'
 import CostExportDialog from './CostExportDialog.vue'
 import TransportRecordEditor from './TransportRecordEditor.vue'
 import TransportRecordActions from './TransportRecordActions.vue'
@@ -524,7 +554,7 @@ function value(
       shipments[r.id]?.flatMap((s) => s.latest.trackingNumbers).join('、') ||
       r.data.ledger?.platformOrderNo ||
       '-',
-    amount: money(amountOf(r, platform)),
+    amount: money(r.data.amount),
     status: statusName(r.statusCode, r.businessStatusCode),
     creator: platform ? '系统同步' : displayRecordActor(r.createdBy),
     carrier: platform
@@ -645,7 +675,7 @@ async function open(r: CostRecord, mode: boolean, section = '') {
   initialSection.value = section
   try {
     active.value = await getTransport(r.id)
-    readonly.value = mode
+    readonly.value = mode || active.value.record.statusCode === 'VOID'
     editorKey.value++
     editorOpen.value = true
   } catch (e) {
@@ -739,11 +769,12 @@ function associateEmployee() {
       : undefined,
   )
 }
-const localToday = () => new Date().toLocaleDateString('sv-SE')
 const syncOpen = ref(false),
-  syncDates = ref<string[]>([localToday(), localToday()]),
+  syncFrom = ref<string | null>(null),
+  syncTo = ref<string | null>(null),
   syncNo = ref(''),
   syncMessage = ref(''),
+  syncError = ref(''),
   syncing = ref(false),
   importOpen = ref(false)
 let syncRunId = '',
@@ -754,9 +785,12 @@ let syncRunId = '',
   initialized = false
 function openSync() {
   if (!syncing.value) {
-    syncDates.value = [localToday(), localToday()]
+    const today = businessDate(new Date())
+    syncFrom.value = today
+    syncTo.value = today
     syncNo.value = ''
     syncMessage.value = ''
+    syncError.value = ''
   }
   syncOpen.value = true
 }
@@ -824,14 +858,16 @@ async function sync() {
   if (syncing.value) return
   syncing.value = true
   syncMessage.value = ''
+  syncError.value = ''
   try {
-    if (!syncDates.value?.[0] || !syncDates.value?.[1]) throw new Error('请选择运输日期')
-    const run = await huolalaApi.sync(
-      'ORDERS',
-      syncDates.value[0],
-      syncDates.value[1],
-      syncNo.value || undefined,
-    )
+    const orderNo = syncNo.value.trim() || undefined
+    const from = orderNo ? undefined : syncFrom.value || undefined
+    const to = orderNo ? undefined : syncTo.value || undefined
+    if (!orderNo) {
+      if (!from || !to) throw new Error('请选择开始日期和结束日期')
+      if (to < from) throw new Error('结束日期不能早于开始日期')
+    }
+    const run = await huolalaApi.sync('ORDERS', from, to, orderNo)
     if (disposed) return
     syncRunId = run.id
     if (pageActive) await finishSync(run)
@@ -839,7 +875,7 @@ async function sync() {
     if (disposed) return
     syncRunId = ''
     syncing.value = false
-    syncMessage.value = errorMessage(e, '同步失败')
+    syncError.value = errorMessage(e, '同步失败')
   }
 }
 const importCities = ref<{ code: string; name: string }[]>([]),
@@ -973,6 +1009,9 @@ async function doExport() {
       (c) => platformOnly || !platformExportKeys.has(c.key),
     )
     if (!chosen.length) throw new Error('请选择适用于当前运输记录的导出字段')
+    if (!platformOnly && chosen.some((column) => column.key === 'payment'))
+      await loadCostDictionaryCodes(['COST_PAYMENT_STATUS'], false, 'inline')
+    if (version !== exportSequence) return
     await exportCostRows(
       '物流运输记录',
       chosen.map((c) => c.label),
@@ -990,7 +1029,7 @@ async function doExport() {
               .map((s) => `${s.code}：${money(s.amount)}`)
               .join('\n')
           if (c.key === 'amount') {
-            const amount = amountOf(r, p)
+            const amount = r.data.amount
             return amount == null ? null : Number(amount)
           }
           return value(r, c.key, p ? { [r.id]: p } : {}, { [r.id]: detail.shipments || [] })
@@ -1004,30 +1043,58 @@ async function doExport() {
     exporting.value = false
   }
 }
+let openedTransportLink = ''
+function openTransportLink() {
+  if (route.path !== '/supply-chain/cost/logistics') {
+    openedTransportLink = ''
+    return
+  }
+  const id = route.query.sourceId || route.query.costId || route.query.id
+  const importFreight = route.query.action === 'import-freight'
+  if (!importFreight && (typeof id !== 'string' || !id)) {
+    openedTransportLink = ''
+    return
+  }
+  const key = route.fullPath
+  if (!initialized || !pageActive || key === openedTransportLink) return
+  openedTransportLink = key
+  if (importFreight) {
+    if (can('order:logistics-cost:write')) feeImportOpen.value = true
+    return
+  }
+  if (typeof id !== 'string') return
+  const target = route.query.section
+  const focus = target === 'fees' || target === 'orders' || target === 'evidence' ? target : ''
+  const editable = route.query.edit === '1' && can('order:logistics-cost:write')
+  void open({ id } as CostRecord, !editable, focus)
+}
+watch(() => route.fullPath, openTransportLink)
 onMounted(async () => {
   const status = route.query.statusCode
   if (status === 'INCOMPLETE' || status === 'COMPLETE' || status === 'VOID') {
     filters.value.statusCode = status
     applied = { ...applied, statusCode: status }
   }
-  try {
-    await loadCostDictionaries('logistics')
-  } catch (e) {
-    ElMessage.error(errorMessage(e, '字典加载失败'))
-  }
-  try {
-    importEmployees.value = (await getCostEmployees('logistics')) || []
-  } catch {
-    /* 人员目录不可用不阻塞已保存的运输记录。 */
-  }
-  await load()
+  const initialLoad = load()
+  void loadCostDictionaryCodes(['COST_CARRIER'], false, 'inline')
+  void getCostEmployees('logistics').then(
+    (employees) => {
+      if (!disposed) importEmployees.value = employees || []
+    },
+    () => {
+      /* 人员目录暂时不可用时，仍可查询已保存的运输记录。 */
+    },
+  )
+  openTransportLink()
+  await initialLoad
   initialized = true
-  const id = route.query.sourceId || route.query.costId || route.query.id
-  if (typeof id === 'string' && id) await open({ id } as CostRecord, true)
 })
 onActivated(() => {
   pageActive = true
-  if (initialized) void load()
+  if (initialized) {
+    void load()
+    openTransportLink()
+  }
   if (syncRunId) void pollSync()
 })
 onDeactivated(() => {
@@ -1087,16 +1154,35 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   padding: 18px 20px;
 }
 .list-heading > div {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }
 .list-heading strong {
   font-size: 17px;
+}
+.freight-summary {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+.freight-summary b {
+  color: var(--el-text-color-primary);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.freight-summary small {
+  color: var(--el-color-warning-dark-2);
+  font-size: inherit;
 }
 .selection {
   color: var(--el-color-primary);

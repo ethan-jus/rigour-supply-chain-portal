@@ -1,5 +1,6 @@
 import { buildCostWorkbook, downloadCostWorkbook } from '../../cost/cost-export'
-import { dictionaryValue } from './cost-presentation'
+import { dictionaryCodeForKey, dictionaryValue } from './cost-presentation'
+import { loadCostDictionaryCodes } from '../../cost/cost-dictionaries'
 
 /** 服务端导出已固定快照且重新验证权限；这里只转换文件格式，不重新请求或汇总业务数据。 */
 export function parseCostCsv(content: string): string[][] {
@@ -64,7 +65,8 @@ const columns = [
   '确认状态',
   '付款状态',
 ]
-export const costDashboardExportColumns = [...columns, '费用项目'].map((key) => ({
+const optionalColumns = ['费用项目', '原始单号']
+export const costDashboardExportColumns = [...columns, ...optionalColumns].map((key) => ({
   key,
   label:
     {
@@ -84,7 +86,7 @@ export async function buildCostDashboardWorkbook(
   const headerIndex = parsed.findIndex((row) => required.every((label) => row.includes(label)))
   if (headerIndex < 0) throw new Error('导出字段不完整，请重新导出')
   const headers = parsed[headerIndex]!
-  const availableColumns = headers.includes('费用项目') ? [...columns, '费用项目'] : columns
+  const availableColumns = [...columns, ...optionalColumns.filter((key) => headers.includes(key))]
   const outputColumns = selectedFields
     ? availableColumns.filter((key) => selectedFields.includes(key))
     : availableColumns
@@ -101,6 +103,12 @@ export async function buildCostDashboardWorkbook(
   if (Number(metadata.get('匹配笔数')) !== details.length)
     throw new Error('导出笔数与明细不一致，请重新导出')
   const get = (row: string[], label: string) => row[headers.indexOf(label)] ?? ''
+  if (outputColumns.includes('费用项目')) {
+    const codes = details
+      .map((row) => dictionaryCodeForKey(get(row, '费用项目')))
+      .filter((code): code is string => !!code)
+    if (codes.length) await loadCostDictionaryCodes(codes, false, 'inline')
+  }
   const rows = details.map((row) =>
     outputColumns.map((label) => {
       let value = get(row, label)
@@ -136,6 +144,7 @@ export async function buildCostDashboardWorkbook(
         `${metadata.get(key)}${key === '已确认金额' ? ' 元' : key === '匹配笔数' ? ' 笔' : ''}`,
       ]),
     ['纳入范围', '运输记录仅统计已完善单据；其他成本沿用各自确认口径，关联报销不重复计入。'],
+    ['分摊口径', '金额按费用归属列示。已分摊的单据显示该归属分到的金额。'],
     [
       '付款状态',
       '薪酬按月度薪酬发放登记，其他费用按原单登记；未付款金额不代表银行流水或工资待发净额。',
@@ -161,7 +170,8 @@ export async function exportCostDashboardWorkbook(
   blob: Blob,
   context = '',
   selectedFields?: string[],
+  shouldDownload?: () => boolean,
 ) {
   const workbook = await buildCostDashboardWorkbook(await blob.text(), context, selectedFields)
-  await downloadCostWorkbook(workbook, '成本数据看板_支出明细')
+  await downloadCostWorkbook(workbook, '成本数据看板_支出明细', shouldDownload)
 }

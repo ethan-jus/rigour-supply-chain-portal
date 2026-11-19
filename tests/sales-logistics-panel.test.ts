@@ -84,10 +84,7 @@ it('物流发货保留本单分摊口径，路线采用运输快照，查看复�
     },
   })
   await flushPromises()
-  expect(api.dictionaries).toHaveBeenCalledWith([
-    { moduleCode: '', code: 'COST_CARRIER' },
-    { moduleCode: '', code: 'COST_DELIVERY_MODE' },
-  ])
+  expect(api.dictionaries).toHaveBeenCalledWith([{ moduleCode: '', code: 'COST_CARRIER' }])
   const summary = wrapper.get('.logistics-summary').text().replace(/\s+/g, '')
   expect(summary).toContain('已关联2笔')
   expect(summary).toContain('本单分摊费用40.00元')

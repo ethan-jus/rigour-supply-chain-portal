@@ -310,32 +310,37 @@
       title="同步货拉拉数据"
       width="min(650px,94vw)"
       :close-on-click-modal="false"
-      ><el-form label-position="top"
-        ><el-form-item label="同步内容"
-          ><el-select v-model="syncScope"
-            ><el-option label="订单和员工" value="ALL" /><el-option
-              label="订单"
-              value="ORDERS" /><el-option
-              label="员工目录"
-              value="EMPLOYEES" /></el-select></el-form-item
-        ><el-form-item label="用车日期"
-          ><el-date-picker
-            v-model="syncRange"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            start-placeholder="开始日期"
-            end-placeholder="截止日期" /></el-form-item
-        ><el-form-item label="货拉拉订单号"
-          ><el-input
-            v-model="syncOrderNo"
-            placeholder="选填，可按完整单号补同步" /></el-form-item></el-form
-      ><template #footer
-        ><el-button @click="syncOpen = false">取消</el-button
-        ><el-button type="primary" :loading="saving" @click="submitSync(syncScope)"
-          >开始同步</el-button
-        ></template
-      ></el-dialog
+      @open="syncError = ''"
     >
+      <el-form label-position="top">
+        <el-form-item label="同步内容">
+          <el-select v-model="syncScope" :disabled="saving">
+            <el-option label="订单和员工" value="ALL" />
+            <el-option label="订单" value="ORDERS" />
+            <el-option label="员工目录" value="EMPLOYEES" />
+          </el-select>
+        </el-form-item>
+        <HuolalaSyncDates
+          v-if="syncScope !== 'EMPLOYEES' && !syncOrderNo.trim()"
+          v-model:from="syncFrom"
+          v-model:to="syncTo"
+          label="用车日期"
+          :disabled="saving"
+        />
+        <el-form-item v-if="syncScope !== 'EMPLOYEES'" label="货拉拉订单号">
+          <el-input
+            v-model="syncOrderNo"
+            :disabled="saving"
+            placeholder="选填，可按完整单号补同步"
+          />
+        </el-form-item>
+      </el-form>
+      <el-alert v-if="syncError" :title="syncError" type="error" :closable="false" />
+      <template #footer>
+        <el-button @click="syncOpen = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="submitSync(syncScope)">开始同步</el-button>
+      </template>
+    </el-dialog>
     <el-dialog
       v-model="authorizing"
       @closed="cancelAuthorization"
@@ -369,11 +374,10 @@ import {
 } from '@/api/core/huolala'
 import { errorMessage } from '@/api/core/error'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
-import { displayDateTime } from '@/utils/business-date'
+import { businessPeriodRange, displayDateTime } from '@/utils/business-date'
+import HuolalaSyncDates from './HuolalaSyncDates.vue'
 const { can } = useSupplyPermissions()
-const localDay = (value = new Date()) =>
-  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(value)
-const firstDay = localDay().slice(0, 7) + '-01'
+const [firstDay, today] = businessPeriodRange('month')
 const connection = ref<HuolalaConnection | null>(null),
   employees = ref<HuolalaEmployee[]>([]),
   runs = ref<HuolalaRun[]>([])
@@ -458,7 +462,9 @@ const selectedInternalDepartment = computed(
 )
 const syncOpen = ref(false),
   syncScope = ref('ALL'),
-  syncRange = ref<[string, string]>([firstDay, localDay()]),
+  syncFrom = ref<string | null>(firstDay),
+  syncTo = ref<string | null>(today),
+  syncError = ref(''),
   syncOrderNo = ref('')
 const issuesOpen = ref(false),
   issueLoading = ref(false),
@@ -668,25 +674,33 @@ async function loadRuns() {
   }
 }
 async function submitSync(scope: string) {
-  if (!syncRange.value?.[0] || !syncRange.value?.[1]) {
-    error.value = '请选择同步日期'
-    return
+  if (saving.value) return
+  const currentError = syncOpen.value ? syncError : error
+  const includesOrders = scope !== 'EMPLOYEES'
+  const orderNo = includesOrders ? syncOrderNo.value.trim() || undefined : undefined
+  const useDates = includesOrders && !orderNo
+  const from = useDates ? syncFrom.value || undefined : undefined
+  const to = useDates ? syncTo.value || undefined : undefined
+  if (useDates) {
+    if (!from || !to) {
+      currentError.value = '请选择开始日期和结束日期'
+      return
+    }
+    if (to < from) {
+      currentError.value = '结束日期不能早于开始日期'
+      return
+    }
   }
   saving.value = true
-  error.value = ''
+  currentError.value = ''
   try {
-    await huolalaApi.sync(
-      scope,
-      syncRange.value[0],
-      syncRange.value[1],
-      syncOrderNo.value || undefined,
-    )
+    await huolalaApi.sync(scope, from, to, orderNo)
     syncOpen.value = false
     tab.value = 'runs'
     await loadRuns()
     ElMessage.success('同步任务已提交')
   } catch (e) {
-    error.value = errorMessage(e, '同步任务提交失败')
+    currentError.value = errorMessage(e, '同步任务提交失败')
   } finally {
     saving.value = false
   }

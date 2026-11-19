@@ -42,9 +42,9 @@ export const dimensions: Record<CostCategory, string[]> = {
 export const dimensionNames: Record<string, string> = {
   leg: '运输类型',
   carrier: '物流公司',
-  method: '运输方式',
+  method: '运输渠道',
   feeType: '费用项目',
-  deliveryMode: '承运方式',
+  deliveryMode: '配送方式',
   component: '采购成本构成',
   premises: '仓库或场地',
   contract: '合同编号',
@@ -61,7 +61,7 @@ export const dimensionNames: Record<string, string> = {
   trip: '出差或报销事项',
   destination: '出差目的地',
 }
-export const palette = ['#3269df', '#00836c', '#7b61b5', '#b76a15', '#2486a5', '#69798b']
+export const palette = ['#77aaf4', '#70c9bc', '#aaa1ef', '#e5b473', '#8dbbde', '#a4adb9']
 export const categoryColor = (key: string, i: number) =>
   palette[Math.max(0, Object.keys(categories).indexOf(key)) % palette.length] ||
   palette[i % palette.length]
@@ -127,9 +127,18 @@ export function overviewCards(report: CostReport, available: CostCategory[]) {
     })
 }
 /** 分组键携带来源字典编码，字典新增项无需维护前端枚举。 */
+const dictionaryKey = /^dict:([A-Z][A-Z0-9_]*):(.+)$/
+
+export function dictionaryCodeForKey(key: string | null | undefined): string | undefined {
+  return key ? dictionaryKey.exec(key)?.[1] : undefined
+}
+
 export function dictionaryValue(key: string, fallback = key): string {
-  const match = /^dict:([A-Z][A-Z0-9_]*):(.+)$/.exec(key)
-  return match ? costLabel(match[1]!, match[2]!) : fallback
+  const match = dictionaryKey.exec(key)
+  if (!match) return fallback
+  const code = match[2]!
+  const label = costLabel(match[1]!, code)
+  return label === code && fallback !== key ? fallback : label
 }
 export function recordItem(row: Pick<CostRecord, 'itemKey' | 'itemName'>): string {
   return !row.itemKey || row.itemKey === 'UNKNOWN'
@@ -144,19 +153,28 @@ export function detailDimensionValue(
   value: string,
 ) {
   if (value.startsWith('dict:')) return dictionaryValue(value)
-  const dictionary =
-    name === '运输环节'
-      ? 'COST_LOGISTICS_LEG'
-      : name === '运输方式'
-        ? 'COST_TRANSPORT_METHOD'
-        : name === '费用类型'
-          ? record.source === 'HR' || record.category === 'expense'
-            ? 'REIMBURSEMENT_EXPENSE_TYPE'
-            : ['office', 'warehouse', 'premises_unknown'].includes(record.category)
-              ? 'COST_PREMISES_TYPE'
-              : 'MARKETING_EXPENSE_TYPE'
-          : undefined
-  return dictionary && value !== '未记录' ? costLabel(dictionary, value) : value
+  const dictionary = detailDimensionDictionary(record, name, value)
+  return dictionary ? costLabel(dictionary, value) : value
+}
+
+export function detailDimensionDictionary(
+  record: Pick<CostRecord, 'source' | 'category'>,
+  name: string,
+  value: string,
+) {
+  if (!value || value === '未记录') return undefined
+  if (value.startsWith('dict:')) return dictionaryCodeForKey(value)
+  return name === '运输环节'
+    ? 'COST_LOGISTICS_LEG'
+    : name === '运输渠道'
+      ? 'COST_TRANSPORT_KIND'
+      : name === '费用类型'
+        ? record.source === 'HR' || record.category === 'expense'
+          ? 'REIMBURSEMENT_EXPENSE_TYPE'
+          : ['office', 'warehouse', 'premises_unknown'].includes(record.category)
+            ? 'COST_PREMISES_TYPE'
+            : 'MARKETING_EXPENSE_TYPE'
+        : undefined
 }
 /** 详情只呈现适用于原业务的维度，必需资料缺失仍保留提示。 */
 export function visibleDetailDimensions(
@@ -183,7 +201,7 @@ export function visibleDetailDimensions(
 }
 const theme = {
   color: palette,
-  textStyle: { color: '#475569', fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif' },
+  textStyle: { color: '#91a8bf', fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif' },
   animationDuration: 200,
 }
 function amountScale(values: number[]) {
@@ -194,15 +212,15 @@ function amountAxis(values: number[]) {
   const number = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 })
   return {
     type: 'value' as const,
-    min: 0,
+    min: values.some((value) => value < 0) ? undefined : 0,
     minInterval: 0.01,
     name: scale === 10000 ? '金额（万元）' : '金额（元）',
-    nameTextStyle: { color: '#64748b' },
+    nameTextStyle: { color: '#8da4bb' },
     axisLabel: {
-      color: '#64748b',
+      color: '#8da4bb',
       formatter: (value: number) => number.format(value / scale),
     },
-    splitLine: { lineStyle: { color: '#e2e8f0' } },
+    splitLine: { lineStyle: { color: '#233b51' } },
   }
 }
 export const ringOption = (groups: CostGroup[], category = false): EChartsCoreOption => ({
@@ -219,14 +237,20 @@ export const ringOption = (groups: CostGroup[], category = false): EChartsCoreOp
       center: ['50%', '50%'],
       label: { show: false },
       emphasis: { scale: true },
-      data: groups
-        .filter((g) => Number(g.current) > 0)
-        .map((g, i) => ({
-          id: g.key,
-          name: g.label,
-          value: Number(g.current),
-          itemStyle: { color: category ? categoryColor(g.key, i) : palette[i % palette.length] },
-        })),
+      data: groups.flatMap((g, i) =>
+        Number(g.current) > 0
+          ? [
+              {
+                id: g.key,
+                name: g.label,
+                value: Number(g.current),
+                itemStyle: {
+                  color: category ? categoryColor(g.key, i) : palette[i % palette.length],
+                },
+              },
+            ]
+          : [],
+      ),
     },
   ],
 })
@@ -239,12 +263,12 @@ export function bars(groups: CostGroup[], comparable: boolean, limit = 8): EChar
       renderMode: 'richText',
       valueFormatter: (v: unknown) => `${money(String(v))} 元`,
     },
-    legend: { top: 0, bottom: 'auto', textStyle: { color: '#475569' }, selectedMode: false },
+    legend: { top: 0, bottom: 'auto', textStyle: { color: '#9bb0c7' }, selectedMode: false },
     grid: { left: 8, right: 16, bottom: 12, top: 40, containLabel: true },
     xAxis: {
       type: 'category',
       data: list.map((g) => g.label),
-      axisLabel: { color: '#475569', interval: 0, width: 72, overflow: 'break', lineHeight: 17 },
+      axisLabel: { color: '#a9bfd4', interval: 0, width: 72, overflow: 'break', lineHeight: 17 },
     },
     yAxis: amountAxis(
       list.flatMap((g) => [Number(g.current), ...(comparable ? [Number(g.previous)] : [])]),
@@ -254,7 +278,7 @@ export function bars(groups: CostGroup[], comparable: boolean, limit = 8): EChar
         name: '本期',
         type: 'bar',
         barMaxWidth: 24,
-        itemStyle: { color: '#3269df', borderRadius: [3, 3, 0, 0] },
+        itemStyle: { color: '#78a9f0', borderRadius: [3, 3, 0, 0] },
         data: list.map((g) => ({ value: Number(g.current), id: g.key })),
       },
       ...(comparable
@@ -263,7 +287,7 @@ export function bars(groups: CostGroup[], comparable: boolean, limit = 8): EChar
               name: '可比期',
               type: 'bar',
               barMaxWidth: 24,
-              itemStyle: { color: '#a4b4cc' },
+              itemStyle: { color: '#4d667e' },
               data: list.map((g) => (g.previous == null ? null : Number(g.previous))),
             },
           ]
@@ -271,46 +295,61 @@ export function bars(groups: CostGroup[], comparable: boolean, limit = 8): EChar
     ],
   }
 }
-export function line(report: CostReport): EChartsCoreOption {
+export function line(
+  report: CostReport,
+  { daily = false, comparisonLabel = '可比期' } = {},
+): EChartsCoreOption {
+  const amounts = (side: 'current' | 'previous') => {
+    let previous = 0
+    return report.cumulative.map((point) => {
+      const value = point[side]
+      if (value == null) return null
+      if (!daily) return Number(value)
+      // 按分取相邻累计值差额，保留冲减和没有发生额的日期。
+      const cents = Math.round(Number(value) * 100)
+      const amount = (cents - previous) / 100
+      previous = cents
+      return amount
+    })
+  }
+  const current = amounts('current')
+  const comparison = report.meta.comparisonAvailable ? amounts('previous') : []
   return {
     ...theme,
     tooltip: {
       trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: '#557490' } },
       renderMode: 'richText',
       valueFormatter: (v: unknown) => `${money(String(v))} 元`,
     },
-    legend: { top: 0, bottom: 'auto', textStyle: { color: '#475569' }, selectedMode: false },
-    grid: { left: 8, right: 14, top: 42, bottom: 12, containLabel: true },
+    legend: { top: 0, bottom: 'auto', textStyle: { color: '#9bb0c7' }, selectedMode: false },
+    grid: { left: 8, right: 14, top: 52, bottom: 12, containLabel: true },
     xAxis: {
       type: 'category',
       data: report.cumulative.map((p) => p.key),
       boundaryGap: false,
-      axisLabel: { color: '#64748b' },
+      axisLabel: { color: '#8da4bb' },
     },
-    yAxis: amountAxis(
-      report.cumulative.flatMap((p) => [
-        Number(p.current),
-        ...(report.meta.comparisonAvailable ? [Number(p.previous)] : []),
-      ]),
-    ),
+    yAxis: amountAxis([...current, ...comparison].filter((value) => value !== null)),
     series: [
       {
         name: '本期',
         type: 'line',
         showSymbol: false,
-        data: report.cumulative.map((p) => (p.current == null ? null : Number(p.current))),
-        itemStyle: { color: '#3269df' },
-        areaStyle: { opacity: 0.07 },
+        data: current,
+        itemStyle: { color: '#7dafff' },
+        lineStyle: { width: 2.5 },
+        areaStyle: { opacity: 0.12 },
       },
       ...(report.meta.comparisonAvailable
         ? [
             {
-              name: '可比期',
+              name: comparisonLabel,
               type: 'line',
               showSymbol: false,
-              data: report.cumulative.map((p) => (p.previous == null ? null : Number(p.previous))),
+              data: comparison,
               lineStyle: { type: 'dashed' },
-              itemStyle: { color: '#a4b4cc' },
+              itemStyle: { color: '#8b9eaf' },
             },
           ]
         : []),
@@ -319,21 +358,22 @@ export function line(report: CostReport): EChartsCoreOption {
 }
 
 /** 月份保持时间顺序；无可比数据保留缺口，不补零或跨缺口连线。 */
-export function monthlyTrend(months: CostMonth[]): EChartsCoreOption {
+export function monthlyTrend(months: CostMonth[], comparisonLabel = '可比期'): EChartsCoreOption {
   const comparable = months.some((m) => m.previous !== null)
   return {
     ...theme,
     tooltip: {
       trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(120, 169, 240, 0.08)' } },
       renderMode: 'richText',
       valueFormatter: (v: unknown) => `${money(String(v))} 元`,
     },
-    legend: { top: 0, textStyle: { color: '#475569' }, selectedMode: false },
-    grid: { left: 8, right: 14, top: 42, bottom: 12, containLabel: true },
+    legend: { top: 0, textStyle: { color: '#9bb0c7' }, selectedMode: false },
+    grid: { left: 8, right: 14, top: 52, bottom: 12, containLabel: true },
     xAxis: {
       type: 'category',
       data: months.map((m) => `${m.month}月${m.month === 1 ? `\n${m.year}` : ''}`),
-      axisLabel: { color: '#64748b' },
+      axisLabel: { color: '#8da4bb' },
     },
     yAxis: amountAxis(
       months.flatMap((m) => [
@@ -346,19 +386,20 @@ export function monthlyTrend(months: CostMonth[]): EChartsCoreOption {
         name: '本期',
         type: 'bar',
         barMaxWidth: 28,
-        itemStyle: { color: '#3269df', borderRadius: [3, 3, 0, 0] },
+        itemStyle: { color: '#78a9f0', borderRadius: [3, 3, 0, 0] },
         data: months.map((m) => ({ id: `${m.year}-${m.month}`, value: Number(m.current) })),
       },
       ...(comparable
         ? [
             {
-              name: '可比期',
+              name: comparisonLabel,
               type: 'line',
               connectNulls: false,
+              silent: true,
               showSymbol: true,
               symbolSize: 5,
               lineStyle: { type: 'dashed' },
-              itemStyle: { color: '#a4b4cc' },
+              itemStyle: { color: '#a9b8ca' },
               data: months.map((m) =>
                 m.previous === null
                   ? null
@@ -382,39 +423,42 @@ export function matrixTotal(
   return mode === 'delta' ? signed(group.delta) : money(group.current)
 }
 
+function objectDictionary(report: CostReport, key: string) {
+  if (key.startsWith('dict:')) return dictionaryCodeForKey(key)
+  if (key.startsWith('code:REIMBURSEMENT_EXPENSE_TYPE:')) return 'REIMBURSEMENT_EXPENSE_TYPE'
+  if (!key.startsWith('code:')) return undefined
+  return report.dimension === 'leg'
+    ? 'COST_LOGISTICS_LEG'
+    : report.dimension === 'method'
+      ? 'COST_TRANSPORT_KIND'
+      : report.dimension === 'type'
+        ? ['expense', 'labor'].includes(report.category || '')
+          ? 'REIMBURSEMENT_EXPENSE_TYPE'
+          : ['office', 'warehouse', 'premises_unknown'].includes(report.category || '')
+            ? 'COST_PREMISES_TYPE'
+            : 'MARKETING_EXPENSE_TYPE'
+        : undefined
+}
+
+export function objectDictionaryCodes(report: CostReport): string[] {
+  return report.objects
+    .map((group) => objectDictionary(report, group.key))
+    .filter((code): code is string => !!code)
+}
+
 /** 费用分类字典与录入页共用；稳定分组键保持不变。 */
 export function resolveObjectLabels(report: CostReport): CostReport {
-  const dictionary =
-    report.dimension === 'leg'
-      ? 'COST_LOGISTICS_LEG'
-      : report.dimension === 'method'
-        ? 'COST_TRANSPORT_METHOD'
-        : report.dimension === 'type'
-          ? ['expense', 'labor'].includes(report.category || '')
-            ? 'REIMBURSEMENT_EXPENSE_TYPE'
-            : ['office', 'warehouse', 'premises_unknown'].includes(report.category || '')
-              ? 'COST_PREMISES_TYPE'
-              : 'MARKETING_EXPENSE_TYPE'
-          : undefined
   return {
     ...report,
-    objects: report.objects.map((group) =>
-      group.key.startsWith('dict:')
-        ? { ...group, label: dictionaryValue(group.key, group.label) }
-        : group.key.startsWith('code:REIMBURSEMENT_EXPENSE_TYPE:')
-          ? {
-              ...group,
-              label: costLabel(
-                'REIMBURSEMENT_EXPENSE_TYPE',
-                group.key.slice('code:REIMBURSEMENT_EXPENSE_TYPE:'.length),
-              ),
-            }
-          : group.key.startsWith('code:')
-            ? dictionary
-              ? { ...group, label: costLabel(dictionary, group.key.slice(5)) }
-              : group
-            : group,
-    ),
+    objects: report.objects.map((group) => {
+      if (group.key.startsWith('dict:'))
+        return { ...group, label: dictionaryValue(group.key, group.label) }
+      const dictionary = objectDictionary(report, group.key)
+      if (!dictionary) return group
+      const code = group.key.replace(/^code:(?:REIMBURSEMENT_EXPENSE_TYPE:)?/, '')
+      const label = costLabel(dictionary, code)
+      return label === code ? group : { ...group, label }
+    }),
   }
 }
 

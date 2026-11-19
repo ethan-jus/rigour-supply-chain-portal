@@ -13,7 +13,13 @@
     "
     @change="emit('change')"
   >
-    <el-option v-for="city in options" :key="city.code" :value="city.code" :label="city.name" />
+    <el-option
+      v-for="city in options"
+      :key="city.code"
+      :value="city.code"
+      :label="city.name"
+      :disabled="'unavailable' in city"
+    />
     <template #empty
       ><div class="city-empty" role="status">
         {{ loading ? '正在加载费用归属…' : failure || '暂无授权费用归属，请联系管理员配置范围' }}
@@ -47,6 +53,7 @@ const options = computed(() =>
         ...cities.value,
         {
           code: value.value,
+          unavailable: true,
           name:
             props.snapshot && props.snapshot !== value.value ? props.snapshot : '归属名称待核对',
         },

@@ -3,7 +3,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { defineComponent } from 'vue'
 import Editor from '@/views/supply-chain/cost/TransportRecordEditor.vue'
-import type { TransportDetail } from '@/api/core/transport-records'
+import TransportShipmentSources from '@/views/supply-chain/cost/TransportShipmentSources.vue'
+import type { ShipmentTransportSource, TransportDetail } from '@/api/core/transport-records'
 import type { CostEmployee, CostSource } from '@/api/core/cost'
 import { createLedgerCommand } from '@/views/supply-chain/cost/cost-ledger'
 
@@ -11,6 +12,11 @@ vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => true }),
 }))
 
+const getMappedDhbCarrierValues = vi.hoisted(() => vi.fn().mockResolvedValue([]))
+vi.mock('@/api/core/business-settings', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getMappedDhbCarrierValues,
+}))
 const api = vi.hoisted(() => ({
   employees: vi.fn(),
   history: vi.fn(),
@@ -90,6 +96,7 @@ function detail(): TransportDetail {
 const global = {
   plugins: [ElementPlus],
   stubs: {
+    RouterLink: true,
     CostAttachments: true,
     CostAttachmentEditor: true,
     TransportEvidence: defineComponent({
@@ -107,6 +114,7 @@ const global = {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  getMappedDhbCarrierValues.mockResolvedValue([])
   api.employees.mockResolvedValue([])
   api.history.mockResolvedValue([])
   api.save.mockResolvedValue(detail())
@@ -172,8 +180,9 @@ describe('运输记录详情回填', () => {
         '备注',
       ])
       const columns = [...document.body.querySelectorAll('th')].map((e) => e.textContent)
-      expect(columns).toContain('关联时间')
+      expect(columns).toContain('订单关联时间')
       for (const label of [
+        '收货方式',
         '费用负责人',
         '付款状态',
         '运输费用总额（元）',
@@ -185,7 +194,15 @@ describe('运输记录详情回填', () => {
         '收货地址',
       ])
         expect(document.body.textContent).toContain(label)
-      if (mode === '查看') expect(w.findAll('input')).toHaveLength(0)
+      const receiving = w
+        .findAll('.el-form-item')
+        .find((item) => item.find('.el-form-item__label').text() === '收货方式')!
+      if (mode === '查看') {
+        expect(w.findAll('input')).toHaveLength(0)
+        expect(receiving.get('.el-form-item__content').text()).toBe('到点自提')
+      } else {
+        expect(receiving.get('[aria-label="收货方式"]').attributes('disabled')).toBeUndefined()
+      }
       w.unmount()
       document.body.innerHTML = ''
     },
@@ -324,6 +341,7 @@ function validManualLedger() {
   const ledger = createLedgerCommand(true).ledger!
   Object.assign(ledger, {
     deliveryModeCode: 'THIRD_PARTY',
+    receivingMethodCode: 'SELF_PICKUP',
     platformOrderNo: 'SF001',
     sender: {
       pointCode: 'FROM',
@@ -375,6 +393,12 @@ describe('通用手工账单', () => {
       global,
       attachTo: document.body,
     })
+    await flushPromises()
+    const receiving = w
+      .findAllComponents({ name: 'ElSelect' })
+      .find((select) => select.props('placeholder') === '请选择收货方式')!
+    expect(receiving.props('modelValue')).toBe('SELF_PICKUP')
+    receiving.vm.$emit('update:modelValue', 'DOOR_DELIVERY')
     await flushPromises()
     const summary = () => w.find('[aria-label="账单汇总"]').text()
     expect(summary()).toContain('费用小计（元）70.00')
@@ -433,6 +457,7 @@ describe('通用手工账单', () => {
       expect.objectContaining({
         draft: expect.objectContaining({
           amount: 72,
+          receivingMethodCode: 'DOOR_DELIVERY',
           manualBillItems: expect.arrayContaining([{ name: '装卸费', amount: 12 }]),
         }),
       }),
@@ -660,16 +685,88 @@ describe('通用手工账单', () => {
 })
 
 describe('物流详情的信息优先级', () => {
-  it('订货宝来源区只显示发货单、状态和商品，共用物流字段在基本信息展示一次', async () => {
+  it('按发货商品行显示订货宝规格，兼容单字段和缺失规格', async () => {
+    const latest: ShipmentTransportSource['latest'] = {
+      shipmentId: 'SHIP1',
+      shipmentNo: 'FH-1',
+      salesOrderId: 'SO1',
+      sourceStatus: 'receivedin',
+      shipTime: '2026-11-18T08:38:00Z',
+      sourceUpdatedAt: null,
+      carrierCode: null,
+      carrierName: null,
+      deliveryModeCode: null,
+      deliveryModeName: null,
+      trackingNumbers: [],
+      receiver: null,
+      sourceFields: {},
+      goods: [
+        {
+          goods_num: '100003',
+          options_info: [{ options_name: 'A300' }],
+          ships_number: 1,
+          remark: '发货前核对颜色',
+        },
+        { goods_num: '100003', options_info: [{ options_name: 'A500' }], ships_number: 1 },
+        {
+          options_info: [{ options_name: '蓝色' }, null, { options_name: ' ' }, { options_name: '加厚' }],
+          goods_options: '旧规格',
+        },
+        { options_info: [{ options_name: ' ' }], goods_options: '单规格' },
+        { options_info: null },
+      ],
+    }
+    const w = mount(TransportShipmentSources, {
+      props: { sources: [{ id: 'SHIP1', costId: 'C1', issue: null, differencePending: false, latest }] },
+      global,
+    })
+    try {
+      await w.get('.el-collapse-item__header').trigger('click')
+      await flushPromises()
+      const specs = w.findAll('.el-table__body tbody tr').map((row) => row.findAll('td')[2]?.text())
+      expect(specs).toEqual(['A300', 'A500', '蓝色 / 加厚', '单规格', '-'])
+      expect(w.findAll('th').at(-1)?.text()).toBe('商品备注')
+      expect(w.findAll('.goods-remark').map((cell) => cell.text())).toEqual([
+        '发货前核对颜色',
+        '-',
+        '-',
+        '-',
+        '-',
+      ])
+    } finally {
+      w.unmount()
+    }
+  })
+
+  it.each([
+    ['快递', '完整'],
+    ['快递', '待设置配送方式'],
+    ['客户自提', '完整'],
+    ['送货上门', '完整'],
+    ['送货上门', '未识别物流公司'],
+    ['送货上门', '物流公司更新中'],
+    ['送货上门', '仅识别物流公司'],
+  ])('订货宝「%s」资料%s时保留来源字段且不重复', async (sourceMode, state) => {
+    const mapped = state === '完整'
+    const updating = state === '物流公司更新中'
+    if (updating) getMappedDhbCarrierValues.mockResolvedValueOnce(['顺丰速运'])
     const d = detail()
-    d.record.data.ledger = validManualLedger()
-    d.record.data.ledger.carrierCode = 'SF'
-    d.record.data.ledger.shippingTime = '2026-11-16T16:18:00'
+    const detailRemark =
+      sourceMode === '快递' ? '到店请联系仓库' : sourceMode === '客户自提' ? undefined : ''
+    const listRemark = '发货列表备注'
+    d.record.data.remark = '本系统补充说明'
+    d.record.data.ledger = {
+      ...validManualLedger(),
+      carrierCode: 'SF',
+      deliveryModeCode: mapped ? 'THIRD_PARTY' : '',
+      transportMethodCode: sourceMode === '快递' ? 'EXPRESS' : null,
+      shippingTime: '2026-11-16T16:18:00',
+    }
     d.shipments = [
       {
         id: 'SHIP1',
         costId: 'C1',
-        issue: null,
+        issue: mapped ? null : '来源配送方式尚未映射，请维护数据字典的来源映射后重新同步',
         differencePending: false,
         latest: {
           shipmentId: 'SHIP1',
@@ -678,13 +775,20 @@ describe('物流详情的信息优先级', () => {
           sourceStatus: 'receivedin',
           shipTime: '2026-11-16T08:18:00Z',
           sourceUpdatedAt: null,
-          carrierCode: 'SF',
+          carrierCode: state === '未识别物流公司' || updating ? null : 'SF',
           carrierName: '顺丰速运',
-          deliveryModeCode: 'THIRD_PARTY',
-          deliveryModeName: '快递',
+          deliveryModeCode: mapped ? 'THIRD_PARTY' : null,
+          deliveryModeName: sourceMode,
           trackingNumbers: ['SF1582052267166'],
           receiver: null,
-          sourceFields: {},
+          sourceFields: {
+            detail: {
+              logistics_name: '顺丰速运',
+              distribution_mode_name: sourceMode,
+              remark: detailRemark,
+            },
+            list: { remark: listRemark },
+          },
           goods: [{ goods_name: '球杆', ships_number: 2, units_name: '支' }],
         },
       },
@@ -702,11 +806,55 @@ describe('物流详情的信息优先级', () => {
     expect(source.text()).toContain('FH.20261116.0420')
     expect(source.text()).toContain('待收货')
     expect(source.text()).toContain('发货商品')
-    for (const value of ['发货时间', '配送方式', '物流公司', '快递单号'])
-      expect(source.text()).not.toContain(value)
+    for (const readonly of [true, false]) {
+      await w.setProps({ readonly })
+      const fields = basic.findAll('.el-form-item')
+      const sourceModeFields = fields.filter(
+        (item) => item.get('.el-form-item__label').text() === '订货宝发货方式',
+      )
+      expect(sourceModeFields).toHaveLength(1)
+      expect(sourceModeFields[0]!.get('.el-form-item__content').text()).toBe(sourceMode)
+      expect(sourceModeFields[0]!.find('input').exists()).toBe(false)
+      expect(basic.text()).not.toContain('运输渠道')
+      expect(basic.text()).not.toContain('收货方式')
+      if (!mapped) expect(basic.text()).toContain('待核对')
+      const remarks = w.get('[aria-label="运输备注"]')
+      expect(remarks.get('.platform-remark p').text()).toBe((detailRemark ?? listRemark) || '-')
+      expect(remarks.get('.platform-remark').find('textarea').exists()).toBe(false)
+      if (readonly) expect(remarks.text()).toContain('本系统补充说明')
+      else expect(remarks.get('textarea').element.value).toBe('本系统补充说明')
+    }
+    const sourceLabels = source.findAll('dt').map((item) => item.text())
+    for (const label of [
+      '发货时间',
+      '配送方式',
+      '订货宝发货方式',
+      '收货方式',
+      '送达要求',
+      '物流公司',
+      '快递单号',
+    ])
+      expect(sourceLabels).not.toContain(label)
+    if (updating) {
+      expect(getMappedDhbCarrierValues).toHaveBeenCalledWith(['顺丰速运'])
+      expect(source.text()).toContain('顺丰速运 · 更新中')
+      expect(source.text()).not.toContain('去设置')
+    } else if (state === '仅识别物流公司') {
+      expect(source.text()).toContain('配送方式待核对')
+      expect(source.text()).not.toContain('去设置')
+    } else if (state === '待设置配送方式') {
+      expect(source.text()).toContain('配送方式待核对')
+      expect(source.find('router-link-stub').exists()).toBe(true)
+      expect(source.text()).not.toContain('快递')
+    } else if (!mapped) {
+      expect(source.text()).toContain('物流公司待核对：顺丰速运')
+    } else {
+      expect(source.find('[role="alert"]').exists()).toBe(false)
+    }
     await source.get('.el-collapse-item__header').trigger('click')
     await flushPromises()
     expect(source.text()).toContain('球杆')
+    expect(source.text()).not.toContain('商品备注')
     w.unmount()
     document.body.innerHTML = ''
   })
@@ -801,6 +949,12 @@ describe('物流详情的信息优先级', () => {
       attachTo: document.body,
     })
     await flushPromises()
+    const receiving = w
+      .get('.transport-section')
+      .findAll('.el-form-item')
+      .find((item) => item.get('.el-form-item__label').text() === '收货方式')!
+    expect(receiving.get('.el-form-item__content').text()).toBe('送货上门')
+    expect(receiving.find('input').exists()).toBe(false)
     const notes = w.get('[aria-label="运输备注"]')
     expect(notes.text()).toContain('物流订单备注')
     expect(notes.text()).toContain('补充备注')
@@ -809,6 +963,7 @@ describe('物流详情的信息优先级', () => {
     expect(notes.get('textarea').element.value).toBe('人工补充：收货前联系店长')
     expect(w.find('.platform-details').text()).not.toContain('平台订单备注')
     await w.setProps({ readonly: true })
+    expect(receiving.get('.el-form-item__content').text()).toBe('送货上门')
     expect(notes.find('textarea').exists()).toBe(false)
     expect(notes.text()).toContain('人工补充：收货前联系店长')
     expect(notes.text()).toContain('两箱货，送货单签字后拍照')

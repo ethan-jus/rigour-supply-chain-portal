@@ -15,30 +15,38 @@ import { categories, statusName } from './cost-presentation'
 export function useCostDashboardExport(
   request: Readonly<Ref<CostQuery>>,
   cities: Ref<CostReport['cities']>,
+  onDownloadStarted?: () => void,
 ) {
   const exportTask = ref<CostExport | null>(null),
     exportError = ref(''),
     exportSubmitting = ref(false),
     exportDownloading = ref(false),
+    exportCancelling = ref(false),
     exportContext = ref('')
-  const exportBusy = computed(
+  const exportPreparing = computed(
     () => !!exportTask.value && ['PENDING', 'RUNNING'].includes(exportTask.value.status),
   )
+  const exportBusy = computed(
+    () => exportSubmitting.value || exportPreparing.value || exportDownloading.value,
+  )
+  const canCancelExport = computed(() => exportPreparing.value && !exportCancelling.value)
   const exportLabel = computed(() =>
-    exportTask.value?.status === 'READY'
-      ? `导出完成，共 ${exportTask.value.rowCount} 笔匹配记录`
-      : exportTask.value?.status === 'CANCELLED'
-        ? '导出已取消'
-        : exportTask.value?.status === 'FAILED'
-          ? '导出失败，请重试'
-          : '正在生成全部匹配单据…',
+    exportCancelling.value
+      ? '正在取消导出…'
+      : exportBusy.value
+        ? '正在生成 Excel…'
+        : exportTask.value?.status === 'CANCELLED'
+          ? '导出已取消'
+          : exportTask.value?.status === 'FAILED'
+            ? '导出失败，请重试'
+            : '',
   )
   let exportTimer: ReturnType<typeof setTimeout> | undefined,
     disposed = false,
     exportGeneration = 0
   let exportFields: string[] | undefined
   async function startExport(fields?: string[]) {
-    if (exportBusy.value || exportSubmitting.value) return
+    if (exportBusy.value) return
     if (fields && !fields.length) {
       exportError.value = '请至少选择一个导出字段'
       return
@@ -73,10 +81,9 @@ export function useCostDashboardExport(
           void cancelCostExport(task.id).catch(() => {})
         return
       }
-      exportTask.value = task
       exportContext.value = context
       exportFields = selectedFields
-      pollExport(generation)
+      handleTask(task, generation)
     } catch (e) {
       if (!disposed && generation === exportGeneration)
         exportError.value = errorMessage(e, '导出失败')
@@ -84,15 +91,23 @@ export function useCostDashboardExport(
       if (generation === exportGeneration) exportSubmitting.value = false
     }
   }
+  function handleTask(task: CostExport, generation: number) {
+    exportTask.value = task
+    if (task.status === 'READY') {
+      void downloadExport(task.id, generation)
+    } else {
+      pollExport(generation)
+    }
+  }
   function pollExport(generation: number) {
-    if (disposed || generation !== exportGeneration || !exportTask.value || !exportBusy.value)
+    const taskId = exportTask.value?.id
+    if (disposed || generation !== exportGeneration || !taskId || !exportPreparing.value)
       return
     exportTimer = setTimeout(async () => {
       try {
-        const task = await getCostExport(exportTask.value!.id)
+        const task = await getCostExport(taskId)
         if (generation !== exportGeneration || disposed) return
-        exportTask.value = task
-        pollExport(generation)
+        handleTask(task, generation)
       } catch (e) {
         if (generation !== exportGeneration || disposed) return
         exportError.value = errorMessage(e, '导出状态读取失败')
@@ -101,30 +116,37 @@ export function useCostDashboardExport(
     }, 2000)
   }
   async function cancelExport() {
-    if (!exportTask.value) return
-    const generation = exportGeneration
+    if (!canCancelExport.value || !exportTask.value) return
+    const generation = ++exportGeneration
     const task = exportTask.value
+    clearTimeout(exportTimer)
+    exportCancelling.value = true
     try {
       await cancelCostExport(task.id)
       if (disposed || generation !== exportGeneration) return
-      exportGeneration++
-      clearTimeout(exportTimer)
       exportTask.value = { ...task, status: 'CANCELLED' }
     } catch (e) {
-      if (!disposed && generation === exportGeneration)
+      if (!disposed && generation === exportGeneration) {
         exportError.value = errorMessage(e, '取消导出失败')
+        pollExport(generation)
+      }
+    } finally {
+      if (generation === exportGeneration) exportCancelling.value = false
     }
   }
-  async function downloadExport() {
-    if (!exportTask.value || exportDownloading.value) return
-    const generation = exportGeneration
+  async function downloadExport(taskId: string, generation: number) {
+    const isCurrent = () => !disposed && generation === exportGeneration
     exportDownloading.value = true
     try {
-      const blob = await downloadCostExport(exportTask.value.id)
-      if (disposed || generation !== exportGeneration) return
+      const blob = await downloadCostExport(taskId)
+      if (!isCurrent()) return
       const { exportCostDashboardWorkbook } = await import('./cost-report-export')
-      if (!disposed && generation === exportGeneration)
-        await exportCostDashboardWorkbook(blob, exportContext.value, exportFields)
+      if (!isCurrent()) return
+      await exportCostDashboardWorkbook(blob, exportContext.value, exportFields, isCurrent)
+      if (isCurrent()) {
+        exportError.value = ''
+        onDownloadStarted?.()
+      }
     } catch (e) {
       if (!disposed && generation === exportGeneration)
         exportError.value = errorMessage(e, '下载失败，请重新导出')
@@ -142,6 +164,7 @@ export function useCostDashboardExport(
     exportFields = undefined
     exportSubmitting.value = false
     exportDownloading.value = false
+    exportCancelling.value = false
     if (task && ['PENDING', 'RUNNING'].includes(task.status))
       void cancelCostExport(task.id).catch(() => {})
   }
@@ -167,9 +190,9 @@ export function useCostDashboardExport(
     exportDownloading,
     exportContext,
     exportBusy,
+    canCancelExport,
     exportLabel,
     startExport,
     cancelExport,
-    downloadExport,
   }
 }

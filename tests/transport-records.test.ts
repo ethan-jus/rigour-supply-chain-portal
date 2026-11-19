@@ -22,6 +22,7 @@ import {
 import { createLedgerCommand } from '@/views/supply-chain/cost/cost-ledger'
 const api = vi.hoisted(() => ({
   list: vi.fn(),
+  huolalaSync: vi.fn(),
   selected: vi.fn(),
   workbook: vi.fn(),
   dictionaries: vi.fn(),
@@ -44,10 +45,13 @@ vi.mock('@/api/core/transport-records', () => ({
   saveTransport: vi.fn(),
   confirmTransport: vi.fn(),
 }))
+vi.mock('@/api/core/huolala', () => ({
+  huolalaApi: { sync: api.huolalaSync, runs: vi.fn() },
+}))
 vi.mock('@/api/core/cost', () => ({
   changeCostStatus: vi.fn(),
   getCostCities: vi.fn(),
-  getCostEmployees: vi.fn(),
+  getCostEmployees: vi.fn().mockResolvedValue([]),
   getCostAttachments: vi.fn().mockResolvedValue([]),
   getCostAttachmentUrl: vi.fn(),
   getTransportPdfContent: vi.fn(),
@@ -166,6 +170,110 @@ async function startExport(allFields = false) {
   await flushPromises()
 }
 describe('统一运输记录 V2.6', () => {
+  it('指定货拉拉订单时只提交订单号并就地显示失败原因', async () => {
+    api.huolalaSync.mockRejectedValueOnce(new Error('请输入完整的货拉拉数字订单号'))
+    wrapper = mount(View, {
+      global: { plugins: [ElementPlus], stubs: { TransportRecordEditor: true } },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    await button('同步货拉拉订单').trigger('click')
+    await flushPromises()
+    const dialog = wrapper.get('[aria-label="同步货拉拉订单"]')
+    await dialog.get('input[placeholder="可选，填写后只同步此单"]').setValue(' 123A ')
+    expect(dialog.find('input[placeholder="选择开始日期"]').exists()).toBe(false)
+    await button('开始同步').trigger('click')
+    await flushPromises()
+    expect(api.huolalaSync).toHaveBeenCalledWith('ORDERS', undefined, undefined, '123A')
+    expect(dialog.get('.el-alert--error').text()).toContain('请输入完整的货拉拉数字订单号')
+  })
+
+  it('手工同步分别选择和修改起止日期，按选择提交并拦截倒序', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date('2026-10-01T10:00:00+08:00'))
+      api.huolalaSync.mockResolvedValue({ id: 'sync-1', status: 'SUCCEEDED', fetched: 0 })
+      wrapper = mount(View, {
+        global: { plugins: [ElementPlus], stubs: { TransportRecordEditor: true } },
+        attachTo: document.body,
+      })
+      await flushPromises()
+      await button('同步货拉拉订单').trigger('click')
+      await flushPromises()
+      const dialog = document.querySelector<HTMLElement>('[aria-label="同步货拉拉订单"]')!
+      const start = dialog.querySelector<HTMLInputElement>('input[placeholder="选择开始日期"]')!
+      const end = dialog.querySelector<HTMLInputElement>('input[placeholder="选择结束日期"]')!
+      expect(start.value).toBe('2026-10-01')
+      expect(end.value).toBe('2026-10-01')
+      async function calendar(input: HTMLInputElement, field: 'start' | 'end') {
+        input.focus()
+        await flushPromises()
+        return document.querySelector<HTMLElement>(`.huolala-sync-${field}-calendar`)!
+      }
+      async function pick(popper: HTMLElement, day: string) {
+        const cell = [...popper.querySelectorAll<HTMLTableCellElement>('td.available')].find(
+          (item) => item.textContent?.trim() === day,
+        )
+        expect(cell).toBeDefined()
+        cell!.click()
+        await flushPromises()
+      }
+      const startCalendar = await calendar(start, 'start')
+      expect(startCalendar.querySelector('.el-date-picker__header')?.textContent).toMatch(
+        /October|10\s*月/,
+      )
+      await pick(startCalendar, '28')
+      expect(start.value).toBe('2026-10-28')
+      expect(end.value).toBe('2026-10-01')
+
+      const endCalendar = await calendar(end, 'end')
+      await pick(endCalendar, '2')
+      expect(start.value).toBe('2026-10-28')
+      expect(end.value).toBe('2026-10-02')
+      const submit = [...dialog.querySelectorAll('button')].find(
+        (item) => item.textContent?.trim() === '开始同步',
+      )!
+      submit.click()
+      await flushPromises()
+      expect(dialog.textContent).toContain('结束日期不能早于开始日期')
+      expect(api.huolalaSync).not.toHaveBeenCalled()
+
+      await calendar(end, 'end')
+      endCalendar.querySelector<HTMLButtonElement>('button.arrow-right')!.click()
+      await flushPromises()
+      await pick(endCalendar, '2')
+      expect(start.value).toBe('2026-10-28')
+      expect(end.value).toBe('2026-11-02')
+      submit.click()
+      await flushPromises()
+      expect(api.huolalaSync).toHaveBeenCalledWith('ORDERS', '2026-10-28', '2026-11-02', undefined)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('字典请求未结束也能先看到运输记录', async () => {
+    let finishDictionaries: (() => void) | undefined
+    api.dictionaries.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishDictionaries = resolve
+      }),
+    )
+    try {
+      wrapper = mount(View, {
+        global: { plugins: [ElementPlus], stubs: { TransportRecordEditor: true } },
+      })
+      await flushPromises()
+      expect(wrapper.text()).toContain(record().documentNo)
+      expect(api.dictionaries).toHaveBeenCalledWith(
+        [{ moduleCode: '', code: 'COST_CARRIER' }],
+        'inline',
+      )
+    } finally {
+      finishDictionaries?.()
+    }
+  })
+
   it('平台账单仅展示金额和费用，凭证资料由统一凭证区域展示', async () => {
     wrapper = mount(Bill, {
       props: { recordId: 'C1', platform: platform(), confirmedAmount: 137.64 },

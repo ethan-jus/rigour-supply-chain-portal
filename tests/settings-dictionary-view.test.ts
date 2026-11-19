@@ -5,6 +5,11 @@ import BusinessDictionaryView from '@/views/supply-chain/settings/BusinessDictio
 import { getBizDicts, getBizDictItems } from '@/api/core/business-settings'
 import type { DictItemView, DictView } from '@/api/core/business-settings'
 
+const route = vi.hoisted(() => ({ query: {} as Record<string, string> }))
+vi.mock('vue-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('vue-router')>()),
+  useRoute: () => route,
+}))
 vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => true }),
 }))
@@ -78,6 +83,24 @@ async function choose(view: VueWrapper, name: string) {
   await flushPromises()
 }
 describe('数据字典目录与详情', () => {
+  it('从运输详情直达指定字典及订货宝来源值', async () => {
+    route.query = {
+      dictionary: 'UNIT',
+      tab: 'sources',
+      source: 'DHB_SHIPMENT_LOGISTICS',
+      value: '85985',
+      label: '送货上门',
+    }
+    try {
+      const view = await page()
+      expect(view.getComponent({ name: 'DictionarySourceMappings' }).props()).toMatchObject({
+        dictionaryCode: 'UNIT',
+        focus: { scope: 'DHB_SHIPMENT_LOGISTICS', value: '85985', label: '送货上门' },
+      })
+    } finally {
+      route.query = {}
+    }
+  })
   it('默认仅加载当前字典，按名称或编码查目录，不发起整目录明细请求', async () => {
     const view = await page()
     expect(getBizDictItems).toHaveBeenCalledTimes(1)

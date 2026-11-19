@@ -806,7 +806,7 @@ const senderName = (row: CostRecord) =>
 const carrier = (row: CostRecord) =>
   row.data.ledger
     ? row.data.ledger.deliveryModeCode === 'SELF'
-      ? '自营'
+      ? costLabel('COST_DELIVERY_MODE', 'SELF')
       : row.data.ledger.carrierCode
         ? costLabel('COST_CARRIER', row.data.ledger.carrierCode)
         : '待补承运方'
@@ -992,7 +992,7 @@ async function edit(row?: CostRecord) {
       draft.reason = ''
       if (!current.data.ledger && !current.data.warehouseLedger)
         await convertLegacy(current, draft, isLogistics)
-    } else if (cities.value.length === 1) {
+    } else if (isLogistics && cities.value.length === 1) {
       draft.cityCode = cities.value[0]!.code
       draft.cityName = cities.value[0]!.name
       if (draft.ledger) draft.ledger.receivingPoints[0]!.cityCode = draft.cityCode

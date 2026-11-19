@@ -14,7 +14,7 @@ import {
   resolveObjectLabels,
 } from '@/views/supply-chain/bi/cost/cost-presentation'
 import type { CostReport } from '@/api/core/bi-cost-dashboard'
-import { costLabel, loadCostDictionaries } from '@/views/supply-chain/cost/cost-dictionaries'
+import { costLabel, loadCostDictionaryCodes } from '@/views/supply-chain/cost/cost-dictionaries'
 const api = vi.hoisted(() => ({
   getCostReport: vi.fn(),
   getCostRecords: vi.fn(),
@@ -23,7 +23,7 @@ const api = vi.hoisted(() => ({
 }))
 vi.mock('@/api/core/bi-cost-dashboard', () => api)
 vi.mock('@/views/supply-chain/cost/cost-dictionaries', () => ({
-  loadCostDictionaries: vi.fn().mockResolvedValue(undefined),
+  loadCostDictionaryCodes: vi.fn().mockResolvedValue(undefined),
   costLabel: vi.fn((_dict: string, code: string) => code),
 }))
 function report(snapshot = 's1', value = '100.01'): CostReport {
@@ -324,7 +324,7 @@ describe('成本看板正式查询交互', () => {
   it('pins the same snapshot across charts, drilldown and both ledgers', async () => {
     const { state, wrapper } = setup()
     await flushPromises()
-    await state.openAnalysis({ city: 'WH', category: 'office' })
+    await state.openAnalysis({ city: 'WH', category: 'office', department: 'dep-1' })
     state.modalRecords('previous')
     await flushPromises()
     expect(api.getCostWorkspace).toHaveBeenLastCalledWith(
@@ -332,6 +332,7 @@ describe('成本看板正式查询交互', () => {
         snapshotId: 's1',
         city: 'WH',
         category: 'office',
+        department: 'dep-1',
         periodSide: 'previous',
       }),
       expect.any(AbortSignal),
@@ -395,12 +396,37 @@ describe('成本看板正式查询交互', () => {
     expect(state.error.value).toContain('来源暂不可用')
     wrapper.unmount()
   })
-  it('主动刷新重新加载字典，新增分类无需重启页面或服务', async () => {
+  it('只查询报表使用的字典，主动刷新时重新取该字典', async () => {
     const { state, wrapper } = setup()
     await flushPromises()
-    expect(loadCostDictionaries).toHaveBeenLastCalledWith(undefined, false)
+    expect(loadCostDictionaryCodes).not.toHaveBeenCalled()
+    const data = report()
+    data.objects = [
+      {
+        key: 'dict:COST_TRANSPORT_KIND:EXPRESS',
+        label: '快递',
+        current: '100.01',
+        previous: null,
+        delta: null,
+        growth: null,
+        share: '100.0',
+        count: 1,
+        missing: false,
+      },
+    ]
+    api.getCostReport.mockResolvedValue(data)
+    await state.load()
+    expect(loadCostDictionaryCodes).toHaveBeenLastCalledWith(
+      ['COST_TRANSPORT_KIND'],
+      false,
+      'inline',
+    )
     await state.load(true)
-    expect(loadCostDictionaries).toHaveBeenLastCalledWith(undefined, true)
+    expect(loadCostDictionaryCodes).toHaveBeenLastCalledWith(
+      ['COST_TRANSPORT_KIND'],
+      true,
+      'inline',
+    )
     wrapper.unmount()
   })
   it('采购成本默认查看货款与实际运费构成，期间切换和下钻保留范围', async () => {
@@ -435,6 +461,23 @@ describe('成本看板正式查询交互', () => {
     })
     wrapper.unmount()
   })
+  it('does not reapply an analysis topic when changing city on the overview', async () => {
+    const { state, wrapper } = setup()
+    await flushPromises()
+    state.goSection('analysis')
+    state.choosePerspective('objects')
+    await flushPromises()
+    state.goSection('overview')
+    await flushPromises()
+    state.filters.city = 'WH'
+    state.globalChange()
+    await flushPromises()
+    expect(state.request.value).toMatchObject({ city: 'WH', scope: 'opex' })
+    expect(state.request.value.category).toBeUndefined()
+    expect(state.request.value.dimension).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('returning from purchase analysis restores operating expense scope', async () => {
     const { state, wrapper } = setup()
     await flushPromises()

@@ -219,16 +219,12 @@
               placeholder="输入订货宝仓库编号"
           /></el-form-item>
           <el-form-item v-if="pageKind === 'warehouse'" label="业务归属地区">
-            <el-tree-select
+            <CostCitySelect
               v-model="filters.regionCode"
-              :data="customerAreaTree"
-              :props="areaTreeProps"
-              node-key="code"
-              check-strictly
-              :render-after-expand="false"
+              :action="warehouseReadRegionAction"
               clearable
-              filterable
               placeholder="业务归属地区"
+              style="width: 180px"
             />
           </el-form-item>
           <el-form-item v-if="pageKind === 'tag'" label="标签类型">
@@ -340,15 +336,6 @@
                   ? scope.row.locationDisplay || scope.row.locationAreaCode || '未维护'
                   : '-'
               }}</template>
-            </el-table-column>
-            <!-- @vue-generic {BasicRow} -->
-            <el-table-column
-              v-if="pageKind === 'warehouse'"
-              label="业务归属地区"
-              min-width="150"
-              show-overflow-tooltip
-            >
-              <template #default="scope">{{ regionLabel(scope.row) }}</template>
             </el-table-column>
             <!-- @vue-generic {BasicRow} -->
             <el-table-column
@@ -587,16 +574,12 @@
           </el-col>
           <el-col v-if="pageKind === 'warehouse'" :span="12">
             <el-form-item label="业务归属地区">
-              <el-tree-select
+              <CostCitySelect
                 v-model="form.regionCode"
-                :data="customerAreaTree"
-                :props="areaTreeProps"
-                node-key="code"
-                check-strictly
-                :render-after-expand="false"
+                :action="warehouseWriteRegionAction"
+                :snapshot="warehouseRegionSnapshot"
                 clearable
-                filterable
-                placeholder="选择业务归属地区"
+                placeholder="选择经营城市或总部"
                 style="width: 100%"
               />
             </el-form-item>
@@ -731,8 +714,9 @@ import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import ErpSupplierProfileEditor from '@/components/erp/ErpSupplierProfileEditor.vue'
 import ProductCategorySelect from '@/components/supply/ProductCategorySelect.vue'
 import { loadAllErpProductCategories } from '@/utils/product-categories'
-import { getAllCrmCustomerAreas, type CrmDictionaryView } from '@/api/core/crm'
-import { buildAreaTree } from '@/utils/crm-area-tree'
+import { getCrmCustomerAreas } from '@/api/core/crm'
+import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
+import CostCitySelect from '../cost/CostCitySelect.vue'
 
 type PageKind = 'category' | 'brand' | 'tag' | 'warehouse' | 'supplier'
 type BasicRow =
@@ -744,6 +728,7 @@ type BasicRow =
 type CategoryTreeRow = ErpProductCategoryView & { children?: CategoryTreeRow[]; depth?: number }
 
 const route = useRoute()
+const supplyAuthorization = useSupplyAuthorizationStore()
 const { can } = useSupplyPermissions()
 function canChange(action: 'create' | 'update' | 'delete') {
   return can(
@@ -811,16 +796,18 @@ const statusDictionaryCode = computed(() =>
 )
 const statusOptions = computed(() => businessDictionaryOptions('ERP', statusDictionaryCode.value))
 const warehouseTypeOptions = computed(() => businessDictionaryOptions('ERP', 'WAREHOUSE_TYPE'))
-/** 仓库归属地区和客户归属地区同源：出库时按客户地区匹配对应地区的仓库。 */
-const customerAreaOptions = ref<CrmDictionaryView[]>([])
-const customerAreaTree = computed(() => buildAreaTree(customerAreaOptions.value))
-const areaTreeProps = { value: 'code', label: 'name', children: 'children' }
-async function loadCustomerAreas() {
+// 只按所打开仓库的编码查历史名称，维护选项取经营城市目录。
+const customerAreaNames = reactive(new Map<string, string>())
+async function loadWarehouseRegionName(row: BasicRow) {
+  if (!('regionCode' in row)) return
+  const code = row.regionCode
+  if (!code || code === 'COST_HEADQUARTERS' || customerAreaNames.has(code)) return
   try {
-    const areas = await getAllCrmCustomerAreas()
-    customerAreaOptions.value = areas.filter((item) => item.status === 'ACTIVE')
-  } catch (reason) {
-    ElMessage.error(errorMessage(reason, '归属地区选项加载失败'))
+    const page = await getCrmCustomerAreas({ q: code, step: 20 })
+    const match = page.items.find((area) => area.code === code)
+    if (match) customerAreaNames.set(code, match.name)
+  } catch {
+    // 查询不到历史名称时，仍可按原编码识别。
   }
 }
 
@@ -830,6 +817,17 @@ const detailVisible = ref(false)
 const editorVisible = ref(false)
 const detail = ref<BasicRow | null>(null)
 const editingId = ref<string | null>(null)
+const warehouseRegionSnapshot = ref('')
+const warehouseReadRegionAction = computed(() =>
+  supplyAuthorization.context?.mode === 'ACTIVE' ? 'erp:warehouse:read' : 'erp:product:read',
+)
+const warehouseWriteRegionAction = computed(() =>
+  supplyAuthorization.context?.mode === 'ACTIVE'
+    ? editingId.value
+      ? 'erp:warehouse:update'
+      : 'erp:warehouse:create'
+    : 'erp:product:write',
+)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const pageData = ref<ErpInternalPage<BasicRow>>({ total: 0, begin: 0, step: 20, items: [] })
@@ -902,7 +900,6 @@ const form = reactive({
 
 onMounted(() => {
   if (pageKind.value === 'warehouse') void loadWarehouseDepartments()
-  if (pageKind.value === 'warehouse') void loadCustomerAreas()
   void loadBusinessDictionaries([
     { moduleCode: 'COMMON', code: 'REGION' },
     { moduleCode: 'ERP', code: 'PRODUCT_TAG_TYPE' },
@@ -930,9 +927,6 @@ watch(pageKind, () => {
   selectedCategoryId.value = null
   categoryKeyword.value = ''
   resetFilters()
-  if (pageKind.value === 'warehouse' && !customerAreaOptions.value.length) {
-    void loadCustomerAreas()
-  }
 })
 
 async function loadRows() {
@@ -1028,6 +1022,7 @@ async function openDetail(row: BasicRow) {
   detail.value = null
   try {
     detail.value = await fetchDetail(row.id)
+    if (detail.value) void loadWarehouseRegionName(detail.value)
   } catch (reason) {
     ElMessage.error(errorMessage(reason, `${pageConfig.value.shortTitle}详情加载失败`))
   }
@@ -1038,7 +1033,12 @@ async function openEdit(row: BasicRow) {
     const current = await fetchDetail(row.id)
     editingId.value = row.id
     fillForm(current)
+    warehouseRegionSnapshot.value = regionLabel(current)
     editorVisible.value = true
+    void loadWarehouseRegionName(current).then(() => {
+      if (editorVisible.value && editingId.value === row.id)
+        warehouseRegionSnapshot.value = regionLabel(current)
+    })
   } catch (reason) {
     ElMessage.error(errorMessage(reason, `${pageConfig.value.shortTitle}信息加载失败`))
   }
@@ -1046,6 +1046,7 @@ async function openEdit(row: BasicRow) {
 
 function openCreate() {
   editingId.value = null
+  warehouseRegionSnapshot.value = ''
   resetForm()
   if (pageKind.value === 'category') form.ordinal = nextCategoryOrdinal(null)
   editorVisible.value = true
@@ -1273,10 +1274,8 @@ function regionLabel(row: BasicRow) {
   if (!('regionCode' in row)) return '-'
   const code = row.regionCode
   if (!code) return '-'
-  return (
-    customerAreaOptions.value.find((item) => item.code === code)?.name ||
-    businessDictionaryLabel('COMMON', 'REGION', code, '地区')
-  )
+  if (code === 'COST_HEADQUARTERS') return '总部'
+  return customerAreaNames.get(code) || businessDictionaryLabel('COMMON', 'REGION', code, '地区')
 }
 
 function warehouseTypeLabel(row: BasicRow) {

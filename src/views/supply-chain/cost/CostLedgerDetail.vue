@@ -29,13 +29,13 @@
           <template v-if="plan"
             ><dt>运输类型</dt>
             <dd>{{ transportTypeLabel(plan.transportPurposeCode) }}</dd>
-            <dt>承运方式</dt>
+            <dt>配送方式</dt>
             <dd>{{ costLabel('COST_DELIVERY_MODE', plan.deliveryModeCode) }}</dd>
             <dt>物流公司</dt>
             <dd>
               {{
                 plan.deliveryModeCode === 'SELF'
-                  ? '自营'
+                  ? '—'
                   : plan.carrierCode
                     ? costLabel('COST_CARRIER', plan.carrierCode)
                     : '待补承运方'
@@ -85,8 +85,8 @@
           >
           <dt>{{ logistics ? '运输日期' : '登记日期' }}</dt>
           <dd>{{ row.data.costDate }}</dd>
-          <dt>费用归属</dt>
-          <dd>{{ row.data.cityName }}</dd>
+          <dt>费用归属城市</dt>
+          <dd>{{ row.data.cityName || '—' }}</dd>
         </dl>
       </section>
       <section>

@@ -3,6 +3,7 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import View from '@/views/supply-chain/huolala/HuolalaIntegrationView.vue'
+import HuolalaSyncDates from '@/views/supply-chain/huolala/HuolalaSyncDates.vue'
 import ConsoleTabPane from '@/components/console/ConsoleTabPane.vue'
 import type { HuolalaConnection } from '@/api/core/huolala'
 const api = vi.hoisted(() => ({
@@ -108,6 +109,26 @@ describe('货拉拉企业控制面', () => {
     expect(button('同步货拉拉数据').attributes('disabled')).toBeDefined()
     expect(api.authorize).not.toHaveBeenCalled()
     expect(api.sync).not.toHaveBeenCalled()
+  })
+  it('手工同步一次提交跨多月的日期，缺少日期时在弹窗提示', async () => {
+    api.connection.mockResolvedValue({
+      ...connection(),
+      authStatus: 'AUTHORIZED',
+      credentialsReady: true,
+    })
+    await open()
+    await button('同步货拉拉数据').trigger('click')
+    await flushPromises()
+    const dates = wrapper.getComponent(HuolalaSyncDates)
+    dates.vm.$emit('update:from', '2026-01-01')
+    dates.vm.$emit('update:to', null)
+    await button('开始同步').trigger('click')
+    expect(wrapper.get('[aria-label="同步货拉拉数据"]').text()).toContain('请选择开始日期和结束日期')
+    expect(api.sync).not.toHaveBeenCalled()
+    dates.vm.$emit('update:to', '2026-10-01')
+    await button('开始同步').trigger('click')
+    expect(api.sync).toHaveBeenCalledOnce()
+    expect(api.sync).toHaveBeenCalledWith('ALL', '2026-01-01', '2026-10-01', undefined)
   })
   it('业务页面只提交同步偏好，企业与应用配置不由浏览器维护', async () => {
     api.save.mockResolvedValue(connection())

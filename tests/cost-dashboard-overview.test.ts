@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import CostOverview from '@/views/supply-chain/bi/cost/CostOverview.vue'
+import CostRing from '@/views/supply-chain/bi/cost/CostRing.vue'
 import { monthlyTrend, overviewCards } from '@/views/supply-chain/bi/cost/cost-presentation'
 import type { CostReport } from '@/api/core/bi-cost-dashboard'
 
@@ -117,8 +118,38 @@ function sample(): CostReport {
 }
 
 describe('成本总览的业务口径及展示', () => {
+  it('默认按月展示，按日查看时标明计入本月但未进入日趋势的金额', async () => {
+    const report = {
+      ...sample(),
+      monthlyAmount: '153.00',
+      cumulative: [
+        { key: '1日', current: '25.00', previous: '15.00' },
+        { key: '2日', current: '20.00', previous: '15.00' },
+        { key: '3日', current: '20.00', previous: null },
+      ],
+    }
+    const wrapper = mount(CostOverview, {
+      props: { report, available: [], comparisonLabel: '较上期', month: 11 },
+      global: { stubs: { EchartsChart: true, CostRing: true, CostComparisonBars: true } },
+    })
+    const tabs = wrapper.get('[aria-label="趋势口径"]').findAll('button')
+    expect(tabs[0]!.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.text()).toContain('经营费用月度趋势')
+    await tabs[1]!.trigger('click')
+    expect(wrapper.text()).toContain('经营费用按日发生金额')
+    expect(wrapper.get('.trend-monthly').text()).toContain('153.00')
+    expect(wrapper.get('.trend-monthly').text()).toContain('日趋势只显示各日按发生日计入的费用')
+    const chart = wrapper.getComponent({ name: 'EchartsChart' })
+    expect(chart.props('option').series[0].data).toEqual([25, -5, 0])
+    await wrapper.setProps({ month: 0 })
+    expect(chart.props('option').series[0].data).toEqual([25, 20, 20])
+    expect(wrapper.text()).toContain('经营费用按月累计')
+    expect(wrapper.find('.trend-monthly').exists()).toBe(false)
+    wrapper.unmount()
+  })
   it('经营费用分项常显且与经营费用合计一致，不重复展示采购和损耗', async () => {
     const report = sample()
+    report.meta.pendingCounts = { freight: 3 }
     const items = [
       { key: 'freight', amount: '180.00' },
       { key: 'warehouse', amount: '6000.00' },
@@ -159,8 +190,13 @@ describe('成本总览的业务口径及展示', () => {
     expect(cents).toBe(1000000)
     expect(cards[4]!.text()).toContain('0.00')
     expect(cards[4]!.text()).toContain('暂无已确认单据')
-    await cards[0]!.trigger('click')
-    expect(wrapper.emitted('category')).toEqual([['freight']])
+    await cards[0]!.get('.expense-card-amount').trigger('click')
+    expect(wrapper.emitted('records')).toEqual([[{ category: 'freight' }]])
+    const pending = cards[0]!.get('.expense-card-pending')
+    expect(pending.text()).toContain('待完善 3 笔')
+    await pending.trigger('click')
+    expect(wrapper.emitted('pending')).toHaveLength(1)
+    expect(wrapper.emitted('records')).toHaveLength(1)
     report.categories.push({
       key: 'premises_unknown',
       label: '待分类场地费用',
@@ -280,5 +316,26 @@ describe('成本总览的业务口径及展示', () => {
     expect(Array.isArray(chart.yAxis)).toBe(false)
     expect(chart.xAxis.data).toHaveLength(3)
     expect(monthlyTrend(months.map((m) => ({ ...m, previous: null }))).series).toHaveLength(1)
+  })
+
+  it('费用含负数时保留净额和明细入口，避免环图误画占比', async () => {
+    const common = { previous: null, delta: null, growth: null, share: null, missing: false }
+    const wrapper = mount(CostRing, {
+      props: {
+        total: '8.00',
+        groups: [
+          { ...common, key: 'office', label: '办公费用', current: '10.00', count: 1 },
+          { ...common, key: 'transport', label: '运输费用', current: '-2.00', count: 1 },
+          { ...common, key: 'loss', label: '商品损耗', current: '0.00', count: 0 },
+        ],
+      },
+      global: { stubs: { EchartsChart: true } },
+    })
+    expect(wrapper.get('.amount-list').text()).toContain('净发生金额')
+    expect(wrapper.find('.cost-ring').exists()).toBe(false)
+    expect(wrapper.text()).toContain('-2.00')
+    expect(wrapper.text()).not.toContain('商品损耗')
+    await wrapper.get('button:nth-of-type(2)').trigger('click')
+    expect(wrapper.emitted('select')).toEqual([['transport']])
   })
 })

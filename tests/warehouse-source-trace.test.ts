@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import ElementPlus, { ElMessage } from 'element-plus'
+import CostCitySelect from '@/views/supply-chain/cost/CostCitySelect.vue'
 import View from '@/views/supply-chain/erp/ErpBasicDataManagementView.vue'
-const api = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn() }))
+const api = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), cities: vi.fn() }))
 vi.mock('vue-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('vue-router')>()),
   useRoute: () => ({ meta: { routeKey: 'supply.erp.inventory.warehouses' } }),
@@ -16,7 +17,8 @@ vi.mock('@/api/core/erp-internal', async (importOriginal) => ({
   getErpInventoryWarehouses: api.list,
   getErpInventoryWarehouse: api.detail,
 }))
-vi.mock('@/api/core/crm', () => ({ getAllCrmCustomerAreas: async () => [] }))
+vi.mock('@/api/core/cost', () => ({ getCostCities: api.cities }))
+vi.mock('@/api/core/crm', () => ({ getCrmCustomerAreas: async () => ({ items: [] }) }))
 vi.mock('@/utils/business-dictionary', () => ({
   loadBusinessDictionaries: async () => undefined,
   businessDictionaryLabel: (_m: string, _d: string, v: string) => v || '—',
@@ -46,6 +48,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.list.mockResolvedValue({ total: 1, items: [row] })
   api.detail.mockResolvedValue(row)
+  api.cities.mockResolvedValue([
+    { code: 'CUSAREA-WH', name: '武汉市' },
+    { code: 'COST_HEADQUARTERS', name: '总部' },
+  ])
 })
 afterEach(() => {
   wrapper?.unmount()
@@ -77,6 +83,17 @@ describe('仓库订货宝来源追溯', () => {
     expect(api.list).toHaveBeenLastCalledWith(
       expect.objectContaining({ sourceWarehouseCode: '0012', warehouseCode: undefined }),
     )
+  })
+  it('归属仅作为筛选和维护字段，仓库选项来自经营城市目录', async () => {
+    await open()
+    expect(wrapper.findAll('th').map((header) => header.text())).not.toContain('业务归属地区')
+    expect(api.cities).toHaveBeenCalledWith('erp:product:read')
+    await wrapper.get('button.el-button--primary').trigger('click')
+    await flushPromises()
+    expect(
+      wrapper.findAllComponents(CostCitySelect).map((select) => select.props('action')),
+    ).toContain('erp:product:write')
+    expect(api.cities).toHaveBeenCalledWith('erp:product:write')
   })
   it('手工仓库没有订货宝编号，不以本系统编号补造', async () => {
     api.list.mockResolvedValue({ total: 1, items: [{ ...row, sourceReferences: [] }] })

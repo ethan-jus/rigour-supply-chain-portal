@@ -816,10 +816,10 @@
             ><el-form-item label="运单号"
               ><el-input v-model="form.logistics.trackingNo" maxlength="100"
             /></el-form-item>
-            <el-form-item label="运输方式"
+            <el-form-item label="运输渠道"
               ><CostDictSelect
                 v-model="form.logistics.transportMethodCode"
-                code="COST_TRANSPORT_METHOD" /></el-form-item
+                code="COST_TRANSPORT_KIND" /></el-form-item
             ><el-form-item label="费用承担方"
               ><CostDictSelect v-model="form.logistics.payerCode" code="COST_PAYER"
             /></el-form-item>

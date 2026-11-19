@@ -40,20 +40,24 @@
       <span class="muted">单位：元</span>
     </div>
     <div class="expense-cards">
-      <button
-        v-for="item in expenseCards"
-        :key="item.key"
-        class="expense-card"
-        @click="emit('category', item.key)"
-      >
-        <span>{{ categories[item.key] }}<span aria-hidden="true"> →</span></span>
-        <strong>{{ money(item.amount) }}</strong>
-        <small>{{
-          item.count
-            ? `${item.count} 笔${item.key === 'freight' ? '已完善' : '已确认'}单据`
-            : `暂无${item.key === 'freight' ? '已完善' : '已确认'}单据`
-        }}</small>
-      </button>
+      <article v-for="item in expenseCards" :key="item.key" class="expense-card">
+        <button class="expense-card-amount" @click="emit('records', { category: item.key })">
+          <span>{{ categories[item.key] }}<span aria-hidden="true"> →</span></span>
+          <strong>{{ money(item.amount) }}</strong>
+          <small>{{
+            item.count
+              ? `${item.count} 笔${item.key === 'freight' ? '已完善' : '已确认'}单据`
+              : `暂无${item.key === 'freight' ? '已完善' : '已确认'}单据`
+          }}</small>
+        </button>
+        <button
+          v-if="item.key === 'freight' && report.meta.pendingCounts?.freight"
+          class="text-button expense-card-pending"
+          @click="emit('pending')"
+        >
+          待完善 {{ report.meta.pendingCounts.freight }} 笔 →
+        </button>
+      </article>
     </div>
   </section>
 
@@ -88,7 +92,15 @@
     <section class="cost-panel">
       <div class="panel-heading">
         <div>
-          <h2>{{ trend === 'months' ? '经营费用月度趋势' : '经营费用期间累计' }}</h2>
+          <h2>
+            {{
+              trend === 'months'
+                ? '经营费用月度趋势'
+                : month === 0
+                  ? '经营费用按月累计'
+                  : '经营费用按日发生金额'
+            }}
+          </h2>
           <p class="muted">{{ trend === 'months' ? monthRange : periodRange }}</p>
         </div>
         <div class="segmented" aria-label="趋势口径">
@@ -104,30 +116,43 @@
             :aria-pressed="trend === 'period'"
             @click="trend = 'period'"
           >
-            期间累计
+            {{ month === 0 ? '按月累计' : '按日发生金额' }}
           </button>
         </div>
       </div>
       <EchartsChart
-        :option="trend === 'months' ? monthlyTrend(report.months) : line(report)"
+        :option="
+          trend === 'months'
+            ? monthlyTrend(report.months, comparisonLabel)
+            : line(report, { daily: month !== 0, comparisonLabel })
+        "
         :height="285"
         @chart-click="trendClick"
       />
       <div v-if="trend === 'period' && month !== 0" class="trend-monthly">
-        <span>按月计入费用</span><strong>{{ money(report.monthlyAmount || '0.00') }} 元</strong
-        ><span class="muted">薪酬、租赁等按所属月归集</span>
+        <span>本月按所属月计入</span><strong>{{ money(report.monthlyAmount || '0.00') }} 元</strong
+        ><span class="muted">已计入本月总额。日趋势只显示各日按发生日计入的费用。</span>
       </div>
+      <p v-else class="chart-note">
+        {{
+          trend === 'months'
+            ? '每根柱代表该月费用总额，点击查看当月费用明细。'
+            : '各月金额从年初累计，包含按发生日及按所属月计入的费用。'
+        }}
+      </p>
     </section>
     <section class="cost-panel overview-structure">
       <div class="panel-heading">
-        <h2>经营费用构成</h2>
-        <span class="muted">金额 · 占比</span>
+        <div>
+          <h2>经营费用构成</h2>
+          <p class="muted">本期各类费用占比，点击查看明细</p>
+        </div>
       </div>
       <CostRing
         :groups="report.categories"
         :total="report.current.amount"
         category
-        @select="(key) => emit('analysis', { category: key as CostCategory })"
+        @select="(key) => emit('records', { category: key as CostCategory })"
       />
     </section>
   </div>
@@ -238,6 +263,7 @@ const emit = defineEmits<{
   scope: [scope: CostScope]
   category: [category: CostCategory]
   records: [query: CostQuery]
+  pending: []
   analysis: [query: CostQuery]
   month: [key: string]
   cities: []

@@ -160,11 +160,15 @@
           row.linkedLogisticsCount == null ? '-' : `${row.linkedLogisticsCount}笔`
         }}</template>
       </el-table-column>
-      <el-table-column prop="senderName" label="发货方" min-width="190" /><el-table-column
-        prop="receiverName"
-        label="收货方"
-        min-width="200"
-      />
+      <el-table-column
+        :label="query.orderTypeCode === 'SALES_ORDER' ? '发货仓库' : '发货方'"
+        min-width="150"
+      >
+        <template #default="{ row }">
+          {{ row.senderName?.trim() || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="receiverName" label="收货方" min-width="200" />
     </el-table>
     <div class="picker-toolbar">
       <div>

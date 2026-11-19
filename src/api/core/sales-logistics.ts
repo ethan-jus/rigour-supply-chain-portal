@@ -12,6 +12,11 @@ const base = '/orders/sales-logistics'
 const options = { stayOnUnauthorized: true }
 export const getSalesLogistics = (id: string | number) =>
   apiClient.get<SalesLogisticsContext>(`${base}/${encodeURIComponent(id)}`, options)
+export const getSalesLogisticsSelection = (id: string | number) =>
+  apiClient.get<SalesLogisticsContext>(`${base}/${encodeURIComponent(id)}`, {
+    ...options,
+    params: { forSelection: true },
+  })
 export const getSalesLogisticsCounts = (nos: string[]) =>
   apiClient.post<Record<string, number>>(`${base}/counts`, nos, options)
 export const linkSalesLogistics = (id: string | number, transportId: string, revision: number) =>

@@ -31,7 +31,11 @@
               :disabled="carrierLocked"
           /></el-form-item>
           <el-form-item label="费用归属城市" required
-            ><el-select v-model="form.cityCode" filterable @change="cityChanged"
+            ><span v-if="!logistics">{{
+              form.cityName ||
+              (warehouse.warehouseCode ? '待维护仓库业务归属地区' : '选择仓库后带出')
+            }}</span
+            ><el-select v-else v-model="form.cityCode" filterable @change="cityChanged"
               ><el-option
                 v-for="c in cities"
                 :key="c.code"
@@ -54,7 +58,7 @@
                 maxlength="200"
                 placeholder="活动、领用、赠送、品鉴等"
             /></el-form-item>
-            <el-form-item label="承运方式" required
+            <el-form-item label="配送方式" required
               ><CostDictSelect
                 v-model="plan.deliveryModeCode"
                 code="COST_DELIVERY_MODE"
@@ -77,7 +81,7 @@
                 maxlength="500"
                 placeholder="确认前须填写运单号或无单号原因"
             /></el-form-item>
-            <el-form-item label="运输方式"
+            <el-form-item label="运输渠道"
               ><CostDictSelect
                 v-model="plan.transportMethodCode"
                 code="COST_TRANSPORT_KIND"
@@ -713,7 +717,11 @@ function employeeChanged() {
     null
 }
 function warehouseChanged(row: LedgerPartyReference | null) {
-  if (!row) return
+  if (!row) {
+    form.value.cityCode = ''
+    cityChanged()
+    return
+  }
   if (!row.cityCode?.trim() || !props.cities.some((c) => c.code === row.cityCode)) {
     form.value.cityCode = ''
     cityChanged()

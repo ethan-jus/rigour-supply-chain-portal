@@ -167,8 +167,13 @@ export async function buildCostWorkbook(title: string, headers: string[], rows: 
   return workbook
 }
 
-export async function downloadCostWorkbook(workbook: Workbook, title: string) {
+export async function downloadCostWorkbook(
+  workbook: Workbook,
+  title: string,
+  shouldDownload?: () => boolean,
+) {
   const bytes = new Uint8Array(await workbook.xlsx.writeBuffer())
+  if (shouldDownload && !shouldDownload()) return
   downloadBlob(
     new Blob([bytes], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

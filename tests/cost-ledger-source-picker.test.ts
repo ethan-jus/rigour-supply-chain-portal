@@ -98,13 +98,20 @@ describe('物流关联单据选择', () => {
 describe('销售配送单据选择与校验', () => {
   it('不常驻展示内部检查列，全选和手动勾选仍不能带回资料无效的单据', async () => {
     api.sources.mockResolvedValue([
-      { id: 1, documentNo: 'SO_VALID', statusCode: 'CONFIRMED' },
+      {
+        id: 1,
+        documentNo: 'SO_VALID',
+        statusCode: 'CONFIRMED',
+        senderName: '武汉城市仓',
+        senderCode: 'WH001',
+      },
       {
         id: 2,
         documentNo: 'SO_PENDING',
         statusCode: 'CONFIRMED',
         referenceIssue: '销售订单归属城市未配置',
       },
+      { id: 3, documentNo: 'SO_NO_WAREHOUSE', statusCode: 'CONFIRMED', senderName: ' ' },
     ])
     const w = mount(Picker, {
       props: { modelValue: true, selectedKeys: [], orderTypeCode: 'SALES_ORDER' },
@@ -126,6 +133,22 @@ describe('销售配送单据选择与校验', () => {
     expect(w.text()).not.toContain('来源状态')
     expect(w.text()).not.toContain('关联检查')
     expect(w.text()).not.toContain('选择后补充发货仓库')
+    const warehouseColumn = w.findAll('th').findIndex((column) => column.text() === '发货仓库')
+    expect(warehouseColumn).toBeGreaterThanOrEqual(0)
+    expect(
+      w
+        .findAll('tr')
+        .find((row) => row.text().includes('SO_VALID'))
+        ?.findAll('td')
+        [warehouseColumn]?.text(),
+    ).toBe('武汉城市仓')
+    expect(
+      w
+        .findAll('tr')
+        .find((row) => row.text().includes('SO_NO_WAREHOUSE'))
+        ?.findAll('td')
+        [warehouseColumn]?.text(),
+    ).toBe('-')
     pending.vm.$emit('change', true)
     w.findAllComponents(ElCheckbox)
       .find((c) => c.attributes('aria-label') === '勾选本页单据')!
@@ -136,7 +159,8 @@ describe('销售配送单据选择与校验', () => {
       .find((b) => b.text().startsWith('确定带回'))!
       .trigger('click')
     expect(w.emitted('selected')?.[0]?.[0]).toEqual([
-      expect.objectContaining({ documentNo: 'SO_VALID' }),
+      expect.objectContaining({ documentNo: 'SO_VALID', senderCode: 'WH001' }),
+      expect.objectContaining({ documentNo: 'SO_NO_WAREHOUSE', senderName: ' ' }),
     ])
     w.unmount()
   })

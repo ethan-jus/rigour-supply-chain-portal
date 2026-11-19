@@ -1,59 +1,80 @@
 <template>
   <section v-loading="loading">
     <div class="mapping-toolbar">
-      <span>{{ rows.filter(row => row.mappingStatus === 'PENDING').length }} 个待映射来源值</span>
-      <span><el-button v-if="canWrite" :loading="scanning" @click="rescan">扫描已有飞书来源</el-button><el-button @click="load">刷新</el-button></span>
+      <span v-if="focused">
+        订货宝 {{ focus?.label || focus?.value || '物流来源' }}
+        <el-button link type="primary" @click="showAll = true">查看全部</el-button>
+      </span>
+      <span v-else>{{ rows.filter(row => row.mappingStatus === 'PENDING').length }} 个待对应来源值</span>
+      <span><el-button v-if="canWrite && !focused" :loading="scanning" @click="rescan">扫描已有飞书来源</el-button><el-button @click="load">刷新</el-button></span>
     </div>
     <el-alert v-if="scanSummary" class="scan-summary" :type="scanWarning ? 'warning' : 'info'" :closable="false" :title="scanSummary" />
     <el-alert v-if="loadFailed" type="error" :closable="false" title="来源映射加载失败，请刷新重试" />
-    <el-table :data="rows" max-height="520" row-key="id">
-      <el-table-column prop="sourceSystem" label="来源" width="90" />
-      <el-table-column prop="sourceScope" label="来源表/对象" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="sourceField" label="来源字段" min-width="110" />
-      <el-table-column prop="sourceValue" label="原始值" min-width="160" show-overflow-tooltip />
-      <el-table-column label="标准项" min-width="180">
-        <template #default="{ row }">{{ row.targetItemCode ? `${dictionaryName(row.targetDictionaryCode)} / ${row.targetItemCode}` : '待映射' }}</template>
+    <el-table :data="visibleRows" max-height="520" row-key="id">
+      <el-table-column v-if="!focused" prop="sourceSystem" label="来源" width="90" />
+      <el-table-column v-if="!focused" prop="sourceScope" label="来源表/对象" min-width="150" show-overflow-tooltip />
+      <el-table-column v-if="!focused" prop="sourceField" label="来源字段" min-width="110" />
+      <!-- @vue-generic {DictionarySourceMapping} -->
+      <el-table-column label="原始值" min-width="160" show-overflow-tooltip>
+        <template #default="{ row }">{{ sourceName(row) }}</template>
+      </el-table-column>
+      <el-table-column :label="focused ? '本系统使用' : '标准项'" min-width="180">
+        <template #default="{ row }">{{ row.targetItemCode ? `${dictionaryName(row.targetDictionaryCode)} / ${row.targetItemCode}` : '—' }}</template>
       </el-table-column>
       <el-table-column label="状态" width="105">
-        <template #default="{ row }"><el-tag :type="row.mappingStatus === 'MAPPED' ? 'success' : 'warning'">{{ row.mappingStatus === 'MAPPED' ? '已映射' : '待映射' }}</el-tag></template>
+        <template #default="{ row }"><el-tag :type="row.mappingStatus === 'MAPPED' ? 'success' : 'warning'">{{ row.mappingStatus === 'MAPPED' ? '已设置' : '待设置' }}</el-tag></template>
       </el-table-column>
       <!-- @vue-generic {DictionarySourceMapping} -->
       <el-table-column v-if="canWrite" label="操作" fixed="right" width="85">
         <template #default="{ row }"><el-button link type="primary" @click="edit(row)">配置</el-button></template>
       </el-table-column>
-      <template #empty><el-empty description="尚无来源观察记录；后续导入会自动记录" /></template>
+      <template #empty><el-empty :description="focused ? '未找到该来源值，可查看全部来源对应。' : '暂无来源值，后续同步会自动记录。'" /></template>
     </el-table>
     <el-dialog v-model="dialog" title="配置来源映射" width="560px" append-to-body>
-      <p v-if="selected">{{ selected.sourceSystem }} · {{ selected.sourceField }}：{{ selected.sourceValue }}</p>
+      <p v-if="selected">{{ selected.sourceSystem === 'DHB' ? '订货宝' : selected.sourceSystem }} · {{ sourceName(selected) }}</p>
       <el-form label-width="90px">
-        <el-form-item label="标准字典">
+        <el-form-item v-if="!shipmentMapping" label="标准字典">
           <el-select v-model="targetDictionary" filterable @change="loadTargets">
             <el-option v-for="d in catalog" :key="d.dictionaryCode" :value="d.dictionaryCode" :label="d.dictionaryName" />
           </el-select>
         </el-form-item>
-        <el-form-item label="标准项">
+        <el-form-item :label="shipmentMapping ? '本系统使用' : '标准项'">
           <el-select v-model="targetItem" filterable :loading="targetsLoading">
             <el-option v-for="item in targets" :key="item.dictionaryItemCode" :value="item.dictionaryItemCode" :label="`${item.dictionaryItemName}（${item.dictionaryItemCode}）`" />
           </el-select>
         </el-form-item>
       </el-form>
-      <p>保存后用于该租户、来源表和字段的来源字典解析，原始值保留；业务状态仍按各业务模块的规则处理。</p>
+      <p>{{ shipmentMapping ? '相同来源值只需设置一次。系统会在后续同步中复核相关发货资料。' : '保存后，相同来源值会统一使用所选标准项。' }}</p>
       <template #footer><el-button @click="dialog = false">取消</el-button><el-button type="primary" :loading="saving" :disabled="!targetItem" @click="save">保存映射</el-button></template>
     </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getDictionarySourceMappings, rescanDictionarySources, updateDictionarySourceMapping, getEffectiveBizDict, getBizDicts, type DictionarySourceMapping, type DictView, type DictItemView } from '@/api/core/business-settings'
-const props = defineProps<{ dictionaryCode: string; dictionaries: DictView[]; canWrite: boolean }>()
+const props = defineProps<{ dictionaryCode: string; dictionaries: DictView[]; canWrite: boolean; focus?: { scope: string; value: string; label: string } }>()
 const rows = ref<DictionarySourceMapping[]>([])
+const showAll = ref(false)
+const focused = computed(() => !!props.focus?.scope && !showAll.value)
+const matchesFocus = (row: DictionarySourceMapping) =>
+  !!props.focus && row.sourceScope === props.focus.scope &&
+  (!props.focus.value || row.sourceValue === props.focus.value)
+const visibleRows = computed(() => focused.value ? rows.value.filter(matchesFocus) : rows.value)
+const sourceName = (row: DictionarySourceMapping) =>
+  matchesFocus(row) && props.focus?.value && props.focus.label ? props.focus.label : row.sourceValue
+watch(() => props.focus, () => { showAll.value = false })
 const catalog = ref<DictView[]>([])
 const scanSummary = ref(''), scanWarning = ref(false)
 const scanning = ref(false)
 const loading = ref(false), loadFailed = ref(false), saving = ref(false), dialog = ref(false), targetsLoading = ref(false)
 const selected = ref<DictionarySourceMapping | null>(null)
+const shipmentMapping = computed(() =>
+  selected.value?.sourceSystem === 'DHB' &&
+  selected.value.sourceScope === 'DHB_SHIPMENT_LOGISTICS' &&
+  ['shipment.deliveryMode', 'shipment.logistics'].includes(selected.value.sourceField),
+)
 const targetDictionary = ref(''), targetItem = ref('')
 const targets = ref<DictItemView[]>([])
 let requestVersion = 0, targetVersion = 0
@@ -84,7 +105,9 @@ async function loadTargets() {
   finally { if (version === targetVersion) targetsLoading.value = false }
 }
 async function edit(row: DictionarySourceMapping) {
-  selected.value = row; targetDictionary.value = row.targetDictionaryCode || props.dictionaryCode; dialog.value = true
+  selected.value = row
+  targetDictionary.value = shipmentMapping.value ? row.dictionaryCode : row.targetDictionaryCode || props.dictionaryCode
+  dialog.value = true
   await loadTargets()
   if (targets.value.some(item => item.dictionaryItemCode === row.targetItemCode)) targetItem.value = row.targetItemCode || ''
 }

@@ -12,6 +12,24 @@ export const transportTypes = [
   { value: 'TRANSFER', label: '仓间调拨', orderType: 'TRANSFER_ORDER', orderLabel: '调拨单' },
   { value: 'OTHER', label: '其他费用', orderType: 'OTHER_OUT', orderLabel: '其他订单' },
 ]
+export const receivingMethods = [
+  { value: 'DOOR_DELIVERY', label: '送货上门' },
+  { value: 'SELF_PICKUP', label: '到点自提' },
+]
+export function transportReceivingMethod(
+  manualCode: string | null | undefined,
+  platform: PlatformTransport | null | undefined,
+) {
+  if (platform) return receivingMethods[0]!.label
+  return receivingMethods.find((option) => option.value === manualCode)?.label || '-'
+}
+export function shipmentRemark(fields: ShipmentTransportSource['latest']['sourceFields'] | null) {
+  const read = (data: unknown) =>
+    data && typeof data === 'object' && 'remark' in data && typeof data.remark === 'string'
+      ? data.remark
+      : undefined
+  return read(fields?.detail) ?? read(fields?.list) ?? ''
+}
 export const money = (n: unknown) =>
   n == null || n === ''
     ? '-'
@@ -237,6 +255,7 @@ export function transportDraft(
         : businessDateTime(new Date()).replace(' ', 'T')),
     deliveryModeCode:
       ledger?.deliveryModeCode || (ledger?.carrierCode === 'SELF' ? 'SELF' : 'THIRD_PARTY'),
+    receivingMethodCode: ledger?.receivingMethodCode ?? null,
     receivingPoints: ledger?.receivingPoints.map((p) => ({ ...p })) || null,
     carrierCode: platform ? 'HLL' : (ledger?.carrierCode ?? null),
     trackingNo: order

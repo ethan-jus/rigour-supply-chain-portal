@@ -124,17 +124,17 @@
         待核对来源 {{ report.current.reviewCount }} 笔，暂未计入。请在对应原单核对。
       </div>
       <div
-        v-if="report.scope === 'opex' && report.meta.pendingCounts?.freight"
+        v-if="
+          section === 'analysis' && report.scope === 'opex' && report.meta.pendingCounts?.freight
+        "
         class="cost-message notice readiness-notice"
         role="status"
       >
-        <span
-          >本期有 {{ report.meta.pendingCounts.freight }} 笔运输记录待完善，尚未计入以下金额。</span
-        >
-        <router-link
-          :to="{ path: '/supply-chain/cost/logistics', query: { statusCode: 'INCOMPLETE' } }"
-          >去完善运输记录</router-link
-        >
+        <div class="readiness-summary">
+          <strong>{{ report.meta.pendingCounts.freight }} 笔运输记录待完善</strong>
+          <span>资料齐全后计入运输成本</span>
+        </div>
+        <button class="text-button" @click="openPendingTransports">查看并补齐 →</button>
       </div>
       <template v-if="section === 'overview'">
         <CostOverview
@@ -145,8 +145,9 @@
           @scope="chooseScope"
           @category="openCostArea"
           @records="openRecords"
+          @pending="openPendingTransports"
           @analysis="openAnalysis"
-          @month="selectMonth"
+          @month="openMonthRecords"
           @cities="openCities"
         />
         <CostDepartmentAnalysis
@@ -254,15 +255,17 @@
                     <td v-for="group in report.categories" :key="group.key">
                       <button
                         :style="cellStyle(city.key, group.key)"
-                        :aria-label="`${city.label}，${group.label}，${cellText(city.key, group.key)}，查看费用变动`"
-                        @click="
-                          openAnalysis({ city: city.key, category: group.key as CostCategory })
-                        "
+                        :aria-label="`${city.label}，${group.label}，${cellText(city.key, group.key)}，${matrixMode === 'delta' ? '查看费用变动' : '查看单据'}`"
+                        @click="openMatrixCell(city.key, group.key as CostCategory)"
                       >
                         {{ cellText(city.key, group.key) }}
                       </button>
                     </td>
-                    <td class="numeric">{{ matrixTotal(city, matrixMode) }}</td>
+                    <td class="numeric">
+                      <button class="text-button" @click="openMatrixCell(city.key)">
+                        {{ matrixTotal(city, matrixMode) }}
+                      </button>
+                    </td>
                   </tr>
                   <tr v-if="!report.cityGroups.length">
                     <td :colspan="report.categories.length + 2" class="empty">
@@ -440,13 +443,13 @@
       <template v-else>
         <div class="analysis-controls">
           <h2>支出明细</h2>
-          <button
-            v-if="report.meta.exportAllowed"
-            :disabled="exportBusy || exportSubmitting"
-            @click="openCustomExport"
-          >
-            自定义导出
-          </button>
+          <div v-if="report.meta.exportAllowed" class="record-export-controls">
+            <span v-if="exportError || exportLabel" class="muted" role="status">
+              {{ exportError || exportLabel }}
+            </span>
+            <button v-if="canCancelExport" @click="cancelExport">取消导出</button>
+            <button :disabled="exportBusy" @click="openCustomExport">自定义导出</button>
+          </div>
         </div>
         <div v-if="Object.keys(drill).length" class="drill-filter">
           <span>继承筛选：{{ drillDescription }}</span
@@ -495,7 +498,7 @@
               可比期费用明细
             </button>
           </div>
-          <span class="muted">支出明细为费用登记记录，不代表银行付款明细</span>
+          <span class="muted">金额按费用归属列示，已分摊的单据显示该归属分到的金额。</span>
         </div>
         <template v-if="records"
           ><div class="metric-strip">
@@ -529,22 +532,15 @@
           </div></template
         >
       </template>
-      <div
-        v-if="exportTask || exportError"
-        class="cost-message"
-        :class="{ error: exportError }"
-        role="status"
-      >
-        <span>{{ exportError || exportLabel }}{{ exportContext ? ` · ${exportContext}` : '' }}</span
-        ><button
-          v-if="exportTask?.status === 'READY'"
-          :disabled="exportDownloading"
-          @click="downloadExport"
-        >
-          {{ exportDownloading ? '正在生成 Excel…' : '下载 Excel' }}</button
-        ><button v-if="exportBusy" @click="cancelExport">取消导出</button>
-      </div>
     </main>
+
+    <CostPendingTransports
+      v-if="pendingQuery"
+      :query="pendingQuery"
+      :range="pendingRange"
+      @count="updatePendingCount"
+      @close="pendingQuery = null"
+    />
 
     <div v-if="modalQuery" class="cost-modal-backdrop" @click.self="closeModal">
       <section
@@ -658,7 +654,7 @@
               </dd>
             </div>
             <div>
-              <dt>金额</dt>
+              <dt>计入金额</dt>
               <dd>
                 {{ detail.record.amount === null ? '未填' : `${money(detail.record.amount)} 元` }}
               </dd>
@@ -712,7 +708,7 @@
           </dd>
           <dt>期间对比</dt>
           <dd>
-            按费用实际发生日期、北京时间统计；薪酬、租赁及月度服务按费用所属月统计，不摊入每日曲线。当前月比较截至日对应范围；历史月比较完整自然月；全年固定同比。上期短月及闰日按有效日期裁剪。授权费用范围已有可比期记录时，新增费用分类的上期金额按零比较，零基数不计算增长率。
+            费用按北京时间统计。薪酬、租赁、月度服务和设置了费用所属月的台账按月计入，其余按发生日计入。日趋势按日期显示当天计入的金额。当前月比较截至日对应范围；历史月比较完整自然月；全年固定同比。上期短月及闰日按有效日期裁剪。授权费用范围已有可比期记录时，新增费用分类的上期金额按零比较，零基数不计算增长率。
           </dd>
           <dt>占比与变动贡献</dt>
           <dd>
@@ -748,14 +744,15 @@
 
 <script setup lang="ts">
 import { displayDateTime } from '@/utils/business-date'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { type CostCategory, type CostScope } from '@/api/core/bi-cost-dashboard'
+import { computed, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { type CostCategory, type CostQuery, type CostScope } from '@/api/core/bi-cost-dashboard'
 import { ElMessage } from 'element-plus'
 import EchartsChart from './components/EchartsChart.vue'
 import CostRing from './cost/CostRing.vue'
 import CostComparisonBars from './cost/CostComparisonBars.vue'
 import CostRecordsTable from './cost/CostRecordsTable.vue'
 import CostOverview from './cost/CostOverview.vue'
+import CostPendingTransports from './cost/CostPendingTransports.vue'
 import CostDepartmentAnalysis from './cost/CostDepartmentAnalysis.vue'
 import { costDialog as vCostDialog } from './cost/cost-dialog'
 import { useCostDashboard } from './cost/use-cost-dashboard'
@@ -816,6 +813,36 @@ const {
   clearLedgerDrill,
   searchRecords,
 } = useCostDashboard()
+const pendingQuery = ref<CostQuery | null>(null)
+const pendingRange = computed(() => {
+  const period = report.value?.meta.period
+  if (!period) return ''
+  const city = report.value?.cities.find((item) => item.key === pendingQuery.value?.city)?.label
+  return [
+    `费用期间 ${period.from} 至 ${period.to}`,
+    city || (pendingQuery.value?.city ? '所选费用归属' : '全部授权归属'),
+    pendingQuery.value?.department && '所选部门',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+})
+function openPendingTransports() {
+  if (!report.value) return
+  pendingQuery.value = {
+    ...request.value,
+    page: 1,
+    size: 20,
+    snapshotId: report.value.meta.snapshotId,
+  }
+}
+function updatePendingCount(count: number) {
+  const meta = report.value?.meta
+  if (meta && meta.snapshotId === pendingQuery.value?.snapshotId)
+    meta.pendingCounts = { ...meta.pendingCounts, freight: count }
+}
+onDeactivated(() => {
+  pendingQuery.value = null
+})
 function openCostArea(category: CostCategory) {
   if (category === 'purchase' || category === 'loss') {
     chooseScope(category)
@@ -925,9 +952,20 @@ function selectMonth(key: string) {
   filters.month = month
   globalChange()
 }
+function openMonthRecords(key: string) {
+  const [year, month] = key.split('-').map(Number)
+  filters.year = year
+  filters.month = month
+  openRecords({ scope: 'opex' })
+}
 function openCities() {
   perspective.value = 'cities'
   goSection('analysis')
+}
+function openMatrixCell(city: string, category?: CostCategory) {
+  const query = { city, category }
+  if (matrixMode.value === 'delta') void openAnalysis(query)
+  else openRecords(query)
 }
 function cell(city: string, category: string) {
   return report.value?.matrix.find((c) => c.city === city && c.category === category)
@@ -1009,17 +1047,14 @@ function refreshBoard() {
   void load(true)
 }
 const {
-  exportTask,
   exportError,
   exportSubmitting,
-  exportDownloading,
-  exportContext,
   exportBusy,
   exportLabel,
+  canCancelExport,
   startExport,
   cancelExport,
-  downloadExport,
-} = useCostDashboardExport(request, cities)
+} = useCostDashboardExport(request, cities, () => ElMessage.success('已开始下载 Excel'))
 const exportDialogOpen = ref(false),
   exportFields = ref<string[]>([])
 function openCustomExport() {

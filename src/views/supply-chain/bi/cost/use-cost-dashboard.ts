@@ -20,8 +20,15 @@ import {
   type CostReport,
   type CostScope,
 } from '@/api/core/bi-cost-dashboard'
-import { dimensions, resolveObjectLabels } from './cost-presentation'
-import { loadCostDictionaries } from '../../cost/cost-dictionaries'
+import {
+  detailDimensionDictionary,
+  dictionaryCodeForKey,
+  dimensions,
+  objectDictionaryCodes,
+  resolveObjectLabels,
+  visibleDetailDimensions,
+} from './cost-presentation'
+import { loadCostDictionaryCodes } from '../../cost/cost-dictionaries'
 export function useCostDashboard() {
   const report = ref<CostReport | null>(null),
     records = ref<CostRecords | null>(null),
@@ -93,12 +100,10 @@ export function useCostDashboard() {
     report.value = null
     records.value = null
     try {
-      const dictionaryReady = loadCostDictionaries(undefined, resetSnapshot)
       const q = { ...request.value }
       // 明细页由一次在线授权同时返回汇总和分页，避免重复权限和快照读取。
       const workspace = section.value === 'records' ? await getCostWorkspace(q, signal) : null
       const result = workspace?.report ?? (await getCostReport(q, signal))
-      await dictionaryReady
       if (serial !== generation) return
       snapshot.value = result.meta.snapshotId
       cutoff.value = result.meta.effectiveCutoff
@@ -114,6 +119,16 @@ export function useCostDashboard() {
         records.value = rows
       }
       report.value = resolveObjectLabels(result)
+      const codes = [
+        ...objectDictionaryCodes(result),
+        ...(workspace?.records.items ?? [])
+          .map((row) => dictionaryCodeForKey(row.itemKey))
+          .filter((code): code is string => !!code),
+      ]
+      if (codes.length)
+        void loadCostDictionaryCodes(codes, resetSnapshot, 'inline').then(() => {
+          if (serial === generation) report.value = resolveObjectLabels(result)
+        })
     } catch (e) {
       if (serial === generation && !signal.aborted)
         error.value = errorMessage(e, '费用数据读取失败，请重试')
@@ -130,7 +145,7 @@ export function useCostDashboard() {
     )
       filters.month = Number(cutoff.value.slice(5, 7))
     if (section.value === 'overview') filters.scope = 'opex'
-    if (perspective.value === 'objects') setDefaultTopic()
+    if (section.value === 'analysis' && perspective.value === 'objects') setDefaultTopic()
     else if (filters.scope === 'purchase' && section.value === 'analysis') {
       filters.category = 'purchase'
       filters.dimension = 'component'
@@ -220,7 +235,13 @@ export function useCostDashboard() {
     modalLoading.value = true
     try {
       const result = await getCostReport(modalQuery.value, signal)
-      if (serial === modalGeneration) modalReport.value = resolveObjectLabels(result)
+      if (serial !== modalGeneration) return
+      modalReport.value = resolveObjectLabels(result)
+      const codes = objectDictionaryCodes(result)
+      if (codes.length)
+        void loadCostDictionaryCodes(codes, false, 'inline').then(() => {
+          if (serial === modalGeneration) modalReport.value = resolveObjectLabels(result)
+        })
     } catch (e) {
       if (serial === modalGeneration && !signal.aborted)
         modalError.value = errorMessage(e, '费用变动读取失败')
@@ -240,6 +261,7 @@ export function useCostDashboard() {
     drill.value = Object.fromEntries(
       Object.entries({
         city: extra.city,
+        department: extra.department ?? filters.department,
         category: extra.category ?? filters.category,
         dimension: extra.dimension ?? filters.dimension,
         dimensionKey: extra.dimensionKey ?? filters.dimensionKey,
@@ -276,7 +298,12 @@ export function useCostDashboard() {
         row.sourceId,
         modalQuery.value || request.value,
       )
-      if (serial === modalGeneration) detail.value = result
+      if (serial !== modalGeneration) return
+      detail.value = result
+      const codes = Object.entries(visibleDetailDimensions(result.record, result.dimensions))
+        .map(([name, value]) => detailDimensionDictionary(result.record, name, value))
+        .filter((code): code is string => !!code)
+      if (codes.length) void loadCostDictionaryCodes(codes, false, 'inline')
     } catch (e) {
       if (serial === modalGeneration) detailError.value = errorMessage(e, '源单据读取失败')
     } finally {

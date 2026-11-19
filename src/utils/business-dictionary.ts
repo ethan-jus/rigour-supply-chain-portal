@@ -41,11 +41,11 @@ export function clearBusinessDictionaries() {
   Object.keys(snapshots).forEach((key) => delete snapshots[key])
   requests.clear()
 }
-export async function refreshBusinessDictionary(code: string) {
+export async function refreshBusinessDictionary(code: string, errorFeedback?: 'inline') {
   const key = normalizedKey('', code)
   delete snapshots[key]
   requests.delete(key)
-  await loadBusinessDictionaries([{ moduleCode: '', code }])
+  await loadBusinessDictionaries([{ moduleCode: '', code }], errorFeedback)
 }
 
 function normalizedKey(_moduleCode: string, code: string) {
@@ -91,7 +91,10 @@ function applySnapshot(target: DictionarySnapshot, result: EffectiveDictView) {
  * 批量预载业务页面需要的字典。单本字典失败不会阻断业务数据查询，
  * 页面展示遵循“后端字典优先、源值兜底”。
  */
-export async function loadBusinessDictionaries(refs: BusinessDictionaryRef[]): Promise<void> {
+export async function loadBusinessDictionaries(
+  refs: BusinessDictionaryRef[],
+  errorFeedback?: 'inline',
+): Promise<void> {
   const unique = new Map(refs.map((item) => [normalizedKey(item.moduleCode, item.code), item]))
   await Promise.all(
     [...unique.entries()].map(async ([key, item]) => {
@@ -100,7 +103,7 @@ export async function loadBusinessDictionaries(refs: BusinessDictionaryRef[]): P
         return requests.get(key)
       current.loading = true
       current.failed = false
-      const request = resolveBizDict(item.code)
+      const request = resolveBizDict(item.code, errorFeedback)
         .then((result) => applySnapshot(current, result))
         .catch(() => {
           current.items = []

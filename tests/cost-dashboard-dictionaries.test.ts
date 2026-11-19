@@ -49,14 +49,15 @@ it('downloaded workbook resolves a newly configured fee and preserves exact amou
     { code: 'LIFTING_NEW', name: '吊装费' },
   ])
   const csv =
-    '匹配笔数,1,已确认金额,123.45\r\n单据号,事项,费用类别,城市,费用日期,金额（元）,确认状态,付款状态,费用所属月,费用项目\r\n000123,运费,物流运输费用,武汉,2026-11-01,123.45,已确认,未付款,2026-11,dict:COST_LOGISTICS_FEE_TYPE:LIFTING_NEW\r\n'
+    '匹配笔数,1,已确认金额,123.45\r\n单据号,事项,费用类别,城市,费用日期,金额（元）,确认状态,付款状态,费用所属月,费用项目,原始单号\r\n000123,运费,物流运输费用,武汉,2026-11-01,123.45,已确认,未付款,2026-11,dict:COST_LOGISTICS_FEE_TYPE:LIFTING_NEW,00123456789012345678\r\n'
   const workbook = await buildCostDashboardWorkbook(csv)
   const restored = new Workbook()
   await restored.xlsx.load(await workbook.xlsx.writeBuffer())
   const sheet = restored.getWorksheet('支出明细')!
-  expect(sheet.columnCount).toBe(10)
+  expect(sheet.columnCount).toBe(11)
   expect(sheet.getCell('A2').value).toBe('000123')
   expect(sheet.getCell('G2').value).toBe(123.45)
   expect(sheet.getCell('J2').value).toBe('吊装费')
+  expect(sheet.getCell('K2').value).toBe('00123456789012345678')
   expect(JSON.stringify(restored.model)).not.toContain('dict:')
 })

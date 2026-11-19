@@ -29,45 +29,58 @@ function setup() {
     city: 'COST_HEADQUARTERS',
     snapshotId: 's1',
   })
+  const onDownloadStarted = vi.fn()
   let state!: ReturnType<typeof useCostDashboardExport>
   const wrapper = mount(
     defineComponent({
       setup() {
-        state = useCostDashboardExport(request, ref([{ key: 'COST_HEADQUARTERS', label: '总部' }]))
+        state = useCostDashboardExport(
+          request,
+          ref([{ key: 'COST_HEADQUARTERS', label: '总部' }]),
+          onDownloadStarted,
+        )
         return () => h('div')
       },
     }),
   )
-  return { state, request, wrapper }
+  return { state, request, wrapper, onDownloadStarted }
 }
 beforeEach(() => {
   vi.useFakeTimers()
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   api.createCostExport.mockResolvedValue(task('e1'))
   api.cancelCostExport.mockResolvedValue(undefined)
   api.exportCostDashboardWorkbook.mockResolvedValue(undefined)
+  api.downloadCostExport.mockResolvedValue(new Blob(['csv']))
 })
 afterEach(() => vi.useRealTimers())
 
 describe('成本报表与筛选、快照保持一致', () => {
-  it('freezes custom fields for its task and refuses an empty selection', async () => {
-    const { state, wrapper } = setup()
+  it('downloads a ready task once with the selected fields and refuses an empty selection', async () => {
+    const { state, wrapper, onDownloadStarted } = setup()
     await state.startExport([])
     expect(api.createCostExport).not.toHaveBeenCalled()
     const fields = ['单据号', '金额（元）']
-    await state.startExport(fields)
-    fields.push('城市')
     const blob = new Blob(['csv'])
     api.downloadCostExport.mockResolvedValueOnce(blob)
-    await state.downloadExport()
-    expect(api.exportCostDashboardWorkbook).toHaveBeenCalledWith(blob, expect.any(String), [
-      '单据号',
-      '金额（元）',
-    ])
+    const exporting = state.startExport(fields)
+    fields.push('城市')
+    await exporting
+    await flushPromises()
+    expect(api.downloadCostExport).toHaveBeenCalledExactlyOnceWith('e1')
+    expect(api.exportCostDashboardWorkbook).toHaveBeenCalledWith(
+      blob,
+      expect.any(String),
+      ['单据号', '金额（元）'],
+      expect.any(Function),
+    )
+    expect(onDownloadStarted).toHaveBeenCalledOnce()
+    expect(state.exportLabel.value).toBe('')
     wrapper.unmount()
   })
   it('exports the selected attribution and snapshot, retains it for paging, and clears it after refresh', async () => {
     const { state, request, wrapper } = setup()
+    api.createCostExport.mockResolvedValueOnce(task('e1', 'RUNNING'))
     await state.startExport()
     expect(api.createCostExport).toHaveBeenCalledWith(
       expect.objectContaining({ city: 'COST_HEADQUARTERS', snapshotId: 's1' }),
@@ -126,7 +139,6 @@ describe('成本报表与筛选、快照保持一致', () => {
 
   it('does not download an old report when its filters change during retrieval', async () => {
     const { state, request, wrapper } = setup()
-    await state.startExport()
     let resolve!: (value: Blob) => void
     api.downloadCostExport.mockImplementationOnce(
       () =>
@@ -134,10 +146,10 @@ describe('成本报表与筛选、快照保持一致', () => {
           resolve = done
         }),
     )
-    const downloading = state.downloadExport()
+    await state.startExport()
     request.value = { ...request.value, status: 'VOID' }
     resolve(new Blob(['old report']))
-    await downloading
+    await flushPromises()
     expect(api.exportCostDashboardWorkbook).not.toHaveBeenCalled()
     expect(state.exportTask.value).toBeNull()
     expect(state.exportDownloading.value).toBe(false)
@@ -146,6 +158,7 @@ describe('成本报表与筛选、快照保持一致', () => {
 
   it('does not let a late cancellation overwrite a newer task', async () => {
     const { state, request, wrapper } = setup()
+    api.createCostExport.mockResolvedValueOnce(task('e1', 'RUNNING'))
     await state.startExport()
     let resolve!: () => void
     api.cancelCostExport.mockImplementationOnce(
@@ -162,6 +175,22 @@ describe('成本报表与筛选、快照保持一致', () => {
     await cancelling
     expect(state.exportTask.value?.id).toBe('new')
     expect(state.exportTask.value?.status).toBe('READY')
+    wrapper.unmount()
+  })
+
+  it('downloads when polling turns ready and reports download errors at the export control', async () => {
+    const { state, wrapper, onDownloadStarted } = setup()
+    api.createCostExport.mockResolvedValueOnce(task('e1', 'RUNNING'))
+    api.getCostExport.mockResolvedValueOnce(task('e1'))
+    api.downloadCostExport.mockRejectedValueOnce(new Error('取文件失败'))
+    await state.startExport()
+    expect(state.canCancelExport.value).toBe(true)
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(api.downloadCostExport).toHaveBeenCalledExactlyOnceWith('e1')
+    expect(onDownloadStarted).not.toHaveBeenCalled()
+    expect(state.exportBusy.value).toBe(false)
+    expect(state.exportError.value).toBeTruthy()
     wrapper.unmount()
   })
 })

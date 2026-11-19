@@ -9,7 +9,17 @@
     :close-on-click-modal="false"
   >
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <dl class="sales-context" aria-label="销售订单信息">
+    <p v-if="contextLoading" class="chooser-note" role="status">正在读取销售订单…</p>
+    <el-button v-else-if="!context && error" link type="primary" @click="loadContext"
+      >重新读取销售订单</el-button
+    >
+    <el-alert
+      v-if="context && !context.canAssociate"
+      title="当前销售订单不可关联物流"
+      type="info"
+      :closable="false"
+    />
+    <dl v-if="context" class="sales-context" aria-label="销售订单信息">
       <div class="context-main">
         <dt>销售订单号</dt>
         <dd>{{ context.salesOrder.documentNo }}</dd>
@@ -41,7 +51,23 @@
       </div>
     </dl>
     <section class="chooser-delivery" aria-label="配送信息">
-      <el-form class="delivery-form" label-position="left" label-width="80px" @submit.prevent>
+      <p
+        v-if="dictionariesLoading && (!modeOptions.length || !carrierOptions.length)"
+        class="chooser-note"
+        role="status"
+      >
+        正在读取配送方式和物流公司…
+      </p>
+      <el-button v-else-if="dictionariesFailed" link type="primary" @click="loadDictionaries"
+        >重新读取配送方式和物流公司</el-button
+      >
+      <el-form
+        v-else
+        class="delivery-form"
+        label-position="left"
+        label-width="80px"
+        @submit.prevent
+      >
         <el-form-item label="配送方式" required
           ><el-select
             v-model="mode"
@@ -70,7 +96,7 @@
         <div v-if="mode === 'SELF' || (carrier && carrier !== 'HLL')" class="manual-entry">
           <el-button
             type="primary"
-            :disabled="!context.canAssociate || !supportedMode"
+            :disabled="!context?.canAssociate || !supportedMode"
             @click="manualOpen = true"
             >手工录入物流</el-button
           >
@@ -129,8 +155,8 @@
           <div class="list-filter-field list-filter-field--select">
             <el-select
               v-model="query.relationState"
-              placeholder="销售关联状态"
-              aria-label="销售关联状态"
+              placeholder="订单关联状态"
+              aria-label="订单关联状态"
               clearable
               ><el-option label="未关联销售单" value="UNLINKED" /><el-option
                 label="已关联销售单"
@@ -204,7 +230,11 @@
           @size-change="resizePage"
         />
       </div>
-      <section v-if="selected" class="chooser-section selected-preview" aria-label="已选物流信息">
+      <section
+        v-if="selected && context"
+        class="chooser-section selected-preview"
+        aria-label="已选物流信息"
+      >
         <h3>已选物流信息</h3>
         <el-descriptions :column="2" border
           ><el-descriptions-item label="快递单号">{{ no(selected) }}</el-descriptions-item
@@ -260,14 +290,14 @@
       ><el-button
         v-if="carrier === 'HLL' && mode !== 'SELF'"
         type="primary"
-        :disabled="!selected || !context.canAssociate"
+        :disabled="!selected || !context?.canAssociate"
         :loading="saving"
         @click="save"
         >保存关联</el-button
       ></template
     >
     <TransportRecordEditor
-      v-if="manualOpen"
+      v-if="manualOpen && context"
       v-model="manualOpen"
       :detail="null"
       :readonly="false"
@@ -280,10 +310,10 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { SalesLogisticsContext } from '@/api/core/sales-logistics'
-import { linkSalesLogistics } from '@/api/core/sales-logistics'
+import { getSalesLogisticsSelection, linkSalesLogistics } from '@/api/core/sales-logistics'
 import { getTransportRecords, type TransportDetail } from '@/api/core/transport-records'
 import { costOptions, costLabel } from '../../cost/cost-dictionaries'
 import {
@@ -302,9 +332,43 @@ import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard
 import TransportRecordEditor from '../../cost/TransportRecordEditor.vue'
 import TransportRouteSummary from '../../cost/TransportRouteSummary.vue'
 import { errorMessage } from '@/api/core/error'
-const props = defineProps<{ orderId: string | number; context: SalesLogisticsContext }>()
+import { loadBusinessDictionaries } from '@/utils/business-dictionary'
+const props = defineProps<{ orderId: string | number; context?: SalesLogisticsContext }>()
 const visible = defineModel<boolean>({ required: true })
 const emit = defineEmits<{ saved: []; view: [id: string] }>()
+const selectionContext = ref<SalesLogisticsContext | null>(null)
+const context = computed(() => props.context ?? selectionContext.value)
+const contextLoading = ref(!props.context)
+const dictionariesLoading = ref(true)
+const dictionariesFailed = ref(false)
+async function loadContext() {
+  contextLoading.value = true
+  error.value = ''
+  try {
+    selectionContext.value = await getSalesLogisticsSelection(props.orderId)
+  } catch (e) {
+    error.value = errorMessage(e, '销售订单读取失败')
+  } finally {
+    contextLoading.value = false
+  }
+}
+async function loadDictionaries() {
+  dictionariesLoading.value = true
+  try {
+    await loadBusinessDictionaries([
+      { moduleCode: '', code: 'COST_CARRIER' },
+      { moduleCode: '', code: 'COST_DELIVERY_MODE' },
+    ])
+    dictionariesFailed.value = !modeOptions.value.length
+  } finally {
+    dictionariesLoading.value = false
+  }
+}
+onMounted(() => {
+  if (!props.context) void loadContext()
+  void loadDictionaries()
+})
+
 const mode = ref('THIRD_PARTY'),
   carrier = ref<string | null>(null)
 const manualOpen = ref(false),
@@ -325,19 +389,22 @@ const rows = ref<TransportDetail[]>([]),
   selected = ref<TransportDetail | null>(null),
   appliedReceiverName = ref('')
 const allocationPreview = computed(() => {
-  if (!selected.value) return []
+  const salesOrder = context.value?.salesOrder
+  if (!selected.value || !salesOrder) return []
   const record = selected.value
   const sources = frozenTransportSources(record.record)
   if (alreadyLinked(record)) return savedTransportAllocations(record, sources)
-  const codes = [...ordersOf(record.record, record.platform), props.context.salesOrder.documentNo]
+  const codes = [...ordersOf(record.record, record.platform), salesOrder.documentNo]
   const amount = amountOf(record.record, record.platform)
   return transportAllocations(amount == null ? null : Number(amount), codes, [
     ...sources,
-    props.context.salesOrder,
+    salesOrder,
   ])
 })
 const automatic = computed(() =>
-  props.context.transports.filter((r) => r.record.statusCode === 'ACTIVE' && !!r.shipments?.length),
+  (context.value?.transports ?? []).filter(
+    (r) => r.record.statusCode === 'ACTIVE' && !!r.shipments?.length,
+  ),
 )
 const modeOptions = computed(() => costOptions('COST_DELIVERY_MODE'))
 const carrierOptions = computed(() => costOptions('COST_CARRIER'))
@@ -357,7 +424,7 @@ const carrierName = (r: TransportDetail) =>
       costLabel('COST_CARRIER', r.record.data.ledger?.carrierCode)
 const orderedAt = (r: TransportDetail) => transportTimeOf(r.record, r.platform, r.shipments)
 const alreadyLinked = (r: TransportDetail) =>
-  ordersOf(r.record, r.platform).includes(props.context.salesOrder.documentNo)
+  !!context.value && ordersOf(r.record, r.platform).includes(context.value.salesOrder.documentNo)
 function select(r: TransportDetail) {
   if (r.record.statusCode === 'ACTIVE') selected.value = r
 }
@@ -430,7 +497,7 @@ function resizePage(size: number) {
   search()
 }
 async function save() {
-  if (!selected.value || saving.value) return
+  if (!selected.value || saving.value || !context.value?.canAssociate) return
   saving.value = true
   error.value = ''
   try {

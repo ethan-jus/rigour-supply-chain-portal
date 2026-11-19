@@ -13,7 +13,16 @@
       @visible-change="open"
       @change="change"
     >
-      <el-option v-for="row in options" :key="row.id" :value="row.id" :label="row.label" />
+      <el-option
+        v-for="row in options"
+        :key="row.id"
+        :value="row.id"
+        :label="row.label"
+        :class="{ 'reference-option--issue': !!row.description }"
+      >
+        <span>{{ row.label }}</span>
+        <small v-if="row.description" class="reference-option-issue">{{ row.description }}</small>
+      </el-option>
       <template #empty>
         <div class="reference-empty" :role="error ? 'alert' : 'status'">
           <span>{{ loading ? '正在加载…' : error || '暂无匹配资料，可更换关键字搜索' }}</span>
@@ -44,6 +53,7 @@ export interface ReferenceOption {
   id: string
   label: string
   name: string
+  description?: string
   [key: string]: unknown
 }
 const props = defineProps<{
@@ -152,5 +162,18 @@ onBeforeUnmount(() => {
 .reference-error {
   color: var(--el-color-danger);
   font-size: 12px;
+}
+.reference-option--issue {
+  height: auto;
+  min-height: 34px;
+  line-height: 20px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.reference-option-issue {
+  display: block;
+  max-width: 450px;
+  white-space: normal;
+  color: var(--el-color-warning-dark-2);
 }
 </style>

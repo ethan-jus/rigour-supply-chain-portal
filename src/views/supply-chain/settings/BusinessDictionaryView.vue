@@ -136,6 +136,9 @@
             :dictionary-code="selectedDict.dictionaryCode"
             :dictionaries="dictionaries"
             :can-write="canWrite"
+            :focus="
+              mappingQuery?.dictionary === selectedDict.dictionaryCode ? mappingQuery : undefined
+            "
           />
           <div v-else class="master-table" v-loading="itemsLoading">
             <el-table
@@ -370,7 +373,8 @@
 <script setup lang="ts">
 import { ArrowRight, InfoFilled, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import DictionarySourceMappings from './DictionarySourceMappings.vue'
 import { refreshBusinessDictionaries } from '@/utils/business-dictionary'
@@ -398,6 +402,17 @@ interface DictItemTree extends DictItemView {
 const DEFAULT_DICTIONARY_TYPE = 'COMMON'
 
 const { can } = useSupplyPermissions()
+const route = useRoute()
+const mappingQuery = computed(() => {
+  const query = route?.query
+  if (query?.tab !== 'sources' || typeof query.dictionary !== 'string') return null
+  return {
+    dictionary: query.dictionary,
+    scope: typeof query.source === 'string' ? query.source : '',
+    value: typeof query.value === 'string' ? query.value : '',
+    label: typeof query.label === 'string' ? query.label : '',
+  }
+})
 const loading = ref(false)
 const itemsLoading = ref(false)
 const saving = ref(false)
@@ -538,10 +553,14 @@ async function loadDicts() {
   try {
     dictionaries.value = await getBizDicts({ dictionaryCode: undefined })
     const selected =
+      dictionaries.value.find((row) => row.dictionaryCode === mappingQuery.value?.dictionary) ||
       dictionaries.value.find((row) => row.id === selectedDict.value?.id) ||
       dictionaries.value[0] ||
       null
-    await selectDict(selected)
+    await selectDict(
+      selected,
+      mappingQuery.value?.dictionary === selected?.dictionaryCode ? 'sources' : undefined,
+    )
   } catch (error) {
     dictionaries.value = []
     await selectDict(null)
@@ -552,7 +571,12 @@ async function loadDicts() {
 }
 
 let selectionVersion = 0
-async function selectDict(row: DictView | null) {
+watch(mappingQuery, (query) => {
+  const row = dictionaries.value.find((item) => item.dictionaryCode === query?.dictionary)
+  if (row) void selectDict(row, 'sources')
+})
+
+async function selectDict(row: DictView | null, mode?: 'sources') {
   const version = ++selectionVersion
   const changed = selectedDict.value?.id !== row?.id
   selectedDict.value = row
@@ -563,6 +587,7 @@ async function selectDict(row: DictView | null) {
     itemMode.value = 'standard'
     itemSearch.value = ''
   }
+  if (mode) itemMode.value = mode
   if (!row) return
   itemsLoading.value = true
   try {

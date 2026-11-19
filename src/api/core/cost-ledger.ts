@@ -9,6 +9,7 @@ export interface LedgerPartyReference {
   contactName: string | null
   phone: string | null
   partyTypeCode: string
+  referenceIssue?: string | null
 }
 const options = { stayOnUnauthorized: true }
 export function getLedgerParties(
