@@ -768,6 +768,7 @@
       :order-id="detailOrderId"
       :initial-tab="detailTab"
       @logistics-changed="refreshLogisticsCounts"
+      @attribution-changed="loadOrders"
     />
 
     <OrderInvoiceApplyDialog

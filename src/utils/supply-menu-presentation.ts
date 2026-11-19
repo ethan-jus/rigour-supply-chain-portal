@@ -1,8 +1,8 @@
 import type { SupplyMenuNode } from '@/api/core/supply-settings'
 
 const interfaceActions = new Set([
-  'order:update', 'order:warehouse:select', 'order:cancel', 'order:history:repair',
-  'order:attribution:read', 'order:attribution:propose', 'order:attribution:approve',
+  'order:update', 'order:warehouse:select', 'order:cancel',
+  'order:payment:create', 'order:payment:update',
 ])
 export function menuKind(node: SupplyMenuNode, parent?: SupplyMenuNode) {
   if (node.type === 'MENU') return '目录'

@@ -224,7 +224,8 @@
             :loading="exporting"
             v-if="can(permission + (category === 'expenses' ? ':read' : ':export'))"
             @click="openExport"
-            >自定义导出</el-button
+            ><template v-if="category === 'expenses'">自定义导出</template>
+            <SupplyActionLabel v-else :code="permission + ':export'" fallback="自定义导出" /></el-button
           >
           <el-button :loading="loading" @click="load">刷新</el-button>
         </div>
@@ -554,7 +555,7 @@
                   :disabled="saving || row.data.amount == null"
                   :title="row.data.amount == null ? '补齐金额后可确认' : undefined"
                   @click="transition(row as CostRecord, 'confirm')"
-                  >确认</el-button
+                  ><SupplyActionLabel :code="permission + ':confirm'" fallback="确认" /></el-button
                 ><el-button
                   v-if="
                     (category === 'expenses'
@@ -565,7 +566,7 @@
                   type="danger"
                   :disabled="saving"
                   @click="transition(row as CostRecord, 'void')"
-                  >作废</el-button
+                  ><SupplyActionLabel :code="permission + ':void'" fallback="作废" /></el-button
                 ><el-button
                   v-if="category === 'expenses'"
                   link
@@ -1120,7 +1121,7 @@
             :loading="saving"
             :disabled="detail.data.amount == null"
             @click="transition(detail, 'confirm')"
-            >核对并确认</el-button
+            ><SupplyActionLabel :code="permission + ':confirm'" fallback="核对并确认" /></el-button
           >
           <el-button
             v-if="
@@ -1132,7 +1133,7 @@
             "
             :disabled="saving"
             @click="transition(detail, 'void')"
-            >作废</el-button
+            ><SupplyActionLabel :code="permission + ':void'" fallback="作废" /></el-button
           >
           <el-button
             v-if="
@@ -1205,6 +1206,7 @@
   />
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { displayBusinessLabel as costLabel } from '@/utils/business-display'
 import { displayCell, displayAmount as costMoney } from '@/utils/business-display'
 import { useNavigationStore } from '@/stores/navigation'

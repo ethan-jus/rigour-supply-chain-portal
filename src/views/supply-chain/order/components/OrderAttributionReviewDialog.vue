@@ -1,11 +1,14 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    title="历史归属复核"
+    append-to-body
     width="min(1000px,96vw)"
     :close-on-click-modal="false"
     @update:model-value="emit('update:modelValue', $event)"
   >
+    <template #header="{ titleId, titleClass }">
+      <span :id="titleId" :class="titleClass"><SupplyActionLabel code="order:attribution:read" fallback="归属更正" /></span>
+    </template>
     <div v-loading="loading">
       <el-alert
         title="按订单当时的事实提交证据，由另一名有权限的用户审核。没有历史部门或地区证据时请保留未知；调整会影响历史归属统计。"
@@ -25,8 +28,9 @@
           }}
           · 地区：{{ current.region_code || '未知' }}
         </p>
-        <el-collapse v-if="can('order:attribution:propose')" v-model="expanded"
-          ><el-collapse-item title="申请归属更正" name="propose">
+        <el-collapse v-if="can('order:attribution:propose') && (context.sourceSystemCode || context.current.order.order_status_code !== 'DRAFT')" v-model="expanded"
+          ><el-collapse-item name="propose">
+            <template #title><SupplyActionLabel code="order:attribution:propose" fallback="申请更正" /></template>
             <el-form label-position="top" :disabled="saving" class="form">
               <el-form-item label="HR 员工编码" required
                 ><el-input
@@ -72,7 +76,7 @@
                 ><el-input v-model="form.reason" maxlength="1000"
               /></el-form-item>
             </el-form>
-            <el-button type="primary" :loading="saving" @click="propose"><SupplyActionLabel code="order:attribution:propose" fallback="提交复核申请" /></el-button>
+            <el-button type="primary" :loading="saving" @click="propose"><SupplyActionLabel code="order:attribution:propose" fallback="申请更正" /></el-button>
           </el-collapse-item></el-collapse
         >
         <h3>申请与处理记录</h3>
@@ -117,9 +121,9 @@
               </p>
             </el-collapse-item></el-collapse
           >
-          <div v-if="item.status === 'PENDING' && can('order:attribution:approve')">
+          <div v-if="item.status === 'PENDING' && can('order:attribution:approve') && item.proposedBy !== auth.user?.id">
             <el-button type="primary" :disabled="saving" @click="decide(item, true)"
-              >审核通过并生效</el-button
+              ><SupplyActionLabel code="order:attribution:approve" fallback="审核更正" /></el-button
             ><el-button :disabled="saving" @click="decide(item, false)">驳回</el-button>
           </div>
         </el-card>
@@ -132,12 +136,14 @@ import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
+import { useAuthStore } from '@/stores/auth'
 import {
   attributionReviewApi,
   type AttributionReviewContext,
   type AttributionAdjustment,
 } from '@/api/core/order-attribution-review'
 const props = defineProps<{ modelValue: boolean; orderId: string | number | null }>()
+const auth = useAuthStore()
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void; (e: 'applied'): void }>()
 const { can } = useSupplyPermissions(),
   context = ref<AttributionReviewContext | null>(null),

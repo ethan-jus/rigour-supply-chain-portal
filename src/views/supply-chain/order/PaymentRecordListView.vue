@@ -471,7 +471,7 @@
                 plain
                 @click="openCheck(row as OrderRegisterPaymentItem)"
               >
-                <el-icon><CircleCheck /></el-icon>确认
+                <el-icon><CircleCheck /></el-icon><SupplyActionLabel code="order:payment:check" fallback="确认" />
               </el-button>
               <span v-else-if="row.paymentStatusCode === 'CHECKED'" class="payment-check-state payment-check-state--done">
                 <el-icon><CircleCheck /></el-icon>已确认
@@ -512,7 +512,7 @@
     <PaymentVoucherTransactionsDialog v-model="voucherVisible" :payment="voucherTarget" />
     <PaymentCheckDialog v-model="checkVisible" :payment="checkTarget" @checked="onChecked" />
     <PaymentDetailDrawer v-model="paymentDetailVisible" :payment="selectedPayment" />
-    <OrderRegisterDetailDrawer v-if="canReadOrders" v-model="detailVisible" :order-id="detailOrderId" />
+    <OrderRegisterDetailDrawer v-if="canReadOrders" v-model="detailVisible" :order-id="detailOrderId" @attribution-changed="loadPayments" />
   </div>
 </template>
 

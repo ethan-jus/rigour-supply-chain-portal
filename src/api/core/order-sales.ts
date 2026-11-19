@@ -472,12 +472,6 @@ export const getSalesPayment = (id: string | number) =>
     options,
   )
 
-export const deleteSalesPayment = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ORDER_PAYMENT_BASE_PATH}/${encodeURIComponent(String(id))}`, {
-    params: { revision },
-    ...options,
-  })
-
 export const getSalesRefunds = (params: SalesRefundQuery) =>
   apiClient.get<OrderPage<SalesRefundSummary>>(ORDER_REFUND_BASE_PATH, { params, ...options })
 

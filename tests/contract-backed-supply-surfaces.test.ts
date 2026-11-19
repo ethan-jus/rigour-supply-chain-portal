@@ -85,7 +85,7 @@ import crmShippingAddressSource from '@/views/supply-chain/crm/CrmShippingAddres
 import salesOrderSource from '@/views/supply-chain/order/OrderListView.vue?raw'
 import fundDocumentSource from '@/views/supply-chain/order/FundDocumentView.vue?raw'
 import salesShipmentSource from '@/views/supply-chain/order/SalesShipmentView.vue?raw'
-import salesPaymentRecordSource from '@/views/supply-chain/order/SalesPaymentRecordView.vue?raw'
+import paymentRecordListSource from '@/views/supply-chain/order/PaymentRecordListView.vue?raw'
 import salesRefundRecordSource from '@/views/supply-chain/order/SalesRefundRecordView.vue?raw'
 import biDashboardSource from '@/views/supply-chain/bi/IndexView.vue?raw'
 
@@ -282,7 +282,7 @@ describe('合同驱动的供应链页面', () => {
       crmShippingAddressSource,
       fundDocumentSource,
       salesShipmentSource,
-      salesPaymentRecordSource,
+      paymentRecordListSource,
       salesRefundRecordSource,
     ]
 

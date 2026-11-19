@@ -443,6 +443,7 @@
       v-model="detailVisible"
       :order-id="detailOrderId"
       :initial-tab="detailTab"
+      @attribution-changed="loadLines"
     />
   </div>
 </template>

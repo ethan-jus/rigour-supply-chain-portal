@@ -51,6 +51,9 @@
               </el-descriptions-item>
               <el-descriptions-item label="业务员">
                 {{ detail.ownerEmployeeNameSnapshot || detail.ownerEmployeeCode || '-' }}
+                <el-button v-if="can('order:attribution:read')" link type="primary" @click="attributionVisible = true">
+                  <SupplyActionLabel code="order:attribution:read" fallback="归属更正" />
+                </el-button>
               </el-descriptions-item>
               <el-descriptions-item label="下单时间">{{
                 displayDateTime(detail.orderDate)
@@ -234,6 +237,13 @@
     </div>
 
     <PaymentDetailDrawer v-model="paymentDetailVisible" :payment="selectedPayment" />
+    <OrderAttributionReviewDialog
+      v-if="modelValue && attributionVisible && detail && String(detail.id) === String(orderId) && can('order:attribution:read')"
+      :key="detail.id"
+      v-model="attributionVisible"
+      :order-id="detail.id"
+      @applied="refreshAttribution"
+    />
   </el-drawer>
 </template>
 
@@ -258,6 +268,8 @@ import { orderLifecycleEvents, type SourceLifecycleEvent } from '@/api/core/orde
 import { getSalesOrder, type SalesOrderDetail } from '@/api/core/order-sales'
 import { getOrderRegisterPayments, type OrderRegisterPaymentItem } from '@/api/core/order-register'
 import PaymentDetailDrawer from './PaymentDetailDrawer.vue'
+import OrderAttributionReviewDialog from './OrderAttributionReviewDialog.vue'
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import SalesLogisticsPanel from './SalesLogisticsPanel.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import OrderInvoicePanel from './OrderInvoicePanel.vue'
@@ -268,7 +280,7 @@ const props = defineProps<{
   /** 打开时默认展示的页签；列表操作列的“发票”入口直接定位到发票页签。 */
   initialTab?: string
 }>()
-const emit = defineEmits<{ 'update:modelValue': [value: boolean]; 'logistics-changed': [] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: boolean]; 'logistics-changed': []; 'attribution-changed': [] }>()
 const { can } = useSupplyPermissions()
 
 const loading = ref(false)
@@ -280,6 +292,7 @@ const lifecycleEvents = ref<SourceLifecycleEvent[]>([])
 const lifecycleError = ref('')
 const activeTab = ref('overview')
 const paymentDetailVisible = ref(false)
+const attributionVisible = ref(false)
 const selectedPayment = ref<OrderRegisterPaymentItem | null>(null)
 
 function errorMessage(reason: unknown, fallback: string) {
@@ -298,9 +311,23 @@ function openPayment(payment: OrderRegisterPaymentItem) {
   paymentDetailVisible.value = true
 }
 
+async function refreshAttribution() {
+  const orderId = props.orderId
+  if (orderId === null) return
+  emit('attribution-changed')
+  try {
+    const current = await getSalesOrder(orderId)
+    if (props.modelValue && props.orderId === orderId) detail.value = current
+  } catch (reason) {
+    if (props.modelValue && props.orderId === orderId)
+      loadError.value = errorMessage(reason, '归属已更新，请重新打开订单查看')
+  }
+}
+
 watch(
   () => [props.modelValue, props.orderId] as const,
   async ([visible, orderId]) => {
+    attributionVisible.value = false
     if (!visible || orderId === null) return
     loading.value = true
     loadError.value = ''
