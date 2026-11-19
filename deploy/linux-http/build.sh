@@ -4,14 +4,14 @@ set -euo pipefail
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$project_dir"
 
-# 本次 Linux HTTP 部署的公开配置。desktop 仅启用现有 HTTP 加密兼容路径，
-# NODE_ENV=production 仍生成优化后的静态文件，保留 PKCE 和签名校验。
+# 两个 SCM 入口共用同一产物，回调由浏览器按当前入口生成。
+# desktop 为现有 HTTP 入口保留 PKCE 和签名校验所需的实现。
 export NODE_ENV=production
-export VITE_APP_ENV=development
+export VITE_APP_ENV=production
 export VITE_API_BASE_URL=/api/v1
 export VITE_OIDC_ISSUER=http://127.0.0.1:26881
 export VITE_OIDC_CLIENT_ID=rigour-scdp-browser
-export VITE_OIDC_REDIRECT_URI=http://8.140.247.79:2026/oidc/callback
+export VITE_OIDC_REDIRECT_URI=''
 
 pnpm typecheck
 pnpm exec vite build --mode desktop --outDir rgscdp_dist
