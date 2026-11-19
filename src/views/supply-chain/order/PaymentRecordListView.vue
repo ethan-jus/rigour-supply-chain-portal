@@ -486,7 +486,7 @@
           <OrderPackageSyncButton plain vouchers-only @completed="search" />
           <el-button plain @click="auditVisible = true">回款凭证核查</el-button>
           <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
-          <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+          <el-button v-if="can('order:payment:export', 'order:read')" plain :loading="exporting" @click="exportCsv"><SupplyActionLabel code="order:payment:export" fallback="导出" /></el-button>
           <TableColumnSettings
             size="default"
             plain
@@ -517,6 +517,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import OrderPackageSyncButton from '@/components/supply/OrderPackageSyncButton.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import { getPaymentAuditStates, type PaymentAuditState } from '@/api/core/payment-voucher-audit'
@@ -804,6 +805,7 @@ function openPaymentDetail(row: OrderRegisterPaymentItem) {
 }
 
 async function exportCsv() {
+  if (!can('order:payment:export', 'order:read')) return
   exporting.value = true
   try {
     const query = await buildQuery()

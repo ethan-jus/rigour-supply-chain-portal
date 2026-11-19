@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { UserInfo } from '@/types'
 import { apiClient } from '@/api'
 import { getToken, removeToken } from '@/utils/token'
@@ -15,7 +15,22 @@ import { clearPayrollIntervalCopies } from '@/utils/payroll-coefficient-clipboar
 /** SCDP 登录会话；Token 只保存在内存，业务授权由供应链权限上下文提供。 */
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<UserInfo | null>(null)
+  const sessionUser = ref<UserInfo | null>(null)
+  const supply = useSupplyAuthorizationStore()
+  const user = computed({
+    get(): UserInfo | null {
+      const identity = sessionUser.value
+      if (!identity || supply.context?.mode !== 'ACTIVE') return identity
+      return { ...identity, permissions: supply.context.permissions }
+    },
+    set(identity: UserInfo | null) {
+      if (sessionUser.value && (identity?.id !== sessionUser.value.id || identity?.tenantId !== sessionUser.value.tenantId)) {
+        supply.reset()
+        useNavigationStore().reset()
+      }
+      sessionUser.value = identity
+    },
+  })
   const token = ref<string | null>(getToken())
   const isAuthenticated = ref(!!getToken() || hasRefreshToken())
 

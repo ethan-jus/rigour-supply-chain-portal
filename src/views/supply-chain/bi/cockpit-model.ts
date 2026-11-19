@@ -57,7 +57,6 @@ export const cockpitSections = {
   'payment-risk': '回款风险',
   'city-cost': '成本与盈亏',
   'inventory-risk': '库存风险',
-  activity: '活动经营',
 } as const
 export type CockpitSection = keyof typeof cockpitSections
 export type ProductDimension = 'PRODUCT' | 'SKU' | 'CATEGORY' | 'BRAND'
@@ -70,7 +69,6 @@ export type DrillKind =
   | 'orders'
   | 'receipt'
   | 'cost'
-  | 'activity'
   | 'target'
 export interface DetailRow {
   key: string
@@ -1426,104 +1424,6 @@ export function buildCockpit(
       rows: replenishmentDetails(replenish),
       empty: stockUnavailable ? '库存快照暂无记录，无法计算补货量' : '当前筛选无补货建议',
       emptyAction: 'inventory',
-    })
-  } else if (section === 'activity') {
-    const campaigns = [
-      { name: '方便面开学季促销', sales: 65000, cost: 12500, reach: 280, order: 76, budget: 18000 },
-      { name: '台球周边联名活动', sales: 52000, cost: 7600, reach: 180, order: 49, budget: 12000 },
-      { name: '粉面菜蛋试吃转化', sales: 38000, cost: 10800, reach: 340, order: 53, budget: 16000 },
-    ]
-    const totals = campaigns.reduce(
-      (sum, row) => ({
-        sales: sum.sales + row.sales,
-        cost: sum.cost + row.cost,
-        reach: sum.reach + row.reach,
-        order: sum.order + row.order,
-      }),
-      { sales: 0, cost: 0, reach: 0, order: 0 },
-    )
-    kpis = [
-      { label: '活动成交', value: amount(totals.sales), color: chartColors[0], sample: true },
-      { label: '活动费用', value: amount(totals.cost), color: chartColors[2], sample: true },
-      {
-        label: '费用产出比',
-        value: `${(totals.sales / totals.cost).toFixed(2)}倍`,
-        color: chartColors[1],
-        sample: true,
-        definition: '活动销售额 / 活动费用；不是净利润ROI。',
-      },
-      {
-        label: '触达转化率',
-        value: percent(ratio(totals.order, totals.reach)),
-        color: chartColors[1],
-        sample: true,
-      },
-    ]
-    const plot = campaigns.map((row) => ({
-      key: row.name,
-      name: row.name,
-      values: [row.sales, row.cost],
-    }))
-    const records = campaigns.map((row) => ({
-      key: row.name,
-      name: row.name,
-      sample: true,
-      cells: {
-        活动销售额: exactAmount(row.sales),
-        费用: exactAmount(row.cost),
-        费用产出比: `${(row.sales / row.cost).toFixed(2)}倍`,
-        触达客户: count(row.reach),
-        下单客户: count(row.order),
-        预算: exactAmount(row.budget),
-      },
-    }))
-    figures.push({
-      id: 'campaigns',
-      title: '活动销售分布',
-      span: 8,
-      sample: true,
-      option: pareto(plot, '活动销售额'),
-      rows: records,
-      note: '独立活动样例，不计入真实销售汇总',
-    })
-    const conversion = campaigns.map((row) => ({
-      key: row.name,
-      name: row.name,
-      values: [ratio(row.order, row.reach)],
-    }))
-    figures.push({
-      id: 'conversion',
-      title: '活动转化对比',
-      span: 4,
-      sample: true,
-      option: bars(conversion, [{ name: '触达转化率', color: chartColors[1] }], { unit: '%' }),
-      rows: records,
-    })
-    const budget = campaigns.map((row) => ({
-      key: row.name,
-      name: row.name,
-      values: [row.cost, row.budget - row.cost],
-    }))
-    figures.push({
-      id: 'campaign-budget',
-      title: '活动预算执行',
-      span: 6,
-      sample: true,
-      option: heatmap(budget, ['已使用', '剩余预算'], { money: true }),
-      rows: records,
-    })
-    const returns = campaigns.map((row) => ({
-      key: row.name,
-      name: row.name,
-      values: [row.sales / row.cost],
-    }))
-    figures.push({
-      id: 'campaign-return',
-      title: '活动费用产出比',
-      span: 6,
-      sample: true,
-      option: bars(returns, [{ name: '费用产出比', color: chartColors[1] }], { unit: '倍' }),
-      rows: records,
     })
   }
 

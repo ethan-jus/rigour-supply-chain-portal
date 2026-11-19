@@ -1,5 +1,4 @@
 import type { NavigationNode } from '@/types/management'
-import { businessNavigationName } from './business-page-labels'
 
 export interface ConsoleEntry {
   name: string
@@ -18,13 +17,13 @@ export function consoleEntries(nodes: NavigationNode[]): ConsoleEntry[] {
       if (node.routePath && !seen.has(node.routePath)) {
         seen.add(node.routePath)
         entries.push({
-          name: businessNavigationName(node),
+          name: node.displayName,
           path: node.routePath,
           iconKey: node.iconKey,
           context: parents.join(' / '),
         })
       }
-      visit(node.children, [...parents, businessNavigationName(node)])
+      visit(node.children, [...parents, node.displayName])
     }
   }
   visit(nodes, [])

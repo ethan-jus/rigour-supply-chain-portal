@@ -7,7 +7,7 @@
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton scope="SPECIFICATION" label="商品规格" @completed="loadRows" />
-        <el-button type="primary" @click="openCreate">新增商品规格</el-button>
+        <el-button v-if="canCreate" type="primary" @click="openCreate"><SupplyActionLabel code="erp:specification:create" fallback="新增" /></el-button>
       </div>
     </div>
 
@@ -73,8 +73,8 @@
           <el-table-column label="操作" width="190" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
-              <el-button link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>
-              <el-button link type="danger" @click.stop="deleteRow(scope.row)">删除</el-button>
+              <el-button v-if="canEdit" link type="primary" @click.stop="openEdit(scope.row)"><SupplyActionLabel code="erp:specification:update" fallback="编辑" /></el-button>
+              <el-button v-if="canDelete" link type="danger" @click.stop="deleteRow(scope.row)"><SupplyActionLabel code="erp:specification:delete" fallback="删除" /></el-button>
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无商品规格" /></template>
@@ -185,18 +185,20 @@
       </el-form>
       <template #footer>
         <el-button @click="editorVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveRow">确定</el-button>
+        <el-button v-if="editingId ? canEdit : canCreate" type="primary" :loading="saving" @click="saveRow">确定</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createErpProductSpecification,
@@ -224,6 +226,10 @@ interface SpecificationValueForm {
   statusCode: string
 }
 
+const { can } = useSupplyPermissions()
+const canCreate = computed(() => can('erp:specification:create', 'erp:product:write'))
+const canEdit = computed(() => can('erp:specification:update', 'erp:product:write'))
+const canDelete = computed(() => can('erp:specification:delete', 'erp:product:write'))
 const loading = ref(false)
 const saving = ref(false)
 const detailVisible = ref(false)
@@ -304,6 +310,7 @@ async function openDetail(row: ErpProductSpecificationView) {
 }
 
 async function openEdit(row: ErpProductSpecificationView) {
+  if (!canEdit.value) return
   try {
     const current = await getErpProductSpecification(row.id)
     editingId.value = current.id
@@ -315,12 +322,14 @@ async function openEdit(row: ErpProductSpecificationView) {
 }
 
 function openCreate() {
+  if (!canCreate.value) return
   editingId.value = null
   resetForm()
   editorVisible.value = true
 }
 
 async function saveRow() {
+  if (editingId.value ? !canEdit.value : !canCreate.value) return
   const command = toCommand()
   if (!command) return
   saving.value = true
@@ -342,6 +351,7 @@ async function saveRow() {
 }
 
 async function deleteRow(row: ErpProductSpecificationView) {
+  if (!canDelete.value) return
   try {
     await ElMessageBox.confirm(
       `确认删除商品规格“${row.specificationName}”？删除后只做逻辑删除。`,

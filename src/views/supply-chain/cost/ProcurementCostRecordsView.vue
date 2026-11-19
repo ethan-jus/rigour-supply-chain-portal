@@ -40,7 +40,7 @@
             :loading="exporting"
             :disabled="loading || !!error"
             @click="openExport"
-            >自定义导出</el-button
+            ><SupplyActionLabel code="erp:cost:purchase:export" fallback="自定义导出" /></el-button
           ><el-button :loading="loading" @click="load">刷新</el-button>
         </div>
       </div>
@@ -144,7 +144,7 @@
               link
               type="danger"
               @click="freightAction(row as ProcurementCostRecord, 'void')"
-              >作废</el-button
+              ><SupplyActionLabel code="erp:cost:purchase:void" fallback="作废" /></el-button
             >
             <el-button
               v-if="row.freightRecordStatus === 'CONFIRMED' && can('erp:cost:purchase:confirm')"
@@ -358,6 +358,7 @@
   />
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'

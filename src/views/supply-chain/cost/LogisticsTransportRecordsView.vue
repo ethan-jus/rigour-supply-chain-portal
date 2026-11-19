@@ -285,7 +285,7 @@
             v-if="can('order:logistics-cost:export')"
             :disabled="loading || !result.page.total"
             @click="openExport"
-            >自定义导出</el-button
+            ><SupplyActionLabel code="order:logistics-cost:export" fallback="自定义导出" /></el-button
           ><el-dropdown
             ><el-button
               >其他操作<el-icon><ArrowDown /></el-icon></el-button
@@ -370,6 +370,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import {
   computed,
   nextTick,

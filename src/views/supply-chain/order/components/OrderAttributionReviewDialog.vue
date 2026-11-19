@@ -72,7 +72,7 @@
                 ><el-input v-model="form.reason" maxlength="1000"
               /></el-form-item>
             </el-form>
-            <el-button type="primary" :loading="saving" @click="propose">提交复核申请</el-button>
+            <el-button type="primary" :loading="saving" @click="propose"><SupplyActionLabel code="order:attribution:propose" fallback="提交复核申请" /></el-button>
           </el-collapse-item></el-collapse
         >
         <h3>申请与处理记录</h3>
@@ -128,6 +128,7 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'

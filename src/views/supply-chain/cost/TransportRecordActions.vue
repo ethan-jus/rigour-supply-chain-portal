@@ -9,7 +9,7 @@
         v-if="can('order:logistics-cost:void')"
         :link="!detail"
         @click="emit('action', 'void')"
-        >作废</el-button
+        ><SupplyActionLabel code="order:logistics-cost:void" fallback="作废" /></el-button
       >
     </template>
     <el-button
@@ -17,11 +17,12 @@
       :link="!detail"
       type="danger"
       @click="emit('action', 'delete')"
-      >删除</el-button
+      ><SupplyActionLabel code="order:logistics-cost:delete" fallback="删除" /></el-button
     >
   </div>
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import type { CostRecord } from '@/api/core/cost'
 defineProps<{ record: CostRecord; detail?: boolean }>()

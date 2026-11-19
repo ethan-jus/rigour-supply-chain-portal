@@ -51,7 +51,7 @@
           v-if="['PUBLIC', 'ALL'].includes(view) && can('crm:lead:create')"
           :icon="Plus"
           @click="openCreate"
-          >新增门店</el-button
+          ><SupplyActionLabel code="crm:lead:create" fallback="新增门店" /></el-button
         >
         <el-popover
           v-if="isList && displayMode === 'list'"
@@ -551,7 +551,7 @@
                       :disabled="!!row.claimBlockedReason || pendingId === row.id"
                       :loading="pendingId === row.id"
                       @click="claim(row as StoreRow)"
-                      >认领</el-button
+                      ><SupplyActionLabel code="crm:pool:claim" fallback="认领" /></el-button
                     >
                   </span>
                 </el-tooltip>
@@ -742,7 +742,7 @@
               ><div class="row-actions">
                 <template v-if="reviewMode && can('crm:lead:review')"
                   ><el-button link type="primary" @click="reviewLead(row as StoreLead, true)"
-                    >审核</el-button
+                    ><SupplyActionLabel code="crm:lead:review" fallback="审核" /></el-button
                   ><el-button link @click="reviewLead(row as StoreLead, false)"
                     >退回</el-button
                   ></template
@@ -1072,6 +1072,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import CrmPoolPolicyEditor from './CrmPoolPolicyEditor.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'

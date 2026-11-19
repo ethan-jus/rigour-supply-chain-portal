@@ -180,7 +180,7 @@
                 link
                 type="danger"
                 @click.stop="deleteRow(scope.row)"
-                >删除</el-button
+                ><SupplyActionLabel code="order:payment:delete" fallback="删除" /></el-button
               >
             </template>
           </el-table-column>
@@ -296,6 +296,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'

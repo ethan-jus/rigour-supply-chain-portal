@@ -140,7 +140,7 @@
                 v-if="can('crm:customer:create', 'crm:customer:write')"
                 type="primary"
                 @click="openCreate"
-                >新增客户</el-button
+                ><SupplyActionLabel code="crm:customer:create" fallback="新增" /></el-button
               >
               <DhbCustomerSourceReview @saved="loadCustomers" />
               <DhbPageSyncButton
@@ -306,7 +306,7 @@
                 link
                 type="primary"
                 @click.stop="openEdit(scope.row)"
-                >编辑</el-button
+                ><SupplyActionLabel code="crm:customer:update" fallback="编辑" /></el-button
               >
               <el-button
                 v-if="can('crm:customer:assign-owner')"
@@ -320,7 +320,7 @@
                 link
                 type="danger"
                 @click.stop="deleteCustomer(scope.row)"
-                >删除</el-button
+                ><SupplyActionLabel code="crm:customer:delete" fallback="删除" /></el-button
               >
             </template>
           </el-table-column>
@@ -639,6 +639,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { buildAreaTree } from '@/utils/crm-area-tree'
 import CustomerShippingAddresses from './CustomerShippingAddresses.vue'
 import { auditActorLabel } from '@/utils/audit-actor'

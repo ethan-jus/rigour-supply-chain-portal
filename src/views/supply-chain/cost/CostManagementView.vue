@@ -1207,6 +1207,8 @@
 <script setup lang="ts">
 import { displayBusinessLabel as costLabel } from '@/utils/business-display'
 import { displayCell, displayAmount as costMoney } from '@/utils/business-display'
+import { useNavigationStore } from '@/stores/navigation'
+import { supplyPageName } from '@/utils/supply-page-title'
 import { businessPageLabels } from '@/utils/business-page-labels'
 import { randomId } from '@/utils/random-id'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
@@ -1304,7 +1306,8 @@ const titles: Record<CostCategory, string> = {
   'office-rentals': businessPageLabels['/supply-chain/cost/office-rentals']!,
   expenses: businessPageLabels['/supply-chain/hr/expenses']!,
 }
-const title = computed(() => titles[category.value])
+const navigation = useNavigationStore()
+const title = computed(() => supplyPageName(navigation.getNavigation('SUPPLY_CHAIN'), route.path) || titles[category.value])
 const permission = computed(() =>
   category.value === 'expenses'
     ? 'hr:expense'

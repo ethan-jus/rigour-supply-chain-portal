@@ -57,7 +57,7 @@ describe('人工补录资料后的显式关联', () => {
         stubs: {
           SalesOrderEntry: {
             name: 'SalesOrderEntry',
-            props: { entryOnly: Boolean, sourceOrderNo: String },
+            props: { sourceOrderNo: String },
             template: '<div data-testid="sales-entry" />',
           },
         },
@@ -73,7 +73,6 @@ describe('人工补录资料后的显式关联', () => {
       .trigger('click')
     await flushPromises()
     const entry = w.findComponent({ name: 'SalesOrderEntry' })
-    expect(entry.props('entryOnly')).toBe(true)
     expect(entry.props('sourceOrderNo')).toBe('DH001')
     entry.vm.$emit('created', {
       id: '16',

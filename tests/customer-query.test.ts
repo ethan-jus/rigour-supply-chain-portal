@@ -173,7 +173,7 @@ it('客户账号、关联状态和树形地区独立筛选，同步时间排序�
   w.unmount()
 })
 
-it.each(['新增客户', '编辑'])('%s 的必填项缺失时不发送保存请求，新增默认启用', async (action) => {
+it.each(['新增', '编辑'])('%s 的必填项缺失时不发送保存请求，新增默认启用', async (action) => {
   const w = mountView()
   await flushPromises()
   await w
@@ -192,7 +192,7 @@ it.each(['新增客户', '编辑'])('%s 的必填项缺失时不发送保存请�
       'ownerEmployeeCode',
     ]),
   )
-  if (action === '新增客户') expect(editor.props('model').statusCode).toBe('ACTIVE')
+  if (action === '新增') expect(editor.props('model').statusCode).toBe('ACTIVE')
   const dialog = w
     .findAllComponents({ name: 'ElDialog' })
     .find((component) => component.props('title') === (action === '编辑' ? '编辑客户' : '新增客户'))!
@@ -203,9 +203,9 @@ it.each(['新增客户', '编辑'])('%s 的必填项缺失时不发送保存请�
   await flushPromises()
   expect(mocks.create).not.toHaveBeenCalled()
   expect(mocks.update).not.toHaveBeenCalled()
-  expect(document.body.textContent).toContain(
-    action === '新增客户' ? '请输入客户名称' : '请选择客户类型',
-  )
+  await vi.waitFor(() => expect(document.body.textContent).toContain(
+    action === '新增' ? '请输入客户名称' : '请选择客户类型',
+  ))
   w.unmount()
 })
 

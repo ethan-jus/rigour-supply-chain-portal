@@ -276,29 +276,6 @@ export interface SupplyDashboardRefreshCommand {
   fullRefresh?: boolean
 }
 
-export interface SupplyDashboardCityCostImportRecord {
-  regionCode: string
-  regionName?: string | null
-  costTypeCode: string
-  costTypeName?: string | null
-  costDate: string
-  costAmount: number
-  budgetAmount?: number | null
-  sourceRecordId: string
-  remark?: string | null
-}
-
-export interface SupplyDashboardCityCostImportCommand {
-  sourceSystemCode?: string | null
-  records: SupplyDashboardCityCostImportRecord[]
-}
-
-export interface SupplyDashboardCityCostImportResult {
-  receivedCount: number
-  upsertedCount: number
-  importedAt: string
-}
-
 export interface SupplyDashboardDataTrustSource {
   sourceCode: string
   sourceName: string
@@ -326,31 +303,6 @@ export interface SupplyDashboardDataTrust {
   sources: SupplyDashboardDataTrustSource[]
 }
 
-export interface SupplyDashboardReconciliationItem {
-  subjectCode: string
-  subjectName: string
-  sourceRowCount: number
-  businessRowCount: number
-  biRowCount: number
-  sourceAmount: number
-  businessAmount: number
-  biAmount: number
-  sourceBusinessRowDiff: number
-  sourceBusinessAmountDiff: number
-  businessBiRowDiff: number
-  businessBiAmountDiff: number
-  status: string
-  description: string
-}
-
-export interface SupplyDashboardReconciliation {
-  from: string
-  to: string
-  generatedAt: string
-  status: string
-  items: SupplyDashboardReconciliationItem[]
-}
-
 export interface SupplyDashboardFilterOption {
   optionType: string
   optionValue: string
@@ -367,46 +319,6 @@ export interface SupplyDashboardFilterOptions {
   customerTypes: SupplyDashboardFilterOption[]
   productCategories: SupplyDashboardFilterOption[]
   sourceSystems: SupplyDashboardFilterOption[]
-}
-
-export interface SupplyDashboardFeishuArchiveCommand {
-  archiveCode: string
-  tableId: string
-  viewId?: string | null
-  tableName: string
-  fileName: string
-  fileFormat: 'CSV' | 'XLSX'
-  exportedBy: string
-  exportedTime: string
-  frozenTime: string
-  recordCount: number
-  checksumSha256: string
-  storageUri?: string | null
-  fieldMappingUri?: string | null
-  reconciliationReportUri?: string | null
-  remark?: string | null
-}
-
-export interface SupplyDashboardFeishuArchive {
-  id: number
-  archiveCode: string
-  tableId: string
-  viewId: string | null
-  tableName: string
-  fileName: string
-  fileFormat: string
-  exportedBy: string
-  exportedTime: string
-  frozenTime: string
-  recordCount: number
-  checksumSha256: string
-  storageUri: string | null
-  fieldMappingUri: string | null
-  reconciliationReportUri: string | null
-  archiveStatusCode: string
-  remark: string | null
-  createdTime: string
-  updatedTime: string
 }
 
 const SUPPLY_DASHBOARD_PATH = '/analytics/supply/dashboard/overview'
@@ -480,10 +392,7 @@ export const getSupplyDashboardOperatingAnalysis = (params: SupplyDashboardQuery
   )
 const SUPPLY_DASHBOARD_REFRESH_PATH = '/analytics/supply/dashboard/refresh-runs'
 const SUPPLY_DASHBOARD_TRUST_PATH = '/analytics/supply/dashboard/trust'
-const SUPPLY_DASHBOARD_RECONCILIATION_PATH = '/analytics/supply/dashboard/reconciliation'
 const SUPPLY_DASHBOARD_FILTER_OPTIONS_PATH = '/analytics/supply/dashboard/filter-options'
-const SUPPLY_DASHBOARD_CITY_COST_IMPORT_PATH = '/analytics/supply/city-cost-records/import'
-const SUPPLY_DASHBOARD_FEISHU_ARCHIVES_PATH = '/analytics/supply/legacy/feishu-archives'
 const options = { stayOnUnauthorized: true }
 
 export const getSupplyDashboardOverview = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass'> = {}) =>
@@ -495,35 +404,8 @@ export const createSupplyDashboardRefreshRun = (command: SupplyDashboardRefreshC
 export const getSupplyDashboardDataTrust = () =>
   apiClient.get<SupplyDashboardDataTrust>(SUPPLY_DASHBOARD_TRUST_PATH, options)
 
-export const getSupplyDashboardReconciliation = (params: SupplyDashboardQuery = {}) =>
-  apiClient.get<SupplyDashboardReconciliation>(SUPPLY_DASHBOARD_RECONCILIATION_PATH, {
-    params,
-    ...options,
-  })
-
 export const getSupplyDashboardFilterOptions = () =>
   apiClient.get<SupplyDashboardFilterOptions>(SUPPLY_DASHBOARD_FILTER_OPTIONS_PATH, options)
-
-export const importSupplyDashboardCityCostRecords = (
-  command: SupplyDashboardCityCostImportCommand,
-) =>
-  apiClient.post<SupplyDashboardCityCostImportResult>(
-    SUPPLY_DASHBOARD_CITY_COST_IMPORT_PATH,
-    command,
-    options,
-  )
-
-export const getSupplyDashboardFeishuArchives = () =>
-  apiClient.get<SupplyDashboardFeishuArchive[]>(SUPPLY_DASHBOARD_FEISHU_ARCHIVES_PATH, options)
-
-export const registerSupplyDashboardFeishuArchive = (
-  command: SupplyDashboardFeishuArchiveCommand,
-) =>
-  apiClient.post<SupplyDashboardFeishuArchive>(
-    SUPPLY_DASHBOARD_FEISHU_ARCHIVES_PATH,
-    command,
-    options,
-  )
 
 export interface SupplyReceiptDetailRow {
   id: string

@@ -7,6 +7,7 @@ export interface SupplyContext {
   mode: 'PREPARING' | 'ACTIVE'
   version: number
   permissions: string[]
+  actionLabels?: Record<string, string>
 }
 export interface SupplyMenuNode {
   id: string

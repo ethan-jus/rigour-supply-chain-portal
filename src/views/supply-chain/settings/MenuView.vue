@@ -22,9 +22,7 @@
           placeholder="菜单类型"
           aria-label="菜单类型"
         >
-          <el-option label="目录" value="MENU" />
-          <el-option label="页面" value="PAGE" />
-          <el-option label="按钮" value="BUTTON" />
+          <el-option v-for="kind in ['目录', '页面', '按钮', '查看权限', '共享权限', '接口权限', 'App 权限']" :key="kind" :label="kind" :value="kind" />
         </el-select>
         <el-select
           v-model="query.status"
@@ -40,8 +38,8 @@
           v-model="query.visible"
           class="menu-query__select is-compact"
           clearable
-          placeholder="显示状态"
-          aria-label="显示状态"
+          placeholder="侧栏展示"
+          aria-label="侧栏展示"
         >
           <el-option label="侧栏显示" value="SHOWN" />
           <el-option label="侧栏隐藏" value="HIDDEN" />
@@ -74,17 +72,18 @@
             type="primary"
             :icon="Plus"
             @click="openEditor()"
-            >新增菜单</el-button
+            ><SupplyActionLabel code="supply:menu:create" fallback="新增" /></el-button
           >
         </div>
       </div>
       <div v-if="!access.context?.initialized" class="menu-empty-state">
         <el-alert
-          title="请先在系统设置首页完成初始化。"
+          title="初始化后可配置本系统的菜单和角色。"
           type="info"
           :closable="false"
           show-icon
         />
+        <el-button v-if="access.context?.canInitialize" type="primary" :loading="loading" @click="initialize">初始化系统设置</el-button>
       </div>
       <div v-else class="table-viewport">
         <el-table
@@ -103,26 +102,28 @@
               </span>
             </template>
           </el-table-column>
+          <!-- @vue-generic {SupplyMenuNode} -->
           <el-table-column label="类型" width="132">
             <template #default="{ row }">
               <span
                 class="type-pill"
                 :class="`is-${String(row.type).toLowerCase()}`"
-                :title="labels[row.type as SupplyMenuNode['type']]"
+                :title="kindOf(row)"
               >
                 <el-icon>
                   <component :is="typeIcons[row.type as SupplyMenuNode['type']]" />
                 </el-icon>
-                {{ labels[row.type as SupplyMenuNode['type']] }}
+                {{ kindOf(row) }}
               </span>
               <span v-if="isCustomPage(row)" class="custom-flag">自定义</span>
             </template>
           </el-table-column>
           <el-table-column prop="sortOrder" label="排序" width="72" align="center" />
-          <el-table-column label="显示状态" width="88" align="center">
+          <el-table-column label="展示方式" width="104" align="center">
             <template #default="{ row }">
-              <span v-if="row.visible" class="display-cell">显示</span>
-              <span v-else class="display-cell is-hidden">隐藏</span>
+              <span v-if="row.type === 'BUTTON'" class="cell-quiet">按角色授权</span>
+              <span v-else-if="row.visible" class="display-cell">侧栏显示</span>
+              <span v-else class="display-cell is-hidden">侧栏隐藏</span>
             </template>
           </el-table-column>
           <el-table-column label="状态" width="92" align="center">
@@ -162,7 +163,7 @@
                   size="small"
                   :icon="Edit"
                   @click="openEditor(row)"
-                  >编辑</el-button
+                  ><SupplyActionLabel code="supply:menu:update" fallback="编辑" /></el-button
                 >
                 <el-button
                   v-if="row.type !== 'BUTTON' && access.can('supply:menu:create')"
@@ -178,7 +179,7 @@
                   plain
                   :icon="Delete"
                   @click="remove(row)"
-                  >删除</el-button
+                  ><SupplyActionLabel code="supply:menu:delete" fallback="删除" /></el-button
                 >
               </div>
             </template>
@@ -236,7 +237,7 @@
             </el-col>
             <el-col :span="12">
               <el-form-item label="菜单名称" required>
-                <el-input v-model="form.name" maxlength="128" placeholder="请输入菜单名称" />
+                <el-input v-model="form.name" maxlength="128" :placeholder="form.type === 'BUTTON' ? '与页面操作同名，如“编辑”' : '请输入菜单名称'" />
               </el-form-item>
             </el-col>
             <el-col :span="12">
@@ -401,8 +402,8 @@
                 </el-radio-group>
               </el-form-item>
             </el-col>
-            <el-col :span="12">
-              <el-form-item label="显示状态">
+            <el-col v-if="form.type !== 'BUTTON'" :span="12">
+              <el-form-item label="侧栏展示">
                 <el-radio-group v-model="form.visible" :disabled="protectedNode">
                   <el-radio :value="true">显示</el-radio>
                   <el-radio :value="false">隐藏</el-radio>
@@ -446,6 +447,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { errorMessage } from '@/api/core/error'
@@ -470,6 +472,7 @@ import {
 } from '@/api/core/supply-settings'
 import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
 import { useNavigationStore } from '@/stores/navigation'
+import { menuKind } from '@/utils/supply-menu-presentation'
 import { MENU_ICONS } from '@/utils/menu-icons'
 import { isCustomPage, listRegisteredViews, resolveView } from '@/utils/dynamic-pages'
 import {
@@ -493,7 +496,7 @@ const saveError = ref('')
 /** 查询条件：面板上正在编辑的值，点「查询」后才写入 activeQuery 生效。 */
 type MenuQuery = {
   name: string
-  type: '' | SupplyMenuNode['type']
+  type: string
   status: '' | SupplyMenuNode['status']
   visible: '' | 'SHOWN' | 'HIDDEN'
 }
@@ -509,7 +512,6 @@ const pageSource = ref<'BOUND' | 'CUSTOM'>('BOUND')
 const iconPickerOpen = ref(false)
 const iconKeyword = ref('')
 const registeredViews = listRegisteredViews()
-const labels = { MENU: '目录', PAGE: '页面', BUTTON: '按钮' }
 const typeIcons: Record<SupplyMenuNode['type'], typeof Folder> = {
   MENU: Folder,
   PAGE: Document,
@@ -582,6 +584,8 @@ const availableFeatures = computed(() => {
 const queryActive = computed(() =>
   Boolean(activeQuery.name || activeQuery.type || activeQuery.status || activeQuery.visible),
 )
+const nodesById = computed(() => new Map(nodes.value.map(node => [node.id, node])))
+const kindOf = (node: SupplyMenuNode) => menuKind(node, nodesById.value.get(node.parentId || ''))
 const displayTree = computed(() => {
   const tree = supplyMenuTree(nodes.value)
   if (!queryActive.value) return tree
@@ -591,10 +595,10 @@ const displayTree = computed(() => {
     (!key ||
       item.name.toLowerCase().includes(key) ||
       (item.permissionCode ?? '').toLowerCase().includes(key)) &&
-    (!activeQuery.type || item.type === activeQuery.type) &&
+    (!activeQuery.type || kindOf(item) === activeQuery.type) &&
     (!activeQuery.status || item.status === activeQuery.status) &&
     (!activeQuery.visible ||
-      (activeQuery.visible === 'SHOWN' ? item.visible : !item.visible))
+      (item.type !== 'BUTTON' && item.visible === (activeQuery.visible === 'SHOWN')))
   const filter = (items: SupplyMenuTreeNode[]): SupplyMenuTreeNode[] =>
     items.flatMap((item) => {
       const children = filter(item.children)
@@ -644,6 +648,16 @@ function resetQuery() {
   Object.assign(query, emptyQuery())
   Object.assign(activeQuery, emptyQuery())
   expandedKeys.value = []
+}
+async function initialize() {
+  if (loading.value) return
+  loading.value = true
+  try {
+    await access.initialize()
+    await load()
+  } finally {
+    loading.value = false
+  }
 }
 async function load() {
   loading.value = true
@@ -762,6 +776,7 @@ async function save() {
       parentId: form.parentId || null,
       iconKey: form.iconKey || null,
       name: form.name.trim(),
+      visible: form.type === 'BUTTON' ? false : form.visible,
       resourceId: editingId.value || usesBoundFeature.value ? form.resourceId : null,
       routeKey: isCustomPageForm.value ? form.routeKey : null,
       routePath,

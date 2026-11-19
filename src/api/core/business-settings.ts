@@ -167,8 +167,3 @@ export function updateDictionarySourceMapping(id: string, command: {
 }) {
   return apiClient.put<DictionarySourceMapping>(`/integration/dictionary-mappings/${id}`, command)
 }
-
-export function rescanDictionarySources(dictionaryCode: string) {
-  return apiClient.post<{ batches: number; rows: number; observedValues: number; pendingValues: number; truncated: boolean }>(
-    '/integration/dictionary-mappings/rescan', null, { params: { dictionaryCode }, timeout: 120000 })
-}

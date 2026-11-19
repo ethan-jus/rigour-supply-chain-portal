@@ -9,7 +9,7 @@
         </SupplyPageHelp>
       </div>
       <div class="heading-actions">
-        <el-button v-if="mode === 'stockIn' && can('erp:stock-in:confirm', 'erp:supply:write')" type="primary" @click="purchaseReceiptVisible = true">采购入库</el-button>
+        <el-button v-if="mode === 'stockIn' && can('erp:stock-in:confirm', 'erp:supply:write')" type="primary" @click="purchaseReceiptVisible = true"><SupplyActionLabel code="erp:stock-in:confirm" fallback="采购入库" /></el-button>
         <DhbPageSyncButton
           :scope="pageSyncScope"
           :label="pageConfig.shortTitle"
@@ -845,6 +845,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import { displayDateTime } from '@/utils/business-date'

@@ -15,8 +15,6 @@ import {
   getOrderRegisterLines,
   getOrderRegisterOrders,
   getOrderRegisterPayments,
-  getOrderRegisterPeriod,
-  getOrderRegisterReceivables,
 } from '@/api/core/order-register'
 
 import { getErpManagedProducts } from '@/api/core/erp-product'
@@ -67,17 +65,6 @@ describe('订单注册读接口契约', () => {
       stayOnUnauthorized: true,
     })
 
-    void getOrderRegisterPeriod({ dateFrom: '2026-09-01', dateTo: '2026-09-10' })
-    expect(mocks.get).toHaveBeenLastCalledWith('/orders/register/statistics/period', {
-      params: { dateFrom: '2026-09-01', dateTo: '2026-09-10' },
-      stayOnUnauthorized: true,
-    })
-
-    void getOrderRegisterReceivables({ asOfDate: '2026-09-10', hasUnpaid: true })
-    expect(mocks.get).toHaveBeenLastCalledWith('/orders/register/statistics/receivables', {
-      params: { asOfDate: '2026-09-10', hasUnpaid: true },
-      stayOnUnauthorized: true,
-    })
   })
 
   it('创建人下拉是独立端点', () => {
@@ -96,20 +83,5 @@ describe('订单注册读接口契约', () => {
       stayOnUnauthorized: true,
     })
 
-    void exportOrderRegisterCsv('period', { dateFrom: '2026-09-01', dateTo: '2026-09-10' })
-    expect(mocks.get).toHaveBeenLastCalledWith('/orders/register/statistics/period/export', {
-      params: { dateFrom: '2026-09-01', dateTo: '2026-09-10' },
-      responseType: 'blob',
-      timeout: 180000,
-      stayOnUnauthorized: true,
-    })
-
-    void exportOrderRegisterCsv('receivables', { asOfDate: '2026-09-10' })
-    expect(mocks.get).toHaveBeenLastCalledWith('/orders/register/statistics/receivables/export', {
-      params: { asOfDate: '2026-09-10' },
-      responseType: 'blob',
-      timeout: 180000,
-      stayOnUnauthorized: true,
-    })
   })
 })

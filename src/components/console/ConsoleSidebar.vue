@@ -14,7 +14,7 @@
         v-if="home"
         class="module-rail__logo"
         :to="home.routePath!"
-        aria-label="供应链工作首页"
+        :aria-label="home.displayName"
         ><img src="@/assets/brand/scdp-logo.png" alt="供应链数字化平台"
       /></router-link>
       <div v-else class="module-rail__logo">
@@ -30,8 +30,8 @@
               'module-link--utility': isUtility(node),
             }"
             type="button"
-            :title="moduleName(node)"
-            :aria-label="moduleName(node)"
+            :title="node.displayName"
+            :aria-label="node.displayName"
             :aria-pressed="activeModule?.id === node.id"
             :aria-expanded="selected?.id === node.id && !workspace.collapsed"
             aria-controls="console-secondary-nav"
@@ -40,7 +40,7 @@
             @focus="previewModule(node)"
             @click="selectModule(node)"
           >
-            <ConsoleNavIcon :icon-key="node.iconKey" /><span>{{ shortName(node) }}</span>
+            <ConsoleNavIcon :icon-key="node.iconKey" /><span>{{ node.displayName }}</span>
           </button>
           <router-link
             v-else-if="node.routePath"
@@ -56,7 +56,7 @@
             @focus="previewModule(node)"
             @click="selectModule(node)"
           >
-            <ConsoleNavIcon :icon-key="node.iconKey" /><span>{{ shortName(node) }}</span>
+            <ConsoleNavIcon :icon-key="node.iconKey" /><span>{{ node.displayName }}</span>
           </router-link>
         </template>
       </div>
@@ -77,18 +77,11 @@
       v-show="!workspace.collapsed"
       id="console-secondary-nav"
       class="secondary-nav"
-      :class="{ 'secondary-nav--crm': isCrm }"
     >
       <div class="secondary-nav__brand">供应链数字化平台</div>
       <header class="secondary-nav__heading">
         <strong>{{
-          isHome
-            ? '工作空间'
-            : isHr
-              ? '人事管理'
-              : selected
-                ? moduleName(selected, true)
-                : '应用菜单'
+          selected?.displayName || '应用菜单'
         }}</strong
         ><button
           type="button"
@@ -104,7 +97,7 @@
       <div class="secondary-nav__body">
         <template v-if="isHome">
           <router-link v-if="home" :to="home.routePath!" class="secondary-link is-active"
-            ><ConsoleNavIcon icon-key="House" /><span>工作首页</span></router-link
+            ><ConsoleNavIcon icon-key="House" /><span>{{ home.displayName }}</span></router-link
           >
           <section v-if="shortcuts.length" class="secondary-group">
             <h2>常用业务</h2>
@@ -143,19 +136,7 @@
             >
           </section>
         </template>
-        <nav v-else-if="isCrm" class="crm-navigation" aria-label="客户功能">
-          <section v-for="group in crmGroups" :key="group.title" class="crm-nav-group">
-            <h2 v-if="crmGroups.length > 1">{{ group.title }}</h2>
-            <ConsoleNavTree :nodes="group.nodes" />
-          </section>
-        </nav>
-        <nav v-else-if="isSettings" aria-label="系统设置功能">
-          <section v-for="group in settingsGroups" :key="group.title" class="settings-nav-group">
-            <h2 v-if="settingsGroups.length > 1">{{ group.title }}</h2>
-            <ConsoleNavTree :nodes="group.nodes" />
-          </section>
-        </nav>
-        <ConsoleNavTree v-else :nodes="displayNodes" />
+        <ConsoleNavTree v-else :nodes="secondaryNodes" />
         <p v-if="!roots.length" class="secondary-nav__empty">暂无可用菜单</p>
       </div>
     </section>
@@ -172,11 +153,6 @@ import {
   homeShortcutPaths,
   selectEntries,
 } from '@/utils/console-navigation'
-import { businessNavigationName } from '@/utils/business-page-labels'
-import { hrNavigationSections } from '@/utils/hr-navigation'
-import { costNavigationSections } from '@/utils/cost-navigation'
-import { crmNavigationSections } from '@/utils/crm-navigation'
-import { settingsNavigationSections } from '@/utils/settings-navigation'
 import { useConsoleWorkspace } from '@/stores/console-workspace'
 import ConsoleNavTree from './ConsoleNavTree.vue'
 import ConsoleNavIcon from './ConsoleNavIcon.vue'
@@ -224,7 +200,7 @@ watch(autoNavigation, cancelClose)
 const roots = computed(() =>
   props.nodes
     .filter((node) => node.visible && (node.routePath || consoleEntries(node.children).length))
-    .map((node) => ({ ...node, displayName: businessNavigationName(node) })),
+,
 )
 const entries = computed(() => consoleEntries(props.nodes))
 const home = computed(() =>
@@ -244,38 +220,6 @@ const secondaryNodes = computed(() =>
     ? selected.value.children
     : roots.value.filter((node) => node.routePath !== '/supply-chain'),
 )
-const isHr = computed(() => selected.value?.routeKey.split('.')[1] === 'hr')
-const isCost = computed(() => selected.value?.routeKey.split('.')[1] === 'cost')
-const isCrm = computed(() => selected.value?.routeKey.split('.')[1] === 'crm')
-const isSettings = computed(() =>
-  ['setting', 'settings'].includes(selected.value?.routeKey.split('.')[1] || ''),
-)
-const settingsGroups = computed(() => settingsNavigationSections(secondaryNodes.value))
-const crmGroups = computed(() => crmNavigationSections(secondaryNodes.value))
-const displayNodes = computed<NavigationNode[]>(() => {
-  const root = selected.value
-  if (!root || (!isHr.value && !isCost.value)) return secondaryNodes.value
-
-  const groups = isCost.value
-    ? costNavigationSections(secondaryNodes.value)
-    : hrNavigationSections(secondaryNodes.value)
-
-  // 展示分组复用 ERP 的菜单树；子页面仍只取 IAM 已授权的入口。
-  return groups.map((group, index) => ({
-    ...root,
-    id: `${root.id}:section:${group.title}`,
-    parentId: root.id,
-    code: `${root.code}.section.${index}`,
-    displayName: group.title,
-    permissionCode: null,
-    routeKey: `${root.routeKey}.section.${index}`,
-    routePath: null,
-    iconKey: 'Document',
-    sortOrder: index,
-    keepAlive: false,
-    children: group.nodes,
-  }))
-})
 const shortcuts = computed(() => selectEntries(entries.value, homeShortcutPaths))
 const analysis = computed(() => selectEntries(entries.value, homeAnalysisPaths))
 const recent = computed(() =>
@@ -286,34 +230,6 @@ const recent = computed(() =>
 )
 function isUtility(node: NavigationNode) {
   return /supply\.(integration|setting)\./.test(node.routeKey)
-}
-function moduleName(node: NavigationNode, heading = false) {
-  if (
-    node.routeKey.split('.')[1] === 'crm' &&
-    ['CRM', '客户', '客户管理', '客户关系管理'].includes(node.displayName)
-  ) {
-    return heading ? '客户关系管理' : 'CRM'
-  }
-  return node.displayName
-}
-function shortName(node: NavigationNode) {
-  const domain = node.routeKey.split('.')[1]
-  return (
-    (
-      {
-        dashboard: '首页',
-        bi: '看板',
-        order: '订单',
-        crm: 'CRM',
-        erp: 'ERP',
-        sales: '销售',
-        hr: '人事',
-        cost: '成本',
-        integration: '同步',
-        setting: '设置',
-      } as Record<string, string>
-    )[domain] || node.displayName
-  )
 }
 function selectModule(node: NavigationNode) {
   cancelClose()
@@ -363,21 +279,6 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
 
-.crm-nav-group + .crm-nav-group,
-.settings-nav-group + .settings-nav-group {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid $color-border-light;
-}
-.crm-nav-group h2,
-.settings-nav-group h2 {
-  margin: 4px 8px 6px;
-  color: $color-text-secondary;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 20px;
-  letter-spacing: 0.04em;
-}
 .secondary-nav--crm .secondary-nav__heading {
   padding: 8px 8px 8px 12px;
 }

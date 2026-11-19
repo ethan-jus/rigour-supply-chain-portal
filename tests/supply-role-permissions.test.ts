@@ -14,6 +14,7 @@ import {
 import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
 vi.mock('@/stores/navigation', () => ({
   useNavigationStore: () => ({
+    isLoaded: () => true,
     invalidate: vi.fn(),
     fetchNavigation: vi.fn().mockResolvedValue([]),
   }),
@@ -120,7 +121,7 @@ async function render(role?: Partial<SupplyRole>, selectScope = true) {
   })
   await useSupplyAuthorizationStore(pinia).refresh()
   await flushPromises()
-  await button(role ? '编辑授权' : '新增角色').trigger('click')
+  await button(role ? '编辑授权' : '新增').trigger('click')
   await flushPromises()
   if (selectScope) {
     await scopes()
