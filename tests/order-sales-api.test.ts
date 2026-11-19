@@ -6,6 +6,7 @@ vi.mock('@/api/core/client', () => ({
 
 import { apiClient } from '@/api/core/client'
 import {
+  getFulfillmentQueueDetail,
   getFundDocument,
   getFundDocuments,
   getSalesOrder,
@@ -16,11 +17,20 @@ import {
   getSalesRefunds,
   getSalesShipment,
   getSalesShipments,
+  listFulfillmentQueue,
 } from '@/api/core/order-sales'
 
 describe('订单中心真实接口封装', () => {
   beforeEach(() => {
     vi.mocked(apiClient.get).mockReset().mockResolvedValue({ total: 0, begin: 0, step: 20, items: [] })
+  })
+
+  it('出库队列与详情共用客户端的 API 版本前缀', async () => {
+    const params = { begin: 0, step: 20, outboundStatus: 'PENDING' }
+    await listFulfillmentQueue(params)
+    await getFulfillmentQueueDetail('A/B')
+    expect(apiClient.get).toHaveBeenNthCalledWith(1, '/orders/fulfillments', { params })
+    expect(apiClient.get).toHaveBeenNthCalledWith(2, '/orders/fulfillments/A%2FB')
   })
 
   it.each([

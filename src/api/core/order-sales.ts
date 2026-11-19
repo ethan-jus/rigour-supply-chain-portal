@@ -575,6 +575,6 @@ export const listFulfillmentQueue = (params: {
   step: number
   keyword?: string
   outboundStatus?: string
-}) => apiClient.get<OrderPage<FulfillmentQueueItem>>('/api/v1/orders/fulfillments', { params })
+}) => apiClient.get<OrderPage<FulfillmentQueueItem>>('/orders/fulfillments', { params })
 export const getFulfillmentQueueDetail = (id: string) =>
-  apiClient.get<FulfillmentQueueDetail>(`/api/v1/orders/fulfillments/${encodeURIComponent(id)}`)
+  apiClient.get<FulfillmentQueueDetail>(`/orders/fulfillments/${encodeURIComponent(id)}`)
