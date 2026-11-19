@@ -253,7 +253,8 @@ describe('供应链工作台', () => {
     expect(search.find('.entry-search__results').exists()).toBe(false)
     expect(search.find('input').exists()).toBe(false)
   })
-  it('自动模式默认收起，悬停切换模块不跳转，移入二级菜单保持展开，离开后收起', async () => {
+  it('已选自动模式时悬停切换模块，离开后收起', async () => {
+    localStorage.setItem('scdp.display-preferences.v1', JSON.stringify({secondaryMenuMode:'auto'}))
     const nodes = [home, node('supply.order.menu', '订单管理', null, [order, payments])]
     const { global, router } = await render(nodes)
     const sidebar = mount(ConsoleSidebar, { props: { nodes }, global })
@@ -302,6 +303,7 @@ describe('供应链工作台', () => {
     expect(sidebar.classes()).toContain('is-collapsed')
   })
   it('悬停其他模块只预览菜单，移开收起后仍选中当前页面所属模块', async () => {
+    localStorage.setItem('scdp.display-preferences.v1', JSON.stringify({secondaryMenuMode:'auto'}))
     const sales = node('supply.sales.menu', '销售管理', null, [
       node('supply.sales.dashboard', '销售管控台', '/supply-chain/sales'),
     ])

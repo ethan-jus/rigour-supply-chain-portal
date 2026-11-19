@@ -110,6 +110,9 @@
             </el-table>
           </el-tab-pane>
 
+          <el-tab-pane v-if="can('order:read')" label="合同账期" name="terms" lazy>
+            <ReceivablePlanTab v-if="detail && activeTab==='terms' && can('order:read')" :id="detail.id" :amount="detail.payableAmount"/>
+          </el-tab-pane>
           <el-tab-pane label="回款记录" name="payments">
             <el-table
               v-loading="paymentsLoading"
@@ -268,6 +271,7 @@ import { orderLifecycleEvents, type SourceLifecycleEvent } from '@/api/core/orde
 import { getSalesOrder, type SalesOrderDetail } from '@/api/core/order-sales'
 import { getOrderRegisterPayments, type OrderRegisterPaymentItem } from '@/api/core/order-register'
 import PaymentDetailDrawer from './PaymentDetailDrawer.vue'
+import ReceivablePlanTab from './ReceivablePlanTab.vue'
 import OrderAttributionReviewDialog from './OrderAttributionReviewDialog.vue'
 import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import SalesLogisticsPanel from './SalesLogisticsPanel.vue'

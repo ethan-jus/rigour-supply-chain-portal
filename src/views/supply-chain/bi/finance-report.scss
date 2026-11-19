@@ -1,0 +1,123 @@
+@use '@/assets/styles/variables' as *;
+.finance-report {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  align-content: start;
+  color: var(--el-text-color-primary);
+}
+.finance-report header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.finance-report h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.finance-report small,
+.finance-report dt {
+  color: var(--el-text-color-secondary);
+}
+.finance-report a {
+  color: var(--el-color-primary);
+  text-underline-offset: 3px;
+}
+.finance-report :focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+.finance-panel,
+.stat-grid {
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.finance-panel {
+  padding: 15px;
+  min-width: 0;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+}
+.stat-grid article {
+  padding: 14px;
+  border-right: 1px solid var(--el-border-color-lighter);
+  display: grid;
+  gap: 3px;
+}
+.stat-grid strong {
+  font-size: clamp(19px, 2vw, 29px);
+  font-variant-numeric: tabular-nums;
+}
+.finance-report dl,
+.age-bands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.finance-report dd {
+  margin: 4px 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.age-bands {
+  margin: 12px 0;
+  gap: 8px;
+}
+.age-bands button {
+  position: relative;
+  flex: 1 1 110px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 8px;
+  background: var(--el-fill-color-lighter);
+  color: inherit;
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.age-bands button[aria-pressed='true'] {
+  border-color: var(--el-color-primary);
+}
+.age-bands i {
+  position: absolute;
+  height: 3px;
+  background: var(--el-color-primary);
+  left: 0;
+  bottom: 0;
+}
+@media (max-width: 850px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .finance-panel {
+    padding: 10px;
+  }
+}
+
+.report-versions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.report-versions .el-select {
+  width: 240px;
+}
+
+.queue-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.queue-filters .el-select {
+  width: 160px;
+}

@@ -4,7 +4,16 @@ import ElementPlus from 'element-plus'
 import BiOperationsWorkbench from '@/views/supply-chain/bi/components/BiOperationsWorkbench.vue'
 import * as api from '@/api/core/bi-operations'
 
-const permissions = vi.hoisted(() => ({ write: true, read: true }))
+const permissions = vi.hoisted(() => ({ write: true, read: true, customerPage: true }))
+const drill = vi.hoisted(() => ({ push: vi.fn(), customers: vi.fn() }))
+vi.mock('@/stores/navigation', () => ({
+  useNavigationStore: () => ({ hasPath: () => permissions.customerPage }),
+}))
+vi.mock('vue-router', async (load) => ({
+  ...await load<typeof import('vue-router')>(),
+  useRouter: () => ({ push: drill.push }),
+}))
+vi.mock('@/api/core/crm', () => ({ getInternalCrmCustomers: drill.customers }))
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
     hasPermission: (permission: string) =>
@@ -39,6 +48,7 @@ const action: api.BiAction = {
 let wrapper: VueWrapper
 beforeEach(() => {
   vi.clearAllMocks()
+  permissions.customerPage = true
   permissions.write = true
   permissions.read = true
   vi.mocked(api.getBiActions).mockResolvedValue({
@@ -127,6 +137,28 @@ describe('BI operating workspace', () => {
     expect(wrapper.text()).toContain('当前账号仅可查看跟进记录')
     expect(wrapper.text()).not.toContain('customer-id:17')
     expect(api.createBiAction).not.toHaveBeenCalled()
+  })
+  it('opens the authorized customer with the exact code even when names repeat', async () => {
+    vi.mocked(api.getBiActions).mockResolvedValue({
+      items: [{ ...action, businessRef: 'customer-code:C17' }], total: 1, page: 1, pageSize: 20,
+    })
+    drill.customers.mockResolvedValue({
+      items: [{ id: '92', customerCode: 'C170', customerName: '客户甲' }, { id: '17', customerCode: 'C17', customerName: '客户甲' }],
+      total: 2,
+    })
+    await open()
+    await button('客户甲')
+    await button('查看业务明细')
+    expect(drill.push).toHaveBeenCalledWith({
+      path: '/supply-chain/crm/customers/profiles', query: { customerId: '17' },
+    })
+  })
+  it('hides the original record link if the role only has follow-up access', async () => {
+    permissions.customerPage = false
+    await open()
+    await button('客户甲')
+    expect(wrapper.text()).not.toContain('查看业务明细')
+    expect(drill.customers).not.toHaveBeenCalled()
   })
   it('does not load data when read permission is missing', async () => {
     permissions.read = false

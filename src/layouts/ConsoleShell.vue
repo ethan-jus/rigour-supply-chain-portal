@@ -49,6 +49,10 @@
           <ConsoleAccountMenu />
         </div>
       </header>
+      <nav v-if="pageGroup" class="console-subviews" :aria-label="pageGroup.displayName">
+        <strong>{{ pageGroup.displayName }}</strong>
+        <router-link v-for="node in pageGroup.children.filter(n => n.visible && n.routePath)" :key="node.id" :to="node.routePath!">{{ node.displayName }}</router-link>
+      </nav>
       <main ref="contentViewport" class="console__content">
         <template v-for="tab in workspaceTabs" :key="tab.id">
           <section
@@ -102,6 +106,7 @@ import ConsoleSidebar from '@/components/console/ConsoleSidebar.vue'
 import ConsoleEntrySearch from '@/components/console/ConsoleEntrySearch.vue'
 import { OfficeBuilding } from '@element-plus/icons-vue'
 import ConsoleAccountMenu from '@/components/console/ConsoleAccountMenu.vue'
+import { pageGroupFor } from '@/utils/navigation-groups'
 import { consoleEntries } from '@/utils/console-navigation'
 import { useConsoleWorkspace } from '@/stores/console-workspace'
 import ConsoleTabPane from '@/components/console/ConsoleTabPane.vue'
@@ -136,6 +141,7 @@ const contentViewport = ref<HTMLElement | null>(null)
 const applicationCode = computed(() => String(route.meta.applicationCode || ''))
 
 const navigation = computed(() => navigationStore.getNavigation(applicationCode.value))
+const pageGroup = computed(() => pageGroupFor(navigation.value, route.path))
 const tenantLabel = computed(() => authStore.user?.tenantName || '企业空间')
 
 const currentPageName = computed(() => {
@@ -349,6 +355,10 @@ onMounted(() => {
   }
 }
 
+.console-subviews { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:6px 16px; background:var(--el-bg-color); border-bottom:1px solid var(--el-border-color-lighter); }
+.console-subviews strong { margin-right:8px; }
+.console-subviews a { padding:5px 12px; color:var(--el-text-color-regular); text-decoration:none; border-radius:4px; }
+.console-subviews .router-link-exact-active { color:var(--el-color-primary); background:var(--el-color-primary-light-9); }
 .workspace-tabs {
   display: flex;
   min-width: 0;

@@ -14,9 +14,10 @@ beforeEach(() => {
   document.documentElement.removeAttribute('style')
 })
 describe('统一显示设置', () => {
-  it('旧设置默认自动收起，常驻模式保存后可恢复，非法模式回退默认', () => {
-    expect(normalizeDisplay({ font: 'serif' }).secondaryMenuMode).toBe('auto')
-    expect(normalizeDisplay({ secondaryMenuMode: 'unknown' }).secondaryMenuMode).toBe('auto')
+  it('默认常驻，保留用户选择自动收起的偏好', () => {
+    expect(normalizeDisplay({ font: 'serif' }).secondaryMenuMode).toBe('pinned')
+    expect(normalizeDisplay({ secondaryMenuMode: 'unknown' }).secondaryMenuMode).toBe('pinned')
+    expect(normalizeDisplay({ secondaryMenuMode: 'auto' }).secondaryMenuMode).toBe('auto')
     saveDisplay({ ...DEFAULT_DISPLAY, secondaryMenuMode: 'pinned' })
     expect(readDisplay().secondaryMenuMode).toBe('pinned')
   })
@@ -78,6 +79,7 @@ describe('新增字体', () => {
     const load = vi.fn().mockResolvedValue([{} as FontFace])
     await loadPreviewFont(font, { load })
     expect(load.mock.calls[0]?.[0]).toContain(family)
+    expect(normalizeDisplay({ secondaryMenuMode: 'auto' }).secondaryMenuMode).toBe('auto')
     saveDisplay({ ...DEFAULT_DISPLAY, font })
     expect(readDisplay().font).toBe(font)
   })

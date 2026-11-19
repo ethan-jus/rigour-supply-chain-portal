@@ -1,3 +1,4 @@
+import { scmReportRoutes } from './scm-report-routes'
 import type { RouteRecordRaw } from 'vue-router'
 import { SUPPLY_DOMAIN_PAGES } from '@/views/supply-chain/domain/catalog'
 
@@ -262,6 +263,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           permission: 'order:invoice:read',
         },
       },
+      ...scmReportRoutes,
       {
         path: 'sales',
         name: 'SupplySalesDashboard',

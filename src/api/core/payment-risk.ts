@@ -25,6 +25,7 @@ export interface PaymentRiskOrder {
   orderDate: string
   ageDays: number
   orderAmount: number
+  remainingAmount?: number | null
   paidAmount: number
   products: PaymentRiskProduct[]
 }

@@ -63,7 +63,7 @@ async function readWorkbook(bytes: Uint8Array) {
 }
 
 describe('风险回款订单明细 Excel', () => {
-  it('生成可读取的真实 Excel，金额为数值、订单号及公式样式名称保持文本，部分回款不抵扣', async () => {
+  it('生成可读取的真实 Excel，金额为数值、订单号及公式样式名称保持文本，部分回款抵减未收', async () => {
     const before = structuredClone(context)
     const result = await buildPaymentRiskExcel(context)
     const book = await readWorkbook(result.bytes)
@@ -78,14 +78,15 @@ describe('风险回款订单明细 Excel', () => {
     expect(sheet.getCell('G2').value).toBe(312.01)
     expect(sheet.getCell('H2').value).toBe(100.13)
     expect(sheet.getCell('G2').numFmt).toBe('#,##0.00####')
-    expect(sheet.getCell('I2').value).toBe('台呢')
-    expect(sheet.getCell('J2').value).toBe('台呢A')
-    expect(sheet.getCell('K2').value).toBe('高风险')
+    expect(sheet.getCell('I2').value).toBe(211.88)
+    expect(sheet.getCell('J2').value).toBe('台呢')
+    expect(sheet.getCell('K2').value).toBe('台呢A')
+    expect(sheet.getCell('L2').value).toBe('高风险')
     const scope = book.getWorksheet('查询条件')!
     const rows: unknown[][] = []
     scope.eachRow((row) => rows.push([row.getCell(1).value, row.getCell(2).value]))
     expect(rows).toContainEqual(['城市', '成都'])
-    expect(rows).toContainEqual(['订单应收合计（元）', 312.01])
+    expect(rows).toContainEqual(['剩余未收合计（元）', 211.88])
     expect(rows).toContainEqual(['账龄截至（北京时间）', '2026-10-20'])
     expect(result.filename).toBe('回款风险订单明细-2026-09_2026-10.xlsx')
     expect(context).toEqual(before)
@@ -107,7 +108,7 @@ describe('风险回款订单明细 Excel', () => {
     expect(sheet.rowCount).toBe(26)
     expect(sheet.getCell('A26').value).toBe('DEMO-24')
     expect(sheet.getCell('B2').value).toBe('客户待确认')
-    expect(sheet.getCell('K2').value).toBe('待确认')
+    expect(sheet.getCell('L2').value).toBe('待确认')
     expect(result.filename).toMatch(/^演示-/)
     expect(book.getWorksheet('查询条件')!.getCell('B2').value).toContain('演示数据')
   })

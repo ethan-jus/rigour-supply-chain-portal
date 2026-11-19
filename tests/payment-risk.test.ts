@@ -62,7 +62,7 @@ const data: PaymentRiskData = {
   ],
   orders: [order],
 }
-describe('未结清订单风险整单口径', () => {
+describe('商品账龄按订单剩余未收', () => {
   it('全国按省级汇总，选择省包含子部门，进入后仅展示子部门且不重复计单', () => {
     const hierarchy: PaymentRiskData = {
       ...data,
@@ -72,9 +72,9 @@ describe('未结清订单风险整单口径', () => {
         { code: 'TS', name: '唐山市', parentCode: 'HB' },
       ],
       orders: [
-        { ...order, orderId: '1', regionCode: 'SJZ', orderAmount: 100 },
-        { ...order, orderId: '2', regionCode: 'TS', orderAmount: 80 },
-        { ...order, orderId: '3', regionCode: 'BJ', orderAmount: 999 },
+        { ...order, orderId: '1', regionCode: 'SJZ', paidAmount: 0, orderAmount: 100 },
+        { ...order, orderId: '2', regionCode: 'TS', paidAmount: 0, orderAmount: 80 },
+        { ...order, orderId: '3', regionCode: 'BJ', paidAmount: 0, orderAmount: 999 },
       ],
     }
     const selected = selectRiskOrders(hierarchy, { ...emptyRiskFilters(), region: 'HB' })
@@ -111,25 +111,25 @@ describe('未结清订单风险整单口径', () => {
     ).toEqual(['2026-09'])
     expect(activeOrderMonths([], '2026-06', '2026-10')).toEqual([])
   })
-  it('部分回款不扣减，重复订单也不能放大总金额', () => {
-    expect(orderAmount([order, order])).toBe(10000)
+  it('部分回款抵减未收，重复订单也不能放大总金额', () => {
+    expect(orderAmount([order, order])).toBe(4000)
   })
   it('混合订单只归属最高风险，风险合计等于整单总额', () => {
     const risks = riskGroups([order])
     expect(risks.find((r) => r.key === 'LOW')?.amount).toBe(0)
-    expect(risks.find((r) => r.key === 'HIGH')?.amount).toBe(10000)
+    expect(risks.find((r) => r.key === 'HIGH')?.amount).toBe(4000)
     expect(risks.find((r) => r.key === 'HIGH')?.count).toBe(1)
-    expect(risks.reduce((n, r) => n + r.amount, 0)).toBe(10000)
-    expect(orderAmount([order])).toBe(10000)
+    expect(risks.reduce((n, r) => n + r.amount, 0)).toBe(4000)
+    expect(orderAmount([order])).toBe(4000)
   })
   it('多选父子分类取并集，不按选中产品数量重复金额', () => {
     const selected = selectRiskOrders(data, { ...emptyRiskFilters(), categories: ['1', '11', '2'] })
     expect(selected).toHaveLength(1)
-    expect(orderAmount(selected)).toBe(10000)
+    expect(orderAmount(selected)).toBe(4000)
     const groups = groupRiskOrders(selected, (o) =>
       o.products.map((p) => ({ key: p.categoryId!, name: p.categoryName! })),
     )
-    expect(groups.map((g) => g.amount)).toEqual([10000])
+    expect(groups.map((g) => g.amount)).toEqual([4000])
   })
   it('先确定唯一归属，再筛选分类，不能降级或重新归属', () => {
     expect(selectRiskOrders(data, { ...emptyRiskFilters(), categories: ['2'] })).toHaveLength(0)

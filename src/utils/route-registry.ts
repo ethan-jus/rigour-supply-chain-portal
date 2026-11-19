@@ -1,3 +1,4 @@
+import { scmReportRoutes } from '@/router/scm-report-routes'
 import type { NavigationNode } from '@/types/management'
 import { devWarn } from '@/utils/dev-log'
 import { CUSTOM_PAGE_ROUTE_PREFIX, isCustomPage, resolveView } from '@/utils/dynamic-pages'
@@ -53,6 +54,7 @@ const ROUTES: Record<string, string | null> = {
   'supply.integration.overview': '/supply-chain/integration',
   'supply.integration.huolala': '/supply-chain/integration/huolala',
   ...SUPPLY_DOMAIN_ROUTE_MAP,
+  ...Object.fromEntries(scmReportRoutes.map(route => [route.meta.routeKey, `/supply-chain/${route.path}`])),
 }
 
 export function validateNavigation(nodes: NavigationNode[]): NavigationNode[] {
@@ -81,7 +83,7 @@ export function validateNavigation(nodes: NavigationNode[]): NavigationNode[] {
       }
       return [{ ...node, children: validateNavigation(node.children) }]
     }
-    const customGroupKey = node.routeKey.startsWith('tenant.menu.group.')
+    const customGroupKey = /^(tenant\.menu\.group\.|supply\.(section|tabs)\.)/.test(node.routeKey)
     const tenantGroup = node.type === 'MENU' && customGroupKey && node.routePath === null
     // IAM 保留隐藏的历史资源；未编译的隐藏分支不进入导航和可访问路径集合。
     // 已注册的隐藏页面仍需校验，保留其授权直达能力；隐藏不等于撤销权限。

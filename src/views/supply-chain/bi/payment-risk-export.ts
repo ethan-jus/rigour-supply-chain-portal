@@ -23,8 +23,9 @@ export async function buildPaymentRiskExcel(context: PaymentRiskExportContext) {
     { header: '业务员', width: 18 },
     { header: '订单日期', width: 16 },
     { header: '账龄（天）', width: 14 },
-    { header: '订单应收（统计金额，元）', width: 28 },
-    { header: '已回款（不抵扣，元）', width: 24 },
+    { header: '订单原额（元）', width: 28 },
+    { header: '已回款（元）', width: 24 },
+    { header: '剩余未收（元）', width: 22 },
     { header: '归属产品分类', width: 22 },
     { header: '归属产品', width: 32 },
     { header: '整单风险', width: 16 },
@@ -40,6 +41,7 @@ export async function buildPaymentRiskExcel(context: PaymentRiskExportContext) {
       order.ageDays,
       order.orderAmount,
       order.paidAmount,
+      orderAmount([order]),
       product.categoryName || '分类待确认',
       product.productName || product.categoryName || '产品待确认',
       riskLevels.find((level) => level.key === product.riskLevel)?.name || '待确认',
@@ -47,11 +49,11 @@ export async function buildPaymentRiskExcel(context: PaymentRiskExportContext) {
   }
   sheet.getColumn(1).numFmt = '@'
   sheet.getColumn(6).numFmt = '0'
-  for (const index of [7, 8]) sheet.getColumn(index).numFmt = '#,##0.00####'
+  for (const index of [7, 8, 9]) sheet.getColumn(index).numFmt = '#,##0.00####'
   sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
   sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF285681' } }
   sheet.getRow(1).height = 30
-  sheet.autoFilter = { from: 'A1', to: `K${sheet.rowCount}` }
+  sheet.autoFilter = { from: 'A1', to: `L${sheet.rowCount}` }
 
   const scope = workbook.addWorksheet('查询条件')
   scope.columns = [
@@ -65,11 +67,11 @@ export async function buildPaymentRiskExcel(context: PaymentRiskExportContext) {
     ['账龄截至（北京时间）', context.asOf],
     ['订单记录最近同步（北京时间）', context.updated],
     ['导出订单数', context.orders.length],
-    ['订单应收合计（元）', orderAmount(context.orders)],
+    ['剩余未收合计（元）', orderAmount(context.orders)],
     ['导出范围', '当前查询及下钻的全部订单，不受明细分页限制；仅包含当前账号有权查看的数据。'],
     [
       '统计口径',
-      '每单一行；未结清订单按整单应收金额统计，不扣部分回款。归属最高风险产品，同风险取商品金额最大者。金额单位为元。',
+      '每单一行；统计金额为订单原额扣除已回款后的剩余金额。归属最高风险产品，同风险取商品金额最大者。金额单位为元。',
     ],
     ['数据时间', '查询时间不代表来源已完整同步。'],
   ])

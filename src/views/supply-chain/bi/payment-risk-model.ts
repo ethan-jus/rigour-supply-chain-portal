@@ -136,7 +136,7 @@ export function selectRiskOrders(data: PaymentRiskData, filters: RiskFilters): P
 }
 export const orderAmount = (orders: PaymentRiskOrder[]) =>
   [...new Map(orders.map((o) => [o.orderId, o])).values()].reduce(
-    (sum, o) => sum + Math.round(o.orderAmount * 1e6),
+    (sum, o) => sum + (o.remainingAmount == null ? Math.max(0, Math.round(o.orderAmount * 1e6) - Math.round(o.paidAmount * 1e6)) : Math.round(o.remainingAmount * 1e6)),
     0,
   ) / 1e6
 

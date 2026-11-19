@@ -34,6 +34,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
 import { defineAsyncComponent, computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import ListTableFooter from '@/components/supply/ListTableFooter.vue'
@@ -45,7 +46,7 @@ const auth = useAuthStore()
 function localDate(value: Date) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year:'numeric',month:'2-digit',day:'2-digit' }).format(value) }
 const today = localDate(new Date()), yesterday = localDate(new Date(Date.now()-86400000))
 const date=ref(today), status=ref(''), keyword=ref(''), page=ref(1), pageSize=ref(20)
-const departmentId=ref(''),includeDescendants=ref(false),pendingOnly=ref(false),riskKind=ref(''),departments=ref<Array<{id:string;name:string}>>([]),departmentError=ref('')
+const departmentId=ref(''),includeDescendants=ref(false),pendingOnly=ref(useRoute()?.query.pendingOnly==='1'),riskKind=ref(''),departments=ref<Array<{id:string;name:string}>>([]),departmentError=ref('')
 let departmentRequest=0,departmentController:AbortController|null=null
 const result=ref<FieldworkPage | null>(null), selected=ref<FieldPersonDay | null>(null), loading=ref(false), error=ref('')
 let request=0, controller: AbortController | null=null

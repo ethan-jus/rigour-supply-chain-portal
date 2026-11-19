@@ -463,7 +463,7 @@
         :regions="cityProductReportOptions.region"
         :sales-owners="cityProductReportOptions.owner"
         :action-seed="actionSeed"
-        @open-business="openActionBusiness"
+        @open-business="operationsVisible = false"
       />
     </el-drawer>
     <el-drawer
@@ -719,8 +719,7 @@ import {
   type SupplyDashboardFilterOptions,
   type SupplyDashboardRefreshSourceCode,
 } from '@/api/core/bi'
-import { getCrmCustomerAreas, getInternalCrmCustomer } from '@/api/core/crm'
-import { getSalesOrder } from '@/api/core/order-sales'
+import { getCrmCustomerAreas } from '@/api/core/crm'
 import type { ErpProductCategoryView } from '@/api/core/erp-internal'
 import { useAuthStore } from '@/stores/auth'
 import { useNavigationStore } from '@/stores/navigation'
@@ -733,7 +732,7 @@ import BiOperationsWorkbench from './components/BiOperationsWorkbench.vue'
 import { biErrorMessage as errorText, biNeedsLogin } from './bi-error'
 import BiScopeSettings from './components/BiScopeSettings.vue'
 import { getBiEffectiveScope, type BiEffectiveScope } from '@/api/core/bi-access'
-import type { BiAction, BiActionSeed } from '@/api/core/bi-operations'
+import type { BiActionSeed } from '@/api/core/bi-operations'
 import type { CityProductReportQuery } from '@/api/core/bi-city-product-report'
 import { buildCockpitDetailExcel } from './cockpit-export'
 import { loadReportDictionaries, reportSourceName } from './report-format'
@@ -938,52 +937,6 @@ function registerFollowup(row: DetailRow) {
   }
   detailVisible.value = false
   operationsVisible.value = true
-}
-async function openActionBusiness(action: BiAction) {
-  try {
-    operationsVisible.value = false
-    if (action.kind === 'STOCK') {
-      void router.push({
-        path: '/supply-chain/erp/inventory/inventory',
-        query: {
-          productCode: action.businessRef.replace(/^product-code:/, ''),
-          productName: action.businessLabel,
-        },
-      })
-    } else if (
-      action.businessRef.startsWith('customer-id:') ||
-      action.businessRef.startsWith('customer-code:')
-    ) {
-      const customerCode = action.businessRef.startsWith('customer-id:')
-        ? (await getInternalCrmCustomer(action.businessRef.slice(12))).customerCode
-        : action.businessRef.slice(14)
-      if (!customerCode) throw new Error('客户尚未具备可追溯业务编码')
-      void router.push({
-        path: '/supply-chain/crm/customers/profiles',
-        query: {
-          customerName: action.businessLabel,
-          regionCode: action.cityCode || undefined,
-          ownerStaffCode: action.employeeCode || undefined,
-          customerCode,
-        },
-      })
-    } else {
-      if (!action.businessRef.startsWith('order-id:'))
-        throw new Error('该跟进尚未关联可追溯业务单据')
-      const order = await getSalesOrder(action.businessRef.slice(9))
-      void router.push({
-        name: 'SupplyOrderSalesOrders',
-        query: {
-          orderNo: order.orderNo,
-          regionCode: action.cityCode || undefined,
-          ownerEmployeeCode: action.employeeCode || undefined,
-          drillLabel: action.businessLabel,
-        },
-      })
-    }
-  } catch (error) {
-    ElMessage.error(errorText(error, '业务明细加载失败，请检查访问权限'))
-  }
 }
 const cityProductReportQuery = computed(() => ({
   ...queryFor(appliedFilters.value),

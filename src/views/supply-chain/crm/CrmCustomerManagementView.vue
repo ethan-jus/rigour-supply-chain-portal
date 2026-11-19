@@ -940,7 +940,10 @@ function handleSizeChange() {
   void loadCustomers()
 }
 
-async function openDetail(row: InternalCrmCustomerSummary) {
+watch(()=>route.query.customerId,id=>{
+  if(typeof id==='string' && /^[0-9]+$/.test(id))void openDetail({id})
+},{immediate:true})
+async function openDetail(row: { id: string | number }) {
   detailVisible.value = true
   detail.value = null
   try {

@@ -96,7 +96,7 @@
       </header>
       <div class="secondary-nav__body">
         <template v-if="isHome">
-          <router-link v-if="home" :to="home.routePath!" class="secondary-link is-active"
+          <router-link v-if="home" :to="home.routePath!" :class="['secondary-link', { 'is-active': route.path === home.routePath }]"
             ><ConsoleNavIcon icon-key="House" /><span>{{ home.displayName }}</span></router-link
           >
           <section v-if="shortcuts.length" class="secondary-group">
@@ -136,7 +136,16 @@
             >
           </section>
         </template>
-        <ConsoleNavTree v-else :nodes="secondaryNodes" />
+        <template v-else>
+          <section v-for="group in groups" :key="group.id" class="secondary-group">
+            <h2>{{ group.name }}</h2>
+            <router-link v-for="item in group.links" :key="item.id"
+              :to="item.path" class="secondary-link" :class="{ 'is-active': item.paths.includes(route.path) }"
+              :aria-current="item.paths.includes(route.path) ? 'page' : undefined">
+              <span>{{ item.label }}</span>
+            </router-link>
+          </section>
+        </template>
         <p v-if="!roots.length" class="secondary-nav__empty">暂无可用菜单</p>
       </div>
     </section>
@@ -154,7 +163,7 @@ import {
   selectEntries,
 } from '@/utils/console-navigation'
 import { useConsoleWorkspace } from '@/stores/console-workspace'
-import ConsoleNavTree from './ConsoleNavTree.vue'
+import { groupedNavigation } from '@/utils/navigation-groups'
 import ConsoleNavIcon from './ConsoleNavIcon.vue'
 const props = defineProps<{ nodes: NavigationNode[] }>()
 const route = useRoute()
@@ -199,8 +208,7 @@ function closeOutside(event: PointerEvent) {
 watch(autoNavigation, cancelClose)
 const roots = computed(() =>
   props.nodes
-    .filter((node) => node.visible && (node.routePath || consoleEntries(node.children).length))
-,
+    .filter((node) => node.visible && (node.routePath || consoleEntries(node.children).length)),
 )
 const entries = computed(() => consoleEntries(props.nodes))
 const home = computed(() =>
@@ -220,6 +228,7 @@ const secondaryNodes = computed(() =>
     ? selected.value.children
     : roots.value.filter((node) => node.routePath !== '/supply-chain'),
 )
+const groups = computed(() => groupedNavigation(secondaryNodes.value, selected.value?.displayName || '工作台'))
 const shortcuts = computed(() => selectEntries(entries.value, homeShortcutPaths))
 const analysis = computed(() => selectEntries(entries.value, homeAnalysisPaths))
 const recent = computed(() =>
@@ -279,14 +288,6 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
 
-.secondary-nav--crm .secondary-nav__heading {
-  padding: 8px 8px 8px 12px;
-}
-.secondary-nav--crm .secondary-nav__heading strong {
-  font-size: $font-size-md;
-  font-weight: 600;
-  line-height: 24px;
-}
 .console-navigation {
   display: grid;
   grid-template-columns: $sidebar-collapsed-width ($sidebar-width - $sidebar-collapsed-width);

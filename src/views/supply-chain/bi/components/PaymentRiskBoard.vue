@@ -197,7 +197,7 @@
         <article>
           <h2>未收款总额</h2>
           <strong class="cyan">{{ wan(total) }}<small>万元</small></strong>
-          <p title="未结清订单按整单应收金额计入，不扣部分回款">整单金额</p>
+          <p title="按截止日核对订单原额、有效核销与应收调整">剩余未收</p>
         </article>
         <article v-for="level in risks.filter((level) => level.key !== 'UNKNOWN')" :key="level.key">
           <h2>{{ level.name }}金额</h2>
@@ -444,7 +444,7 @@
         <details class="calculation-notes">
           <summary>统计口径</summary>
           <p>
-            未结清订单按整单应收金额计入，不扣部分回款。每单取最高风险；并列时归属商品金额最大的产品。分类、产品和风险金额合计均等于未收款总额。分类缺失归待确认，账龄按北京时间自然日计算。
+            按截止日核对订单原额、有效核销与应收调整。每单取最高风险；并列时归属商品金额最大的产品。分类、产品和风险金额合计均等于未收款总额。分类缺失归待确认，账龄截至所选期间末日，按北京时间自然日计算。
           </p>
         </details>
       </section>

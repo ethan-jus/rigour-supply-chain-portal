@@ -12,6 +12,8 @@ export interface BiActionSeed {
   note?: string
 }
 export interface BiActionCommand extends BiActionSeed {
+  promisedOn?: string|null
+  disputed?: boolean|null
   assignee: string
   dueAt: string
   note: string
@@ -25,6 +27,8 @@ export interface BiAction extends BiActionCommand {
   updatedAt: string
 }
 export interface BiActionUpdate {
+  promisedOn?: string|null
+  disputed?: boolean|null
   assignee: string
   dueAt: string
   status: BiActionStatus

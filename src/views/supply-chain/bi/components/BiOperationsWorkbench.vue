@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { displayDateTime } from '@/utils/business-date'
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter, type LocationQueryRaw } from 'vue-router'
+import { useNavigationStore } from '@/stores/navigation'
+import { getInternalCrmCustomers } from '@/api/core/crm'
+import { getSalesOrder } from '@/api/core/order-sales'
 import { Check, Refresh, Plus } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { biErrorMessage } from '../bi-error'
@@ -24,6 +28,7 @@ const props = withDefaults(
   defineProps<{
     regionCode?: string
     ownerStaffCode?: string
+    kind?: BiActionSeed['kind']
     actionSeed?: BiActionSeed | null
     regions?: Option[]
     salesOwners?: Option[]
@@ -35,6 +40,8 @@ const emit = defineEmits<{
   'open-business': [action: BiAction]
 }>()
 const auth = useAuthStore()
+const navigation = useNavigationStore()
+const router = useRouter()
 const canRead = computed(() => auth.hasPermission('analytics:dashboard:read'))
 const canActionWrite = computed(() => auth.hasPermission('analytics:operations:write'))
 const busy = ref(false)
@@ -63,7 +70,55 @@ const page = ref(1)
 const statusFilter = ref<BiActionStatus | ''>('')
 const actionRecord = ref<BiAction | null>(null)
 const actionEditing = ref(false)
+const detailPath = computed(() => {
+  const action = actionRecord.value
+  if (!action) return ''
+  if (action.kind === 'STOCK') return '/supply-chain/erp/inventory/inventory'
+  if (action.businessRef.startsWith('order-id:')) return '/supply-chain/order/sales-orders'
+  if (/^customer-(id|code):.+$/.test(action.businessRef)) return '/supply-chain/crm/customers/profiles'
+  return ''
+})
+const canOpenDetail = computed(() => !!detailPath.value && navigation.hasPath('SUPPLY_CHAIN', detailPath.value))
+
+async function customerIdByCode(code: string) {
+  // CRM also supports partial-code searches. Open only the exact, authorized match.
+  for (let begin = 0; ; ) {
+    const page = await getInternalCrmCustomers({ customerCode: code, begin, step: 100 })
+    const match = page.items.find((customer) => customer.customerCode === code)
+    if (match) return match.id
+    begin += page.items.length
+    if (!page.items.length || begin >= page.total) throw new Error('未找到可访问的同编号客户')
+  }
+}
+
+async function openBusiness() {
+  const action = actionRecord.value
+  const path = detailPath.value
+  if (!action || !canOpenDetail.value) return
+  detailError.value = ''
+  try {
+    let query: LocationQueryRaw
+    if (action.kind === 'STOCK') {
+      query = { productCode: action.businessRef.replace(/^product-code:/, ''), productName: action.businessLabel }
+    } else if (action.businessRef.startsWith('order-id:')) {
+      const order = await getSalesOrder(action.businessRef.slice('order-id:'.length))
+      query = { orderNo: order.orderNo, regionCode: action.cityCode || undefined, ownerEmployeeCode: action.employeeCode || undefined, drillLabel: action.businessLabel }
+    } else {
+      const customerId = action.businessRef.startsWith('customer-id:')
+        ? action.businessRef.slice('customer-id:'.length)
+        : await customerIdByCode(action.businessRef.slice('customer-code:'.length))
+      query = { customerId }
+    }
+    if (actionRecord.value?.id !== action.id || !actionEditing.value) return
+    await router.push({ path, query })
+    emit('open-business', action)
+  } catch (reason) {
+    if (actionRecord.value?.id === action.id) detailError.value = biErrorMessage(reason, '业务明细读取失败')
+  }
+}
 const seed = ref<BiActionSeed | null>(null)
+const promisedOn=ref<string|null>(null),disputed=ref(false)
+const isCollection=computed(()=>(actionRecord.value?.kind || seed.value?.kind)==='COLLECTION')
 const assignee = ref('')
 const dueAt = ref<Date | null>(null)
 const actionStatus = ref<BiActionStatus>('OPEN')
@@ -96,6 +151,7 @@ async function reload() {
   error.value = ''
   try {
     const result = await getBiActions({
+      kind: props.kind,
       cityCode: props.regionCode || undefined,
       employeeCode: props.ownerStaffCode || undefined,
       status: statusFilter.value || undefined,
@@ -127,12 +183,14 @@ function startSeed(incoming: BiActionSeed) {
   assignee.value = incoming.assignee || incoming.employeeCode || props.ownerStaffCode || ''
   dueAt.value = null
   actionStatus.value = 'OPEN'
+  promisedOn.value=null;disputed.value=false
   note.value = incoming.note ?? ''
 }
 async function editAction(action: BiAction) {
   actionRecord.value = action
   seed.value = null
   assignee.value = action.assignee
+  promisedOn.value=action.promisedOn || null;disputed.value=action.disputed===true
   dueAt.value = new Date(action.dueAt)
   actionStatus.value = statusOptions.value[0]!
   note.value = ''
@@ -166,6 +224,7 @@ async function submitAction() {
         assignee: assignee.value,
         dueAt: dueAt.value.toISOString(),
         status: actionStatus.value,
+        ...(isCollection.value?{promisedOn:promisedOn.value,disputed:disputed.value}:{}),
         note: note.value.trim(),
         expectedRevision: actionRecord.value.revision,
       })
@@ -176,6 +235,7 @@ async function submitAction() {
         employeeCode: seed.value.employeeCode ?? props.ownerStaffCode,
         assignee: assignee.value,
         dueAt: dueAt.value.toISOString(),
+        ...(isCollection.value?{promisedOn:promisedOn.value,disputed:disputed.value}:{}),
         note: note.value.trim(),
       })
     } else {
@@ -312,6 +372,8 @@ onMounted(async () => {
               aria-label="跟进期限"
               :disabled="saving || !canActionWrite"
           /></label>
+          <label v-if="isCollection">客户承诺还款日<el-date-picker v-model="promisedOn" type="date" value-format="YYYY-MM-DD" aria-label="客户承诺还款日" :disabled="saving || !canActionWrite"/></label>
+          <label v-if="isCollection"><el-checkbox v-model="disputed" :disabled="saving || !canActionWrite">款项存在争议</el-checkbox></label>
           <label v-if="actionRecord"
             >处理状态
             <el-select
@@ -357,10 +419,10 @@ onMounted(async () => {
             >
             <el-button :disabled="saving" @click="actionEditing = false">关闭</el-button>
             <el-button
-              v-if="actionRecord"
+              v-if="canOpenDetail"
               link
               type="primary"
-              @click="emit('open-business', actionRecord)"
+              @click="openBusiness"
               >查看业务明细</el-button
             >
           </div>

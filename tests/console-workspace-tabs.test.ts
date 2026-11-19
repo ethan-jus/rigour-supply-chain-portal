@@ -109,7 +109,7 @@ function createTestRouter(): Router {
   })
 }
 
-async function mountConsole(initialPath = '/supply-chain/alpha', realNavigation = false) {
+async function mountConsole(initialPath = '/supply-chain/alpha') {
   const pinia = createPinia()
   setActivePinia(pinia)
   const authStore = useAuthStore()
@@ -145,7 +145,6 @@ async function mountConsole(initialPath = '/supply-chain/alpha', realNavigation 
     global: {
       plugins: [pinia, router],
       stubs: {
-        ConsoleNavTree: !realNavigation,
         ElButton: defineComponent({ template: '<button><slot /></button>' }),
       },
     },
@@ -168,7 +167,7 @@ describe('ConsoleShell 工作页签', () => {
   })
 
   it('连续点击真实菜单链接只切换右侧页面，保留外壳、已打开页签和表单状态', async () => {
-    const { wrapper, router } = await mountConsole('/supply-chain/alpha', true)
+    const { wrapper, router } = await mountConsole('/supply-chain/alpha')
     const shell = wrapper.findComponent(ConsoleShell).element
     await wrapper.get('.sentinel-input').setValue('未提交筛选条件')
     for (const page of ['beta', 'gamma', 'alpha']) {
