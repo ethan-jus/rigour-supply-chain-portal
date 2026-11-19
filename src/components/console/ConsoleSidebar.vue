@@ -61,7 +61,7 @@
         </template>
       </div>
       <button
-        v-if="workspace.collapsed"
+        v-if="!autoNavigation && workspace.collapsed"
         class="module-rail__expand"
         type="button"
         aria-label="展开二级菜单"
