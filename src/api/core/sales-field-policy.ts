@@ -13,7 +13,8 @@ export interface FieldPolicy {
   allowAdjustment: boolean
   adjustmentDeadlineHours: number | null
   locationEnabled: boolean
-  locationIntervalMinutes: number
+  locationSampleIntervalSeconds: number
+  locationUploadIntervalSeconds: number
   minimumLocationAccuracyMeters: number | null
   offlineUploadDeadlineMinutes: number
   scopeType: string
