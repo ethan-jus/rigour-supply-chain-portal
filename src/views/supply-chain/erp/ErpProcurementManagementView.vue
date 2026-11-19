@@ -81,7 +81,7 @@
         type="primary"
         :icon="Plus"
         @click="openEditor()"
-        >新增采购单</el-button
+        ><SupplyActionLabel code="erp:procurement:create" fallback="新增" /></el-button
       >
     </template>
 
@@ -165,7 +165,7 @@
                   link
                   type="primary"
                   @click="openEditor(row)"
-                  >编辑</el-button
+                  ><SupplyActionLabel code="erp:procurement:update" fallback="编辑" /></el-button
                 ><el-button
                   v-if="can('erp:procurement:update', 'erp:supply:write')"
                   link
@@ -178,7 +178,7 @@
                   link
                   type="danger"
                   @click="remove(row)"
-                  >删除</el-button
+                  ><SupplyActionLabel code="erp:procurement:delete" fallback="删除" /></el-button
                 ></template
               >
             </div></template
@@ -207,6 +207,7 @@
   <ErpProcurementDetail v-model="detailVisible" :order-id="editingId" />
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { onMounted, reactive, ref } from 'vue'
 import { errorMessage } from '@/api/core/error'
 import { displayDateTime } from '@/utils/business-date'

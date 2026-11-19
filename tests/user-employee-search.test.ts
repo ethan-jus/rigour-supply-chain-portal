@@ -57,7 +57,7 @@ beforeEach(async () => {
     },
   })
   await flushPromises()
-  await wrapper.findAll('button').find(b => b.text() === '新增用户')!.trigger('click')
+  await wrapper.findAll('button').find(b => b.text() === '新增')!.trigger('click')
   await flushPromises()
 })
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks() })

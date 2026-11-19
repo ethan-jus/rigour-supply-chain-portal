@@ -1,7 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ElementPlus, { ElMessage } from 'element-plus'
-import Entry from '@/views/supply-chain/order/SalesOrderView.vue'
+import Entry from '@/components/supply/DhbSalesOrderEntry.vue'
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   orders: vi.fn(),
@@ -51,11 +51,11 @@ type State = {
     lines: Array<Record<string, unknown>>
   }
   selectCustomer: (id: string) => void
-  saveOrder: (submit: boolean) => Promise<void>
+  saveOrder: () => Promise<void>
 }
 const setup = () =>
   mount(Entry, {
-    props: { entryOnly: true, sourceOrderNo: 'DH-ORIGINAL' },
+    props: { sourceOrderNo: 'DH-ORIGINAL' },
     global: { plugins: [ElementPlus], stubs: { teleport: true, ElSelect: {template: '<div><slot /></div>'}, ElOption: true, ElDatePicker: true } },
   })
 function complete(w: ReturnType<typeof setup>) {
@@ -93,7 +93,7 @@ describe('发货关联窗口复用销售单补录表单', () => {
     expect(w.text()).toContain('DH-ORIGINAL')
     expect(w.text()).not.toContain('保存草稿')
     expect((w.vm as unknown as State).form.orderDate).toBeNull()
-    await (w.vm as unknown as State).saveOrder(true)
+    await (w.vm as unknown as State).saveOrder()
     expect(warning).toHaveBeenCalledWith('请选择原销售单的下单时间')
     expect(mocks.create).not.toHaveBeenCalled()
     expect(mocks.orders).not.toHaveBeenCalled()
@@ -112,9 +112,9 @@ describe('发货关联窗口复用销售单补录表单', () => {
     const w = setup()
     await flushPromises()
     const state = complete(w)
-    const first = state.saveOrder(true)
+    const first = state.saveOrder()
     await flushPromises()
-    await state.saveOrder(true)
+    await state.saveOrder()
     expect(mocks.create).toHaveBeenCalledTimes(1)
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -149,10 +149,10 @@ describe('发货关联窗口复用销售单补录表单', () => {
     const w = setup()
     await flushPromises()
     const state = complete(w)
-    await state.saveOrder(true)
+    await state.saveOrder()
     expect(state.form.customerId).toBe('3')
     expect(state.form.lines[0]!.quantity).toBe(10)
-    await state.saveOrder(true)
+    await state.saveOrder()
     expect(w.emitted('created')).toHaveLength(1)
     w.unmount()
     mocks.allowed = false

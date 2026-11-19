@@ -4,6 +4,9 @@ import ElementPlus, { ElSelect, ElTreeSelect, ElDatePicker } from 'element-plus'
 import { reactive } from 'vue'
 
 vi.mock('@/composables/useSupplyPermissions', () => ({
+  useSupplyPermissions: () => ({ can: (action: string) => action === 'order:line:export' }),
+}))
+vi.mock('@/composables/useSupplyPermissions', () => ({
   useSupplyPermissions: () => ({ can: () => true }),
 }))
 

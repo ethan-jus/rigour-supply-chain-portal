@@ -6,9 +6,8 @@
         <el-button link type="primary" @click="showAll = true">查看全部</el-button>
       </span>
       <span v-else>{{ rows.filter(row => row.mappingStatus === 'PENDING').length }} 个待对应来源值</span>
-      <span><el-button v-if="canWrite && !focused" :loading="scanning" @click="rescan">扫描已有飞书来源</el-button><el-button @click="load">刷新</el-button></span>
+      <el-button @click="load">刷新</el-button>
     </div>
-    <el-alert v-if="scanSummary" class="scan-summary" :type="scanWarning ? 'warning' : 'info'" :closable="false" :title="scanSummary" />
     <el-alert v-if="loadFailed" type="error" :closable="false" title="来源映射加载失败，请刷新重试" />
     <el-table :data="visibleRows" max-height="520" row-key="id">
       <el-table-column v-if="!focused" prop="sourceSystem" label="来源" width="90" />
@@ -53,7 +52,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getDictionarySourceMappings, rescanDictionarySources, updateDictionarySourceMapping, getEffectiveBizDict, getBizDicts, type DictionarySourceMapping, type DictView, type DictItemView } from '@/api/core/business-settings'
+import { getDictionarySourceMappings, updateDictionarySourceMapping, getEffectiveBizDict, getBizDicts, type DictionarySourceMapping, type DictView, type DictItemView } from '@/api/core/business-settings'
 const props = defineProps<{ dictionaryCode: string; dictionaries: DictView[]; canWrite: boolean; focus?: { scope: string; value: string; label: string } }>()
 const rows = ref<DictionarySourceMapping[]>([])
 const showAll = ref(false)
@@ -66,8 +65,6 @@ const sourceName = (row: DictionarySourceMapping) =>
   matchesFocus(row) && props.focus?.value && props.focus.label ? props.focus.label : row.sourceValue
 watch(() => props.focus, () => { showAll.value = false })
 const catalog = ref<DictView[]>([])
-const scanSummary = ref(''), scanWarning = ref(false)
-const scanning = ref(false)
 const loading = ref(false), loadFailed = ref(false), saving = ref(false), dialog = ref(false), targetsLoading = ref(false)
 const selected = ref<DictionarySourceMapping | null>(null)
 const shipmentMapping = computed(() =>
@@ -79,18 +76,6 @@ const targetDictionary = ref(''), targetItem = ref('')
 const targets = ref<DictItemView[]>([])
 let requestVersion = 0, targetVersion = 0
 function dictionaryName(code: string) { return (catalog.value.length ? catalog.value : props.dictionaries).find(d => d.dictionaryCode === code)?.dictionaryName || code }
-async function rescan() {
-  scanning.value = true; scanSummary.value = ''; scanWarning.value = false
-  try {
-    const result = await rescanDictionarySources(props.dictionaryCode)
-    const message = `已扫描本租户 ${result.batches} 个飞书导入批次、${result.rows} 行，发现 ${result.observedValues} 个来源值，${result.pendingValues} 个待映射`
-    scanWarning.value = result.truncated
-    scanSummary.value = message + (result.truncated ? '；扫描达到上限，可能存在未扫描记录' : '')
-      + (result.observedValues === 0 ? '。已有导入记录中未提取到该字典的来源字段值' : '')
-    await load()
-  } catch { scanWarning.value = true; scanSummary.value = '来源扫描失败，请重试' }
-  finally { scanning.value = false }
-}
 async function load() {
   const version = ++requestVersion
   loading.value = true; loadFailed.value = false
@@ -120,9 +105,8 @@ async function save() {
   } finally { saving.value = false }
 }
 onMounted(async () => { catalog.value = await getBizDicts({}) })
-watch(() => props.dictionaryCode, () => { scanSummary.value = ''; void load() }, { immediate: true })
+watch(() => props.dictionaryCode, () => { void load() }, { immediate: true })
 </script>
 <style scoped>
-.scan-summary { margin-bottom: 12px; }
 .mapping-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 </style>

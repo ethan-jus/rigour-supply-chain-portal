@@ -86,7 +86,6 @@ describe('看板业务口径', () => {
       ['payment-risk', '平均逾期天数', '÷ 逾期未收订单数'],
       ['customer', '复购客户', '至少有2笔'],
       ['city-cost', '成本率', '经营成本 ÷ 销售额'],
-      ['activity', '活动费用', '已用费用之和'],
       ['inventory-risk', '高风险', '风险等级为高的记录数'],
       ['product-inventory', '留存数量', '当前ERP库存快照'],
     ]) {

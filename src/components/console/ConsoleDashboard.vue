@@ -2,7 +2,7 @@
   <section class="workbench" aria-label="业务首页">
     <header class="workbench__heading">
       <div>
-        <h1>工作台</h1>
+        <SupplyPageTitle>首页</SupplyPageTitle>
         <p>
           {{ todayText }}<span v-if="overview">{{ scopeLabel }}</span>
         </p>
@@ -233,6 +233,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { SupplyDashboardQuery } from '@/api/core/bi'
@@ -407,7 +408,7 @@ function analysisDescription(path: string) {
 function openReport(page: number, reportQuery: SupplyDashboardQuery) {
   meetingOpen.value = false
   const section = (
-    { 2: 'city-operating', 3: 'product-sales', 4: 'sales-collection' } as Record<number, string>
+    { 2: 'city-operating', 3: 'product-sales', 4: 'sales' } as Record<number, string>
   )[page]
   const target =
     entries.value.find((entry) => entry.path === `/supply-chain/bi/${section}`) || biEntry.value
@@ -416,6 +417,7 @@ function openReport(page: number, reportQuery: SupplyDashboardQuery) {
       path: target.path,
       query: {
         ...reportQuery,
+        ...(page === 4 && target.path === '/supply-chain/bi/sales' ? { view: 'collection' } : {}),
         from: reportQuery.from ? businessDate(reportQuery.from) : undefined,
         to: reportQuery.to ? businessDate(reportQuery.to) : undefined,
       },

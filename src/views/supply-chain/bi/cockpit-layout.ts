@@ -99,12 +99,6 @@ const layouts: Record<CockpitSection, Layout> = {
     aside: ['risk-levels', 'risk-types'],
     groups: [],
   },
-  activity: {
-    label: '活动监测',
-    main: ['conversion', 'campaigns'],
-    aside: ['campaign-budget'],
-    groups: [{ id: 'returns', label: '投入产出', figures: ['campaign-return'] }],
-  },
 }
 
 const heights: Record<string, number> = {

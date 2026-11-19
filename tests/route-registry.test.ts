@@ -153,13 +153,13 @@ describe('数据库导航注册表', () => {
     expect(validateNavigation([node('system.user.list', '/platform-admin/tenants')])).toEqual([])
   })
 
-  it('接受销售管理三级菜单的已编译路由', () => {
+  it('退役的销售子页面不能从旧导航进入', () => {
     expect(
       validateNavigation([
         node('supply.sales.attendance.today', '/supply-chain/sales/attendance/today'),
         node('supply.sales.policies.releases', '/supply-chain/sales/policies/releases'),
       ]),
-    ).toHaveLength(2)
+    ).toEqual([])
   })
 
   it('拒绝旧订货宝订单镜像菜单，只接受新销售订单入口', () => {
@@ -185,7 +185,7 @@ describe('数据库导航注册表', () => {
     ).toEqual([])
   })
 
-  it('接受V2.1 ERP和CRM三级路由', () => {
+  it('ERP 与 CRM 路由只接受仍在使用的页面和目录', () => {
     expect(
       validateNavigation([
         node('supply.erp.master-data.menu', null),
@@ -209,8 +209,12 @@ describe('数据库导航注册表', () => {
           '/supply-chain/crm/customers/shipping-addresses',
         ),
         node('supply.crm.assignments.sales', '/supply-chain/crm/assignments/sales'),
-      ]),
-    ).toHaveLength(9)
+      ]).map((entry) => entry.routeKey),
+    ).toEqual([
+      'supply.erp.master-data.menu', 'supply.erp.master-data.products',
+      'supply.erp.master-data.attributes.tags', 'supply.erp.master-data.attributes.specifications',
+      'supply.crm.customers.areas', 'supply.crm.customers.shipping-addresses',
+    ])
   })
 
   it('丢弃 IAM 返回的已隐藏旧分支，保留当前商品中心和系统设置', () => {
@@ -310,18 +314,10 @@ describe('数据库导航注册表', () => {
     ).toEqual([])
   })
 
-  it('采购付款单使用可加载的独立业务占位页', async () => {
-    const supplyRoot = constantRoutes.find((route) => route.path === '/supply-chain')
-    const paymentRoute = supplyRoot?.children?.find(
-      (route) => route.meta?.routeKey === 'supply.erp.procurement.payments',
-    )
-
-    expect(paymentRoute?.path).toBe('erp/procurement/payments')
-    expect(paymentRoute?.meta?.title).toBe('采购付款单')
-    expect(typeof paymentRoute?.component).toBe('function')
-
-    const componentModule = await (paymentRoute?.component as () => Promise<{ default: unknown }>)()
-    expect(componentModule.default).toBeTruthy()
+  it('采购付款单占位路由已从编译产物移除', () => {
+    const routes = constantRoutes.find((route) => route.path === '/supply-chain')?.children
+    expect(routes?.some((route) => route.meta?.routeKey === 'supply.erp.procurement.payments')).toBe(false)
+    expect(validateNavigation([node('supply.erp.procurement.payments', '/supply-chain/erp/procurement/payments')])).toEqual([])
   })
 
   it('ERP商品入口使用自研商品管理页，商品规格使用独立业务页', async () => {
@@ -386,7 +382,7 @@ describe('数据库导航注册表', () => {
       expect.arrayContaining([
         'supply.order.menu',
         'supply.hr.menu',
-        'supply.erp.cost-settlement.menu',
+        'supply.erp.procurement.menu',
       ]),
     )
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).toEqual(
@@ -398,7 +394,7 @@ describe('数据库导航注册表', () => {
         'supply.hr.performance-rules',
       ]),
     )
-    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(13)
+    expect(SUPPLY_DOMAIN_MENU_KEYS).toHaveLength(10)
     expect(new Set(SUPPLY_DOMAIN_PAGES.map((page) => page.routeKey)).size).toBe(
       SUPPLY_DOMAIN_PAGES.length,
     )
@@ -445,7 +441,6 @@ describe('数据库导航注册表', () => {
       '销售看板',
       '城市经营看板',
       '客户看板',
-      '活动看板',
       '商品/库存看板',
       '商品销售统计',
       '销售毛利分析',
@@ -457,7 +452,7 @@ describe('数据库导航注册表', () => {
       SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '同步控制').map(
         (item) => item.title,
       ),
-    ).toEqual(['订货宝同步中心', '货拉拉接入', '定时任务', '飞书导入中心'])
+    ).toEqual(['订货宝同步中心', '货拉拉接入', '定时任务'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
       'supply.erp.master-data.skus',
     )
@@ -471,25 +466,22 @@ describe('数据库导航注册表', () => {
         (item) => item.title,
       ),
     ).toEqual([
-      '库存看板',
       '库存',
       '入库单',
       '出库单',
-      '出入库流水',
       '库存调拨',
-      '库存盘点',
       '仓库信息',
     ])
     expect(
       SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '采购管理').map(
         (item) => item.title,
       ),
-    ).toEqual(['采购申请', '采购订单', '到货与入库', '采购退货', '采购付款单'])
+    ).toEqual(['采购订单'])
     expect(
       SUPPLY_DOMAIN_PAGES.filter((item) => item.groupTitle === '客户管理').map(
         (item) => item.title,
       ),
-    ).toEqual(['我的客户', '公海', '合作客户', '门店提报', '商家库管理', '客户经营分析', '客户档案', '客户地址', '门店档案', '客户类型', '归属地区'])
+    ).toEqual(['我的客户', '公海', '合作客户', '门店提报', '商家库管理', '客户经营分析', '客户档案', '客户地址', '客户类型', '归属地区'])
     expect(SUPPLY_DOMAIN_PAGES.map((item) => item.routeKey)).not.toContain(
       'supply.crm.customers.customer-360',
     )
@@ -517,7 +509,7 @@ describe('数据库导航注册表', () => {
         node('supply.bi.city-cost', '/supply-chain/bi/city-cost'),
         node('supply.bi.inventory-risk', '/supply-chain/bi/inventory-risk'),
       ]),
-    ).toHaveLength(14)
+    ).toHaveLength(12)
 
     expect(
       validateNavigation([node('supply.bi.sync-quality', '/supply-chain/bi/sync-quality')]),

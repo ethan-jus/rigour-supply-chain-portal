@@ -472,12 +472,6 @@ export const getSalesPayment = (id: string | number) =>
     options,
   )
 
-export const deleteSalesPayment = (id: string | number, revision: number) =>
-  apiClient.delete<void>(`${ORDER_PAYMENT_BASE_PATH}/${encodeURIComponent(String(id))}`, {
-    params: { revision },
-    ...options,
-  })
-
 export const getSalesRefunds = (params: SalesRefundQuery) =>
   apiClient.get<OrderPage<SalesRefundSummary>>(ORDER_REFUND_BASE_PATH, { params, ...options })
 
@@ -575,6 +569,6 @@ export const listFulfillmentQueue = (params: {
   step: number
   keyword?: string
   outboundStatus?: string
-}) => apiClient.get<OrderPage<FulfillmentQueueItem>>('/api/v1/orders/fulfillments', { params })
+}) => apiClient.get<OrderPage<FulfillmentQueueItem>>('/orders/fulfillments', { params })
 export const getFulfillmentQueueDetail = (id: string) =>
-  apiClient.get<FulfillmentQueueDetail>(`/api/v1/orders/fulfillments/${encodeURIComponent(id)}`)
+  apiClient.get<FulfillmentQueueDetail>(`/orders/fulfillments/${encodeURIComponent(id)}`)

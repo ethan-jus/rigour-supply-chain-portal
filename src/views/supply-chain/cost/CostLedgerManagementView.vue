@@ -186,7 +186,7 @@
             :loading="exporting"
             :disabled="loading || !listReady"
             @click="openExport"
-            >自定义导出</el-button
+            ><SupplyActionLabel :code="permission + ':export'" fallback="自定义导出" /></el-button
           ><el-button
             v-if="can(permission + ':write')"
             type="primary"
@@ -439,7 +439,7 @@
               link
               type="primary"
               @click="act(row as CostRecord, 'confirm')"
-              >确认</el-button
+              ><SupplyActionLabel :code="permission + ':confirm'" fallback="确认" /></el-button
             ><el-button
               v-if="
                 row.statusCode === (logistics ? 'ACTIVE' : 'DRAFT') && can(permission + ':void')
@@ -447,7 +447,7 @@
               link
               type="danger"
               @click="act(row as CostRecord, 'void')"
-              >作废</el-button
+              ><SupplyActionLabel :code="permission + ':void'" fallback="作废" /></el-button
             ><el-button
               v-if="!logistics && row.statusCode === 'CONFIRMED' && can(permission + ':confirm')"
               link
@@ -632,6 +632,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'

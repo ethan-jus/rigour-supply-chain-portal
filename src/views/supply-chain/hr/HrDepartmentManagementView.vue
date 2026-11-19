@@ -6,7 +6,7 @@
         <SupplyPageHelp>维护部门和上下级关系，新增员工时可选择所属部门。</SupplyPageHelp>
       </div>
       <el-button v-if="can('hr:department:create')" type="primary" @click="edit()"
-        >新增部门</el-button
+        ><SupplyActionLabel code="hr:department:create" fallback="新增" /></el-button
       >
     </header>
     <div class="department-toolbar">
@@ -43,7 +43,7 @@
         description="还没有部门，请先创建顶级部门"
       >
         <el-button v-if="can('hr:department:create')" type="primary" @click="edit()"
-          >创建第一个部门</el-button
+          ><SupplyActionLabel code="hr:department:create" fallback="新增" /></el-button
         >
       </el-empty>
       <el-table
@@ -90,18 +90,18 @@
               >查看</el-button
             >
             <el-button
-              v-if="can('hr:department:create')"
+              v-if="can('hr:department:create-child', 'hr:department:create')"
               link
               type="primary"
               :disabled="row.statusCode !== 'ACTIVE'"
               @click="edit(undefined, row.id)"
-              >新增子部门</el-button
+              ><SupplyActionLabel code="hr:department:create-child" fallback="新增子部门" /></el-button
             >
             <el-button v-if="can('hr:department:update')" link type="primary" @click="edit(row)"
-              >编辑</el-button
+              ><SupplyActionLabel code="hr:department:update" fallback="编辑" /></el-button
             >
             <el-button v-if="can('hr:department:delete')" link type="danger" @click="remove(row)"
-              >删除</el-button
+              ><SupplyActionLabel code="hr:department:delete" fallback="删除" /></el-button
             >
           </template>
         </el-table-column>
@@ -182,11 +182,12 @@
         <el-form-item label="上级部门">
           <el-tree-select
             v-model="form.parentId"
+            :disabled="editing === null && !can('hr:department:create-child', 'hr:department:create')"
             :data="parents"
             node-key="id"
             :props="{ label: 'departmentName', children: 'children', disabled: 'disabled' }"
             check-strictly
-            clearable
+            :clearable="editing !== null || can('hr:department:create')"
             filterable
             default-expand-all
             placeholder="无（顶级部门）"
@@ -289,12 +290,13 @@
       </div>
       <template #footer>
         <el-button :disabled="saving" @click="visible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">确定</el-button>
+        <el-button v-if="canSaveDepartment" type="primary" :loading="saving" @click="save">确定</el-button>
       </template>
     </el-dialog>
   </section>
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayCell } from '@/utils/business-display'
 import { displayRecordDateTime as displayDateTime } from '@/utils/business-display'
@@ -452,8 +454,11 @@ function edit(row?: HrDepartment, parentId: number | null = null) {
     : []
   visible.value = true
 }
+const canSaveDepartment = computed(() => editing.value !== null
+  ? can('hr:department:update')
+  : form.parentId ? can('hr:department:create-child', 'hr:department:create') : can('hr:department:create'))
 async function save() {
-  if (saving.value) return
+  if (saving.value || !canSaveDepartment.value) return
   if (!form.departmentName.trim()) {
     saveError.value = '请输入部门名称'
     return

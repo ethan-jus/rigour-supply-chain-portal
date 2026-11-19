@@ -55,6 +55,7 @@ function renderEditor() {
       renderStubDefaultSlot: true,
       directives: { loading: () => undefined },
       stubs: {
+        SupplyActionLabel: false,
         ElFormItem: Field, ElInput: Input, ElSelect: Input, ElInputNumber: NumberInput, ElDialog: Dialog, ElButton: Button,
         ElTable: defineComponent({ template: '<div />' }),
         ElForm: true, ElOption: true, ElDatePicker: true, ElTag: true, ElEmpty: true, ElPagination: true,

@@ -292,95 +292,6 @@ export interface OrderRegisterPaymentPage {
   coverage: OrderRegisterCoverage | null
 }
 
-export type OrderPeriodGroupBy = 'region' | 'customer' | 'employee'
-
-export interface OrderPeriodQuery {
-  dateFrom: string
-  dateTo: string
-  groupBy?: OrderPeriodGroupBy
-  customerId?: string | number
-  customerName?: string
-  customerCode?: string
-  regionCode?: string
-  ownerEmployeeCode?: string
-  departmentId?: number
-}
-
-export interface OrderPeriodRow {
-  key: string
-  label: string
-  periodOrderAmount: number
-  periodReceivedAmount: number
-  periodRefundAmount: number
-  periodNetReceivedAmount: number
-  endingUnpaidAmount: number
-}
-
-export interface OrderPeriodTotals {
-  periodOrderAmount: number
-  periodReceivedAmount: number
-  periodRefundAmount: number
-  periodNetReceivedAmount: number
-  endingUnpaidAmount: number
-}
-
-export interface OrderPeriodView {
-  dateFrom: string
-  dateTo: string
-  groupBy: OrderPeriodGroupBy
-  totals: OrderPeriodTotals
-  rows: OrderPeriodRow[]
-  coverage: OrderRegisterCoverage | null
-}
-
-export interface OrderReceivablesQuery {
-  asOfDate: string
-  hasUnpaid?: boolean
-  customerId?: string | number
-  customerName?: string
-  customerCode?: string
-  regionCode?: string
-  ownerEmployeeCode?: string
-  departmentId?: number
-  orderDateFrom?: string
-  orderDateTo?: string
-}
-
-export interface OrderReceivablesRow {
-  orderId: string
-  orderNo: string
-  customerId: string | null
-  customerCode: string | null
-  customerName: string | null
-  regionCode: string | null
-  regionName: string | null
-  ownerEmployeeCode: string | null
-  ownerEmployeeName: string | null
-  departmentId: number | null
-  departmentName: string | null
-  orderDate: string
-  receivableAmount: number | null
-  netReceivedAmount: number | null
-  unpaidAmount: number | null
-  overpaidAmount: number | null
-  historyComplete: boolean | null
-  coverageFrom: string | null
-}
-
-export interface OrderReceivablesTotals {
-  receivableAmount: number | null
-  netReceivedAmount: number | null
-  unpaidAmount: number | null
-  overpaidAmount: number | null
-}
-
-export interface OrderReceivablesView {
-  asOfDate: string
-  totals: OrderReceivablesTotals
-  items: OrderReceivablesRow[]
-  coverage: OrderRegisterCoverage | null
-}
-
 const readOptions = { stayOnUnauthorized: true }
 function productFilterParams(params: Record<string, unknown>) {
   return { ...params,
@@ -409,33 +320,17 @@ export const getOrderRegisterPayments = (params: OrderRegisterPaymentQuery, feed
     ...feedback,
   })
 
-export const getOrderRegisterPeriod = (params: OrderPeriodQuery) =>
-  apiClient.get<OrderPeriodView>(`${ORDER_REGISTER_BASE_PATH}/statistics/period`, {
-    params,
-    ...readOptions,
-  })
-
-export const getOrderRegisterReceivables = (params: OrderReceivablesQuery) =>
-  apiClient.get<OrderReceivablesView>(`${ORDER_REGISTER_BASE_PATH}/statistics/receivables`, {
-    params,
-    ...readOptions,
-  })
-
 /** 创建人下拉数据源；契约补充项，后端尚未实现时页面降级为空列表并提示。 */
 export const getOrderRegisterCreators = () =>
   apiClient.get<string[]>(`${ORDER_REGISTER_BASE_PATH}/creators`, readOptions)
 
-export type OrderRegisterExportKind = 'orders' | 'lines' | 'payments' | 'period' | 'receivables'
+export type OrderRegisterExportKind = 'orders' | 'lines' | 'payments'
 
 export function exportOrderRegisterCsv(
   kind: OrderRegisterExportKind,
   params: Record<string, unknown>,
 ) {
-  const path = kind === 'period'
-    ? `${ORDER_REGISTER_BASE_PATH}/statistics/period/export`
-    : kind === 'receivables'
-      ? `${ORDER_REGISTER_BASE_PATH}/statistics/receivables/export`
-      : `${ORDER_REGISTER_BASE_PATH}/${kind}/export`
+  const path = `${ORDER_REGISTER_BASE_PATH}/${kind}/export`
   return apiClient.get<Blob>(path, {
     params: productFilterParams(params),
     responseType: 'blob',

@@ -163,7 +163,7 @@ describe('部门维护：真实表格与表单交互', () => {
       return saved
     })
     await render()
-    await button('新增部门').trigger('click')
+    await button('新增').trigger('click')
     await wrapper!.get('input[placeholder="例如：销售部、浙江区域、杭州市"]').setValue('运营部')
     wrapper!
       .findAllComponents({ name: 'ElSelect' })
@@ -221,7 +221,7 @@ describe('部门维护：真实表格与表单交互', () => {
       message: '资源不存在',
     })
     await render()
-    await button('新增部门').trigger('click')
+    await button('新增').trigger('click')
     await wrapper!.get('input[placeholder="例如：销售部、浙江区域、杭州市"]').setValue('区域部')
     await button('确定').trigger('click')
     await flushPromises()
@@ -230,7 +230,7 @@ describe('部门维护：真实表格与表单交互', () => {
   })
   it('保存成功但重读失败：保留真实返回记录并提示已保存，避免重复新增', async () => {
     await render()
-    await button('新增部门').trigger('click')
+    await button('新增').trigger('click')
     vi.mocked(hrOrganizationApi.saveDepartment).mockResolvedValue(row(5, '区域部'))
     vi.mocked(hrOrganizationApi.departments).mockRejectedValue({ message: 'HR 服务暂不可用' })
     await wrapper!.get('input[placeholder="例如：销售部、浙江区域、杭州市"]').setValue('区域部')
@@ -277,7 +277,7 @@ describe('部门维护：真实表格与表单交互', () => {
   it('无写权限只显示组织树，不显示维护入口', async () => {
     permission.write = false
     await render()
-    expect(button('新增部门')).toBeUndefined()
+    expect(button('新增')).toBeUndefined()
     expect(button('编辑')).toBeUndefined()
     expect(button('删除')).toBeUndefined()
     expect(wrapper!.text()).toContain('杭州市')

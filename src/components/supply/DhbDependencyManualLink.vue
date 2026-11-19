@@ -71,7 +71,6 @@
   </el-dialog>
   <SalesOrderEntry
     v-if="salesEntryVisible"
-    entry-only
     :source-order-no="issue?.relatedSalesOrderNo || issue?.requiredSourceId || ''"
     @created="onSalesCreated"
     @closed="salesEntryVisible = false"
@@ -87,7 +86,7 @@ import { getErpInventoryWarehouses } from '@/api/core/erp-internal'
 import { getErpManagedProducts, type ErpManagedProductVariant } from '@/api/core/erp-product'
 import { linkDhbDependency, type DhbSyncOpenIssueItem } from '@/api/core/dhb-orchestration'
 const SalesOrderEntry = defineAsyncComponent(
-  () => import('@/views/supply-chain/order/SalesOrderView.vue'),
+  () => import('./DhbSalesOrderEntry.vue'),
 )
 const { can } = useSupplyPermissions()
 const salesEntryVisible = ref(false)

@@ -3,6 +3,11 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import Dialog from '@/views/supply-chain/order/components/OrderAttributionReviewDialog.vue'
+import OrderDetail from '@/views/supply-chain/order/components/OrderRegisterDetailDrawer.vue'
+import { getSalesOrder } from '@/api/core/order-sales'
+import { orderLifecycleEvents } from '@/api/core/order-history-sync'
+import { getOrderRegisterPayments } from '@/api/core/order-register'
+import { useAuthStore } from '@/stores/auth'
 import {
   attributionReviewApi,
   type AttributionReviewContext,
@@ -12,6 +17,9 @@ import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
 vi.mock('@/api/core/order-attribution-review', () => ({
   attributionReviewApi: { context: vi.fn(), propose: vi.fn(), decide: vi.fn() },
 }))
+vi.mock('@/api/core/order-sales', () => ({ getSalesOrder: vi.fn() }))
+vi.mock('@/api/core/order-history-sync', () => ({ orderLifecycleEvents: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/api/core/order-register', () => ({ getOrderRegisterPayments: vi.fn().mockResolvedValue({ items: [] }) }))
 let wrapper: VueWrapper
 let context: AttributionReviewContext
 const permissions = [
@@ -43,7 +51,7 @@ const adjustment = (): AttributionAdjustment => ({
   reviewedAt: null,
   reviewReason: null,
 })
-async function render() {
+function authorize(grants = permissions) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useSupplyAuthorizationStore().context = {
@@ -51,8 +59,12 @@ async function render() {
     canInitialize: false,
     mode: 'ACTIVE',
     version: 9,
-    permissions,
+    permissions: grants,
   }
+  return pinia
+}
+async function render(grants = permissions) {
+  const pinia = authorize(grants)
   wrapper = mount(Dialog, {
     props: { modelValue: true, orderId: '123' },
     attachTo: document.body,
@@ -60,7 +72,7 @@ async function render() {
   })
   await flushPromises()
 }
-const button = (label: string) => wrapper.findAll('button').find((b) => b.text() === label)!
+const button = (label: string) => wrapper.findAll('button.el-button').find((b) => b.text() === label)!
 const field = (label: string) =>
   wrapper
     .findAll('.el-form-item')
@@ -107,7 +119,7 @@ it('提交时绑定当前版本，未知历史部门和地区保持为空，提�
   await field('来源证据位置').get('input').setValue('原单档案 123')
   await field('历史归属证据说明').get('textarea').setValue('原单业务员映射证据；无历史部门证据')
   await field('更正原因').get('input').setValue('历史归属核对')
-  await button('提交复核申请').trigger('click')
+  await button('申请更正').trigger('click')
   await flushPromises()
   expect(attributionReviewApi.propose).toHaveBeenCalledWith(
     '123',
@@ -139,7 +151,7 @@ it('审核只提交申请编号和意见，成功后读取生效记录并通知�
     return applied
   })
   await render()
-  await button('审核通过并生效').trigger('click')
+  await button('审核更正').trigger('click')
   await flushPromises()
   expect(attributionReviewApi.decide).toHaveBeenCalledWith(
     '123',
@@ -150,4 +162,39 @@ it('审核只提交申请编号和意见，成功后读取生效记录并通知�
   expect(wrapper.text()).toContain('已生效')
   expect(wrapper.emitted('applied')).toHaveLength(1)
   expect(attributionReviewApi.context).toHaveBeenCalledTimes(2)
+})
+
+it('只读角色可查申请，缺少申请或审核权限时收起对应操作', async () => {
+  context.adjustments = [adjustment()]
+  await render(['order:attribution:read'])
+  expect(wrapper.text()).toContain('待复核')
+  for (const label of ['申请更正', '审核更正', '驳回']) expect(button(label)).toBeUndefined()
+})
+
+it('申请人不能审核自己的申请', async () => {
+  context.adjustments = [adjustment()]
+  await render()
+  useAuthStore().user = { id: 'author', principalScope: 'TENANT', username: 'owner', displayName: '申请人', roles: [], permissions, tenantId: null, tenantName: null }
+  await flushPromises()
+  expect(button('审核更正')).toBeUndefined()
+  expect(button('驳回')).toBeUndefined()
+})
+
+it('订单详情只对有查看权的角色开放，点击后读取当前订单的申请', async () => {
+  const pinia = authorize([])
+  vi.mocked(getSalesOrder, { partial: true }).mockResolvedValue({ id: '123', orderNo: 'DD123', lines: [] })
+  vi.mocked(orderLifecycleEvents).mockResolvedValue([])
+  vi.mocked(getOrderRegisterPayments, { partial: true }).mockResolvedValue({ items: [] })
+  wrapper = mount(OrderDetail, {
+    props: { modelValue: true, orderId: '123' },
+    global: { plugins: [pinia, ElementPlus], stubs: { teleport: true, PaymentDetailDrawer: true, SalesLogisticsPanel: true, OrderInvoicePanel: true } },
+  })
+  await flushPromises()
+  expect(button('归属更正')).toBeUndefined()
+  useSupplyAuthorizationStore().context!.permissions = ['order:attribution:read']
+  await flushPromises()
+  expect(attributionReviewApi.context).not.toHaveBeenCalled()
+  await button('归属更正').trigger('click')
+  await flushPromises()
+  expect(attributionReviewApi.context).toHaveBeenCalledWith('123')
 })

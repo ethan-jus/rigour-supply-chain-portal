@@ -6,7 +6,7 @@
         <SupplyPageHelp>先配置能使用的菜单和按钮，再统一设置能查看、操作的数据。</SupplyPageHelp>
       </div>
       <el-button v-if="access.can('supply:role:create')" type="primary" @click="edit()"
-        >新增角色</el-button
+        ><SupplyActionLabel code="supply:role:create" fallback="新增" /></el-button
       >
     </header>
     <el-input
@@ -61,7 +61,7 @@
             :disabled="row.status !== 'DISABLED' || row.userCount > 0"
             title="角色须先停用并解除全部用户关联，才能删除"
             @click="remove(row)"
-            >删除</el-button
+            ><SupplyActionLabel code="supply:role:delete" fallback="删除" /></el-button
           ></template
         ></el-table-column
       >
@@ -125,7 +125,11 @@
                 show-checkbox
                 :props="{ label: 'name', children: 'children', disabled: 'disabled' }"
                 @check="menuChecked"
-            /></el-tab-pane>
+              >
+                <template #default="{ data }">
+                  <span class="el-tree-node__label">{{ data.name }}</span><small v-if="data.kind" class="permission-kind">{{ data.kind }}</small>
+                </template>
+              </el-tree></el-tab-pane>
             <el-tab-pane label="业务数据范围" name="scopes">
               <div class="scope-intro">
                 <h3>这个角色可以访问哪些数据？</h3>
@@ -227,6 +231,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
@@ -240,6 +245,7 @@ import {
   type RoleDataScope,
 } from '@/api/core/supply-settings'
 import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
+import { menuKind } from '@/utils/supply-menu-presentation'
 import ScopeReferencePicker from './ScopeReferencePicker.vue'
 import RoleMembersDrawer from './RoleMembersDrawer.vue'
 const roleMembers = ref<InstanceType<typeof RoleMembersDrawer>>()
@@ -273,7 +279,7 @@ const filtered = computed(() =>
   roles.value.filter((r) => (r.name + r.code).includes(keyword.value)),
 )
 const ALL_MENUS = '__all_menus__'
-type Menu = { id: string; name: string; children: Menu[]; disabled: boolean }
+type Menu = { id: string; name: string; children: Menu[]; disabled: boolean; kind?: string }
 const scopeOptions = [
   { value: 'ALL', label: '全部数据', description: '当前企业的全部业务数据' },
   { value: 'CUSTOM', label: '选择部门', description: '仅所选部门归属的业务数据' },
@@ -333,6 +339,7 @@ const enabledMenuIds = computed(() => {
   )
 })
 const menuNodes = computed(() => {
+  const byId = new Map(menus.value.map(node => [node.id, node]))
   const map = new Map(
     menus.value
       .filter((n) => enabledMenuIds.value.has(n.id))
@@ -340,6 +347,7 @@ const menuNodes = computed(() => {
         n.id,
         {
           ...n,
+          kind: n.type === 'BUTTON' ? menuKind(n, byId.get(n.parentId || '')) : undefined,
           children: [] as Menu[],
           disabled: !enabledMenuIds.value.has(n.id) || protectedRole.value,
         },
@@ -511,6 +519,7 @@ async function remove(role: SupplyRole) {
 onMounted(load)
 </script>
 <style scoped>
+.permission-kind { margin-inline-start: 0.5rem; color: var(--el-text-color-secondary); font-size: 0.75rem; }
 .role-save-error {
   margin-bottom: 12px;
   text-align: left;

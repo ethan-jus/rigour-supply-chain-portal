@@ -418,7 +418,7 @@
       </div>
       <ListTableFooter>
         <template #actions>
-          <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+          <el-button v-if="can('order:line:export', 'order:read')" plain :loading="exporting" @click="exportCsv"><SupplyActionLabel code="order:line:export" fallback="导出" /></el-button>
           <TableColumnSettings
             size="default"
             plain
@@ -443,11 +443,14 @@
       v-model="detailVisible"
       :order-id="detailOrderId"
       :initial-tab="detailTab"
+      @attribution-changed="loadLines"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
+import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { loadPaymentDictionaries, paymentDictionaryOptions } from '@/utils/order-register-status'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -543,6 +546,7 @@ const productInfo = ref(new Map<string, ErpManagedProductSummary>())
 
 const loading = ref(false)
 const loadFailed = ref(false)
+const { can } = useSupplyPermissions()
 const exporting = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -739,6 +743,7 @@ function openLineDetail(row: { orderId?: string }) {
 }
 
 async function exportCsv() {
+  if (!can('order:line:export', 'order:read')) return
   exporting.value = true
   try {
     const query = await buildQuery()

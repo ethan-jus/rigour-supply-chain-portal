@@ -3,7 +3,7 @@ import { constantRoutes } from '@/router/routes'
 import CrmShippingAddressView from '@/views/supply-chain/crm/CrmShippingAddressView.vue'
 
 describe('CRM 前端路由', () => {
-  it('CRM 首页和已接入客户页面都要求客户读取权限', () => {
+  it('客户正式页面要求客户读取权限，旧工作台入口已退役', () => {
     const supplyRoute = constantRoutes.find((route) => route.path === '/supply-chain')
     const crmHome = supplyRoute?.children?.find((route) => route.path === 'crm')
     const crmPages = [
@@ -13,7 +13,7 @@ describe('CRM 前端路由', () => {
       'crm/customers/areas',
     ].map((path) => supplyRoute?.children?.find((route) => route.path === path))
 
-    expect(crmHome?.meta?.permission).toBe('crm:customer:read')
+    expect(crmHome).toBeUndefined()
     expect(crmPages.map((route) => route?.meta?.routeKey)).toEqual([
       'supply.crm.customers.profiles',
       'supply.crm.customers.shipping-addresses',

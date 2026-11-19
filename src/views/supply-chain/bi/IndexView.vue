@@ -43,19 +43,6 @@
             @click="openOperations('targets')"
         /></el-tooltip>
         <el-tooltip
-          v-if="effectiveScope?.globalGovernance"
-          content="飞书数据对账"
-          placement="bottom"
-        >
-          <el-button
-            text
-            circle
-            :icon="Connection"
-            aria-label="飞书数据对账"
-            @click="reconciliationCenterVisible = true"
-          />
-        </el-tooltip>
-        <el-tooltip
           v-if="
             authStore.hasPermission('supply:role:read') ||
             authStore.hasPermission('supply:user:read')
@@ -103,7 +90,7 @@
       </div>
     </header>
 
-    <form v-if="section !== 'activity'" class="cockpit-filters" @submit.prevent="loadDashboard()">
+    <form class="cockpit-filters" @submit.prevent="loadDashboard()">
       <el-radio-group
         v-model="quickPeriod"
         size="small"
@@ -210,7 +197,7 @@
         /></el-select>
       </div>
     </form>
-    <div v-if="scopeTags.length && section !== 'activity'" class="scope-tags">
+    <div v-if="scopeTags.length" class="scope-tags">
       <el-tag
         v-for="tag in scopeTags"
         :key="tag.key"
@@ -378,7 +365,7 @@
             :key="`${section}-${activeAnalysis}`"
             :main="workspace.main"
             :aside="workspace.aside"
-            :actions="section === 'activity' ? [] : model.actions"
+            :actions="model.actions"
             :aria-busy="loading"
             v-loading="loading"
             @inspect="inspectFigure"
@@ -463,18 +450,6 @@
       :product-categories="productCategories"
       :filter-options="cityProductReportOptions"
     />
-    <el-drawer
-      v-model="reconciliationCenterVisible"
-      title="飞书数据对账"
-      size="min(1280px, 98vw)"
-      destroy-on-close
-    >
-      <BiReconciliationCenter
-        v-if="reconciliationCenterVisible && effectiveScope?.globalGovernance"
-        :from="queryFor(appliedFilters).from"
-        :to="queryFor(appliedFilters).to"
-      />
-    </el-drawer>
     <el-drawer
       v-model="operationsVisible"
       title="经营目标与跟进"
@@ -636,10 +611,10 @@
             >
           </dl>
           <p class="detail-note">
-            经营结余＝销售额－经营成本，尚未覆盖全部财务调整项。成本分类、人力汇总、SKU损耗、活动数据中的样例独立标记；采购参考价毛利不等于财务净利润。
+            经营结余＝销售额－经营成本，尚未覆盖全部财务调整项。成本分类、人力汇总、SKU损耗中的样例独立标记；采购参考价毛利不等于财务净利润。
           </p>
         </el-tab-pane>
-        <el-tab-pane v-if="effectiveScope?.globalGovernance" label="同步与核对" name="sync">
+        <el-tab-pane v-if="effectiveScope?.globalGovernance" label="数据同步" name="sync">
           <div v-if="canRefreshData" class="sync-toolbar">
             <el-select v-model="refreshMode" aria-label="同步范围"
               ><el-option
@@ -648,55 +623,9 @@
                 :label="mode.label"
                 :value="mode.key" /></el-select
             ><el-button type="primary" :icon="Refresh" :loading="refreshing" @click="triggerRefresh"
-              >同步最新数据</el-button
+              ><SupplyActionLabel code="analytics:refresh:write" fallback="同步最新数据" /></el-button
             >
           </div>
-          <el-button :loading="reconciliationLoading" @click="loadReconciliation"
-            >核对当前期间</el-button
-          >
-          <p class="detail-note">
-            来源为已接收的导入快照，不代表飞书在线表格的当前版本。
-            退款排除记录需结合导入结果核对，不能仅凭行数差异判定漏导。
-          </p>
-          <el-alert
-            v-if="reconciliationError"
-            :title="reconciliationError"
-            type="error"
-            :closable="false"
-          />
-          <p v-if="reconciliation" class="detail-note">
-            核对结果：{{ reconciliation.status }} · {{ reconciliation.generatedAt }}
-          </p>
-          <el-table :data="reconciliation?.items || []">
-            <el-table-column type="expand"
-              ><template #default="scope"
-                ><p class="detail-note">{{ scope.row.description }}</p>
-                <p class="detail-note">
-                  导入快照 {{ scope.row.sourceRowCount }} 行 / 业务
-                  {{ scope.row.businessRowCount }} 行 / BI {{ scope.row.biRowCount }} 行
-                </p>
-                <p class="detail-note">
-                  导入快照 {{ exactAmount(scope.row.sourceAmount) }} / 业务
-                  {{ exactAmount(scope.row.businessAmount) }} / BI
-                  {{ exactAmount(scope.row.biAmount) }}
-                </p></template
-              ></el-table-column
-            >
-            <el-table-column prop="subjectName" label="业务" min-width="115" />
-            <el-table-column label="导入快照→业务差异" min-width="170"
-              ><template #default="scope"
-                >{{ scope.row.sourceBusinessRowDiff }} 行 /
-                {{ exactAmount(scope.row.sourceBusinessAmountDiff) }}</template
-              ></el-table-column
-            >
-            <el-table-column label="业务→BI差异" min-width="150"
-              ><template #default="scope"
-                >{{ scope.row.businessBiRowDiff }} 行 /
-                {{ exactAmount(scope.row.businessBiAmountDiff) }}</template
-              ></el-table-column
-            >
-            <el-table-column prop="status" label="状态" width="75" />
-          </el-table>
           <el-alert v-if="trustError" :title="trustError" type="warning" :closable="false" />
           <dl v-if="dataTrust" class="definition-list">
             <template v-for="source in dataTrust.sources" :key="source.sourceCode"
@@ -739,6 +668,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { displayDateTime } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import {
@@ -765,7 +695,6 @@ import { ElMessage } from 'element-plus'
 import {
   Aim,
   Close,
-  Connection,
   Download,
   Filter,
   FullScreen,
@@ -784,12 +713,10 @@ import {
   getSupplyDashboardOperatingAnalysis,
   type SupplyDashboardOperatingAnalysis,
   getSupplyDashboardDataTrust,
-  getSupplyDashboardReconciliation,
   type SupplyDashboardOverview,
   type SupplyDashboardDataTrust,
   type SupplyDashboardQuery,
   type SupplyDashboardFilterOptions,
-  type SupplyDashboardReconciliation,
   type SupplyDashboardRefreshSourceCode,
 } from '@/api/core/bi'
 import { getCrmCustomerAreas, getInternalCrmCustomer } from '@/api/core/crm'
@@ -804,7 +731,6 @@ import { buildMetricExplanations } from './cockpit-methodology'
 import CityProductReport from './components/CityProductReport.vue'
 import BiOperationsWorkbench from './components/BiOperationsWorkbench.vue'
 import { biErrorMessage as errorText, biNeedsLogin } from './bi-error'
-import BiReconciliationCenter from './components/BiReconciliationCenter.vue'
 import BiScopeSettings from './components/BiScopeSettings.vue'
 import { getBiEffectiveScope, type BiEffectiveScope } from '@/api/core/bi-access'
 import type { BiAction, BiActionSeed } from '@/api/core/bi-operations'
@@ -824,7 +750,6 @@ import {
   type Figure,
   type CockpitAction,
 } from './cockpit-model'
-import { exactAmount } from './cockpit-charts'
 import { concreteDimension, drillScope, supportsCategoryFilter } from './cockpit-scope'
 import { analysisSections } from './cockpit-analysis'
 import { cockpitLayout } from './cockpit-layout'
@@ -927,7 +852,6 @@ async function restoreLogin() {
   }
 }
 const effectiveScope = ref<BiEffectiveScope>()
-const reconciliationCenterVisible = ref(false)
 const scopeSettingsVisible = ref(false)
 const filterError = ref('')
 const overview = ref<SupplyDashboardOverview | null>(null)
@@ -1221,7 +1145,6 @@ watch(
   { immediate: true },
 )
 const rangeLabel = computed(() => {
-  if (section.value === 'activity') return '活动样例'
   const dates = appliedFilters.value.dateRange || []
   return dates.length === 2 ? `${dates[0]} 至 ${dates[1]}` : ''
 })
@@ -1382,9 +1305,6 @@ const methodologyScope = computed(
   () =>
     `${rangeLabel.value} · ${scopeTags.value.map((tag) => tag.label).join(' · ') || '当前账号授权范围'}`,
 )
-const reconciliation = ref<SupplyDashboardReconciliation | null>(null)
-const reconciliationLoading = ref(false)
-const reconciliationError = ref('')
 const dataTrust = ref<SupplyDashboardDataTrust | null>(null)
 const trustError = ref('')
 const canRefreshData = computed(
@@ -1466,18 +1386,6 @@ async function loadDataTrust() {
     trustError.value = errorText(error, '同步水位加载失败')
   }
 }
-async function loadReconciliation() {
-  reconciliationLoading.value = true
-  reconciliationError.value = ''
-  try {
-    reconciliation.value = await getSupplyDashboardReconciliation(queryFor(appliedFilters.value))
-  } catch (error) {
-    reconciliation.value = null
-    reconciliationError.value = errorText(error, '对账结果加载失败')
-  } finally {
-    reconciliationLoading.value = false
-  }
-}
 async function triggerRefresh() {
   if (refreshing.value || !canRefreshData.value) return
   refreshing.value = true
@@ -1488,7 +1396,7 @@ async function triggerRefresh() {
     })
     if (run.statusCode === 'SUCCESS' || run.upsertedCount > 0) {
       await refreshDashboard()
-      await Promise.all([loadFilterOptions(), loadReconciliation(), loadDataTrust()])
+      await Promise.all([loadFilterOptions(), loadDataTrust()])
       if (run.statusCode !== 'SUCCESS') ElMessage.warning(run.failureReason || '部分来源同步失败')
       else ElMessage.success('同步完成')
     } else ElMessage.warning(run.failureReason || '同步任务未完成')
@@ -1552,7 +1460,6 @@ async function loadDashboard(source: Filters = filters) {
       filters.dateRange = [...snapshot.dateRange]
     }
     appliedFilters.value = snapshot
-    reconciliation.value = null
     if (section.value === 'city-operating') {
       if (snapshot.customerTypeCode || snapshot.sourceSystemCode || snapshot.productCategoryId) {
         cityContactError.value =
@@ -1690,9 +1597,8 @@ function scopeQuery() {
   }
 }
 function openSection(target: CockpitSection, overrides: Record<string, string | undefined> = {}) {
-  const path = target === 'overview' ? '/supply-chain/bi' : `/supply-chain/bi/${target}`
-  const fallback = target === 'sales-collection' && !navigationStore.hasPath('SUPPLY_CHAIN', path)
-  const accessiblePath = fallback ? '/supply-chain/bi/sales' : path
+  const collection = target === 'sales-collection'
+  const accessiblePath = target === 'overview' ? '/supply-chain/bi' : `/supply-chain/bi/${collection ? 'sales' : target}`
   if (!navigationStore.hasPath('SUPPLY_CHAIN', accessiblePath)) {
     ElMessage.warning('当前账号未获该专题访问权限')
     return
@@ -1700,7 +1606,7 @@ function openSection(target: CockpitSection, overrides: Record<string, string | 
   detailVisible.value = false
   void router.push({
     path: accessiblePath,
-    query: { ...scopeQuery(), ...(fallback ? { view: 'collection' } : {}), ...overrides },
+    query: { ...scopeQuery(), ...(collection ? { view: 'collection' } : {}), ...overrides },
   })
 }
 function rowActionLabel(row: DetailRow) {
@@ -1720,7 +1626,6 @@ function rowActionLabel(row: DetailRow) {
         receipt: '查看回款',
         cost: '成本分析',
         target: '目标缺口',
-        activity: '活动明细',
       } as Record<string, string>
     )[row.kind || ''] || '查看'
   )

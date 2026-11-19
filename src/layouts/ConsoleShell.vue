@@ -82,6 +82,7 @@ import {
   nextTick,
   onErrorCaptured,
   onMounted,
+  onBeforeUnmount,
   reactive,
   shallowReactive,
   shallowRef,
@@ -94,6 +95,7 @@ import {
   useRouter,
   type RouteLocationNormalizedLoaded,
 } from 'vue-router'
+import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
 import { useAuthStore, useNavigationStore } from '@/stores'
 import type { NavigationNode } from '@/types/management'
 import ConsoleSidebar from '@/components/console/ConsoleSidebar.vue'
@@ -299,7 +301,15 @@ onBeforeRouteUpdate((_to, from) => {
   savePageScroll(from.path, String(from.meta.applicationCode || ''))
 })
 
+const supplyAccess = useSupplyAuthorizationStore()
+function refreshOnReturn() {
+  if (document.visibilityState === 'visible' && applicationCode.value === 'SUPPLY_CHAIN') {
+    void supplyAccess.refresh().catch(() => {})
+  }
+}
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', refreshOnReturn))
 onMounted(() => {
+  document.addEventListener('visibilitychange', refreshOnReturn)
   if (applicationCode.value && !navigationStore.isLoaded(applicationCode.value)) {
     void navigationStore.fetchNavigation(applicationCode.value).catch(() => {})
   }

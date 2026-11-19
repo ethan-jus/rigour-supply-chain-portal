@@ -61,7 +61,7 @@
               >批量设置角色</el-button
             >
             <el-button v-if="access.can('supply:user:create')" type="primary" @click="edit()"
-              >新增用户</el-button
+              ><SupplyActionLabel code="supply:user:create" fallback="新增" /></el-button
             >
           </div>
         </div>
@@ -149,7 +149,7 @@
                     link
                     type="primary"
                     @click="edit(row)"
-                    >编辑</el-button
+                    ><SupplyActionLabel code="supply:user:update" fallback="编辑" /></el-button
                   ><el-button
                     v-if="access.can('supply:user:disable')"
                     :disabled="
@@ -170,7 +170,7 @@
                     v-if="access.can('supply:user:reset-password')"
                     link
                     @click="password(row)"
-                    >重置密码</el-button
+                    ><SupplyActionLabel code="supply:user:reset-password" fallback="重置密码" /></el-button
                   ><el-button
                     v-if="access.can('supply:user:delete')"
                     :disabled="isSelf(row.id) || row.status !== 'DISABLED'"
@@ -184,7 +184,7 @@
                     link
                     type="danger"
                     @click="remove(row)"
-                    >删除</el-button
+                    ><SupplyActionLabel code="supply:user:delete" fallback="删除" /></el-button
                   ></template
                 ></template
               ></el-table-column
@@ -413,6 +413,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { errorMessage } from '@/api/core/error'
 import { MEMBER_PASSWORD_HINT, memberPasswordError } from '@/utils/member-password'
 import { displayDateTime } from '@/utils/business-date'

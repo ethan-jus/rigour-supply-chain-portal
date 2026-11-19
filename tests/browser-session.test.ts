@@ -59,6 +59,18 @@ describe('Web 同源认证边界', () => {
     expect(url.searchParams.has('prompt')).toBe(false)
     expect(takeOidcLandingPath()).toBe('/supply-chain')
   })
+  it.each(['http://scdp.example:2026', 'https://scdp.example'])('同一构建在 %s 使用当前入口回调', async origin => {
+    const assign = vi.fn()
+    vi.stubGlobal('window', { location: { origin, assign } })
+    vi.stubEnv('MODE', 'desktop')
+    vi.stubEnv('VITE_OIDC_ISSUER', 'http://127.0.0.1:26881')
+    vi.stubEnv('VITE_OIDC_CLIENT_ID', 'scdp-browser')
+    vi.stubEnv('VITE_OIDC_REDIRECT_URI', '')
+    await beginOidcLogin()
+    const url = new URL(assign.mock.calls[0]![0])
+    expect(url.origin).toBe(origin)
+    expect(url.searchParams.get('redirect_uri')).toBe(origin + '/oidc/callback')
+  })
   it.each(['/supply-chain/hr/employees?keyword=test', 'https://evil.example/', '//evil.example/', '/login', '/supply-chain\\evil'])('恢复地址 %s 只接受供应链站内地址且使用后清除', async path => {
     vi.stubGlobal('window', { location: { origin: 'https://scdp.example', assign: vi.fn() } })
     vi.stubEnv('VITE_OIDC_ISSUER', 'https://iam.example')

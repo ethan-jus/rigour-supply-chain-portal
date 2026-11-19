@@ -82,10 +82,10 @@ import erpInventoryBalanceSource from '@/views/supply-chain/erp/ErpInventoryBala
 import crmCustomerManagementSource from '@/views/supply-chain/crm/CrmCustomerManagementView.vue?raw'
 import crmCustomerDictionarySource from '@/views/supply-chain/crm/CrmCustomerDictionaryView.vue?raw'
 import crmShippingAddressSource from '@/views/supply-chain/crm/CrmShippingAddressView.vue?raw'
-import salesOrderSource from '@/views/supply-chain/order/SalesOrderView.vue?raw'
+import salesOrderSource from '@/views/supply-chain/order/OrderListView.vue?raw'
 import fundDocumentSource from '@/views/supply-chain/order/FundDocumentView.vue?raw'
 import salesShipmentSource from '@/views/supply-chain/order/SalesShipmentView.vue?raw'
-import salesPaymentRecordSource from '@/views/supply-chain/order/SalesPaymentRecordView.vue?raw'
+import paymentRecordListSource from '@/views/supply-chain/order/PaymentRecordListView.vue?raw'
 import salesRefundRecordSource from '@/views/supply-chain/order/SalesRefundRecordView.vue?raw'
 import biDashboardSource from '@/views/supply-chain/bi/IndexView.vue?raw'
 
@@ -201,7 +201,7 @@ describe('合同驱动的供应链页面', () => {
     expect(erpProductSpecificationSource).not.toContain('getErpSpecifications')
     expect(crmShippingAddressSource).toContain('客户地址')
     expect(crmShippingAddressSource).toContain('getCrmShippingAddresses')
-    expect(salesOrderSource.replace(/\s+/g, ' ')).toContain('销售订单')
+    expect(salesOrderSource).toContain('订单列表')
     expect(fundDocumentSource).toContain('客户资金流水')
     expect(fundDocumentSource).toContain('按收支明细口径查看客户资金来源、关联单据、支付流水和账户信息')
     expect(businessDictionarySource).toContain('label="字典项编码"')
@@ -258,7 +258,7 @@ describe('合同驱动的供应链页面', () => {
     expect(biDashboardSource).toContain('workspace-navigation')
     expect(biDashboardSource).toContain('核心经营指标')
     expect(biDashboardSource).toContain('getSupplyDashboardOverview')
-    expect(biDashboardSource).toContain('getSupplyDashboardReconciliation')
+    expect(biDashboardSource).not.toContain('getSupplyDashboardReconciliation')
     expect(biDashboardSource).toContain('inspectFigure')
     expect(biDashboardSource).toContain('scopeQuery')
     expect(biDashboardSource).toContain('样例')
@@ -282,7 +282,7 @@ describe('合同驱动的供应链页面', () => {
       crmShippingAddressSource,
       fundDocumentSource,
       salesShipmentSource,
-      salesPaymentRecordSource,
+      paymentRecordListSource,
       salesRefundRecordSource,
     ]
 

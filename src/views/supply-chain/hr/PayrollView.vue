@@ -358,7 +358,7 @@
                   type="primary"
                   :disabled="saving || batchBusy"
                   @click="openSettlement(row as PayrollRecord, 'paid')"
-                  >登记发放</el-button
+                  ><SupplyActionLabel code="hr:payroll:paid" fallback="登记发放" /></el-button
                 >
                 <el-dropdown
                   v-if="can('hr:payroll:calculate') || can('hr:payroll:confirm')"
@@ -961,6 +961,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { displayBusinessLabel as costLabel } from '@/utils/business-display'
 import {

@@ -287,15 +287,6 @@ const rules = {
       '图中占比仅以本次返回风险项为分母；无库存快照不能判定无风险。',
     ],
   },
-  campaign: {
-    formula:
-      '活动成交 = 样例活动销售额合计；费用产出比 = 活动销售额 ÷ 费用；触达转化率 = 下单客户 ÷ 触达客户 × 100%；剩余预算 = 预算 − 已用费用',
-    source: '固定活动演示数据（非Order或CRM真实活动归因）',
-    rules: [
-      '全部为独立样例，不随经营筛选变化，不合入真实销售、客户或经营成本总额。',
-      '费用产出比不是净利润ROI；总转化率用下单客户合计除触达合计，不取各活动转化率平均。样例未做跨活动客户去重。',
-    ],
-  },
   actions: {
     formula:
       '优先跟进不是综合评分：逾期金额最大的城市；返回名单中待回款最高的待跟进客户；首条有补货建议的商品',
@@ -338,10 +329,6 @@ const kpiRules: Record<string, RuleKey> = {
   高风险: 'inventoryRisk',
   中风险: 'inventoryRisk',
   低风险: 'inventoryRisk',
-  活动成交: 'campaign',
-  活动费用: 'campaign',
-  费用产出比: 'campaign',
-  触达转化率: 'campaign',
 }
 const kpiFormulas: Record<string, string> = {
   可用客户: '可用客户 = 当前授权和筛选范围内CRM有效客户档案数',
@@ -364,10 +351,6 @@ const kpiFormulas: Record<string, string> = {
   高风险: '高风险 = 本次返回库存风险项中，风险等级为高的记录数',
   中风险: '中风险 = 本次返回库存风险项中，风险等级为中的记录数',
   低风险: '低风险 = 本次返回库存风险项中，风险等级为低的记录数',
-  活动成交: '活动成交 = 样例活动销售额之和',
-  活动费用: '活动费用 = 样例活动已用费用之和',
-  费用产出比: '费用产出比 = 样例活动销售额合计 ÷ 样例活动费用合计',
-  触达转化率: '触达转化率 = 样例活动下单客户数合计 ÷ 触达客户数合计 × 100%',
 }
 const figureRules: Record<string, RuleKey> = {
   trend: 'trend',
@@ -417,10 +400,6 @@ const figureRules: Record<string, RuleKey> = {
   'risk-replenishment': 'replenish',
   'risk-levels': 'inventoryRisk',
   'risk-types': 'inventoryRisk',
-  campaigns: 'campaign',
-  conversion: 'campaign',
-  'campaign-budget': 'campaign',
-  'campaign-return': 'campaign',
 }
 
 export function hasMetricExplanation(kind: 'kpi' | 'figure', key: string): boolean {

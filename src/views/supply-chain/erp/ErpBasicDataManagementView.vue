@@ -80,7 +80,7 @@
                 <p>{{ categoryPath(selectedCategory) }}</p>
               </div>
               <div class="category-detail-actions">
-                <el-button :icon="Plus" @click="openCreateCategoryChild(selectedCategory)"
+                <el-button v-if="canChange('create')" :icon="Plus" @click="openCreateCategoryChild(selectedCategory)"
                   >新增子分类</el-button
                 >
                 <el-button

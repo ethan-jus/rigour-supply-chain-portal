@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import { defineComponent, h } from 'vue'
 import MenuView from '@/views/supply-chain/settings/MenuView.vue'
-import SettingsHome from '@/views/supply-chain/settings/IndexView.vue'
 import RoleView from '@/views/supply-chain/settings/RoleView.vue'
 import FulfillmentView from '@/views/supply-chain/order/FulfillmentView.vue'
 import {
@@ -16,6 +15,7 @@ import {
 import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
 import * as orders from '@/api/core/order-sales'
 const nav = vi.hoisted(() => ({
+  isLoaded: () => true,
   invalidate: vi.fn(),
   getNavigation: vi.fn().mockReturnValue([]),
   fetchNavigation: vi.fn().mockResolvedValue(undefined),
@@ -27,6 +27,7 @@ vi.mock('@/api/core/supply-settings', () => ({
     legacyRoles: vi.fn(),
     importLegacyRole: vi.fn(),
     context: vi.fn(),
+    initialize: vi.fn(),
     observations: vi.fn(),
     dataObservations: vi.fn(),
     menus: vi.fn(),
@@ -83,7 +84,7 @@ const node = (id: string, name: string, parentId: string | null = null): SupplyM
 let rows: SupplyMenuNode[]
 const all = ['supply:menu:create', 'supply:menu:update', 'supply:menu:delete']
 async function render(
-  component: typeof MenuView | typeof FulfillmentView | typeof SettingsHome | typeof RoleView,
+  component: typeof MenuView | typeof FulfillmentView | typeof RoleView,
 ) {
   wrapper = mount(component, {
     attachTo: document.body,
@@ -336,18 +337,16 @@ describe('仓管订单出库交互', () => {
   })
 })
 
-it('系统设置只有配置入口，不再提供授权准备和启用流程', async () => {
-  vi.mocked(supplySettingsApi.context).mockResolvedValue({
-    initialized: true,
-    canInitialize: false,
-    mode: 'ACTIVE',
-    version: 3,
-    permissions: ['supply:role:grant'],
-  })
-  await render(SettingsHome)
-  expect(wrapper.text()).toContain('权限配置保存后立即生效')
-  expect(wrapper.text()).not.toContain('检查并启用')
-  expect(wrapper.text()).not.toContain('数据权限对比')
+it('有初始化权限的管理员可从菜单管理完成初始化', async () => {
+  const preparing = { initialized: false, canInitialize: true, mode: 'PREPARING' as const, version: 0, permissions: [] }
+  const active = { ...preparing, initialized: true, canInitialize: false, mode: 'ACTIVE' as const, version: 1 }
+  vi.mocked(supplySettingsApi.context).mockResolvedValueOnce(preparing).mockResolvedValue(active)
+  vi.mocked(supplySettingsApi.initialize).mockResolvedValue(active)
+  await render(MenuView)
+  await button('初始化系统设置').trigger('click')
+  await flushPromises()
+  expect(supplySettingsApi.initialize).toHaveBeenCalledTimes(1)
+  expect(supplySettingsApi.menus).toHaveBeenCalled()
 })
 
 it('内置管理员显示动态全部权限说明，不用旧授权勾选快照误导用户', async () => {

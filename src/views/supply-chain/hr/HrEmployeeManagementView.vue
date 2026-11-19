@@ -221,7 +221,7 @@
                   link
                   type="primary"
                   @click.stop="openEditor(row)"
-                  >编辑</el-button
+                  ><SupplyActionLabel code="hr:employee:update" fallback="编辑" /></el-button
                 ><el-button
                   v-if="can('hr:employee:delete')"
                   link
@@ -229,7 +229,7 @@
                   :loading="deletingId === row.id"
                   :disabled="deletingId !== null && deletingId !== row.id"
                   @click.stop="removeEmployee(row)"
-                  >删除</el-button
+                  ><SupplyActionLabel code="hr:employee:delete" fallback="删除" /></el-button
                 ></template
               ></el-table-column
             >
@@ -244,7 +244,7 @@
               type="primary"
               :icon="Plus"
               @click="openEditor()"
-              >新增员工</el-button
+              ><SupplyActionLabel code="hr:employee:create" fallback="新增" /></el-button
             >
           </template>
           <CompactPagination
@@ -551,6 +551,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { displayCell, displayValue } from '@/utils/business-display'
 import DhbSalespersonSyncButton from '@/components/supply/DhbSalespersonSyncButton.vue'
 import { computed, onMounted, ref, watch } from 'vue'

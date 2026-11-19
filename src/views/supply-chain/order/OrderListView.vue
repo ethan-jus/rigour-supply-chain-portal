@@ -694,7 +694,7 @@
                 size="small"
                 @click="deleteDraftOrder(row as OrderRegisterOrderItem)"
               >
-                删除
+                <SupplyActionLabel code="order:delete" fallback="删除" />
               </el-button>
             </template>
           </el-table-column>
@@ -702,8 +702,8 @@
       </div>
       <ListTableFooter>
         <template #actions>
-          <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
-          <el-button plain @click="monthlyExportVisible = true">月业绩导出</el-button>
+          <el-button v-if="can('order:export', 'order:read')" plain :loading="exporting" @click="exportCsv"><SupplyActionLabel code="order:export" fallback="导出" /></el-button>
+          <el-button v-if="can('order:monthly-performance:export', 'order:read')" plain @click="monthlyExportVisible = true"><SupplyActionLabel code="order:monthly-performance:export" fallback="月业绩导出" /></el-button>
           <TableColumnSettings
             size="default"
             plain
@@ -743,7 +743,7 @@
       </p>
       <template #footer>
         <el-button @click="monthlyExportVisible = false">取消</el-button>
-        <el-button type="primary" :loading="monthlyExporting" @click="exportMonthlyPerformance"
+        <el-button v-if="can('order:monthly-performance:export', 'order:read')" type="primary" :loading="monthlyExporting" @click="exportMonthlyPerformance"
           >导出 Excel</el-button
         >
       </template>
@@ -766,6 +766,7 @@
       :order-id="detailOrderId"
       :initial-tab="detailTab"
       @logistics-changed="refreshLogisticsCounts"
+      @attribution-changed="loadOrders"
     />
 
     <OrderInvoiceApplyDialog
@@ -777,6 +778,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import {
   loadOrderDictionaries,
   orderLifecycleOptions,
@@ -941,6 +943,7 @@ const monthlyRange = ref<[string, string] | null>([
   `${reportYear}-${String(reportMonth).padStart(2, '0')}`,
 ])
 async function exportMonthlyPerformance() {
+  if (!can('order:monthly-performance:export', 'order:read')) return
   if (!monthlyRange.value?.[0] || !monthlyRange.value?.[1]) {
     ElMessage.warning('请选择业绩月份')
     return
@@ -1216,6 +1219,7 @@ async function deleteDraftOrder(row: OrderRegisterOrderItem) {
 }
 
 async function exportCsv() {
+  if (!can('order:export', 'order:read')) return
   exporting.value = true
   try {
     const query = buildQuery()

@@ -9,7 +9,7 @@
         </SupplyPageHelp>
       </div>
       <div class="heading-actions">
-        <el-button v-if="mode === 'stockIn' && can('erp:stock-in:confirm', 'erp:supply:write')" type="primary" @click="purchaseReceiptVisible = true">采购入库</el-button>
+        <el-button v-if="mode === 'stockIn' && can('erp:stock-in:confirm', 'erp:supply:write')" type="primary" @click="purchaseReceiptVisible = true"><SupplyActionLabel code="erp:stock-in:confirm" fallback="采购入库" /></el-button>
         <DhbPageSyncButton
           :scope="pageSyncScope"
           :label="pageConfig.shortTitle"
@@ -20,7 +20,7 @@
           type="primary"
           @click="openCreate"
         >
-          新增{{ pageConfig.shortTitle }}
+          <SupplyActionLabel :code="changePermission('create')" fallback="新增" />
         </el-button>
       </div>
     </div>
@@ -413,35 +413,35 @@
                 link
                 type="primary"
                 @click.stop="openEdit(scope.row)"
-                >编辑</el-button
+                ><SupplyActionLabel :code="changePermission('update')" fallback="编辑" /></el-button
               >
               <el-button
                 v-if="canStockIn(scope.row)"
                 link
                 type="primary"
                 @click.stop="openProcurementStockIn(scope.row)"
-                >入库</el-button
+                ><SupplyActionLabel code="erp:stock-in:confirm" fallback="入库" /></el-button
               >
               <el-button
                 v-if="canTransferStockOut(scope.row)"
                 link
                 type="primary"
                 @click.stop="openTransferAction(scope.row, 'out')"
-                >确认出库</el-button
+                ><SupplyActionLabel :code="changePermission('stock-out')" fallback="确认出库" /></el-button
               >
               <el-button
                 v-if="canTransferStockIn(scope.row)"
                 link
                 type="primary"
                 @click.stop="openTransferAction(scope.row, 'in')"
-                >确认入库</el-button
+                ><SupplyActionLabel :code="changePermission('stock-in')" fallback="确认入库" /></el-button
               >
               <el-button
                 v-if="canDelete(scope.row)"
                 link
                 type="danger"
                 @click.stop="deleteDocument(scope.row)"
-                >删除</el-button
+                ><SupplyActionLabel :code="changePermission('delete')" fallback="删除" /></el-button
               >
             </template>
           </el-table-column>
@@ -845,6 +845,7 @@
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { auditActorLabel } from '@/utils/audit-actor'
 import { displayDateTime } from '@/utils/business-date'
@@ -942,11 +943,11 @@ interface StockInLineForm {
 const purchaseReceiptVisible = ref(false)
 const route = useRoute()
 const { can } = useSupplyPermissions()
+function changePermission(action: string) {
+  return mode.value === 'transfer' ? `erp:transfer:${action}` : `erp:procurement:${action}`
+}
 function canChange(action: string) {
-  return can(
-    mode.value === 'transfer' ? `erp:transfer:${action}` : `erp:procurement:${action}`,
-    'erp:supply:write',
-  )
+  return can(changePermission(action), 'erp:supply:write')
 }
 
 const pageSyncScope = computed<DhbPageScope>(

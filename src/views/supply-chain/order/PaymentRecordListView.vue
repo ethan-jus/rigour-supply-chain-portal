@@ -471,7 +471,7 @@
                 plain
                 @click="openCheck(row as OrderRegisterPaymentItem)"
               >
-                <el-icon><CircleCheck /></el-icon>确认
+                <el-icon><CircleCheck /></el-icon><SupplyActionLabel code="order:payment:check" fallback="确认" />
               </el-button>
               <span v-else-if="row.paymentStatusCode === 'CHECKED'" class="payment-check-state payment-check-state--done">
                 <el-icon><CircleCheck /></el-icon>已确认
@@ -486,7 +486,7 @@
           <OrderPackageSyncButton plain vouchers-only @completed="search" />
           <el-button plain @click="auditVisible = true">回款凭证核查</el-button>
           <el-button plain @click="transactionCheckVisible = true">交易单号查重</el-button>
-          <el-button plain :loading="exporting" @click="exportCsv">导出</el-button>
+          <el-button v-if="can('order:payment:export', 'order:read')" plain :loading="exporting" @click="exportCsv"><SupplyActionLabel code="order:payment:export" fallback="导出" /></el-button>
           <TableColumnSettings
             size="default"
             plain
@@ -512,11 +512,12 @@
     <PaymentVoucherTransactionsDialog v-model="voucherVisible" :payment="voucherTarget" />
     <PaymentCheckDialog v-model="checkVisible" :payment="checkTarget" @checked="onChecked" />
     <PaymentDetailDrawer v-model="paymentDetailVisible" :payment="selectedPayment" />
-    <OrderRegisterDetailDrawer v-if="canReadOrders" v-model="detailVisible" :order-id="detailOrderId" />
+    <OrderRegisterDetailDrawer v-if="canReadOrders" v-model="detailVisible" :order-id="detailOrderId" @attribution-changed="loadPayments" />
   </div>
 </template>
 
 <script setup lang="ts">
+import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import OrderPackageSyncButton from '@/components/supply/OrderPackageSyncButton.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import { getPaymentAuditStates, type PaymentAuditState } from '@/api/core/payment-voucher-audit'
@@ -804,6 +805,7 @@ function openPaymentDetail(row: OrderRegisterPaymentItem) {
 }
 
 async function exportCsv() {
+  if (!can('order:payment:export', 'order:read')) return
   exporting.value = true
   try {
     const query = await buildQuery()

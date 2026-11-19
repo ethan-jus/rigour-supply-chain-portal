@@ -7,15 +7,19 @@ import { useNavigationStore } from '@/stores/navigation'
 export const useSupplyAuthorizationStore = defineStore('supply-authorization', () => {
   const context = ref<SupplyContext | null>(null)
   function can(action: string) { return context.value?.permissions.includes(action) === true }
+  let sessionGeneration = 0
   async function refresh() {
+    const generation = sessionGeneration
     const next = await supplySettingsApi.context()
-    if (context.value?.version !== next.version || context.value?.initialized !== next.initialized) {
-      const navigation = useNavigationStore()
-      navigation.invalidate('SUPPLY_CHAIN')
+    if (generation !== sessionGeneration || (context.value && next.version < context.value.version)) return context.value
+    const changed = context.value?.version !== next.version || context.value?.initialized !== next.initialized
+    context.value = next
+    const navigation = useNavigationStore()
+    if (changed || !navigation.isLoaded('SUPPLY_CHAIN')) {
+      if (changed) navigation.invalidate('SUPPLY_CHAIN')
       // 保存用户/角色后仍停留在当前页，不能依赖下一次路由跳转补载菜单。
       await navigation.fetchNavigation('SUPPLY_CHAIN', { deferSessionRecovery: true })
     }
-    context.value = next
     return next
   }
   async function initialize() {
@@ -23,6 +27,6 @@ export const useSupplyAuthorizationStore = defineStore('supply-authorization', (
     useNavigationStore().invalidate('SUPPLY_CHAIN')
     await useNavigationStore().fetchNavigation('SUPPLY_CHAIN')
   }
-  function reset() { context.value = null }
+  function reset() { sessionGeneration++; context.value = null }
   return { context, can, refresh, initialize, reset }
 })
