@@ -14,6 +14,7 @@ const VERIFIER_KEY = 'rigour_oidc_code_verifier'
 const NONCE_KEY = 'rigour_oidc_nonce'
 const LANDING_PATH_KEY = 'rigour_oidc_landing_path'
 const ACCESS_TOKEN_EXPIRY_SAFETY_WINDOW_MS = 5_000
+const LOCAL_CLOCK_TOLERANCE_SECONDS = 5 * 60
 
 let accessToken: string | null = null
 let accessTokenExpiresAt: number | null = null
@@ -181,7 +182,11 @@ export async function completeOidcCallback(): Promise<boolean> {
     if (!tokens || !validTokens(tokens) || typeof tokens.id_token !== 'string' || !tokens.id_token) {
       throw new Error('OIDC Token 响应不完整')
     }
-    await validateIdToken(tokens.id_token, issuer, clientId, expectedNonce)
+    // 同源、禁止缓存的登录响应提供服务器时间，避免电脑时钟偏差误拒绝新签发的凭据。
+    const serverTime = Date.parse(response.headers.get('Date') ?? '')
+    const validationTime = Math.floor((Number.isFinite(serverTime) ? serverTime : Date.now()) / 1000)
+    const clockTolerance = Number.isFinite(serverTime) ? 0 : LOCAL_CLOCK_TOLERANCE_SECONDS
+    await validateIdToken(tokens.id_token, issuer, clientId, expectedNonce, validationTime, clockTolerance)
     if (generation !== tokenGeneration) throw new TokenRefreshError('REQUEST_CANCELLED', '登录操作已取消')
     saveTokens(tokens, requestedAt)
     devInfo('OIDC回调完成，Token已保存在当前页面内存')
@@ -216,13 +221,15 @@ interface IdTokenClaims {
   nonce?: string
 }
 
-async function validateIdToken(token: string, issuer: string, clientId: string, nonce: string): Promise<void> {
+async function validateIdToken(
+  token: string, issuer: string, clientId: string, nonce: string, now: number, clockTolerance: number,
+): Promise<void> {
   const parts = token.split('.')
   if (parts.length !== 3) throw new Error('ID Token 格式无效')
   const header = decodeJwtPart<{ alg?: string; kid?: string }>(parts[0]!)
   const claims = decodeJwtPart<IdTokenClaims>(parts[1]!)
   if (header.alg !== 'RS256' || !header.kid) throw new Error('ID Token 签名算法无效')
-  validateIdTokenClaims(claims, issuer, clientId, nonce, Math.floor(Date.now() / 1000))
+  validateIdTokenClaims(claims, issuer, clientId, nonce, now, clockTolerance)
 
   const discoveryResponse = await fetch(browserAuthUrl('/.well-known/openid-configuration'), {
     headers: { Accept: 'application/json' }, credentials: 'omit',
@@ -244,13 +251,13 @@ async function validateIdToken(token: string, issuer: string, clientId: string, 
 }
 
 export function validateIdTokenClaims(
-  claims: IdTokenClaims, issuer: string, clientId: string, nonce: string, now: number,
+  claims: IdTokenClaims, issuer: string, clientId: string, nonce: string, now: number, clockTolerance = 0,
 ): void {
   const audiences = typeof claims.aud === 'string' ? [claims.aud] : claims.aud
   if (claims.iss !== issuer || !claims.sub || !audiences?.includes(clientId)
     || (audiences.length > 1 && claims.azp !== clientId)
-    || typeof claims.exp !== 'number' || claims.exp <= now
-    || typeof claims.iat !== 'number' || claims.iat > now + 60
+    || typeof claims.exp !== 'number' || claims.exp <= now - clockTolerance
+    || typeof claims.iat !== 'number' || claims.iat > now + Math.max(60, clockTolerance)
     || claims.nonce !== nonce) {
     throw new Error('ID Token声明校验失败')
   }

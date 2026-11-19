@@ -62,6 +62,76 @@ describe('OIDC PKCE 与Token存储边界', () => {
     }, 'https://iam.test.rigour.local', 'scdp-test', 'nonce-1', now)).toThrow('ID Token声明校验失败')
   })
 
+  it.each([
+    { name: '电脑慢90秒', clockOffset: -90, serverDate: 'valid', rejected: false },
+    { name: '电脑快15分钟', clockOffset: 900, serverDate: 'valid', rejected: false },
+    { name: '缺少服务器时间时使用电脑时间', clockOffset: 0, serverDate: 'missing', rejected: false },
+    { name: '服务器时间无效时使用电脑时间', clockOffset: 0, serverDate: 'invalid', rejected: false },
+    { name: '缺少服务器时间时容忍电脑慢90秒', clockOffset: -90, serverDate: 'missing', rejected: false },
+    { name: '服务器时间无效时容忍电脑慢90秒', clockOffset: -90, serverDate: 'invalid', rejected: false },
+    { name: '缺少服务器时间时容忍电脑快7分钟的2分钟过期偏差', clockOffset: 420, serverDate: 'missing', rejected: false },
+    { name: '缺少服务器时间时仍拒绝超过5分钟的签发偏差', clockOffset: -360, serverDate: 'missing', rejected: true },
+    { name: '缺少服务器时间时仍拒绝超过5分钟的过期偏差', clockOffset: 900, serverDate: 'missing', rejected: true },
+    { name: '电脑慢也不能接受已过期凭据', clockOffset: -90, serverDate: 'valid', expired: true, rejected: true },
+    { name: '仍拒绝服务器时间之后签发的凭据', clockOffset: 900, serverDate: 'valid', futureIssued: true, rejected: true },
+    { name: '仍拒绝nonce不匹配', clockOffset: -90, serverDate: 'valid', wrongNonce: true, rejected: true },
+    { name: '仍拒绝签名无效', clockOffset: -90, serverDate: 'valid', invalidSignature: true, rejected: true },
+  ])('按同源登录响应的服务器时间校验：$name', async ({
+    clockOffset, serverDate, expired, futureIssued, wrongNonce, invalidSignature, rejected,
+  }) => {
+    vi.useFakeTimers()
+    const serverNow = new Date('2026-08-17T08:00:00Z')
+    const serverNowSeconds = serverNow.getTime() / 1000
+    const localNow = serverNow.getTime() + clockOffset * 1000
+    vi.setSystemTime(localNow)
+    const idToken = [
+      jwtPart({ alg: 'RS256', kid: 'key-1' }),
+      jwtPart({
+        iss: 'https://iam.test.rigour.local', sub: 'user-1', aud: 'scdp-test',
+        exp: serverNowSeconds + (expired ? -1 : 300),
+        iat: serverNowSeconds + (futureIssued ? 120 : -10),
+        nonce: wrongNonce ? 'wrong-nonce' : 'nonce-1',
+      }),
+      'AQ',
+    ].join('.')
+    sessionStorage.setItem('rigour_oidc_state', 'state-1')
+    sessionStorage.setItem('rigour_oidc_code_verifier', 'verifier-1')
+    sessionStorage.setItem('rigour_oidc_nonce', 'nonce-1')
+    window.history.replaceState({}, '', '/oidc/callback?code=code-1&state=state-1')
+    vi.spyOn(crypto.subtle, 'importKey').mockResolvedValue({} as CryptoKey)
+    const verify = vi.spyOn(crypto.subtle, 'verify').mockResolvedValue(!invalidSignature)
+    const headers = new Headers({ 'Content-Type': 'application/json' })
+    if (serverDate !== 'missing') {
+      headers.set('Date', serverDate === 'valid' ? serverNow.toUTCString() : 'invalid-date')
+    }
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        access_token: 'access-token-1', refresh_token: 'refresh-token-1',
+        id_token: idToken, token_type: 'Bearer', expires_in: 60,
+      }), { status: 200, headers }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        issuer: 'https://iam.test.rigour.local',
+        jwks_uri: 'https://iam.test.rigour.local/oauth2/jwks',
+      })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        keys: [{ kid: 'key-1', kty: 'RSA', alg: 'RS256', use: 'sig', n: 'AQAB', e: 'AQAB' }],
+      }))))
+
+    if (rejected) {
+      await expect(completeOidcCallback()).rejects.toThrow(
+        invalidSignature ? 'ID Token签名无效' : 'ID Token声明校验失败',
+      )
+      expect(getAccessToken()).toBeNull()
+    } else {
+      await expect(completeOidcCallback()).resolves.toBe(true)
+      expect(verify).toHaveBeenCalledOnce()
+      expect(getAccessToken()).toBe('access-token-1')
+      vi.setSystemTime(localNow + 56_000)
+      expect(getAccessToken()).toBeNull()
+    }
+    expect(sessionStorage.getItem('rigour_oidc_nonce')).toBeNull()
+  })
+
   it('保存expires_in并在过期前5秒安全窗口内停止使用Access Token', async () => {
     vi.useFakeTimers()
     const now = new Date('2026-08-17T08:00:00Z')
