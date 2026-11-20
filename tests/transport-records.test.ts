@@ -387,6 +387,26 @@ describe('统一运输记录 V2.6', () => {
     expect(cell(4, '货拉拉下单人').get('span').text()).toBe('王先生')
     expect(cell(4, '货拉拉下单人').get('small').text()).toBe('本系统运营部')
     expect(cell(4, '运输费用（元）').text()).toBe('137.64')
+
+    api.selected.mockResolvedValue([
+      { record: combined, platform: combinedPlatform, shipments: [shipment] },
+    ])
+    wrapper.findComponent({ name: 'ElTable' }).vm.$emit('selection-change', [combined])
+    await startExport(true)
+    expect(api.selected).toHaveBeenCalledWith([combined.id])
+    const [, exportHeaders, exported] = api.workbook.mock.calls[0]!
+    expect(exported).toHaveLength(1)
+    const cells = Object.fromEntries(
+      exportHeaders.map((heading: string, index: number) => [heading, exported[0][index]]),
+    )
+    expect(cells).toMatchObject({
+      费用单号: combined.documentNo,
+      快递单号: combinedPlatform.source.order.orderNo,
+      业务单号: 'DHB-S1',
+      销售业务员: '订货宝业务员（直营部）',
+      货拉拉下单人: '王先生（本系统运营部）',
+      '运输费用（元）': 137.64,
+    })
   })
 
   it('平台账单仅展示金额和费用，凭证资料由统一凭证区域展示', async () => {
