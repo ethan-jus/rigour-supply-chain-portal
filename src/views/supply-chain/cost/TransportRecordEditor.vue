@@ -38,7 +38,7 @@
           <div class="form-grid">
             <el-form-item label="数据来源"
               ><span>{{
-                platform ? '货拉拉同步' : shipmentSources.length ? '订货宝同步' : '手动录入'
+                transportSourceLabel(platform, shipmentSources)
               }}</span></el-form-item
             >
             <el-form-item
@@ -104,7 +104,7 @@
                 />
               </el-select>
             </el-form-item>
-            <el-form-item v-if="shipmentSources.length" label="订货宝发货方式">
+            <el-form-item v-if="!platform && shipmentSources.length" label="订货宝发货方式">
               <span>{{ shipmentDeliveryModeName }}</span>
             </el-form-item>
             <el-form-item v-else label="收货方式">
@@ -150,9 +150,9 @@
               :required="!readonly && !shippingLocked && form.deliveryModeCode !== 'SELF'"
               :error="fieldErrors.platformOrderNo"
               ><span v-if="readonly || shippingLocked">{{
-                shipmentSources.length
-                  ? shipmentTrackingNumbers || '-'
-                  : form.platformOrderNo || '-'
+                order?.orderNo ||
+                  (shipmentSources.length ? shipmentTrackingNumbers : form.platformOrderNo) ||
+                  '-'
               }}</span
               ><el-input
                 v-else
@@ -661,6 +661,7 @@
       <TransportShipmentSources
         v-if="shipmentSources.length"
         :sources="shipmentSources"
+        :huolala-order-no="order?.orderNo"
         @open-mapping="visible = false"
       />
       <TransportPlatformDetails
@@ -758,6 +759,7 @@ import {
   frozenTransportReceivers,
   vehicleOf,
   transportTimeOf,
+  transportSourceLabel,
 } from './transport-records'
 import {
   allocationError,

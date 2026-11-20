@@ -276,7 +276,7 @@ describe('统一运输记录 V2.6', () => {
     }
   })
 
-  it('列表默认列出实际下单人和所属部门，在运输类型后显示关联业务单号', async () => {
+  it('双来源在同一行展示两类人员，单来源只显示相应人员', async () => {
     const current = platform()
     current.source.order.facts!.sourceDepartmentName = '货拉拉平台部门'
     current.source.order.facts!.mappedEmployeeCode = 'EMP1'
@@ -295,14 +295,53 @@ describe('统一运输记录 V2.6', () => {
     dhb.data.ledger!.sources = [
       { ...sale, allocations: [], orderCode: 'DHB-S1', employeeName: '订货宝业务员', departmentName: '直营部' },
     ]
+    const huolalaOnly = record()
+    huolalaOnly.data.ledger!.sources = [
+      { ...sale, allocations: [], orderCode: 'SO-MANUAL', employeeName: '仅在货拉拉单上手工关联的业务员' },
+    ]
+    const combined = { ...dhb, id: 'COMBINED', documentNo: 'CST-COMBINED' }
+    const combinedPlatform = platform()
+    combinedPlatform.source.order.orderNo = '3618959686541873242'
+    combinedPlatform.source.order.facts = current.source.order.facts
+    const shipment: ShipmentTransportSource = {
+      id: 'FH-1',
+      costId: combined.id,
+      issue: null,
+      differencePending: false,
+      latest: {
+        shipmentId: 'FH-1',
+        shipmentNo: 'FH.20261101.0001',
+        salesOrderId: 'SO1',
+        sourceStatus: 'received',
+        shipTime: '2026-11-10T05:22:00Z',
+        sourceUpdatedAt: null,
+        carrierCode: null,
+        carrierName: null,
+        deliveryModeCode: 'THIRD_PARTY',
+        deliveryModeName: '快递',
+        trackingNumbers: [combinedPlatform.source.order.orderNo],
+        receiver: null,
+        sourceFields: {},
+        goods: [],
+      },
+    }
     api.list.mockResolvedValue({
       page: {
-        total: 4,
+        total: 5,
         begin: 0,
         step: 20,
-        items: [record(), { ...record(), id: 'LEGACY' }, manual, dhb],
+        items: [huolalaOnly, { ...record(), id: 'LEGACY' }, manual, dhb, combined],
       },
-      platformRecords: { C1: current, LEGACY: legacy },
+      platformRecords: { C1: current, LEGACY: legacy, COMBINED: combinedPlatform },
+      shipmentRecords: {
+        DHB: [{
+          ...shipment,
+          id: 'FH-2',
+          costId: dhb.id,
+          latest: { ...shipment.latest, trackingNumbers: ['SF0123456789'] },
+        }],
+        COMBINED: [shipment],
+      },
     } satisfies TransportPage)
     wrapper = mount(View, {
       global: { plugins: [ElementPlus], stubs: { TransportRecordEditor: true } },
@@ -310,29 +349,44 @@ describe('统一运输记录 V2.6', () => {
     await flushPromises()
     const headers = wrapper.findAll('.el-table__header th').map((header) => header.text())
     const column = (name: string) => headers.indexOf(name)
-    expect(column('下单人')).toBe(column('下单／发货时间') + 1)
-    expect(column('下单人所属部门')).toBe(column('下单人') + 1)
+    expect(column('销售业务员')).toBe(column('下单／发货时间') + 1)
+    expect(column('货拉拉下单人')).toBe(column('销售业务员') + 1)
     expect(column('业务单号')).toBe(column('运输类型') + 1)
     expect(column('订单关联状态')).toBe(column('业务单号') + 1)
     const rows = wrapper.findAll('.el-table__body tr.el-table__row')
     const cell = (row: number, name: string) => rows[row]!.findAll('td')[column(name)]!
-    expect(cell(0, '下单人').text()).toBe('王先生')
-    expect(cell(0, '下单人所属部门').text()).toBe('本系统运营部')
-    expect(cell(0, '业务单号').text()).toBe('-')
-    expect(cell(0, '订单关联状态').text()).toBe('未关联')
-    expect(cell(1, '下单人').text()).toBe('旧单下单人')
-    expect(cell(1, '下单人所属部门').text()).toBe('-')
-    expect(cell(2, '下单人').text()).toBe('销售人员、第二位业务员')
-    expect(cell(2, '下单人所属部门').text()).toBe('销售部门')
+    expect(cell(0, '销售业务员').text()).toBe('-')
+    expect(cell(0, '货拉拉下单人').get('span').text()).toBe('王先生')
+    expect(cell(0, '货拉拉下单人').get('small').text()).toBe('本系统运营部')
+    expect(cell(0, '业务单号').text()).toBe('SO-MANUAL')
+    expect(cell(1, '销售业务员').text()).toBe('-')
+    expect(cell(1, '货拉拉下单人').text()).toBe('旧单下单人')
+    expect(cell(1, '货拉拉下单人').find('small').exists()).toBe(false)
+    expect(cell(1, '订单关联状态').text()).toBe('未关联')
+    expect(cell(2, '销售业务员').findAll('.transport-person span').map((item) => item.text()))
+      .toEqual(['销售人员', '第二位业务员'])
+    expect(cell(2, '销售业务员').get('small').text()).toBe('销售部门')
+    expect(cell(2, '货拉拉下单人').text()).toBe('-')
     expect(cell(2, '业务单号').findAll('.table-line').map((line) => line.text())).toEqual([
       'XS001',
       'XS002',
     ])
-    expect(cell(3, '下单人').text()).toBe('订货宝业务员')
-    expect(cell(3, '下单人所属部门').text()).toBe('直营部')
+    expect(cell(3, '销售业务员').get('span').text()).toBe('订货宝业务员')
+    expect(cell(3, '销售业务员').get('small').text()).toBe('直营部')
+    expect(cell(3, '货拉拉下单人').text()).toBe('-')
     expect(cell(3, '业务单号').text()).toBe('DHB-S1')
     expect(cell(2, '订单关联状态').text()).toBe('已关联')
     expect(cell(3, '订单关联状态').text()).toBe('已关联')
+    expect(rows).toHaveLength(5)
+    expect(cell(4, '快递单号').text()).toBe(combinedPlatform.source.order.orderNo)
+    expect(rows.filter((_, index) =>
+      cell(index, '快递单号').text() === combinedPlatform.source.order.orderNo,
+    )).toHaveLength(1)
+    expect(cell(4, '销售业务员').get('span').text()).toBe('订货宝业务员')
+    expect(cell(4, '销售业务员').get('small').text()).toBe('直营部')
+    expect(cell(4, '货拉拉下单人').get('span').text()).toBe('王先生')
+    expect(cell(4, '货拉拉下单人').get('small').text()).toBe('本系统运营部')
+    expect(cell(4, '运输费用（元）').text()).toBe('137.64')
   })
 
   it('平台账单仅展示金额和费用，凭证资料由统一凭证区域展示', async () => {
@@ -505,9 +559,9 @@ describe('统一运输记录 V2.6', () => {
     await flushPromises()
     await wrapper.get('input[aria-label="业务单号"]').setValue('XS001')
     const employee = wrapper.findAllComponents({ name: 'ElSelectV2' })
-      .find((c) => c.props('placeholder') === '下单人')!
+      .find((c) => c.props('placeholder') === '运输相关人员')!
     const department = wrapper.findAllComponents({ name: 'ElSelectV2' })
-      .find((c) => c.props('placeholder') === '下单人所属部门')!
+      .find((c) => c.props('placeholder') === '人员所属部门')!
     expect(employee.props('options')).toEqual([
       { label: '同名员工 · 销售部 · EMP1', value: 'EMP1' },
       { label: '同名员工 · 销售部 · EMP2', value: 'EMP2' },
@@ -682,8 +736,8 @@ describe('统一运输记录 V2.6', () => {
       '武汉仓（仓储路1号） → 星河门店（沿江路18号） → 长江门店（江汉路20号）',
     )
     expect(rows[0][headers.indexOf('收货点数')]).toBe(2)
-    expect(rows[0][headers.indexOf('下单人')]).toBe('王先生')
-    expect(rows[0][headers.indexOf('下单人所属部门')]).toBe('本系统运营部')
+    expect(rows[0][headers.indexOf('货拉拉下单人')]).toBe('王先生（本系统运营部）')
+    expect(rows[0][headers.indexOf('销售业务员')]).toBe('-')
     expect(headers).not.toContain('收货方')
   })
   it('手工物流默认只导出九项摘要，货拉拉专属字段不出现在选项或文件中', async () => {
@@ -702,6 +756,7 @@ describe('统一运输记录 V2.6', () => {
     const optionLabels = dialog.props('columns').map((c: { label: string }) => c.label)
     for (const label of [
       '运输状态',
+      '货拉拉下单人',
       '员工关联状态',
       '最近同步时间',
       '本公司员工',
@@ -741,15 +796,15 @@ describe('统一运输记录 V2.6', () => {
     await startExport(true)
     let [, headers] = api.workbook.mock.calls[0]!
     expect(headers).not.toContain('运输状态')
-    expect(headers).toContain('下单人')
-    expect(headers).toContain('下单人所属部门')
+    expect(headers).toContain('销售业务员')
+    expect(headers).toContain('货拉拉下单人')
     api.selected.mockResolvedValue([{ record: manual, platform: null }])
     wrapper.findComponent({ name: 'ElTable' }).vm.$emit('selection-change', [record()])
     await startExport(true)
     ;[, headers] = api.workbook.mock.calls[1]!
     expect(headers).not.toContain('运输状态')
-    expect(headers).toContain('下单人')
-    expect(headers).toContain('下单人所属部门')
+    expect(headers).toContain('销售业务员')
+    expect(headers).not.toContain('货拉拉下单人')
   })
   it('已勾选只导出选择记录，不能回退成整批；单据状态在创建人之前', async () => {
     api.selected.mockResolvedValue([{ record: record(), platform: platform() }])

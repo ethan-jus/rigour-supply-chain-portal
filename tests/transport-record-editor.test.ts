@@ -738,6 +738,102 @@ describe('物流详情的信息优先级', () => {
     }
   })
 
+  it('同一费用单优先展示货拉拉运输信息，保留订货宝原发货资料', async () => {
+    const d = detail()
+    const orderNo = '3618959686541873242'
+    d.record.data.amount = 37.03
+    d.platform = {
+      source: {
+        id: 'P1',
+        costId: 'C1',
+        state: 'GENERATED',
+        revision: 1,
+        fileName: '接口',
+        order: {
+          enterpriseId: 'E1',
+          orderNo,
+          status: '已完成',
+          paidAmount: 37.03,
+          useTime: '2026-11-01 13:17:34',
+          raw: { 下单时间: '2026-11-01 13:08:41', 车型: '跑腿' },
+          salesOrderNos: [],
+          line: 0,
+        },
+      },
+      draft: null,
+      billHistory: [],
+    }
+    const shipment: ShipmentTransportSource = {
+      id: 'SHIP1',
+      costId: 'C1',
+      issue: '来源物流公司尚未映射，请维护数据字典的来源映射后重新同步',
+      differencePending: false,
+      latest: {
+        shipmentId: 'SHIP1',
+        shipmentNo: 'FH.20261101.0001',
+        salesOrderId: 'SO1',
+        sourceStatus: 'received',
+        shipTime: '2026-11-01T05:22:00Z',
+        sourceUpdatedAt: null,
+        carrierCode: null,
+        carrierName: null,
+        deliveryModeCode: 'THIRD_PARTY',
+        deliveryModeName: '快递',
+        trackingNumbers: [orderNo],
+        receiver: null,
+        sourceFields: {},
+        goods: [{ goods_name: '球杆', options_info: [{ options_name: 'A300' }], ships_number: 2 }],
+      },
+    }
+    d.shipments = [shipment]
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    try {
+      await flushPromises()
+      const basic = w.get('.transport-section')
+      for (const value of [
+        '货拉拉和订货宝同步',
+        '收货方式',
+        '送货上门',
+        orderNo,
+        '2026-11-01 13:08:41',
+        '跑腿',
+      ])
+        expect(basic.text()).toContain(value)
+      expect(basic.text()).not.toContain('订货宝发货方式')
+      expect(w.text()).toContain('37.03')
+      expect(w.text()).toContain('SO1')
+      const source = w.get('[aria-label="订货宝发货信息"]')
+      expect(source.text()).toContain('FH.20261101.0001')
+      expect(source.text()).toContain('已收货')
+      expect(source.text()).toContain('订货宝发货方式快递')
+      expect(source.text()).toContain('已按快递单号关联货拉拉')
+      expect(source.find('.el-alert').exists()).toBe(false)
+      expect(getMappedDhbCarrierValues).not.toHaveBeenCalled()
+      await source.get('.el-collapse-item__header').trigger('click')
+      expect(source.text()).toContain('球杆')
+      expect(source.text()).toContain('A300')
+    } finally {
+      w.unmount()
+    }
+
+    const review = mount(TransportShipmentSources, {
+      props: {
+        huolalaOrderNo: orderNo,
+        sources: [{ ...shipment, issue: '已关联的业务订单待核对', differencePending: true }],
+      },
+      global,
+    })
+    try {
+      expect(review.get('.el-alert').text()).toContain('已关联的业务订单待核对')
+    } finally {
+      review.unmount()
+    }
+  })
+
   it.each([
     ['快递', '完整'],
     ['快递', '待设置配送方式'],

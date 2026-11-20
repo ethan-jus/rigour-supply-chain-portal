@@ -11,9 +11,14 @@
           <dt>发货状态</dt>
           <dd>{{ sourceStatus(source.latest.sourceStatus) }}</dd>
         </div>
+        <div v-if="huolalaOrderNo && source.latest.deliveryModeName?.trim()">
+          <dt>订货宝发货方式</dt>
+          <dd>{{ source.latest.deliveryModeName }}</dd>
+        </div>
       </dl>
+      <p v-if="isLinkedToHuolala(source)" class="shipment-link-note">已按快递单号关联货拉拉</p>
       <el-alert
-        v-if="source.issue || source.differencePending"
+        v-if="needsReview(source)"
         :title="sourceNotice(source)"
         :type="carrierUpdating(source) ? 'info' : 'warning'"
         :closable="false"
@@ -82,8 +87,12 @@ import { ref, watch } from 'vue'
 import { getMappedDhbCarrierValues } from '@/api/core/business-settings'
 import type { ShipmentTransportSource } from '@/api/core/transport-records'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
+import { shipmentUsesHuolala } from './transport-records'
 import { displayValue } from '@/utils/business-display'
-const props = defineProps<{ sources: ShipmentTransportSource[] }>()
+const props = defineProps<{
+  sources: ShipmentTransportSource[]
+  huolalaOrderNo?: string
+}>()
 const emit = defineEmits<{ 'open-mapping': [] }>()
 const { can } = useSupplyPermissions()
 const mappedCarriers = ref<string[]>([])
@@ -135,7 +144,18 @@ watch(
   { immediate: true },
 )
 
+function isLinkedToHuolala(source: ShipmentTransportSource) {
+  return shipmentUsesHuolala(source, props.huolalaOrderNo)
+}
+
+function needsReview(source: ShipmentTransportSource) {
+  if (source.differencePending) return true
+  if (!source.issue) return false
+  return !isLinkedToHuolala(source) || (!mappingField(source) && !needsDoorDeliveryReview(source))
+}
+
 function carrierSourceValue(source: ShipmentTransportSource) {
+  if (!needsReview(source)) return ''
   if (mappingField(source)?.dictionary !== 'COST_CARRIER') return ''
   return (
     sourceField(source, 'logistics_code') ||
@@ -255,6 +275,10 @@ const sourceStatus = (s: string) =>
   overflow-wrap: anywhere;
 }
 
+.shipment-link-note {
+  color: var(--el-text-color-secondary);
+  margin: 12px 0 0;
+}
 .shipment-source + .shipment-source {
   margin-top: 20px;
 }

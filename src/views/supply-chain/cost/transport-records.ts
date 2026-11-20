@@ -30,6 +30,45 @@ export function shipmentRemark(fields: ShipmentTransportSource['latest']['source
       : undefined
   return read(fields?.detail) ?? read(fields?.list) ?? ''
 }
+export function shipmentUsesHuolala(source: ShipmentTransportSource, orderNo?: string | null) {
+  const normalized = (value: string) => value.trim().toUpperCase()
+  const numbers = new Set(source.latest.trackingNumbers.map(normalized).filter(Boolean))
+  return !!orderNo && numbers.size === 1 && numbers.has(normalized(orderNo))
+}
+
+export function transportSourceLabel(
+  platform?: PlatformTransport | null,
+  shipments: ShipmentTransportSource[] = [],
+) {
+  if (platform) return shipments.length ? '货拉拉和订货宝同步' : '货拉拉同步'
+  return shipments.length ? '订货宝同步' : '手动录入'
+}
+
+export function transportPeople(
+  row: CostRecord,
+  platform?: PlatformTransport | null,
+  shipments: ShipmentTransportSource[] = [],
+) {
+  const order = platform ? currentSource(platform.source) : null
+  const name = order?.facts?.sourceEmployeeName?.trim() || order?.raw['下单人(员工)']?.trim()
+  const huolala = name
+    ? [{ name, department: order?.facts?.mappedDepartmentName?.trim() || '' }]
+    : []
+  const sales = new Map<string, { name: string; department: string }>()
+  if (!platform || shipments.length) {
+    const ledger = row.data.ledger?.sources
+    const sources = ledger?.length
+      ? ledger.filter((s) => s.orderTypeCode === 'SALES_ORDER' || s.orderTypeCode === 'DELIVERY')
+      : row.sources.filter((s) => s.sourceType === 'SALES_ORDER' || s.sourceType === 'DELIVERY')
+    for (const source of sources) {
+      const name = source.employeeName?.trim()
+      if (!name) continue
+      const department = source.departmentName?.trim() || ''
+      sales.set(JSON.stringify([name, department]), { name, department })
+    }
+  }
+  return { sales: [...sales.values()], huolala }
+}
 export const money = (n: unknown) =>
   n == null || n === ''
     ? '-'

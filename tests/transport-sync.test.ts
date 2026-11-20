@@ -156,10 +156,11 @@ describe('运输列表同步完成后刷新', () => {
     await click('关闭')
     vi.setSystemTime(new Date('2026-11-12T03:00:00Z'))
     await click('同步货拉拉订单')
-    expect(wrapper!.findAllComponents(ElDatePicker).at(-1)!.props('modelValue')).toEqual([
-      '2026-11-12',
-      '2026-11-12',
-    ])
+    const dates = wrapper!.findAllComponents(ElDatePicker)
+    for (const placeholder of ['选择开始日期', '选择结束日期']) {
+      const picker = dates.find((date) => date.props('placeholder') === placeholder)
+      expect(picker?.props('modelValue')).toBe('2026-11-12')
+    }
     await click('开始同步')
     expect(api.sync).toHaveBeenCalledWith('ORDERS', '2026-11-12', '2026-11-12', undefined)
   })

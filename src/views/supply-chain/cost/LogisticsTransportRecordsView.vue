@@ -107,8 +107,8 @@
             :options="employeeOptions"
             :loading="employeeDirectoryLoading"
             :no-data-text="employeeDirectoryError || '暂无员工'"
-            placeholder="下单人"
-            aria-label="下单人"
+            placeholder="运输相关人员"
+            aria-label="运输相关人员"
             @visible-change="retryEmployeeDirectory"
           />
         </div>
@@ -120,8 +120,8 @@
             :options="departmentOptions"
             :loading="employeeDirectoryLoading"
             :no-data-text="employeeDirectoryError || '暂无所属部门'"
-            placeholder="下单人所属部门"
-            aria-label="下单人所属部门"
+            placeholder="人员所属部门"
+            aria-label="人员所属部门"
             @visible-change="retryEmployeeDirectory"
           />
         </div>
@@ -199,7 +199,7 @@
             :label="col.label"
             :min-width="col.width"
             :align="col.key === 'stopCount' ? 'center' : col.numeric ? 'right' : 'left'"
-            :show-overflow-tooltip="!['route', 'orders'].includes(col.key)"
+            :show-overflow-tooltip="!['route', 'orders', 'salesPeople', 'huolalaPeople'].includes(col.key)"
           >
             <template #default="{ row }"
               ><TransportRouteSummary
@@ -213,7 +213,18 @@
                 >
                   {{ text }}
                 </div></template
-              ><el-tag
+              ><template v-else-if="col.key === 'salesPeople' || col.key === 'huolalaPeople'">
+                <div
+                  v-for="person in peopleByRecord.get(row.id)?.[col.key]"
+                  :key="JSON.stringify(person)"
+                  class="transport-person"
+                >
+                  <span>{{ person.name }}</span>
+                  <small v-if="person.department">{{ person.department }}</small>
+                </div>
+                <span v-if="!peopleByRecord.get(row.id)?.[col.key].length">-</span>
+              </template>
+              <el-tag
                 v-else-if="col.key === 'status'"
                 :type="
                   row.businessStatusCode === 'COMPLETE'
@@ -417,6 +428,8 @@ import {
   routeText,
   vehicleOf,
   transportTimeOf,
+  transportPeople,
+  transportSourceLabel,
   statusName,
   transportTypes,
   typeName,
@@ -455,8 +468,8 @@ const columns = [
   { key: 'platformNo', label: '快递单号', width: 200 },
   { key: 'carrier', label: '物流公司', width: 120 },
   { key: 'orderedAt', label: '下单／发货时间', width: 190 },
-  { key: 'platformEmployee', label: '下单人', width: 130 },
-  { key: 'platformEmployeeDepartment', label: '下单人所属部门', width: 160 },
+  { key: 'salesPeople', label: '销售业务员', width: 145 },
+  { key: 'huolalaPeople', label: '货拉拉下单人', width: 145 },
   { key: 'amount', label: '运输费用（元）', width: 150, numeric: true },
   { key: 'status', label: '单据状态', width: 104 },
   { key: 'route', label: '行驶路段', width: 280 },
@@ -472,8 +485,6 @@ const columns = [
   { key: 'platformStatus', label: '运输状态', width: 155, optional: true },
   { key: 'mappedEmployee', label: '本公司员工', width: 150, optional: true },
   { key: 'employeeRelation', label: '员工关联状态', width: 130, optional: true },
-  { key: 'employee', label: '业务员', width: 130, optional: true },
-  { key: 'department', label: '部门', width: 160, optional: true },
   { key: 'billItems', label: '账单费用明细', width: 240, optional: true },
   { key: 'payment', label: '付款状态', width: 100, optional: true },
   { key: 'paid', label: '已支付（元）', width: 145, numeric: true, optional: true },
@@ -496,6 +507,18 @@ function businessOrderLines(r: CostRecord) {
   const orderNos = [...new Set(ordersOf(r, platformOf(r)).filter(Boolean))]
   return orderNos.length ? orderNos : ['-']
 }
+const peopleByRecord = computed(() =>
+  new Map(
+    result.value.page.items.map((row) => {
+      const { sales, huolala } = transportPeople(
+        row,
+        platformOf(row),
+        result.value.shipmentRecords?.[row.id],
+      )
+      return [row.id, { salesPeople: sales, huolalaPeople: huolala }]
+    }),
+  ),
+)
 function value(
   r: CostRecord,
   key: string,
@@ -504,26 +527,16 @@ function value(
 ): string {
   const platform = sources[r.id],
     source = platform ? currentSource(platform.source) : null
-  if (key === 'platformEmployee' || key === 'platformEmployeeDepartment') {
-    const department = key === 'platformEmployeeDepartment'
-    if (source) {
-      return (
-        (department
-          ? source.facts?.mappedDepartmentName?.trim()
-          : source.facts?.sourceEmployeeName?.trim() || source.raw['下单人(员工)']?.trim()) || '-'
-      )
-    }
-    const ledgerSources = r.data.ledger?.sources
-    const sales = ledgerSources?.length
-      ? ledgerSources.filter((s) => s.orderTypeCode === 'SALES_ORDER' || s.orderTypeCode === 'DELIVERY')
-      : r.sources.filter((s) => s.sourceType === 'SALES_ORDER' || s.sourceType === 'DELIVERY')
-    const names = sales.map((s) => (department ? s.departmentName : s.employeeName)?.trim())
-    return [...new Set(names.filter(Boolean))].join('、') || '-'
+  if (key === 'salesPeople' || key === 'huolalaPeople') {
+    const { sales, huolala } = transportPeople(r, platform, shipments[r.id])
+    return (key === 'salesPeople' ? sales : huolala)
+      .map(({ name, department }) => (department ? `${name}（${department}）` : name))
+      .join('、') || '-'
   }
   const vals: Record<string, unknown> = {
     route: routeText(routeOf(r, platform)),
     stopCount: routeOf(r, platform).receivers.length || '-',
-    source: platform ? '货拉拉同步' : shipments[r.id]?.length ? '订货宝同步' : '手动录入',
+    source: transportSourceLabel(platform, shipments[r.id]),
     type: typeName(
       platform?.draft?.transportType ||
         r.data.ledger?.transportPurposeCode ||
@@ -552,14 +565,6 @@ function value(
         ?.employeeName || source?.facts?.mappedEmployeeCode,
     employeeRelation: source ? (source.facts?.mappedEmployeeCode ? '已关联' : '未关联') : '-',
     relation: ordersOf(r, platform).some((no) => no?.trim()) ? '已关联' : '未关联',
-    employee: [
-      ...new Set((r.data.ledger?.sources ?? r.sources).map((s) => s.employeeName).filter(Boolean)),
-    ].join('、'),
-    department: [
-      ...new Set(
-        (r.data.ledger?.sources ?? r.sources).map((s) => s.departmentName).filter(Boolean),
-      ),
-    ].join('、'),
     billItems: source
       ? source.facts?.fees.map((item) => `${item.name}：${money(item.amount)}`).join('；')
       : r.data.ledger?.manualBillItems
@@ -920,6 +925,7 @@ const exportOpen = ref(false),
   exportCount = ref(0),
   exporting = ref(false),
   exportError = ref(''),
+  exportHasPlatform = ref(false),
   exportPlatformOnly = ref(false)
 const exportSummaryKeys = new Set([
   'documentNo',
@@ -938,10 +944,7 @@ const exportBusinessKeys = new Set([
   'creator',
   'relation',
   'orders',
-  'platformEmployee',
-  'platformEmployeeDepartment',
-  'employee',
-  'department',
+  'salesPeople',
   'billItems',
   'payment',
   'source',
@@ -958,6 +961,7 @@ const exportColumns = computed(() => [
     .filter(
       (c) =>
         exportBusinessKeys.has(c.key) ||
+        (c.key === 'huolalaPeople' && exportHasPlatform.value) ||
         (exportPlatformOnly.value && platformExportKeys.has(c.key)),
     )
     .map((c) => ({ key: c.key, label: c.label })),
@@ -982,12 +986,15 @@ function openExport() {
   exportIds.value = selected.value.map((r) => r.id)
   exportCount.value = result.value.page.total
   exportQuery = { ...applied, begin: 0, step: 200 }
-  // 仅明确全部为货拉拉的范围提供专属字段；混合范围使用通用业务字段。
-  exportPlatformOnly.value = selected.value.length
-    ? selected.value.every((r) => !!result.value.platformRecords[r.id])
-    : applied.sourceSystem === 'HUOLALA' ||
-      (result.value.page.items.length === result.value.page.total &&
-        result.value.page.items.every((r) => !!result.value.platformRecords[r.id]))
+  const hasSelection = selected.value.length > 0
+  const visibleRows = hasSelection ? selected.value : result.value.page.items
+  const platformFilter = !hasSelection && applied.sourceSystem === 'HUOLALA'
+  exportHasPlatform.value = platformFilter || visibleRows.some((row) => !!platformOf(row))
+  exportPlatformOnly.value =
+    platformFilter ||
+    (exportHasPlatform.value &&
+      (hasSelection || visibleRows.length === result.value.page.total) &&
+      visibleRows.every((row) => !!platformOf(row)))
   exportFields.value = exportColumns.value
     .filter(
       (c) => exportSummaryKeys.has(c.key) || (exportPlatformOnly.value && c.key === 'vehicle'),
@@ -1020,9 +1027,12 @@ async function doExport() {
           current: () => version === exportSequence,
         })
     if (!rows || version !== exportSequence) return
-    const platformOnly = rows.length > 0 && rows.every((r) => !!r.platform)
+    const hasPlatform = rows.some((r) => !!r.platform)
+    const platformOnly = hasPlatform && rows.every((r) => !!r.platform)
     const chosen = selectedCostColumns(exportColumns.value, exportFields.value).filter(
-      (c) => platformOnly || !platformExportKeys.has(c.key),
+      (c) =>
+        (c.key !== 'huolalaPeople' || hasPlatform) &&
+        (platformOnly || !platformExportKeys.has(c.key)),
     )
     if (!chosen.length) throw new Error('请选择适用于当前运输记录的导出字段')
     if (!platformOnly && chosen.some((column) => column.key === 'payment'))
@@ -1215,6 +1225,18 @@ onBeforeUnmount(() => {
 }
 .row-actions .el-button {
   margin: 0;
+}
+.transport-person {
+  display: grid;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.transport-person + .transport-person {
+  margin-top: 6px;
+}
+.transport-person small {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 .table-line {
   white-space: normal;

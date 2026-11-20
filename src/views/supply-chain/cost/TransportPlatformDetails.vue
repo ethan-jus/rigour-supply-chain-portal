@@ -31,10 +31,16 @@
       >
     </div>
     <div class="details-grid">
-      <Field label="下单员工" :value="order.facts?.sourceEmployeeName" />
+      <Field
+        label="货拉拉下单人"
+        :value="order.facts?.sourceEmployeeName?.trim() || raw['下单人(员工)']"
+      />
       <Field label="下单员工手机号" :value="raw['下单员工手机号']" />
       <Field label="本公司员工" :value="employee?.employeeName" />
-      <Field label="员工所属部门" :value="employee?.departmentName" />
+      <Field
+        label="下单人所属部门"
+        :value="order.facts?.mappedDepartmentName?.trim() || employee?.departmentName"
+      />
       <Field label="员工关联状态" :value="order.facts?.mappedEmployeeCode ? '已关联' : '未关联'" />
     </div>
     <h4>支付、开票与保价</h4>
