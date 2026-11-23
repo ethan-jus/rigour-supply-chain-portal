@@ -127,11 +127,12 @@
               <span>{{ transportChannelName }}</span>
             </el-form-item>
             <el-form-item
-              v-if="!selfDelivery || (shippingLocked && (form.carrierCode || shipmentCarriers))"
+              v-if="!selfDelivery || shipmentCarriers"
               label="物流公司"
               :required="!readonly && !shippingLocked && form.deliveryModeCode !== 'SELF'"
               :error="fieldErrors.carrierCode"
-              ><span v-if="platform">货拉拉</span
+              ><span v-if="selfDelivery">{{ shipmentCarriers }}</span
+              ><span v-else-if="platform">货拉拉</span
               ><span v-else-if="readonly || shippingLocked">{{
                 form.carrierCode
                   ? costLabel('COST_CARRIER', form.carrierCode)
@@ -145,7 +146,7 @@
                   :value="o.value" /></el-select
             ></el-form-item>
             <el-form-item
-              v-if="!selfDelivery || (shippingLocked && shipmentTrackingNumbers)"
+              v-if="!selfDelivery || shipmentTrackingNumbers"
               label="快递单号"
               :required="!readonly && !shippingLocked && form.deliveryModeCode !== 'SELF'"
               :error="fieldErrors.platformOrderNo"
@@ -746,6 +747,7 @@ import { currentSource, platformPaymentStatus } from './huolala-source'
 import {
   transportDraft,
   transportReceivingMethod,
+  shipmentCarrierNames,
   shipmentRemark,
   receivingMethods,
   transportTypes,
@@ -814,11 +816,7 @@ const shipmentDeliveryModeName = computed(
       ),
     ].join('、') || '-',
 )
-const shipmentCarriers = computed(() =>
-  [...new Set(shipmentSources.value.map(({ latest }) => latest.carrierName).filter(Boolean))].join(
-    '、',
-  ),
-)
+const shipmentCarriers = computed(() => shipmentCarrierNames(shipmentSources.value))
 const shipmentTrackingNumbers = computed(() =>
   [...new Set(shipmentSources.value.flatMap(({ latest }) => latest.trackingNumbers))].join('、'),
 )

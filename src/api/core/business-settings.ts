@@ -105,24 +105,38 @@ export function resolveBizDict(dictionaryCode: string, errorFeedback?: 'inline')
   })
 }
 
+const dictionaryWriteOptions = { errorFeedback: 'inline' as const }
+
 /** 新增字典。 */
 export function createBizDict(command: DictCommand) {
-  return apiClient.post<DictView>(BASE_PATH, command)
+  return apiClient.post<DictView>(BASE_PATH, command, dictionaryWriteOptions)
 }
 
 /** 修改字典。 */
 export function updateBizDict(dictId: string | number, command: DictCommand) {
-  return apiClient.put<DictView>(`${BASE_PATH}/${encodeURIComponent(String(dictId))}`, command)
+  return apiClient.put<DictView>(
+    `${BASE_PATH}/${encodeURIComponent(String(dictId))}`,
+    command,
+    dictionaryWriteOptions,
+  )
 }
 
 /** 新增字典项。 */
 export function createBizDictItem(dictId: string | number, command: DictItemCommand) {
-  return apiClient.post<DictItemView>(`${BASE_PATH}/${encodeURIComponent(String(dictId))}/items`, command)
+  return apiClient.post<DictItemView>(
+    `${BASE_PATH}/${encodeURIComponent(String(dictId))}/items`,
+    command,
+    dictionaryWriteOptions,
+  )
 }
 
 /** 修改字典项。 */
 export function updateBizDictItem(itemId: string | number, command: DictItemCommand) {
-  return apiClient.put<DictItemView>(`${BASE_PATH}/items/${encodeURIComponent(String(itemId))}`, command)
+  return apiClient.put<DictItemView>(
+    `${BASE_PATH}/items/${encodeURIComponent(String(itemId))}`,
+    command,
+    dictionaryWriteOptions,
+  )
 }
 
 export interface DictMergePreview {

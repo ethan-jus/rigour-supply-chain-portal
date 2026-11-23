@@ -71,6 +71,7 @@ const names: Record<string, string> = {
   CREATE: '新增',
   STATE_UPGRADE: '调整运输记录状态',
   SOURCE_SYNC: '同步订货宝物流',
+  SHIPMENT_LOGISTICS_EDIT: '修改发货物流',
   SOURCE_ACCEPT: '核对货拉拉来源差异',
   BILL_VERIFY: '核对货拉拉净费用',
   REVOKE: '撤销确认',

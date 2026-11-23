@@ -70,6 +70,7 @@ export interface TransportPage {
   shipmentRecords?: Record<string, ShipmentTransportSource[]>
 }
 export type TransportQuery = CostQuery & {
+  deliveryModeCode?: string
   salesSelectable?: boolean
   relationState?: string
   platformOrderNo?: string

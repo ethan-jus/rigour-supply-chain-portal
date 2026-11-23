@@ -164,16 +164,23 @@
             <template #default="scope">{{ formatTime(scope.row.shipTime) }}</template>
           </el-table-column>
           <!-- @vue-generic {SalesShipmentSummary} -->
-          <el-table-column label="操作" width="150" fixed="right" align="center">
+          <el-table-column label="操作" width="178" fixed="right" align="center">
             <template #default="scope">
               <el-button link type="primary" @click.stop="openDetail(scope.row)">详情</el-button>
+              <el-button
+                v-if="canEditLogistics(scope.row)"
+                link
+                type="primary"
+                @click.stop="openLogisticsEdit(scope.row)"
+                ><SupplyActionLabel code="order:shipment:update" fallback="编辑"
+              /></el-button>
               <el-button
                 v-if="!isExternalSource(scope.row) && can('order:shipment:delete', 'order:write')"
                 link
                 type="danger"
                 @click.stop="deleteRow(scope.row)"
-                ><SupplyActionLabel code="order:shipment:delete" fallback="删除" /></el-button
-              >
+                ><SupplyActionLabel code="order:shipment:delete" fallback="删除"
+              /></el-button>
             </template>
           </el-table-column>
           <template #empty><el-empty description="暂无发货单" /></template>
@@ -298,6 +305,65 @@
       </div>
       <el-skeleton v-else :rows="10" animated />
     </el-drawer>
+
+    <el-dialog
+      v-model="logisticsEditVisible"
+      title="编辑发货物流"
+      width="min(560px, 94vw)"
+      :close-on-click-modal="false"
+      :show-close="!savingLogistics"
+      :close-on-press-escape="!savingLogistics"
+    >
+      <el-form
+        v-if="editingShipment"
+        :model="logisticsForm"
+        :disabled="savingLogistics"
+        label-position="top"
+        @submit.prevent="saveLogistics"
+      >
+        <el-form-item label="发货单号">
+          <span>{{ editingShipment.sourceDocumentNo || editingShipment.shipmentNo }}</span>
+        </el-form-item>
+        <el-form-item label="物流公司">
+          <el-select v-model="logisticsForm.carrierCode" filterable style="width: 100%">
+            <el-option
+              v-if="originalCarrierCode === KEEP_ORIGINAL_CARRIER"
+              :label="editingShipment.logisticsCompany?.trim()"
+              :value="KEEP_ORIGINAL_CARRIER"
+            />
+            <el-option label="立即送（自配送）" value="SELF" />
+            <el-option
+              v-for="option in carrierOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="物流单号">
+          <el-input v-model="logisticsForm.trackingNo" maxlength="120" clearable />
+        </el-form-item>
+        <el-form-item label="发货时间">
+          <el-date-picker
+            v-model="logisticsForm.shipTime"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            format="YYYY-MM-DD HH:mm:ss"
+            :clearable="false"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="发货备注">
+          <el-input v-model="logisticsForm.remark" type="textarea" :rows="3" maxlength="1000" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="savingLogistics" @click="logisticsEditVisible = false"
+          >取消</el-button
+        >
+        <el-button type="primary" :loading="savingLogistics" @click="saveLogistics">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -307,7 +373,8 @@ import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard
 import CompactPagination from '@/components/supply/CompactPagination.vue'
 import ListTableFooter from '@/components/supply/ListTableFooter.vue'
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
-import { displayDateTime } from '@/utils/business-date'
+import { businessDateTime, businessInstant, displayDateTime } from '@/utils/business-date'
+import { costOptions, loadCostDictionaryCodes } from '@/views/supply-chain/cost/cost-dictionaries'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import DhbPageSyncButton from '@/components/supply/DhbPageSyncButton.vue'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
@@ -318,7 +385,9 @@ import {
   deleteSalesShipment,
   getSalesShipment,
   getSalesShipments,
+  updateSalesShipmentLogistics,
   type OrderPage,
+  type SalesShipmentLogisticsEdit,
   type SalesShipmentDetail,
   type SalesShipmentSummary,
 } from '@/api/core/order-sales'
@@ -340,6 +409,15 @@ function searchRows() {
 const loading = ref(false)
 const detailVisible = ref(false)
 const detail = ref<SalesShipmentDetail | null>(null)
+const logisticsEditVisible = ref(false)
+const savingLogistics = ref(false)
+const editingShipment = ref<SalesShipmentDetail | null>(null)
+const KEEP_ORIGINAL_CARRIER = '__ORIGINAL__'
+const originalCarrierCode = ref('')
+const logisticsForm = reactive({ carrierCode: '', trackingNo: '', shipTime: '', remark: '' })
+const carrierOptions = computed(() =>
+  costOptions('COST_CARRIER').filter((option) => option.value !== 'SELF'),
+)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const pageData = ref<OrderPage<SalesShipmentSummary>>({ total: 0, begin: 0, step: 20, items: [] })
@@ -406,6 +484,80 @@ async function openDetail(row: SalesShipmentSummary) {
     detail.value = await getSalesShipment(row.id)
   } catch (reason) {
     ElMessage.error(errorMessage(reason, '发货单详情加载失败'))
+  }
+}
+
+function canEditLogistics(row: SalesShipmentSummary) {
+  return (
+    row.shipmentStatusCode !== 'CANCELLED' &&
+    (!isExternalSource(row) || row.sourceSystemCode === 'DINGHUOBAO') &&
+    can('order:shipment:update', 'order:write')
+  )
+}
+
+function shipmentCarrierValue(shipment: SalesShipmentDetail) {
+  const name = shipment.logisticsCompany?.trim()
+  if (!name) return ''
+  if (name === '立即送' && !shipment.trackingNo?.trim()) return 'SELF'
+
+  const matches = carrierOptions.value.filter(
+    (option) => option.label === name || option.value === name,
+  )
+  return matches.length === 1 ? matches[0]!.value : KEEP_ORIGINAL_CARRIER
+}
+
+async function openLogisticsEdit(row: SalesShipmentSummary) {
+  try {
+    const [shipment] = await Promise.all([
+      getSalesShipment(row.id),
+      loadCostDictionaryCodes(['COST_CARRIER'], false, 'inline'),
+    ])
+    editingShipment.value = shipment
+    originalCarrierCode.value = shipmentCarrierValue(shipment)
+    Object.assign(logisticsForm, {
+      carrierCode: originalCarrierCode.value,
+      trackingNo: shipment.trackingNo ?? '',
+      shipTime: shipment.shipTime ? businessDateTime(shipment.shipTime) : '',
+      remark: shipment.remark ?? '',
+    })
+    logisticsEditVisible.value = true
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason, '发货物流信息加载失败'))
+  }
+}
+
+async function saveLogistics() {
+  const shipment = editingShipment.value
+  if (!shipment || savingLogistics.value) return
+  const command: SalesShipmentLogisticsEdit = { revision: shipment.revision }
+  const trackingNo = logisticsForm.trackingNo.trim()
+  const remark = logisticsForm.remark.trim()
+  if (logisticsForm.carrierCode !== originalCarrierCode.value) {
+    command.carrierCode = logisticsForm.carrierCode
+  }
+  if (trackingNo !== (shipment.trackingNo ?? '').trim()) command.trackingNo = trackingNo
+  if (remark !== (shipment.remark ?? '').trim()) command.remark = remark
+  try {
+    const originalTime = shipment.shipTime ? businessDateTime(shipment.shipTime) : ''
+    if (logisticsForm.shipTime && logisticsForm.shipTime !== originalTime) {
+      command.shipTime = businessInstant(
+        `${logisticsForm.shipTime.replace(' ', 'T')}+08:00`,
+      ).toISOString()
+    }
+    if (Object.keys(command).length === 1) {
+      logisticsEditVisible.value = false
+      return
+    }
+    savingLogistics.value = true
+    const updated = await updateSalesShipmentLogistics(shipment.id, command)
+    if (detail.value?.id === updated.id) detail.value = updated
+    logisticsEditVisible.value = false
+    ElMessage.success('发货物流信息已保存')
+    await loadRows()
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason, '发货物流信息保存失败'))
+  } finally {
+    savingLogistics.value = false
   }
 }
 

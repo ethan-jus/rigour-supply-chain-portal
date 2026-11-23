@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import BusinessDictionaryView from '@/views/supply-chain/settings/BusinessDictionaryView.vue'
-import { getBizDicts, getBizDictItems } from '@/api/core/business-settings'
+import {
+  createBizDict,
+  createBizDictItem,
+  getBizDicts,
+  getBizDictItems,
+} from '@/api/core/business-settings'
 import type { DictItemView, DictView } from '@/api/core/business-settings'
 
 const route = vi.hoisted(() => ({ query: {} as Record<string, string> }))
@@ -70,6 +75,7 @@ afterEach(() => {
 })
 async function page() {
   wrapper = mount(BusinessDictionaryView, {
+    attachTo: document.body,
     global: { plugins: [ElementPlus], stubs: { DictionarySourceMappings: true } },
   })
   await flushPromises()
@@ -82,6 +88,82 @@ async function choose(view: VueWrapper, name: string) {
     .trigger('click')
   await flushPromises()
 }
+describe('字典保存反馈', () => {
+  it('缺少字典项编码时在输入框下提示，补齐后提交并刷新列表', async () => {
+    const view = await page()
+    await view
+      .findAll('button')
+      .find((button) => button.text() === '新增字典项')!
+      .trigger('click')
+    const dialog = view.get('[role="dialog"][aria-label="新增字典项"]')
+    const inputs = dialog.findAll<HTMLInputElement>('.el-form-item input')
+    await inputs[0]!.setValue('大箱')
+    const save = dialog.findAll('button').find((button) => button.text() === '保存')!
+    await save.trigger('click')
+    await flushPromises()
+
+    await vi.waitFor(() => expect(dialog.get('.el-form-item__error').text()).toBe('请输入编码'))
+    expect(createBizDictItem).not.toHaveBeenCalled()
+
+    const added = item('LARGE_BOX', '大箱')
+    vi.mocked(createBizDictItem).mockResolvedValueOnce(added)
+    vi.mocked(getBizDictItems).mockResolvedValueOnce([item('BOX', '箱'), added])
+    await inputs[1]!.setValue('  large_box  ')
+    await save.trigger('click')
+    await flushPromises()
+    expect(createBizDictItem).toHaveBeenCalledWith(
+      'unit',
+      expect.objectContaining({
+        dictionaryItemName: '大箱',
+        dictionaryItemCode: 'LARGE_BOX',
+        dictionaryCode: 'UNIT',
+      }),
+    )
+    expect(view.find('.master-detail').text()).toContain('大箱')
+  })
+
+  it('字典项保存冲突显示在弹窗内，保留已填数据', async () => {
+    const view = await page()
+    await view
+      .findAll('button')
+      .find((button) => button.text() === '新增字典项')!
+      .trigger('click')
+    const dialog = view.get('[role="dialog"][aria-label="新增字典项"]')
+    const inputs = dialog.findAll<HTMLInputElement>('.el-form-item input')
+    await inputs[0]!.setValue('其他箱')
+    await inputs[1]!.setValue('BOX')
+    vi.mocked(createBizDictItem).mockRejectedValueOnce(new Error('字典项编码已存在'))
+
+    const save = dialog.findAll('button').find((button) => button.text() === '保存')!
+    await save.trigger('click')
+    await flushPromises()
+    expect(dialog.get('[role="alert"]').text()).toContain('字典项编码已存在')
+    expect(inputs[0]!.element.value).toBe('其他箱')
+    expect(inputs[1]!.element.value).toBe('BOX')
+    expect(save.attributes('disabled')).toBeUndefined()
+  })
+
+  it('新增字典校验编码格式', async () => {
+    const view = await page()
+    await view
+      .findAll('button')
+      .find((button) => button.text() === '新增字典')!
+      .trigger('click')
+    const dialog = view.get('[role="dialog"][aria-label="新增字典"]')
+    await dialog.get('input[placeholder="例如：商品单位"]').setValue('冷链规格')
+    await dialog.get('input[placeholder="例如 PRODUCT_UNIT"]').setValue('冷链-规格')
+    await dialog
+      .findAll('button')
+      .find((button) => button.text() === '保存')!
+      .trigger('click')
+    await flushPromises()
+    await vi.waitFor(() =>
+      expect(dialog.get('.el-form-item__error').text()).toContain('编码须以英文字母开头'),
+    )
+    expect(createBizDict).not.toHaveBeenCalled()
+  })
+})
+
 describe('数据字典目录与详情', () => {
   it('从运输详情直达指定字典及订货宝来源值', async () => {
     route.query = {
