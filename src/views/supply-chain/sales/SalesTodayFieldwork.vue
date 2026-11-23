@@ -29,6 +29,7 @@
           departmentId,
           descendants: departmentId && includeSubDepartments ? '1' : undefined,
           person: profile,
+          view: 'report',
         },
       }"
       >查看人员日报</router-link

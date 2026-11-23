@@ -8,8 +8,16 @@
     >
       <img :src="url" alt="门头照" />
     </button>
-    <button v-else-if="failed" type="button" class="field-link" @click="load">重试</button>
-    <span v-else>{{ message }}</span>
+    <button
+      v-else-if="failed"
+      type="button"
+      class="field-link"
+      :title="failureReason"
+      @click="load"
+    >
+      {{ failedLabel }}
+    </button>
+    <span v-else :title="message === '—' ? '无门头照' : undefined">{{ message }}</span>
     <el-image-viewer
       v-if="preview && url"
       :url-list="[url]"
@@ -30,6 +38,8 @@ const cell = ref<HTMLElement>()
 const url = ref('')
 const preview = ref(false)
 const failed = ref(false)
+const failedLabel = ref('重试')
+const failureReason = ref('')
 const message = ref('加载中')
 const request = new AbortController()
 let observer: IntersectionObserver | undefined
@@ -40,7 +50,7 @@ async function load() {
     const { photos } = await visitPhotos(props.visitId, request.signal)
     const photo = photos.find((item) => item.evidenceStatus === 'TECHNICALLY_VERIFIED') ?? photos[0]
     if (!photo) {
-      message.value = '暂无'
+      message.value = '—'
       return
     }
     const blob = await evidenceBlob(
@@ -53,7 +63,15 @@ async function load() {
   } catch (error) {
     if (request.signal.aborted) return
     if (error instanceof ApiError && error.status === 403) message.value = '无权限'
-    else failed.value = true
+    else {
+      failureReason.value = error instanceof Error ? error.message : '门头照读取失败'
+      if (error instanceof ApiError) failureReason.value += '（' + error.code + '）'
+      failedLabel.value =
+        error instanceof ApiError && error.code === 'SALES_EVIDENCE_STORAGE_FAILED'
+          ? '原图读取失败'
+          : '重试'
+      failed.value = true
+    }
   }
 }
 onMounted(() => {
@@ -73,13 +91,9 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.storefront {
-  font-size: 12px;
-  color: var(--field-muted);
-}
 .storefront button {
-  display: inline-flex;
-  vertical-align: middle;
+  display: block;
+  font: inherit;
   padding: 0;
   background: transparent;
   border: 0;
@@ -88,10 +102,10 @@ onBeforeUnmount(() => {
 }
 .storefront img {
   display: block;
-  width: 48px;
+  width: 64px;
   max-width: 100%;
-  height: 36px;
+  height: 42px;
   object-fit: cover;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 </style>

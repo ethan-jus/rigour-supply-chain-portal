@@ -1,23 +1,199 @@
 <template>
-  <section class="field-page field-report">
-    <div v-if="ledgerReturn" class="field-heading-tools">
-      <a :href="ledgerReturn.href" class="field-link" @click="returnToLedger">
+  <section
+    class="field-page field-report"
+    :class="{
+      'team-workspace': tab === 'overview' || tab === 'day',
+      'day-workspace': tab === 'day',
+    }"
+  >
+    <div v-if="tab === 'overview' || tab === 'day'" class="team-crumb">
+      销售管理 <el-icon><ArrowRight /></el-icon> 团队外勤
+      <template v-if="tab === 'day' && selected"
+        ><el-icon><ArrowRight /></el-icon>{{ selected.employeeName }}</template
+      >
+    </div>
+    <div v-if="tab === 'day'" class="field-heading-tools">
+      <a :href="returnTarget.href" class="field-link team-back" @click="returnToSource">
+        <el-icon><Back /></el-icon>
         {{
-          ledgerReturn.query.detail || ledgerReturn.query.visitId ? '返回拜访详情' : '返回拜访记录'
+          returnTarget.name === 'SupplySalesVisitsRecords'
+            ? returnTarget.query.detail || returnTarget.query.visitId
+              ? '返回拜访详情'
+              : '返回拜访记录'
+            : returnTarget.query.view === 'report'
+              ? '返回人员日报'
+              : '返回团队总览'
         }}
       </a>
     </div>
     <header class="field-heading">
-      <div class="field-title">
-        <SupplyPageTitle>{{ route.meta.title }}</SupplyPageTitle>
+      <div>
+        <div class="field-title">
+          <h1 v-if="tab === 'day'" class="day-heading">
+            {{ selected ? selected.employeeName + '的工作日' : '个人工作日' }}
+          </h1>
+          <h1 v-else-if="tab === 'overview'">团队外勤</h1>
+          <SupplyPageTitle v-else>{{ route.meta.title }}</SupplyPageTitle>
+        </div>
+        <p v-if="tab === 'day' && selected && report" class="person-meta">
+          {{
+            [selected.departmentName, report.date, attendanceNames[selected.status]]
+              .filter(Boolean)
+              .join('　·　')
+          }}
+        </p>
       </div>
-      <div class="field-heading-tools">
-        <span v-if="report">数据截至 {{ asOf }}</span>
-        <button type="button" class="field-link" @click="methodOpen = true">指标口径</button>
+      <div v-if="tab !== 'day'" class="field-heading-tools">
+        <div v-if="tab !== 'overview'" class="field-tabbar" role="group" aria-label="团队外勤视图">
+          <button
+            class="field-tab"
+            type="button"
+            aria-pressed="false"
+            @click="selectTab('overview')"
+          >
+            团队总览
+          </button>
+          <button
+            class="field-tab"
+            type="button"
+            :aria-pressed="tab === 'report'"
+            @click="selectTab('report')"
+          >
+            人员日报
+          </button>
+          <button
+            v-if="canMap"
+            class="field-tab"
+            type="button"
+            :aria-pressed="tab === 'compare'"
+            @click="selectTab('compare')"
+          >
+            轨迹对比
+          </button>
+        </div>
+        <span v-if="report" class="data-asof"
+          ><el-icon><Clock /></el-icon> 数据截至 {{ asOf }}</span
+        >
+        <el-dropdown v-if="tab === 'overview'" trigger="click">
+          <button type="button" class="view-more" aria-label="更多团队外勤功能">
+            <el-icon><MoreFilled /></el-icon>
+          </button>
+          <template #dropdown
+            ><el-dropdown-menu>
+              <el-dropdown-item @click="selectTab('report')">人员日报</el-dropdown-item>
+              <el-dropdown-item v-if="canMap" @click="selectTab('compare')"
+                >轨迹对比</el-dropdown-item
+              >
+              <el-dropdown-item @click="methodOpen = true">指标口径</el-dropdown-item>
+            </el-dropdown-menu></template
+          >
+        </el-dropdown>
+        <button
+          v-if="tab !== 'overview'"
+          type="button"
+          class="field-link"
+          @click="methodOpen = true"
+        >
+          指标口径
+        </button>
       </div>
     </header>
 
+    <form
+      v-if="tab === 'overview'"
+      class="team-filters"
+      aria-label="团队总览筛选"
+      @submit.prevent="search"
+    >
+      <div class="team-filter-group">
+        <label for="team-workdate">工作日</label>
+        <div class="team-date">
+          <button type="button" aria-label="前一日" @click="shiftDate(-1)">
+            <el-icon><ArrowLeft /></el-icon>
+          </button>
+          <input
+            id="team-workdate"
+            type="date"
+            :value="filter.date"
+            :max="today"
+            @change="changeWorkDate"
+          />
+          <button
+            type="button"
+            aria-label="后一日"
+            :disabled="filter.date >= today"
+            @click="shiftDate(1)"
+          >
+            <el-icon><ArrowRight /></el-icon>
+          </button>
+        </div>
+      </div>
+      <div class="team-filter-group">
+        <label for="team-department">部门</label>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select
+            id="team-department"
+            v-model="filter.departmentId"
+            clearable
+            filterable
+            aria-label="部门"
+            placeholder="全部部门"
+            @change="changeDept"
+          >
+            <el-option
+              v-for="item in options.departments"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </div>
+        <el-checkbox
+          v-if="filter.departmentId"
+          v-model="filter.includeDescendants"
+          @change="changeDept"
+          >含子部门</el-checkbox
+        >
+      </div>
+      <div class="list-filter-field">
+        <el-select
+          v-model="filter.person"
+          clearable
+          filterable
+          aria-label="搜索业务员"
+          placeholder="搜索业务员"
+          @change="search"
+        >
+          <template #prefix
+            ><el-icon><Search /></el-icon
+          ></template>
+          <el-option
+            v-for="item in options.people"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
+        </el-select>
+      </div>
+      <el-tag v-if="filter.city" closable @close="pickCity('')">{{ cityName(filter.city) }}</el-tag>
+      <button
+        v-if="
+          filter.date !== today ||
+          filter.departmentId ||
+          filter.person ||
+          filter.city ||
+          filter.status ||
+          filter.pendingOnly
+        "
+        type="button"
+        class="field-link"
+        @click="reset"
+      >
+        重置
+      </button>
+    </form>
     <OrderRegisterFilterCard
+      v-else-if="tab !== 'day'"
       class="order-register-filter--compact"
       :loading="busy"
       @search="search"
@@ -111,7 +287,7 @@
     </OrderRegisterFilterCard>
 
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <template v-if="report">
+    <template v-if="report && tab === 'report'">
       <details class="field-panel team-summary" :open="summaryOpen" @toggle="rememberSummary">
         <summary>团队工作日汇总</summary>
         <dl class="metrics" aria-label="当前筛选范围的指标">
@@ -153,264 +329,211 @@
       </div>
     </template>
 
-    <div class="field-panel field-tabbar" role="group" aria-label="团队外勤视图">
-      <button
-        class="field-tab"
-        type="button"
-        :aria-pressed="tab === 'map'"
-        @click="selectTab('map')"
-      >
-        人员与轨迹
-      </button>
-      <button
-        class="field-tab"
-        type="button"
-        :aria-pressed="tab === 'report'"
-        @click="selectTab('report')"
-      >
-        人员日报
-      </button>
-      <button
-        v-if="canMap"
-        class="field-tab"
-        type="button"
-        :aria-pressed="tab === 'compare'"
-        @click="selectTab('compare')"
-      >
-        轨迹对比
-      </button>
-    </div>
-    <div v-if="tab !== 'compare'" :class="{ 'field-map-workbench': tab === 'map' }">
-      <aside
-        v-if="tab === 'map'"
-        class="field-panel map-roster"
-        v-loading="busy"
-        aria-labelledby="map-roster-title"
-      >
-        <header class="field-panel-header">
-          <h2 id="map-roster-title">业务员</h2>
+    <FieldTeamRoster
+      v-if="tab === 'overview' && report"
+      :report="report"
+      :avatar-style="avatarStyle"
+      :page="page"
+      :size="size"
+      :status="reportFilters.status"
+      @choose="choose"
+      @status="setWorkStatus"
+      @page="turn"
+      @size="resize"
+    />
+    <section
+      v-if="tab === 'report'"
+      class="field-panel roster"
+      aria-labelledby="field-roster-title"
+      v-loading="busy"
+    >
+      <header class="field-panel-header">
+        <div class="roster-heading">
+          <h2 id="field-roster-title">{{ rosterTitle }}</h2>
           <span v-if="report" class="field-count">{{ report.total }} 人</span>
-        </header>
-        <div class="map-roster-list" tabindex="0" role="region" aria-label="业务员列表">
+        </div>
+        <div class="field-panel-tools">
           <button
-            v-for="row in mapRows"
-            :key="row.salesProfileId"
+            class="field-button"
             type="button"
-            class="map-roster-person"
-            :aria-pressed="row.salesProfileId === selected?.salesProfileId"
-            @click="choose(row)"
+            :aria-pressed="filter.pendingOnly"
+            @click="togglePending"
           >
-            <span class="employee-initial" aria-hidden="true">{{
-              row.employeeName.slice(0, 1)
-            }}</span>
-            <span class="map-roster-name"
-              ><strong>{{ row.employeeName }}</strong
-              ><small>{{ row.departmentName || '部门待核' }}</small></span
-            >
-            <span class="field-status" :data-status="row.status">{{
-              workNames[row.status] || row.status
-            }}</span>
+            只看待核<span v-if="report"> · {{ report.summary.pendingPeople }} 人</span>
           </button>
-        </div>
-        <p v-if="report && !report.items.length" class="field-empty">当前筛选没有匹配的员工</p>
-        <div v-if="report && report.total > size" class="map-roster-pages">
-          <el-button size="small" :disabled="page === 1" @click="turn(page - 1)">上一页</el-button>
-          <span>{{ page }} / {{ Math.ceil(report.total / size) }}</span>
-          <el-button size="small" :disabled="page * size >= report.total" @click="turn(page + 1)"
-            >下一页</el-button
-          >
-        </div>
-      </aside>
-      <section
-        v-if="tab === 'report'"
-        class="field-panel roster"
-        aria-labelledby="field-roster-title"
-        v-loading="busy"
-      >
-        <header class="field-panel-header">
-          <div class="roster-heading">
-            <h2 id="field-roster-title">{{ rosterTitle }}</h2>
-            <span v-if="report" class="field-count">{{ report.total }} 人</span>
-          </div>
-          <div class="field-panel-tools">
-            <button
-              class="field-button"
-              type="button"
-              :aria-pressed="filter.pendingOnly"
-              @click="togglePending"
+          <div class="field-filter">
+            <span class="field-filter-label">排序</span>
+            <el-select
+              v-model="filter.sort"
+              size="small"
+              aria-label="排序"
+              class="roster-sort"
+              @change="search"
             >
-              只看待核<span v-if="report"> · {{ report.summary.pendingPeople }} 人</span>
-            </button>
-            <div class="field-filter">
-              <span class="field-filter-label">排序</span>
-              <el-select
-                v-model="filter.sort"
-                size="small"
-                aria-label="排序"
-                class="roster-sort"
-                @change="search"
-              >
-                <el-option label="待核优先" value="risk" />
-                <el-option label="拜访最多" value="visits" />
-                <el-option label="里程最多" value="distance" />
-              </el-select>
-            </div>
+              <el-option label="待核优先" value="risk" />
+              <el-option label="拜访最多" value="visits" />
+              <el-option label="里程最多" value="distance" />
+            </el-select>
           </div>
-        </header>
-        <div
-          class="field-table-wrap roster-scroll"
-          tabindex="0"
-          role="region"
-          aria-label="人员日报，可横向浏览"
-        >
-          <table class="field-table roster-table">
-            <thead>
-              <tr>
-                <th scope="col">员工 / 部门</th>
-                <th scope="col">
-                  <el-dropdown trigger="click" @command="setWorkStatus">
-                    <button
-                      type="button"
-                      :class="['field-column-filter', { 'is-active': filter.status }]"
-                      aria-label="筛选工作状态"
-                      :title="workNames[filter.status] || '筛选工作状态'"
-                    >
-                      工作状态 <el-icon><Filter /></el-icon>
-                    </button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="" :disabled="!filter.status"
-                          >全部工作状态</el-dropdown-item
-                        >
-                        <el-dropdown-item
-                          v-for="(label, value) in workNames"
-                          :key="value"
-                          :command="value"
-                          :disabled="filter.status === value"
-                          >{{ label }}</el-dropdown-item
-                        >
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
-                </th>
-                <th scope="col">打卡</th>
-                <th scope="col">门店 / 次</th>
-                <th scope="col">计划完成</th>
-                <th scope="col">工作时长</th>
-                <th scope="col">录音 / 已核时长</th>
-                <th scope="col">里程 km</th>
-                <th scope="col">企微新增</th>
-                <th scope="col">作业核查</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="r in report?.items"
-                :key="r.salesProfileId"
-                :class="{ selected: r.salesProfileId === selected?.salesProfileId }"
-                @click="choose(r)"
-              >
-                <th scope="row">
-                  <button
-                    class="employee"
-                    type="button"
-                    :aria-pressed="r.salesProfileId === selected?.salesProfileId"
-                    :aria-label="'查看' + r.employeeName + '工作日'"
-                    @click.stop="choose(r)"
-                  >
-                    <span class="employee-initial" aria-hidden="true">{{
-                      r.employeeName.slice(0, 1)
-                    }}</span>
-                    <strong :title="r.employeeName">{{ r.employeeName }}</strong>
-                    <small :title="r.departmentName || '部门待核'">{{
-                      r.departmentName || '部门待核'
-                    }}</small>
-                  </button>
-                </th>
-                <td>
-                  <span class="field-status" :data-status="r.status">{{
-                    workNames[r.status] || r.status
-                  }}</span>
-                </td>
-                <td>{{ r.punchCount }}</td>
-                <td>
-                  <b>{{ r.storeCount }}</b> / {{ r.visitCount }}
-                </td>
-                <td>{{ r.completedPlans }} / {{ r.planned }}</td>
-                <td>
-                  {{
-                    r.status === 'MISSING_CHECKOUT' && !r.periods.some((p) => p.end)
-                      ? '—'
-                      : duration(r.workMinutes)
-                  }}<sup v-if="r.status === 'ACTIVE'">暂</sup
-                  ><sup v-else-if="r.status === 'MISSING_CHECKOUT'">待</sup>
-                </td>
-                <td>
-                  {{ r.files }} / {{ recordings(r.files, r.verifiedFiles, r.verifiedMillis)
-                  }}<sup v-if="r.files > r.verifiedFiles">待</sup>
-                </td>
-                <td>
-                  {{ r.distanceMeters == null ? '—' : (r.distanceMeters / 1000).toFixed(1)
-                  }}<sup v-if="r.gapCount">断</sup>
-                </td>
-                <td>{{ r.newContacts ?? '待同步' }}</td>
-                <td>
-                  <button
-                    v-if="r.issues.length"
-                    class="field-button risk"
-                    type="button"
-                    @click.stop="inspectEmployee(r)"
-                  >
-                    {{ r.issues[0]?.title
-                    }}{{ r.issues.length > 1 ? ' +' + (r.issues.length - 1) : '' }}
-                  </button>
-                  <span v-else class="field-muted">{{
-                    r.pendingReviewCount
-                      ? r.pendingReviewCount + ' 项待核'
-                      : r.workDayId && r.distanceMeters == null
-                        ? r.summaryPending
-                          ? '计算中'
-                          : '点位不足'
-                        : '—'
-                  }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
         </div>
-        <p v-if="report && !report.items.length" class="field-empty">当前筛选没有匹配的员工</p>
-        <ListTableFooter v-if="report && report.total > size">
-          <CompactPagination
-            :current-page="page"
-            :page-size="size"
-            :total="report.total"
-            :page-sizes="[20, 50, 100]"
-            @current-change="turn"
-            @size-change="resize"
-          />
-        </ListTableFooter>
-      </section>
-      <SalesFieldworkDay
-        v-if="tab === 'map' && selected && report"
-        workbench
-        :key="report.date + selected.salesProfileId"
-        :person="rosterPerson(selected)"
-        :daily="selected"
-        :date="report.date"
-        :initial-visit="focusVisit"
-        @ledger="toLedger"
-        @changed="load"
-      />
-      <p
-        v-else-if="tab === 'map' && report && focusVisit && focused"
-        class="field-panel field-empty"
-        role="status"
+      </header>
+      <div
+        class="field-table-wrap roster-scroll"
+        tabindex="0"
+        role="region"
+        aria-label="人员日报，可横向浏览"
       >
-        {{ extraLoading ? '正在定位拜访工作日' : '当前范围内找不到这次拜访的工作日' }}
-      </p>
-    </div>
+        <table class="field-table roster-table">
+          <thead>
+            <tr>
+              <th scope="col">员工 / 部门</th>
+              <th scope="col">
+                <el-dropdown trigger="click" @command="setWorkStatus">
+                  <button
+                    type="button"
+                    :class="['field-column-filter', { 'is-active': filter.status }]"
+                    aria-label="筛选工作状态"
+                    :title="workNames[filter.status] || '筛选工作状态'"
+                  >
+                    工作状态 <el-icon><Filter /></el-icon>
+                  </button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="" :disabled="!filter.status"
+                        >全部工作状态</el-dropdown-item
+                      >
+                      <el-dropdown-item
+                        v-for="(label, value) in workNames"
+                        :key="value"
+                        :command="value"
+                        :disabled="filter.status === value"
+                        >{{ label }}</el-dropdown-item
+                      >
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </th>
+              <th scope="col">打卡</th>
+              <th scope="col">门店 / 次</th>
+              <th scope="col">计划完成</th>
+              <th scope="col">工作时长</th>
+              <th scope="col">录音 / 已核时长</th>
+              <th scope="col">里程 km</th>
+              <th scope="col">企微新增</th>
+              <th scope="col">作业核查</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="r in report?.items"
+              :key="r.salesProfileId"
+              :class="{ selected: r.salesProfileId === selected?.salesProfileId }"
+              @click="choose(r)"
+            >
+              <th scope="row">
+                <button
+                  class="employee"
+                  type="button"
+                  :aria-pressed="r.salesProfileId === selected?.salesProfileId"
+                  :aria-label="'查看' + r.employeeName + '工作日'"
+                  @click.stop="choose(r)"
+                >
+                  <span
+                    class="employee-initial"
+                    :style="avatarStyle(r.salesProfileId)"
+                    aria-hidden="true"
+                    >{{ r.employeeName.slice(0, 1) }}</span
+                  >
+                  <strong :title="r.employeeName">{{ r.employeeName }}</strong>
+                  <small :title="r.departmentName || '部门待核'">{{
+                    r.departmentName || '部门待核'
+                  }}</small>
+                </button>
+              </th>
+              <td>
+                <span class="field-status" :data-status="r.status">{{
+                  workNames[r.status] || r.status
+                }}</span>
+              </td>
+              <td>{{ r.punchCount }}</td>
+              <td>
+                <b>{{ r.storeCount }}</b> / {{ r.visitCount }}
+              </td>
+              <td>{{ r.completedPlans }} / {{ r.planned }}</td>
+              <td>
+                {{
+                  r.status === 'MISSING_CHECKOUT' && !r.periods.some((p) => p.end)
+                    ? '—'
+                    : duration(r.workMinutes)
+                }}<sup v-if="r.status === 'ACTIVE'">暂</sup
+                ><sup v-else-if="r.status === 'MISSING_CHECKOUT'">待</sup>
+              </td>
+              <td>
+                {{ r.files }} / {{ recordings(r.files, r.verifiedFiles, r.verifiedMillis)
+                }}<sup v-if="r.files > r.verifiedFiles">待</sup>
+              </td>
+              <td>
+                {{ r.distanceMeters == null ? '—' : (r.distanceMeters / 1000).toFixed(1)
+                }}<sup v-if="r.gapCount">断</sup>
+              </td>
+              <td>{{ r.newContacts ?? '待同步' }}</td>
+              <td>
+                <button
+                  v-if="r.issues.length"
+                  class="field-button risk"
+                  type="button"
+                  @click.stop="inspectEmployee(r)"
+                >
+                  {{ r.issues[0]?.title
+                  }}{{ r.issues.length > 1 ? ' +' + (r.issues.length - 1) : '' }}
+                </button>
+                <span v-else class="field-muted">{{
+                  r.pendingReviewCount
+                    ? r.pendingReviewCount + ' 项待核'
+                    : r.workDayId && r.distanceMeters == null
+                      ? r.summaryPending
+                        ? '计算中'
+                        : '点位不足'
+                      : '—'
+                }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-if="report && !report.items.length" class="field-empty">当前筛选没有匹配的员工</p>
+      <ListTableFooter v-if="report && report.total > size">
+        <CompactPagination
+          :current-page="page"
+          :page-size="size"
+          :total="report.total"
+          :page-sizes="[20, 50, 100]"
+          @current-change="turn"
+          @size-change="resize"
+        />
+      </ListTableFooter>
+    </section>
+    <SalesFieldworkDay
+      v-if="tab === 'day' && selected && report"
+      workbench
+      :key="report.date + selected.salesProfileId"
+      :person="rosterPerson(selected)"
+      :daily="selected"
+      :date="report.date"
+      :initial-visit="focusVisit"
+      @ledger="toLedger"
+      @changed="load"
+    />
+    <p
+      v-else-if="tab === 'day' && report && !selected"
+      class="field-panel field-empty"
+      role="status"
+    >
+      当前范围内找不到该业务员的工作日
+    </p>
+    <p v-if="busy" class="field-empty" role="status">正在读取工作日数据</p>
     <SalesTrackComparison
-      v-else-if="canMap && report"
+      v-if="tab === 'compare' && canMap && report"
       :staff-options="options.people"
       :initial-person="selected?.salesProfileId"
       :initial-date="report.date"
@@ -437,7 +560,15 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from 'vue-router'
-import { Filter } from '@element-plus/icons-vue'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Back,
+  Clock,
+  Filter,
+  MoreFilled,
+  Search,
+} from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { businessDate } from '@/utils/business-date'
 import { fieldClock } from '@/api/core/sales-fieldwork'
@@ -453,6 +584,8 @@ import {
   type DailyReport,
   type ReportEmployee,
 } from '@/api/core/sales-fieldwork-report'
+import { attendanceNames, teamAvatarColor } from './team-attendance'
+import FieldTeamRoster from './FieldTeamRoster.vue'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import ListTableFooter from '@/components/supply/ListTableFooter.vue'
@@ -479,9 +612,12 @@ const defaults = () => ({
   sort: 'risk',
 })
 const filter = ref(defaults())
-const tab = computed(() =>
-  q('view') === 'compare' && canMap.value ? 'compare' : q('view') === 'report' ? 'report' : 'map',
-)
+const tab = computed(() => {
+  if (q('view') === 'compare' && canMap.value) return 'compare'
+  if (q('view') === 'report') return 'report'
+  if ((q('view') === 'map' || q('visit')) && (q('selected') || q('person'))) return 'day'
+  return 'overview'
+})
 const summaryOpen = ref(tab.value === 'report')
 watch(tab, (value) => {
   summaryOpen.value = value === 'report'
@@ -494,23 +630,26 @@ const size = computed(() => ([20, 50, 100].includes(Number(q('size'))) ? Number(
 const focused = computed(() => q('selected') || q('person'))
 const focusVisit = computed(() => q('visit'))
 const comparisonMode = computed(() => (q('compareMode') === 'person' ? 'person' : 'day'))
-const ledgerReturn = computed(() => {
-  const target = q('ledgerBack')
-  if (!canMap.value || !target.startsWith('/') || target.startsWith('//')) return null
-  const resolved = router.resolve(target)
-  return resolved.name === 'SupplySalesVisitsRecords' ? resolved : null
+const returnTarget = computed(() => {
+  const source = q('ledgerBack') || q('teamBack')
+  if (source.startsWith('/') && !source.startsWith('//')) {
+    const resolved = router.resolve(source)
+    if (resolved.name === (q('ledgerBack') ? 'SupplySalesVisitsRecords' : 'SupplySalesDashboard'))
+      return resolved
+  }
+  return router.resolve({ name: 'SupplySalesDashboard', query: { date: q('date') || undefined } })
 })
 const reportFilters = computed(() => ({
   date: q('date') || today,
   city: q('city'),
   departmentId: q('departmentId'),
-  person: q('person'),
+  person: tab.value === 'day' ? focused.value : q('person'),
   status: q('status'),
   sort: q('sort') || 'risk',
   includeDescendants: q('descendants') === '1',
   pendingOnly: q('pendingOnly') === '1',
-  page: page.value,
-  size: size.value,
+  page: tab.value === 'day' ? 1 : page.value,
+  size: tab.value === 'day' ? 1 : size.value,
 }))
 const reportKey = computed(() => JSON.stringify(reportFilters.value))
 const owner = computed(() =>
@@ -524,45 +663,13 @@ const options = ref<Pick<DailyReport, 'cities' | 'people' | 'departments'>>({
   people: [],
   departments: [],
 })
-const extraSelection = ref<ReportEmployee | null>(null)
-const extraLoading = ref(false)
-const mapRows = computed(() => {
-  const rows = report.value?.items ?? []
-  return extraSelection.value ? [extraSelection.value, ...rows] : rows
-})
-const selected = computed(() => {
-  const match = mapRows.value.find((row) => row.salesProfileId === focused.value)
-  return match || (focusVisit.value && focused.value ? undefined : mapRows.value[0])
-})
-watch([report, focused, focusVisit, owner], async (_, __, onCleanup) => {
-  extraLoading.value = false
-  extraSelection.value = null
-  const shown = report.value
-  const id = focused.value
-  if (!shown || !focusVisit.value || !id || shown.items.some((row) => row.salesProfileId === id))
-    return
-  const request = new AbortController()
-  onCleanup(() => request.abort())
-  extraLoading.value = true
-  try {
-    const result = await readFieldReport(
-      {
-        ...reportFilters.value,
-        person: id,
-        page: 1,
-        size: 1,
-      },
-      request.signal,
-    )
-    if (!request.signal.aborted)
-      extraSelection.value = result.items.find((row) => row.salesProfileId === id) ?? null
-  } catch (cause) {
-    if (!request.signal.aborted)
-      error.value = cause instanceof Error ? cause.message : '所选业务员的工作日读取失败'
-  } finally {
-    if (!request.signal.aborted) extraLoading.value = false
-  }
-})
+const avatarIndices = new Map<string, number>()
+function avatarStyle(id: string) {
+  return teamAvatarColor(avatarIndices.get(id) ?? 0)
+}
+const selected = computed(() =>
+  report.value?.items.find((row) => row.salesProfileId === focused.value),
+)
 const asOf = computed(() =>
   report.value
     ? businessDate(report.value.asOf).slice(5) + ' ' + fieldClock(report.value.asOf)
@@ -587,9 +694,9 @@ const caseOpen = ref(false),
   caseError = ref(''),
   cases = ref<FieldworkCase[]>([])
 let active: AbortController | undefined, caseRequest: AbortController | undefined
-function returnToLedger(event: MouseEvent) {
+function returnToSource(event: MouseEvent) {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-  const target = ledgerReturn.value
+  const target = returnTarget.value
   if (!target) return
   event.preventDefault()
   if (router.options.history.state.back === target.fullPath) router.back()
@@ -602,7 +709,15 @@ function selectTab(view: string) {
   void updateQuery({ view })
 }
 function choose(row: ReportEmployee) {
-  void updateQuery({ selected: row.salesProfileId, visit: undefined, view: 'map' })
+  void router.push({
+    name: 'SupplySalesDashboard',
+    query: {
+      view: 'map',
+      date: reportFilters.value.date,
+      selected: row.salesProfileId,
+      teamBack: route.fullPath,
+    },
+  })
 }
 function inspectEmployee(row: ReportEmployee) {
   void openCase(row)
@@ -654,9 +769,15 @@ async function load() {
       token.signal,
     )
     if (!token.signal.aborted) {
-      if (!data.items.length && page.value > 1) {
+      if (!data.items.length && tab.value !== 'day' && page.value > 1) {
         await updateQuery({ page: String(Math.max(1, Math.ceil(data.total / size.value))) }, true)
         return
+      }
+      for (const id of [
+        ...data.people.map((p) => p.id),
+        ...data.items.map((p) => p.salesProfileId),
+      ]) {
+        if (!avatarIndices.has(id)) avatarIndices.set(id, avatarIndices.size)
       }
       report.value = data
       options.value = data
@@ -719,6 +840,16 @@ function changeDept() {
   options.value = { ...options.value, people: [] }
   search()
 }
+function shiftDate(days: number) {
+  const date = new Date(filter.value.date + 'T12:00:00Z')
+  date.setUTCDate(date.getUTCDate() + days)
+  pickDate(date.toISOString().slice(0, 10))
+}
+function changeWorkDate(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.value && input.validity.valid) pickDate(input.value)
+  else input.value = filter.value.date
+}
 function pickDate(v: string) {
   filter.value.date = v
   search()
@@ -729,6 +860,18 @@ function reset() {
 }
 function toLedger(visit?: string, openDetail = false) {
   if (!selected.value) return
+  if (q('ledgerBack') && returnTarget.value.name === 'SupplySalesVisitsRecords') {
+    const origin = returnTarget.value
+    if (openDetail && visit) {
+      void router.push({
+        name: 'SupplySalesVisitsRecords',
+        query: { ...origin.query, detail: visit, detailDate: reportFilters.value.date },
+      })
+    } else {
+      void router.push(origin.fullPath)
+    }
+    return
+  }
   const f = reportFilters.value
   void router.push({
     name: 'SupplySalesVisitsRecords',
@@ -749,7 +892,8 @@ function toLedger(visit?: string, openDetail = false) {
       fromVisit: visit,
       detail: openDetail ? visit : undefined,
       detailDate: openDetail && visit ? f.date : undefined,
-      boardView: tab.value,
+      boardView: tab.value === 'day' ? 'map' : tab.value,
+      dayBack: route.fullPath,
       boardSelected: selected.value.salesProfileId,
       boardDate: f.date,
       boardCity: f.city || undefined,
@@ -759,6 +903,7 @@ function toLedger(visit?: string, openDetail = false) {
   })
 }
 watch(owner, () => {
+  avatarIndices.clear()
   caseOpen.value = false
   caseRequest?.abort()
   cases.value = []
@@ -781,8 +926,143 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss" src="./sales-fieldwork.scss"></style>
 <style scoped lang="scss">
+.day-heading {
+  font-size: var(--app-font-size-heading);
+  font-weight: 600;
+}
 .field-report {
   gap: 10px;
+}
+.field-report.team-workspace {
+  --field-ink: #18324a;
+  --field-muted: #667888;
+  --field-line: #dfe5ea;
+  --field-accent: #235bd5;
+  padding: 4px clamp(0px, 1.3vw, 24px) 24px;
+  gap: 16px;
+  color: var(--field-ink);
+  font:
+    14px/1.5 Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  font-synthesis: none;
+}
+.field-report.day-workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding-bottom: 12px;
+}
+.team-crumb,
+.data-asof,
+.team-back,
+.team-filter-group,
+.team-date {
+  display: inline-flex;
+  align-items: center;
+}
+.team-crumb {
+  gap: 6px;
+  color: #697b8b;
+  font-size: 12px;
+}
+.team-workspace .field-heading {
+  margin-bottom: 4px;
+}
+.team-workspace .field-title h1 {
+  font-size: clamp(24px, 2vw, 31px);
+  font-weight: 680;
+  letter-spacing: -0.7px;
+  line-height: 1.45;
+  margin: 0;
+}
+.data-asof,
+.team-back {
+  gap: 6px;
+}
+.team-back {
+  font-weight: 500;
+  font-size: 13px;
+}
+.team-workspace .field-heading-tools {
+  font-size: 13px;
+}
+.person-meta {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: #667888;
+}
+.view-more,
+.team-date button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: #526679;
+}
+.team-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 14px 19px;
+  border: 1px solid #dfe5ea;
+  border-radius: 8px;
+  background: white;
+}
+.team-filter-group {
+  gap: 9px;
+}
+.team-filter-group > label {
+  font-size: 13px;
+  font-weight: 550;
+}
+.team-date {
+  height: 34px;
+  border: 1px solid #d3dce5;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+.team-date button {
+  width: 26px;
+  height: 100%;
+}
+.team-date button:disabled {
+  color: #b4bec6;
+  cursor: default;
+}
+.team-date input {
+  min-width: 0;
+  border: 0;
+  padding: 0 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+}
+.team-filters :deep(.el-select__wrapper) {
+  min-height: 34px;
+  padding-inline: 9px;
+  gap: 5px;
+  border-radius: 5px;
+}
+.team-filters :deep(.el-select__placeholder) {
+  color: #526679;
+}
+@media (max-width: 760px) {
+  .field-report.team-workspace {
+    padding-inline: 0;
+    gap: 12px;
+  }
+  .team-filters {
+    gap: 10px 13px;
+    padding: 10px;
+  }
 }
 .field-report .list-filter-field :deep(.el-date-editor.el-input) {
   width: 100%;
@@ -801,84 +1081,7 @@ onBeforeUnmount(() => {
   padding: 0 12px;
 }
 .field-report .field-tab {
-  min-height: 39px;
-}
-.field-map-workbench {
-  display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
-  align-items: start;
-  gap: 10px;
-}
-.map-roster .field-panel-header {
-  border-bottom: 1px solid var(--field-line);
-}
-.map-roster-list {
-  max-height: min(58vh, 540px);
-  overflow: auto;
-}
-.map-roster-person {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  min-height: 47px;
-  padding: 6px 9px;
-  border: 0;
-  border-bottom: 1px solid var(--field-line);
-  background: transparent;
-  color: var(--field-ink);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-.map-roster-person:last-child {
-  border-bottom: 0;
-}
-.map-roster-person:hover,
-.map-roster-person[aria-pressed='true'] {
-  background: var(--field-selected);
-}
-.map-roster-person:focus-visible {
-  outline: 2px solid var(--field-accent);
-  outline-offset: -3px;
-}
-.map-roster-name {
-  flex: 1;
-  min-width: 0;
-}
-.map-roster-name :is(strong, small) {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.map-roster-name small {
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--field-muted);
-}
-.map-roster-person .field-status {
-  white-space: nowrap;
-}
-.map-roster-pages {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 7px;
-  border-top: 1px solid var(--field-line);
-}
-@media (max-width: 1160px) {
-  .field-map-workbench {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .map-roster-list {
-    display: flex;
-  }
-  .map-roster-person {
-    flex: 0 0 185px;
-    border: 0;
-    border-right: 1px solid var(--field-line);
-  }
+  min-height: 32px;
 }
 .metrics {
   display: grid;
