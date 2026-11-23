@@ -237,7 +237,6 @@
         </div>
         <ListTableFooter class="employee-list-footer">
           <template #actions>
-            <DhbSalespersonSyncButton @completed="refresh" />
             <el-button :loading="loading" :icon="Refresh" @click="refresh">刷新</el-button>
             <el-button
               v-if="can('hr:employee:create')"
@@ -553,7 +552,6 @@
 <script setup lang="ts">
 import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
 import { displayCell, displayValue } from '@/utils/business-display'
-import DhbSalespersonSyncButton from '@/components/supply/DhbSalespersonSyncButton.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'

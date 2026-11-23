@@ -13,6 +13,7 @@ const messages = vi.hoisted(() => ({
   error: vi.fn(),
 }))
 
+vi.mock('@/api/core/client',()=>({apiClient:api}))
 vi.mock('@/api', () => ({ apiClient: api }))
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ hasPermission: (permission: string) => authPermissions.has(permission) }),
@@ -64,8 +65,8 @@ describe('销售精确轨迹权限', () => {
     vi.clearAllMocks()
     authPermissions.clear()
     api.get.mockImplementation((url: string) => {
-      if (url === '/sales/management/fieldwork') {
-        return Promise.resolve({ items: [{ salesProfileId: 'profile-1', salesNo: 'S001',employeeName:'测试销售' }],total:1 })
+      if (url === '/sales/management/fieldwork/report') {
+        return Promise.resolve({ people: [{ id: 'profile-1', name:'测试销售' }] })
       }
       if (url.includes('/track')) {
         return Promise.resolve({
@@ -105,7 +106,7 @@ describe('销售精确轨迹权限', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('无精确轨迹查看权限')
-    expect(api.get).toHaveBeenCalledWith('/sales/management/fieldwork', expect.any(Object))
+    expect(api.get).toHaveBeenCalledWith('/sales/management/fieldwork/report', expect.any(Object))
     expect(api.get).toHaveBeenCalledWith(
       '/sales/management/profiles/profile-1/track',
       expect.objectContaining({ params: expect.objectContaining({ date: expect.any(String) }) }),

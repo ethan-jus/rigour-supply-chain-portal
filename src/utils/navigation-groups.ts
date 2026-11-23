@@ -13,7 +13,7 @@ export function pageGroupFor(nodes: NavigationNode[], path: string): NavigationN
 }
 
 export function groupedNavigation(nodes: NavigationNode[], moduleName: string) {
-  type Link = { id: string; label: string; path: string; paths: string[] }
+  type Link = { id: string; label: string; path: string; paths: string[]; iconKey: string | null }
   const sections: { id: string; name: string; links: Link[] }[] = []
   function add(id: string, name: string, node: NavigationNode, pages: NavigationNode[]) {
     const paths = pages.flatMap((page) => (page.visible && page.routePath ? [page.routePath] : []))
@@ -23,7 +23,7 @@ export function groupedNavigation(nodes: NavigationNode[], moduleName: string) {
       group = { id, name, links: [] }
       sections.push(group)
     }
-    group.links.push({ id: node.id, label: node.displayName, path: paths[0], paths })
+    group.links.push({ id: node.id, label: node.displayName, path: paths[0], paths, iconKey: node.iconKey })
   }
   function visit(branch: NavigationNode[], id: string, name: string) {
     for (const node of branch) {

@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, expect, it, vi } from 'vitest'
 const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}))
 const permissions=vi.hoisted(()=>new Set<string>())
+vi.mock('@/stores/navigation',()=>({useNavigationStore:()=>({hasPath:()=>false})}))
 vi.mock('@/api/core/client',()=>({apiClient:api}))
 vi.mock('@/stores/auth',()=>({useAuthStore:()=>({user:{tenantId:'tenant',id:'admin',permissions:[]},hasPermission:(p:string)=>permissions.has(p)})}))
 vi.mock('@/utils/amap-js-api',()=>({isAmapJsConfigured:()=>false,loadAmapJsApi:vi.fn()}))
@@ -25,3 +26,34 @@ it('未关联门店的历史不显示零次结论',async()=>{permissions.add('sa
 it('切换拜访后旧历史响应不能覆盖当前记录',async()=>{permissions.add('sales:risk:read');let finish:(value:unknown)=>void=()=>{};api.get.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));const w=mount(History,{props:{visitId:'old'},global:{stubs,directives:{loading:()=>{}}}});api.get.mockResolvedValueOnce({storeLinked:false,current:{visitId:'new'},items:[],total:0});await w.setProps({visitId:'new'});await flushPromises();finish({storeLinked:true,current:{visitId:'old'},items:[],total:0});await flushPromises();expect((w.vm as unknown as {history:{current:{visitId:string}}}).history.current.visitId).toBe('new');w.unmount()})
 
 it('只有核查权限仍可从人员日期进入设备核查而不读取轨迹',async()=>{permissions.add('sales:risk:read');api.get.mockResolvedValue([]);const w=mount(Day,{props:{person:{...person,workDayId:'day'},date:'2026-11-13'},global:{stubs:{...stubs,ElDatePicker:slot,ElSelect:slot,ElOption:slot,ElSlider:slot,ElTable:slot,ElTableColumn:true,ElDrawer:true},directives:{loading:()=>{}}}});await flushPromises();expect(w.text()).toContain('暂无精确轨迹查看权限');expect((w.vm as unknown as {inspectorDayId:string}).inspectorDayId).toBe('day');expect(api.get).toHaveBeenCalledWith('/sales/management/profiles/profile/work-days/day/cases',expect.anything());expect(api.get.mock.calls.every(c=>!c[0].includes('/track'))).toBe(true);w.unmount()})
+
+it('按连续段核对设备采集、服务端接收和精度，缺口不合并进路段', async () => {
+  permissions.add('sales:location:sensitive:read')
+  const sample = (time: string, received: string, accuracyMeters: number) => ({
+    longitude: 120, latitude: 30, clientOccurredAt: time,
+    serverReceivedAt: received, qualityStatus: 'ACCEPTED', accuracyMeters,
+  })
+  const first = sample('2026-11-13T02:00:00Z', '2026-11-13T02:01:00Z', 10)
+  const second = sample('2026-11-13T02:29:00Z', '2026-11-13T02:33:00Z', 13)
+  api.get.mockResolvedValue({
+    ...track,
+    gaps: [{ from: '2026-11-13T02:04:00Z', to: second.clientOccurredAt, reason: 'GAP' }],
+    legs: [{ distanceMeters: 85, points: [first] }, { distanceMeters: 152, points: [second] }],
+    points: [first, second],
+  })
+  const view = mount(Day, {
+    props: { person: { ...person, workDayId: 'day' }, date: '2026-11-13' },
+    global: { stubs: { ...stubs, ElDrawer: true }, directives: { loading: () => {} } },
+  })
+  await flushPromises()
+  expect(view.text()).toContain('缺口 25 分')
+  await view.findAll('.timeline-tabs button')[1]!.trigger('click')
+  await view.findAll('.leg')[1]!.trigger('click')
+  expect(view.find('.leg-samples').text()).toContain('路段 2 的定位样点')
+  expect(view.find('.leg-samples tbody').text()).toContain('P2-1')
+  expect(view.find('.leg-samples tbody').text()).toContain('10:29')
+  expect(view.find('.leg-samples tbody').text()).toContain('10:33')
+  expect(view.find('.leg-samples tbody').text()).toContain('13 m')
+  expect(view.find('.leg-samples tbody').text()).not.toContain('10:00')
+  view.unmount()
+})

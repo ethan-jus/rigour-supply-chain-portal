@@ -11,6 +11,8 @@
         :clearable="false"
         @change="reload"
       />
+      <el-button @click="dateRange=weekRange();reload()">本周</el-button>
+      <router-link v-if="ledger" :to="{name:'SupplySalesVisitsRecords',query:{from:dateRange[0],to:dateRange[1],origin:'UNPLANNED'}}">计划外到店</router-link>
       <el-select v-model="statusFilter" clearable placeholder="全部状态" style="width: 150px" @change="reload">
         <el-option label="待执行" value="PLANNED" />
         <el-option label="进行中" value="IN_PROGRESS" />
@@ -52,7 +54,8 @@
         </el-table-column>
         <el-table-column label="执行" width="120">
           <template #default="scope">
-            <span v-if="scope.row.visitId">已关联拜访</span>
+            <router-link v-if="scope.row.visitId && ledger" :to="{name:'SupplySalesVisitsRecords',query:{from:scope.row.plannedDate,to:scope.row.plannedDate,person:scope.row.salesProfileId,visitId:scope.row.visitId}}">查看实际拜访</router-link>
+            <span v-else-if="scope.row.visitId">已关联拜访</span>
             <span v-else>尚未开始</span>
           </template>
         </el-table-column>
@@ -79,14 +82,6 @@
         />
       </div>
     </el-card>
-
-    <el-alert
-      title="计划与执行边界"
-      description="主管计划只定义销售、日期、CRM负责门店和拜访目标；销售仍需在飞书手机端到店定位后开始。临时拜访不要求先建计划。"
-      type="info"
-      :closable="false"
-      show-icon
-    />
 
     <el-dialog v-if="canManagePlans" v-model="dialogVisible" :title="editingPlanId ? '编辑拜访计划' : '新增拜访计划'" width="560px" destroy-on-close>
       <el-form label-position="top">
@@ -129,6 +124,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiClient } from '@/api'
+import {useNavigationStore} from '@/stores/navigation'
+import { businessDate } from '@/utils/business-date'
 import { useAuthStore } from '@/stores/auth'
 
 interface VisitPlanProfileOption {
@@ -173,9 +170,15 @@ interface ManagementVisitPlanPage {
   total: number
 }
 
-const today = localDate(new Date())
-const monthEnd = localDate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))
-const dateRange = ref<[string, string]>([today, monthEnd])
+const today = businessDate(new Date())
+function weekRange(): [string,string] {
+  const monday = new Date(businessDate(new Date())+'T00:00:00Z')
+  monday.setUTCDate(monday.getUTCDate()-(monday.getUTCDay()+6)%7)
+  const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate()+6)
+  return [monday.toISOString().slice(0,10),sunday.toISOString().slice(0,10)]
+}
+const dateRange = ref<[string, string]>(weekRange())
+const nav=useNavigationStore(),ledger=computed(()=>nav.hasPath('SUPPLY_CHAIN','/supply-chain/sales/visits/records'))
 const statusFilter = ref('')
 const page = ref(1)
 const pageSize = 20

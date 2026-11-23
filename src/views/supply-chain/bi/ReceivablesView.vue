@@ -726,10 +726,15 @@ async function download() {
   }
 }
 watch(
-  () => [route.path, route.query.regionCode, route.query.ownerStaffCode, route.query.month],
+  () => [route.path, route.query.regionCode, route.query.ownerStaffCode, route.query.month,
+    route.query.from, route.query.asOf],
   () => {
     const month = String(route.query.month || '')
-    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    const from = String(route.query.from || ''), asOf = String(route.query.asOf || '')
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(asOf)
+        && from <= asOf && asOf <= businessDate(new Date())) {
+      dates.value = [from, asOf]
+    } else if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
       const r = businessMonthRange(month)
       dates.value = [r[0], r[1] < businessDate(new Date()) ? r[1] : businessDate(new Date())]
     }

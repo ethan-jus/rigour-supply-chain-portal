@@ -1,7 +1,7 @@
 <template>
   <el-radio-group v-model="productView" aria-label="风险分析维度" class="risk-dimension">
-    <el-radio-button :value="false">合同到期</el-radio-button>
     <el-radio-button :value="true">商品账龄</el-radio-button>
+    <el-radio-button :value="false">合同到期</el-radio-button>
   </el-radio-group>
   <ReceivablesView v-if="!productView" />
   <PaymentRiskBoard v-else
@@ -23,7 +23,7 @@ import { getPaymentRisk, type PaymentRiskData } from '@/api/core/payment-risk'
 import PaymentRiskBoard from './components/PaymentRiskBoard.vue'
 
 import ReceivablesView from './ReceivablesView.vue'
-const productView = ref(false)
+const productView = ref(true)
 const route = useRoute()
 const data = ref<PaymentRiskData | null>(null)
 const loading = ref(false)
@@ -62,6 +62,7 @@ async function load(months: [string, string], cacheBypass = false) {
 watch(
   () => [productView.value, route.query.regionCode, route.query.ownerStaffCode],
   () => { if (productView.value) void load(range.value) },
+  { immediate: true },
 )
 </script>
 <style scoped>.risk-dimension { margin-bottom: 12px }</style>

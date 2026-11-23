@@ -141,7 +141,9 @@ const contentViewport = ref<HTMLElement | null>(null)
 const applicationCode = computed(() => String(route.meta.applicationCode || ''))
 
 const navigation = computed(() => navigationStore.getNavigation(applicationCode.value))
-const pageGroup = computed(() => pageGroupFor(navigation.value, route.path))
+const pageGroup = computed(() =>
+  route.meta.inlineSubviewNavigation ? undefined : pageGroupFor(navigation.value, route.path),
+)
 const tenantLabel = computed(() => authStore.user?.tenantName || '企业空间')
 
 const currentPageName = computed(() => {

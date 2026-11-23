@@ -16,6 +16,7 @@ const messages = vi.hoisted(() => ({
 }))
 const authPermissions = vi.hoisted(() => new Set<string>())
 
+vi.mock('@/stores/navigation',()=>({useNavigationStore:()=>({hasPath:()=>false})}))
 vi.mock('@/api', () => ({ apiClient: api }))
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ hasPermission: (permission: string) => authPermissions.has(permission) }),

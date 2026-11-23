@@ -97,7 +97,7 @@
       <div class="secondary-nav__body">
         <template v-if="isHome">
           <router-link v-if="home" :to="home.routePath!" :class="['secondary-link', { 'is-active': route.path === home.routePath }]"
-            ><ConsoleNavIcon icon-key="House" /><span>{{ home.displayName }}</span></router-link
+            ><ConsoleNavIcon v-if="home.iconKey" :icon-key="home.iconKey" /><span>{{ home.displayName }}</span></router-link
           >
           <section v-if="shortcuts.length" class="secondary-group">
             <h2>常用业务</h2>
@@ -142,6 +142,7 @@
             <router-link v-for="item in group.links" :key="item.id"
               :to="item.path" class="secondary-link" :class="{ 'is-active': item.paths.includes(route.path) }"
               :aria-current="item.paths.includes(route.path) ? 'page' : undefined">
+              <ConsoleNavIcon v-if="item.iconKey" :icon-key="item.iconKey" />
               <span>{{ item.label }}</span>
             </router-link>
           </section>

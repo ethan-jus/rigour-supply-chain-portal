@@ -4,7 +4,14 @@ export interface FieldworkCase { id:string; salesProfileId:string; workDayId:str
 export interface TranscriptSegment { startMs:number; endMs:number; text:string; speakerId:number|null }
 export interface RecordingAnalysis { clipId:string; clipIndex:number; status:string; transcript:string|null; segments:TranscriptSegment[]; summaryStatus:string; summary:string|null; summaryModel:string|null; errorCode:string|null; updatedAt:string }
 export interface VisitAnalysis { visitId:string; processingEnabled:boolean; clips:RecordingAnalysis[]; speakers:RecordingSpeaker[] }
-export interface RecordingClip { clipId:string; clipIndex:number; clientDurationMs:number|null }
+export interface RecordingClip {
+  clipId: string
+  clipIndex: number
+  clientDurationMs: number | null
+  uploadStatus: string
+  verifyStatus?: string
+  verifiedDurationMs?: number | null
+}
 export interface VisitRecordings { clips:RecordingClip[] }
 export interface PhotoEvidence { evidenceId:string; captureSource:string; capturedAt:string; distanceToTargetMeters:number|null; evidenceStatus:string }
 const options=(signal?:AbortSignal)=>({signal,cacheBypass:true,errorFeedback:'inline' as const})

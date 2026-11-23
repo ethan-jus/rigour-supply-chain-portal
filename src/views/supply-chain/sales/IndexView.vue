@@ -7,7 +7,6 @@
     </header>
 
     <SalesVisitPolicy v-if="pageKey === 'policies-visit'" />
-    <SalesFieldwork v-else-if="pageKey === 'dashboard'" />
     <SalesVisitPlans v-else-if="pageKey === 'visit-plans'" />
     <SalesVisitAppeals v-else-if="pageKey === 'visit-reviews'" />
     <SalesTrackComparison v-else-if="pageKey === 'exceptions-location'" />
@@ -19,13 +18,12 @@ import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import SalesVisitPolicy from './SalesVisitPolicy.vue'
-import SalesFieldwork from './SalesFieldwork.vue'
 import SalesVisitPlans from './SalesVisitPlans.vue'
 import SalesVisitAppeals from './SalesVisitAppeals.vue'
 import SalesTrackComparison from './SalesTrackComparison.vue'
 
 const route = useRoute()
-const pageKey = computed(() => String(route.meta.pageKey || 'dashboard'))
+const pageKey = computed(() => String(route.meta.pageKey || ''))
 </script>
 
 <style scoped lang="scss">

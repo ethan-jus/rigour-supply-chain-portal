@@ -1,35 +1,47 @@
 <template>
-  <div class="visit-evidence">
-    <div class="evidence-heading"><el-button text :icon="ArrowLeft" @click="emit('back')">返回</el-button><div><h2>{{ visit.storeName }}</h2><span>{{ employeeName }} · {{ fieldClock(visit.checkedInAt) }}–{{ fieldClock(visit.checkedOutAt) }}</span></div><el-tag class="capture-state" type="info">{{ visit.checkedOutAt?'采集已完成':'采集中' }}</el-tag><el-button :loading="loading" @click="load">刷新</el-button></div>
+  <div class="visit-evidence" :class="{ 'visit-evidence--inline': inline }">
+    <div v-if="!inline" class="evidence-heading"><el-button text :icon="ArrowLeft" @click="emit('back')">返回</el-button><div><h2>{{ visit.storeName }}</h2><span>{{ employeeName }} · {{ fieldClock(visit.checkedInAt) }}–{{ fieldClock(visit.checkedOutAt) }}</span></div><el-tag class="capture-state" type="info">{{ visit.checkedOutAt?'采集已完成':'采集中' }}</el-tag><el-button :loading="loading" @click="load">刷新</el-button></div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <div class="evidence-columns">
+      <aside v-if="inline" class="evidence-side"><slot name="facts" /></aside>
       <section class="evidence-main">
-        <el-tabs v-model="tab"><el-tab-pane label="录音与原文" name="audio" /><el-tab-pane :label="`现场照片 ${photos.length}`" name="photos" /><el-tab-pane label="位置信息" name="position" /></el-tabs>
+        <el-tabs v-model="tab">
+          <el-tab-pane :label="inline ? '录音与转写' : '录音与原文'" name="audio" />
+          <el-tab-pane :label="inline ? '现场材料' : `现场照片 ${photos.length}`" name="photos" />
+          <el-tab-pane v-if="!inline" label="位置信息" name="position" />
+          <el-tab-pane v-if="inline && canRisk" label="同店历史" name="history" />
+        </el-tabs>
         <template v-if="tab==='audio'">
           <div v-if="!canAudio" class="evidence-empty">暂无录音查看权限</div>
           <template v-else>
-            <div class="audio-controls"><el-select v-model="selectedClip" placeholder="选择录音片段" :disabled="!clips.length" @change="resetAudio"><el-option v-for="clip in clips" :key="clip.clipId" :label="`片段 ${clip.clipIndex} · ${clip.clientDurationMs == null ? '时长待确认' : audioClock(clip.clientDurationMs)}`" :value="clip.clipId" /></el-select><el-button v-if="!audioUrl" :icon="VideoPlay" :loading="mediaLoading" :disabled="!selectedClip" @click="playAt(0)">播放</el-button><el-tag v-if="currentAnalysis" type="info">{{ analysisLabel(currentAnalysis.status) }}</el-tag></div>
+            <div class="audio-controls"><el-select v-model="selectedClip" placeholder="选择录音片段" :disabled="!clips.length" @change="resetAudio"><el-option v-for="clip in clips" :key="clip.clipId" :label="`片段 ${inline ? String(clip.clipIndex + 1).padStart(2, '0') : clip.clipIndex} · ${inline ? (clip.verifyStatus === 'VERIFIED' && clip.verifiedDurationMs != null ? '已核 ' + audioClock(clip.verifiedDurationMs) : '时长待核') : (clip.clientDurationMs == null ? '时长待确认' : audioClock(clip.clientDurationMs))}`" :value="clip.clipId" /></el-select><el-button v-if="!audioUrl" :icon="VideoPlay" :loading="mediaLoading" :disabled="!selectedClip" @click="playAt(0)">播放</el-button><el-tag v-if="currentAnalysis" type="info">{{ analysisLabel(currentAnalysis.status) }}</el-tag></div>
             <audio v-if="audioUrl" ref="player" :src="audioUrl" controls preload="metadata" @timeupdate="onTime" @loadedmetadata="onMetadata" />
             <div class="transcript-search"><el-input v-model="query" clearable :prefix-icon="Search" placeholder="搜索录音文字" /><el-button v-if="failed && analysis?.processingEnabled && canRetry" :loading="retrying" @click="retry">重新转写</el-button></div>
             <div class="transcript-lines"><button v-for="(line,index) in lines" :key="`${line.startMs}-${index}`" :class="{active:line.startMs<=currentMs&&line.endMs>currentMs}" @click="playAt(line.startMs)"><time>{{ audioClock(line.startMs) }}</time><strong v-if="line.speakerId!=null">{{ recordingSpeaker(line.speakerId,analysis?.speakers||[]) }}：</strong><span>{{ line.text }}</span></button><p v-if="currentAnalysis?.transcript && !currentAnalysis.segments.length" class="plain-transcript">{{ currentAnalysis.transcript }}</p><el-empty v-if="!lines.length && !currentAnalysis?.transcript" :description="transcriptEmpty" :image-size="56" /></div>
           </template>
         </template>
-        <template v-else-if="tab==='photos'"><div v-if="!canPhotos" class="evidence-empty">暂无现场照片查看权限</div><article v-for="photo in photos" :key="photo.evidenceId" class="photo-evidence"><el-image v-if="photoUrls[photo.evidenceId]" :src="photoUrls[photo.evidenceId]" fit="contain" :preview-src-list="[photoUrls[photo.evidenceId]!]" preview-teleported /><button v-else class="photo-load" :disabled="loadingPhoto===photo.evidenceId" @click="loadPhoto(photo)"><Camera />{{ loadingPhoto===photo.evidenceId?'读取中':'查看门头照' }}</button><div><strong>门头照</strong><span>{{ photo.captureSource==='APP_CAMERA'?'App 现场拍摄':photo.captureSource==='FILE_IMPORT'?'历史导入':'其他采集来源' }}</span><span>{{ fieldClock(photo.capturedAt) }}</span><span>{{ photo.distanceToTargetMeters==null?'距离未获得':`距门店 ${Math.round(photo.distanceToTargetMeters)}m` }}</span></div></article><el-empty v-if="canPhotos&&!photos.length" description="暂无门头照" :image-size="56" /></template>
-        <div v-else class="position-detail"><div><span>到店</span><strong>{{ fieldClock(visit.checkedInAt) }}</strong></div><div><span>离店</span><strong>{{ fieldClock(visit.checkedOutAt) }}</strong></div><div><span>停留</span><strong>{{ visit.dwellMinutes }}分钟</strong></div><div><span>门店坐标</span><strong>{{ visit.longitude==null?'未获得':`${visit.longitude}, ${visit.latitude}` }}</strong></div></div>
+        <template v-else-if="tab==='photos'"><slot name="materials" /><div v-if="!canPhotos" class="evidence-empty">暂无现场照片查看权限</div><article v-for="photo in photos" :key="photo.evidenceId" class="photo-evidence"><el-image v-if="photoUrls[photo.evidenceId]" :src="photoUrls[photo.evidenceId]" fit="contain" :preview-src-list="[photoUrls[photo.evidenceId]!]" preview-teleported /><button v-else class="photo-load" :disabled="loadingPhoto===photo.evidenceId" @click="loadPhoto(photo)"><Camera />{{ loadingPhoto===photo.evidenceId?'读取中':'查看门头照' }}</button><div><strong>门头照</strong><span>{{ photo.captureSource==='APP_CAMERA'?'App 现场拍摄':photo.captureSource==='FILE_IMPORT'?'历史导入':'其他采集来源' }}</span><span>{{ fieldClock(photo.capturedAt) }}</span><span>{{ photo.distanceToTargetMeters==null?'距离未获得':`距门店 ${Math.round(photo.distanceToTargetMeters)}m` }}</span></div></article><el-empty v-if="canPhotos&&!photos.length" description="暂无门头照" :image-size="56" /></template>
+        <SalesVisitHistory v-else-if="inline && tab === 'history' && canRisk" :visit-id="visit.visitId" through-visit @open-capture="emit('capture', $event)" />
+        <div v-else-if="!inline" class="position-detail"><div><span>到店</span><strong>{{ fieldClock(visit.checkedInAt) }}</strong></div><div><span>离店</span><strong>{{ fieldClock(visit.checkedOutAt) }}</strong></div><div><span>停留</span><strong>{{ visit.dwellMinutes }}分钟</strong></div><div><span>门店坐标</span><strong>{{ visit.longitude==null?'未获得':`${visit.longitude}, ${visit.latitude}` }}</strong></div></div>
+      <section v-if="inline && tab === 'photos' && canRisk" aria-label="核查事项">
+          <el-alert v-if="caseError" :title="caseError" type="error" :closable="false" />
+          <SalesFieldworkCasePanel v-else :cases="cases" @changed="updateCase" />
+        </section>
       </section>
-      <aside class="evidence-side"><SalesVisitHistory v-if="canRisk" :visit-id="visit.visitId" @open="emit('history',$event)" /><SalesFieldworkCasePanel v-if="canRisk && !caseError" :cases="cases" @changed="updateCase" /><el-alert v-if="caseError" :title="caseError" type="error" :closable="false" /></aside>
+      <aside v-if="!inline" class="evidence-side"><SalesVisitHistory v-if="canRisk" :visit-id="visit.visitId" @open="emit('history',$event)" /><SalesFieldworkCasePanel v-if="canRisk && !caseError" :cases="cases" @changed="updateCase" /><el-alert v-if="caseError" :title="caseError" type="error" :closable="false" /></aside>
     </div>
   </div>
 </template>
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, Camera, Search, VideoPlay } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { fieldClock, type TrackVisit } from '@/api/core/sales-fieldwork'
 import { visitAnalysis,visitRecordings,visitPhotos,visitCases,evidenceBlob,retryAnalysis,audioClock,recordingSpeaker,type VisitAnalysis,type RecordingClip,type PhotoEvidence,type FieldworkCase } from '@/api/core/sales-fieldwork-review'
+import type { HistoryCapture } from '@/api/core/sales-fieldwork-evidence'
 import SalesFieldworkCasePanel from './SalesFieldworkCasePanel.vue'
 const SalesVisitHistory=defineAsyncComponent(()=>import('./SalesVisitHistory.vue'))
-const props=defineProps<{visit:TrackVisit;employeeName:string}>(),emit=defineEmits<{back:[];history:[visit:TrackVisit];changed:[item:FieldworkCase]}>(),auth=useAuthStore()
+const props=defineProps<{visit:TrackVisit;employeeName:string;inline?:boolean}>(),emit=defineEmits<{back:[];history:[visit:TrackVisit];capture:[item:HistoryCapture];changed:[item:FieldworkCase]}>(),auth=useAuthStore()
 const tab=ref('audio'),loading=ref(false),error=ref(''),caseError=ref(''),query=ref(''),analysis=ref<VisitAnalysis|null>(null),clips=ref<RecordingClip[]>([]),photos=ref<PhotoEvidence[]>([]),cases=ref<FieldworkCase[]>([])
 const selectedClip=ref(''),audioUrl=ref(''),photoUrls=ref<Record<string,string>>({}),player=ref<HTMLAudioElement|null>(null),currentMs=ref(-1),mediaLoading=ref(false),loadingPhoto=ref(''),retrying=ref(false)
 const canAudio=computed(()=>auth.hasPermission('sales:recording:sensitive:play')),canPhotos=computed(()=>auth.hasPermission('sales:evidence:sensitive:read')),canRisk=computed(()=>auth.hasPermission('sales:risk:read')),canRetry=computed(()=>auth.hasPermission('sales:visit:review'))
@@ -74,10 +86,21 @@ async function retry(){if(!selectedClip.value||retrying.value)return;const curre
 function updateCase(item:FieldworkCase){cases.value=cases.value.map(c=>c.id===item.id?item:c);emit('changed',item)}
 watch(owner,()=>{generation++;aborter?.abort();clearMedia();analysis.value=null;cases.value=[];emit('back')})
 watch(()=>props.visit.visitId,()=>{query.value='';void load()})
+watch(tab, (value) => { if (value !== 'audio') resetAudio() })
 onMounted(load)
+onDeactivated(clearMedia)
 onBeforeUnmount(()=>{generation++;aborter?.abort();clearMedia()})
 </script>
 <style scoped lang="scss">
 @use '@/assets/styles/variables' as *;
 .visit-evidence{display:flex;flex-direction:column;gap:16px}.evidence-heading{display:flex;align-items:center;gap:16px}.evidence-heading h2{font-size:22px;margin:0 0 6px}.evidence-heading span{color:$color-text-secondary;font-size:13px}.capture-state{margin-left:auto}.evidence-columns{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(360px,1fr);gap:16px}.evidence-main{padding:0 16px 16px;background:$color-bg-white;border:1px solid $color-border-base;border-radius:6px;min-width:0}.evidence-main :deep(.el-tabs__header){margin-bottom:20px}.evidence-main :deep(.el-tabs__item){height:54px;font-size:15px;font-weight:500}.audio-controls{display:flex;align-items:center;gap:12px;padding:12px;background:#f5f7fb;border-radius:6px}.audio-controls .el-select{flex:1;min-width:140px}.evidence-main audio{width:100%;height:44px;margin:12px 0}.transcript-search{display:flex;gap:12px;margin:18px 0 12px}.transcript-lines{min-height:280px;max-height:560px;overflow:auto}.transcript-lines button{display:flex;align-items:flex-start;gap:16px;width:100%;text-align:left;padding:13px 12px;border:0;border-radius:4px;background:none;color:$color-text-primary;cursor:pointer;font-size:14px;line-height:1.6}.transcript-lines button.active{background:#eaf0ff}.transcript-lines time{color:$color-primary;flex-shrink:0;font-variant-numeric:tabular-nums}.transcript-lines strong{flex-shrink:0}.transcript-lines span{text-align:left;overflow-wrap:anywhere}.plain-transcript{white-space:pre-wrap;line-height:1.8}.evidence-side{display:flex;flex-direction:column;gap:16px;min-width:0}.photo-evidence{display:flex;gap:20px;padding:12px;border:1px solid $color-border-base;border-radius:6px;margin:12px 0}.photo-evidence .el-image,.photo-load{width:62%;height:240px;flex-shrink:0}.photo-evidence>div{display:flex;flex-direction:column;gap:14px;font-size:13px;padding-top:8px}.photo-evidence span{color:$color-text-secondary}.photo-load{border:0;background:#f3f5f8;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;color:$color-primary}.photo-load svg{width:22px;height:22px}.position-detail>div{display:flex;justify-content:space-between;padding:16px 0;border-bottom:1px solid $color-border-base}.position-detail span,.evidence-empty{color:$color-text-secondary}.evidence-empty{padding:70px 0;text-align:center}@media(max-width:1100px){.evidence-columns{grid-template-columns:1fr}.evidence-heading{flex-wrap:wrap}}
+.visit-evidence--inline .evidence-columns {
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr);
+}
+.visit-evidence--inline .audio-controls { flex-wrap: wrap; }
+.visit-evidence--inline .transcript-lines { min-height: 160px; }
+@media (max-width: 1000px) {
+  .visit-evidence--inline .evidence-columns { grid-template-columns: minmax(0, 1fr); }
+  .visit-evidence--inline .evidence-main { grid-row: 1; }
+}
 </style>
