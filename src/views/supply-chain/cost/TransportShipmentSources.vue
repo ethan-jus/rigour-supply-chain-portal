@@ -11,6 +11,10 @@
           <dt>发货状态</dt>
           <dd>{{ sourceStatus(source.latest.sourceStatus) }}</dd>
         </div>
+        <div v-if="(huolalaOrderNo || sources.length > 1) && source.latest.shipTime">
+          <dt>发货时间</dt>
+          <dd>{{ displayDateTime(source.latest.shipTime) }}</dd>
+        </div>
         <div v-if="huolalaOrderNo && source.latest.deliveryModeName?.trim()">
           <dt>订货宝发货方式</dt>
           <dd>{{ source.latest.deliveryModeName }}</dd>
@@ -89,6 +93,7 @@ import type { ShipmentTransportSource } from '@/api/core/transport-records'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { shipmentUsesHuolala } from './transport-records'
 import { displayValue } from '@/utils/business-display'
+import { displayDateTime } from '@/utils/business-date'
 const props = defineProps<{
   sources: ShipmentTransportSource[]
   huolalaOrderNo?: string

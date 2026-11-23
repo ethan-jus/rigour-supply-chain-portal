@@ -282,14 +282,23 @@
       v-model="dictDialog"
       :title="editingDictId ? '修改字典' : '新增字典'"
       width="min(560px, calc(100vw - 32px))"
+      destroy-on-close
+      :close-on-click-modal="!saving"
+      :close-on-press-escape="!saving"
+      :show-close="!saving"
     >
-      <el-form :model="dictForm" label-position="top">
-        <el-form-item label="字典名称" required>
-          <el-input v-model="dictForm.dictionaryName" placeholder="例如：商品单位" />
+      <el-form :model="dictForm" :disabled="saving" label-position="top" @submit.prevent="saveDict">
+        <el-form-item label="字典名称" required :error="dictFieldErrors.name">
+          <el-input
+            v-model="dictForm.dictionaryName"
+            placeholder="例如：商品单位"
+            @input="dictFieldErrors.name = undefined"
+          />
         </el-form-item>
-        <el-form-item label="字典编码" required>
+        <el-form-item label="字典编码" required :error="dictFieldErrors.code">
           <el-input
             v-model="dictForm.dictionaryCode"
+            @input="dictFieldErrors.code = undefined"
             :disabled="!!editingDictId"
             placeholder="例如 PRODUCT_UNIT"
           />
@@ -305,7 +314,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dictDialog = false">取消</el-button>
+        <el-alert v-if="dictSaveError" :title="dictSaveError" type="error" :closable="false" />
+        <el-button :disabled="saving" @click="dictDialog = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="saveDict">保存</el-button>
       </template>
     </el-dialog>
@@ -314,14 +324,22 @@
       v-model="itemDialog"
       :title="editingItemId ? '修改字典项' : '新增字典项'"
       width="min(560px, calc(100vw - 32px))"
+      destroy-on-close
+      :close-on-click-modal="!saving"
+      :close-on-press-escape="!saving"
+      :show-close="!saving"
     >
-      <el-form :model="itemForm" label-position="top">
-        <el-form-item label="字典项名称" required>
-          <el-input v-model="itemForm.dictionaryItemName" />
+      <el-form :model="itemForm" :disabled="saving" label-position="top" @submit.prevent="saveItem">
+        <el-form-item label="字典项名称" required :error="itemFieldErrors.name">
+          <el-input
+            v-model="itemForm.dictionaryItemName"
+            @input="itemFieldErrors.name = undefined"
+          />
         </el-form-item>
-        <el-form-item label="字典项编码" required>
+        <el-form-item label="字典项编码" required :error="itemFieldErrors.code">
           <el-input
             v-model="itemForm.dictionaryItemCode"
+            @input="itemFieldErrors.code = undefined"
             :disabled="Boolean(editingItemId)"
             placeholder="例如 SALES"
           />
@@ -363,7 +381,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="itemDialog = false">取消</el-button>
+        <el-alert v-if="itemSaveError" :title="itemSaveError" type="error" :closable="false" />
+        <el-button :disabled="saving" @click="itemDialog = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="saveItem">保存</el-button>
       </template>
     </el-dialog>
@@ -376,6 +395,7 @@ import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { errorMessage } from '@/api/core/error'
 import DictionarySourceMappings from './DictionarySourceMappings.vue'
 import { refreshBusinessDictionaries } from '@/utils/business-dictionary'
 import {
@@ -500,6 +520,24 @@ const dictDialog = ref(false)
 const itemDialog = ref(false)
 const editingDictId = ref('')
 const editingItemId = ref('')
+const dictSaveError = ref('')
+const itemSaveError = ref('')
+interface DictionaryFieldErrors {
+  name?: string
+  code?: string
+}
+const dictFieldErrors = ref<DictionaryFieldErrors>({})
+const itemFieldErrors = ref<DictionaryFieldErrors>({})
+
+function validateDictionaryFields(name: string, code: string): DictionaryFieldErrors {
+  const errors: DictionaryFieldErrors = {}
+  if (!name) errors.name = '请输入名称'
+  else if (name.length > 100) errors.name = '名称不能超过 100 个字符'
+  if (!code) errors.code = '请输入编码'
+  else if (!/^[A-Z][A-Z0-9_]{0,49}$/.test(code))
+    errors.code = '编码须以英文字母开头，最多 50 个字符，仅支持字母、数字和下划线'
+  return errors
+}
 
 const dictForm = reactive<DictCommand>({
   dictionaryCode: '',
@@ -602,6 +640,8 @@ async function selectDict(row: DictView | null, mode?: 'sources') {
 }
 
 function openDict(row?: DictView) {
+  dictSaveError.value = ''
+  dictFieldErrors.value = {}
   editingDictId.value = row?.id || ''
   Object.assign(
     dictForm,
@@ -625,15 +665,17 @@ function openDict(row?: DictView) {
 }
 
 async function saveDict() {
-  if (!dictForm.dictionaryCode.trim() || !dictForm.dictionaryName.trim()) {
-    ElMessage.warning('请填写字典编码和字典名称')
-    return
-  }
+  if (saving.value) return
+  const dictionaryCode = dictForm.dictionaryCode.trim().toUpperCase()
+  const dictionaryName = dictForm.dictionaryName.trim()
+  dictSaveError.value = ''
+  dictFieldErrors.value = validateDictionaryFields(dictionaryName, dictionaryCode)
+  if (dictFieldErrors.value.name || dictFieldErrors.value.code) return
   saving.value = true
   try {
     const command: DictCommand = {
-      dictionaryCode: dictForm.dictionaryCode.trim().toUpperCase(),
-      dictionaryName: dictForm.dictionaryName.trim(),
+      dictionaryCode,
+      dictionaryName,
       dictionaryType: dictForm.dictionaryType?.trim() || DEFAULT_DICTIONARY_TYPE,
       remark: empty(dictForm.remark) || null,
       revision: dictForm.revision,
@@ -643,6 +685,8 @@ async function saveDict() {
     ElMessage.success('字典保存成功')
     dictDialog.value = false
     await loadDicts()
+  } catch (error) {
+    dictSaveError.value = errorMessage(error, '字典保存失败，请重试')
   } finally {
     saving.value = false
   }
@@ -650,6 +694,8 @@ async function saveDict() {
 
 function openItem(row?: DictItemView) {
   if (!selectedDict.value) return
+  itemSaveError.value = ''
+  itemFieldErrors.value = {}
   editingItemId.value = row?.id || ''
   Object.assign(
     itemForm,
@@ -679,29 +725,33 @@ function openItem(row?: DictItemView) {
 }
 
 async function saveItem() {
-  if (!selectedDict.value) return
-  if (!itemForm.dictionaryItemCode.trim() || !itemForm.dictionaryItemName.trim()) {
-    ElMessage.warning('请填写字典项编码和字典项名称')
-    return
-  }
+  const dictionary = selectedDict.value
+  if (!dictionary || saving.value) return
+  const dictionaryItemCode = itemForm.dictionaryItemCode.trim().toUpperCase()
+  const dictionaryItemName = itemForm.dictionaryItemName.trim()
+  itemSaveError.value = ''
+  itemFieldErrors.value = validateDictionaryFields(dictionaryItemName, dictionaryItemCode)
+  if (itemFieldErrors.value.name || itemFieldErrors.value.code) return
   saving.value = true
   try {
     const command: DictItemCommand = {
-      dictionaryCode: selectedDict.value.dictionaryCode,
+      dictionaryCode: dictionary.dictionaryCode,
       parentDictionaryItemCode: empty(itemForm.parentDictionaryItemCode) || null,
-      dictionaryItemCode: itemForm.dictionaryItemCode.trim().toUpperCase(),
-      dictionaryItemName: itemForm.dictionaryItemName.trim(),
+      dictionaryItemCode,
+      dictionaryItemName,
       remark: empty(itemForm.remark) || null,
       ordinal: itemForm.ordinal,
       enabled: itemForm.enabled !== false,
       revision: itemForm.revision,
     }
     if (editingItemId.value) await updateBizDictItem(editingItemId.value, command)
-    else await createBizDictItem(selectedDict.value.id, command)
+    else await createBizDictItem(dictionary.id, command)
     ElMessage.success('字典项保存成功')
     itemDialog.value = false
     await loadDicts()
     await refreshBusinessDictionaries()
+  } catch (error) {
+    itemSaveError.value = errorMessage(error, '字典项保存失败，请重试')
   } finally {
     saving.value = false
   }

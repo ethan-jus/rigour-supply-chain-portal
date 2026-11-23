@@ -457,6 +457,24 @@ export const getSalesShipment = (id: string | number) =>
     options,
   )
 
+export interface SalesShipmentLogisticsEdit {
+  revision: number
+  carrierCode?: string
+  trackingNo?: string
+  shipTime?: string
+  remark?: string
+}
+
+export const updateSalesShipmentLogistics = (
+  id: string | number,
+  command: SalesShipmentLogisticsEdit,
+) =>
+  apiClient.put<SalesShipmentDetail>(
+    `${ORDER_SHIPMENT_BASE_PATH}/${encodeURIComponent(String(id))}/logistics`,
+    command,
+    options,
+  )
+
 export const deleteSalesShipment = (id: string | number, revision: number) =>
   apiClient.delete<void>(`${ORDER_SHIPMENT_BASE_PATH}/${encodeURIComponent(String(id))}`, {
     params: { revision },

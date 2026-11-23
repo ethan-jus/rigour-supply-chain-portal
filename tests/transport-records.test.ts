@@ -172,6 +172,49 @@ async function startExport(allFields = false) {
   await flushPromises()
 }
 describe('统一运输记录 V2.6', () => {
+  it('自配送列表展示订货宝实际物流公司，缺少来源时保留空值', async () => {
+    const dhb = record()
+    dhb.data.ledger!.deliveryModeCode = 'SELF'
+    dhb.data.ledger!.carrierCode = null
+    dhb.data.amount = 0
+    const manual = { ...dhb, id: 'M1', documentNo: 'CST-MANUAL' }
+    const shipment: ShipmentTransportSource = {
+      id: 'FH-1',
+      costId: dhb.id,
+      issue: null,
+      differencePending: false,
+      latest: {
+        shipmentId: 'FH-1',
+        shipmentNo: 'FH.20261120.0639',
+        salesOrderId: 'SO1',
+        sourceStatus: 'receivedin',
+        shipTime: '2026-11-20T08:52:00Z',
+        sourceUpdatedAt: null,
+        carrierCode: null,
+        carrierName: '立即送',
+        deliveryModeCode: 'SELF',
+        deliveryModeName: '送货上门',
+        trackingNumbers: [],
+        receiver: null,
+        sourceFields: {},
+        goods: [],
+      },
+    }
+    api.list.mockResolvedValue({
+      page: { total: 2, begin: 0, step: 20, items: [dhb, manual] },
+      platformRecords: {},
+      shipmentRecords: { [dhb.id]: [shipment] },
+    } satisfies TransportPage)
+    wrapper = mount(View, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const headers = wrapper.findAll('.el-table__header th').map((th) => th.text())
+    const rows = wrapper.findAll('.el-table__body tr.el-table__row')
+    const cells = (label: string) => rows.map((row) => row.findAll('td')[headers.indexOf(label)]!.text())
+    expect(cells('物流公司')).toEqual(['立即送', '-'])
+    expect(cells('快递单号')).toEqual(['-', '-'])
+    expect(cells('配送方式')).toEqual(['SELF', 'SELF'])
+  })
+
   it('指定货拉拉订单时只提交订单号并就地显示失败原因', async () => {
     api.huolalaSync.mockRejectedValueOnce(new Error('请输入完整的货拉拉数字订单号'))
     wrapper = mount(View, {

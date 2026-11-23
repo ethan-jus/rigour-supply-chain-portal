@@ -28,8 +28,14 @@ export function shipmentRemark(fields: ShipmentTransportSource['latest']['source
     data && typeof data === 'object' && 'remark' in data && typeof data.remark === 'string'
       ? data.remark
       : undefined
+  if (typeof fields?.shipmentRemark === 'string') return fields.shipmentRemark
   return read(fields?.detail) ?? read(fields?.list) ?? ''
 }
+export function shipmentCarrierNames(shipments: ShipmentTransportSource[] = []) {
+  const names = shipments.map(({ latest }) => latest.carrierName?.trim()).filter(Boolean)
+  return [...new Set(names)].join('、')
+}
+
 export function shipmentUsesHuolala(source: ShipmentTransportSource, orderNo?: string | null) {
   const normalized = (value: string) => value.trim().toUpperCase()
   const numbers = new Set(source.latest.trackingNumbers.map(normalized).filter(Boolean))

@@ -685,6 +685,52 @@ describe('通用手工账单', () => {
 })
 
 describe('物流详情的信息优先级', () => {
+  it.each([true, false])('立即送从发货来源回显公司，物流编辑保持只读（详情=%s）', async (readonly) => {
+    const d = detail()
+    d.record.data.ledger = validManualLedger()
+    d.record.data.ledger.deliveryModeCode = 'SELF'
+    d.record.data.ledger.carrierCode = null
+    d.record.data.amount = 0
+    d.shipments = [{
+      id: 'FH-1',
+      costId: d.record.id,
+      issue: null,
+      differencePending: false,
+      latest: {
+        shipmentId: 'FH-1',
+        shipmentNo: 'FH.20261120.0639',
+        salesOrderId: 'SO1',
+        sourceStatus: 'receivedin',
+        shipTime: '2026-11-20T08:52:00Z',
+        sourceUpdatedAt: null,
+        carrierCode: null,
+        carrierName: '立即送',
+        deliveryModeCode: 'SELF',
+        deliveryModeName: '送货上门',
+        trackingNumbers: [],
+        receiver: null,
+        sourceFields: {},
+        goods: [],
+      },
+    }]
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    try {
+      await flushPromises()
+      const carrier = w.findAll('.el-form-item').find((field) => field.text().includes('物流公司'))
+      expect(carrier?.text()).toContain('立即送')
+      expect(carrier?.find('input').exists()).toBe(false)
+      expect(w.text()).toContain('送货上门')
+      expect(w.findAll('.el-form-item').some((field) => field.text().startsWith('快递单号'))).toBe(false)
+    } finally {
+      w.unmount()
+      document.body.innerHTML = ''
+    }
+  })
+
   it('按发货商品行显示订货宝规格，兼容单字段和缺失规格', async () => {
     const latest: ShipmentTransportSource['latest'] = {
       shipmentId: 'SHIP1',

@@ -445,6 +445,7 @@ import {
   transportTimeOf,
   transportPeople,
   transportSourceLabel,
+  shipmentCarrierNames,
   statusName,
   transportTypes,
   typeName,
@@ -543,6 +544,8 @@ function value(
 ): string {
   const platform = sources[r.id],
     source = platform ? currentSource(platform.source) : null
+  const shipmentSources = shipments[r.id]
+  const selfDelivery = r.data.ledger?.deliveryModeCode === 'SELF'
   if (key === 'salesPeople' || key === 'huolalaPeople') {
     const { sales, huolala } = transportPeople(r, platform, shipments[r.id])
     return (key === 'salesPeople' ? sales : huolala)
@@ -562,12 +565,9 @@ function value(
     date: source?.useTime.slice(0, 10) || r.data.costDate,
     orderedAt: transportTimeOf(r, platform, shipments[r.id]),
     platformNo:
-      r.data.ledger?.deliveryModeCode === 'SELF'
-        ? '-'
-        : source?.orderNo ||
-          shipments[r.id]?.flatMap((s) => s.latest.trackingNumbers).join('、') ||
-          r.data.ledger?.platformOrderNo ||
-          '-',
+      (selfDelivery ? null : source?.orderNo) ||
+      shipmentSources?.flatMap((s) => s.latest.trackingNumbers).join('、') ||
+      (selfDelivery ? null : r.data.ledger?.platformOrderNo),
     deliveryMode: costLabel(
       'COST_DELIVERY_MODE',
       platform ? 'THIRD_PARTY' : r.data.ledger?.deliveryModeCode,
@@ -575,14 +575,13 @@ function value(
     amount: money(r.data.amount),
     status: statusName(r.statusCode, r.businessStatusCode),
     creator: platform ? '系统同步' : displayRecordActor(r.createdBy),
-    carrier:
-      r.data.ledger?.deliveryModeCode === 'SELF'
-        ? '-'
-        : platform
-          ? '货拉拉'
-          : r.data.ledger?.carrierCode
-            ? costLabel('COST_CARRIER', r.data.ledger.carrierCode)
-            : shipments[r.id]?.[0]?.latest.carrierName || r.data.logistics?.carrierName,
+    carrier: selfDelivery
+      ? shipmentCarrierNames(shipmentSources)
+      : platform
+        ? '货拉拉'
+        : r.data.ledger?.carrierCode
+          ? costLabel('COST_CARRIER', r.data.ledger.carrierCode)
+          : shipmentCarrierNames(shipmentSources) || r.data.logistics?.carrierName,
     vehicle: vehicleOf(platform),
     platformStatus: source?.status,
     mappedEmployee:
