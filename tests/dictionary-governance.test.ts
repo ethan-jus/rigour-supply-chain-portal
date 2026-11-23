@@ -28,7 +28,7 @@ describe('租户字典与远程治理组合', () => {
     api.resolveBizDict.mockResolvedValue({ dictionary: {}, items: [{ ...standard, enabled: false }, { ...standard, id: '3', dictionaryItemCode: 'CHILD', parentDictionaryItemCode: 'ACTIVE' }, legacy] })
     await loadBusinessDictionaries([{ moduleCode: '', code: 'STORE_STATUS' }])
     await refreshBusinessDictionaries()
-    expect(api.resolveBizDict).toHaveBeenLastCalledWith('STORE_STATUS')
+    expect(api.resolveBizDict).toHaveBeenLastCalledWith('STORE_STATUS', undefined)
     expect(businessDictionaryOptions('', 'STORE_STATUS')).toEqual([])
     expect(businessDictionaryLabel('', 'STORE_STATUS', 'LEGACY')).toBe('营业中')
     setBusinessDictionaryTenant('tenant-B')

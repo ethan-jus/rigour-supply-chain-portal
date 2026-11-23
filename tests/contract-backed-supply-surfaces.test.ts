@@ -297,10 +297,8 @@ describe('合同驱动的供应链页面', () => {
 })
 
 describe('ERP 仓库信息新增表单', () => {
-  it('归属地区复用客户归属地区树，仓库类型用 WAREHOUSE_TYPE 字典下拉', () => {
-    expect(erpBasicDataManagementSource).toContain('getAllCrmCustomerAreas')
-    expect(erpBasicDataManagementSource).toContain('buildAreaTree')
-    expect(erpBasicDataManagementSource).toContain('areas.filter((item) => item.status === \'ACTIVE\')')
+  it('归属地区复用经营城市选择器并校验写入范围，仓库类型用 WAREHOUSE_TYPE 字典下拉', () => {
+    expect(erpBasicDataManagementSource).toMatch(/<CostCitySelect\s+v-model="form.regionCode"\s+:action="warehouseWriteRegionAction"\s+:snapshot="warehouseRegionSnapshot"/)
     expect(erpBasicDataManagementSource).toContain('warehouseTypeOptions')
     expect(erpBasicDataManagementSource).toContain("businessDictionaryOptions('ERP', 'WAREHOUSE_TYPE')")
     expect(erpBasicDataManagementSource).not.toContain('placeholder="仓库类型编码"')
