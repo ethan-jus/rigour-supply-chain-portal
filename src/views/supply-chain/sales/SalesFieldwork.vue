@@ -30,14 +30,22 @@
       <div>
         <div class="field-title">
           <h1 v-if="tab === 'day'" class="day-heading">
-            {{ selected ? selected.employeeName + '的工作日' : '个人工作日' }}
+            {{ dayEmployeeName ? dayEmployeeName + '的工作日' : '个人工作日' }}
           </h1>
           <h1 v-else-if="tab === 'overview'">团队外勤</h1>
           <SupplyPageTitle v-else>{{ route.meta.title }}</SupplyPageTitle>
+          <FieldworkDatePicker
+            v-if="tab === 'day'"
+            id="person-workdate"
+            class="day-date"
+            :date="reportFilters.date"
+            :max="today"
+            @change="changePersonDate"
+          />
         </div>
         <p v-if="tab === 'day' && selected && report" class="person-meta">
           {{
-            [selected.departmentName, report.date, attendanceNames[selected.status]]
+            [selected.departmentName, attendanceNames[selected.status]]
               .filter(Boolean)
               .join('　·　')
           }}
@@ -107,26 +115,7 @@
     >
       <div class="team-filter-group">
         <label for="team-workdate">工作日</label>
-        <div class="team-date">
-          <button type="button" aria-label="前一日" @click="shiftDate(-1)">
-            <el-icon><ArrowLeft /></el-icon>
-          </button>
-          <input
-            id="team-workdate"
-            type="date"
-            :value="filter.date"
-            :max="today"
-            @change="changeWorkDate"
-          />
-          <button
-            type="button"
-            aria-label="后一日"
-            :disabled="filter.date >= today"
-            @click="shiftDate(1)"
-          >
-            <el-icon><ArrowRight /></el-icon>
-          </button>
-        </div>
+        <FieldworkDatePicker id="team-workdate" :date="filter.date" :max="today" @change="pickDate" />
       </div>
       <div class="team-filter-group">
         <label for="team-department">部门</label>
@@ -561,7 +550,6 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from 'vue-router'
 import {
-  ArrowLeft,
   ArrowRight,
   Back,
   Clock,
@@ -586,6 +574,7 @@ import {
 } from '@/api/core/sales-fieldwork-report'
 import { attendanceNames, teamAvatarColor } from './team-attendance'
 import FieldTeamRoster from './FieldTeamRoster.vue'
+import FieldworkDatePicker from './FieldworkDatePicker.vue'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import OrderRegisterFilterCard from '@/components/supply/OrderRegisterFilterCard.vue'
 import ListTableFooter from '@/components/supply/ListTableFooter.vue'
@@ -669,6 +658,9 @@ function avatarStyle(id: string) {
 }
 const selected = computed(() =>
   report.value?.items.find((row) => row.salesProfileId === focused.value),
+)
+const dayEmployeeName = computed(() =>
+  selected.value?.employeeName || options.value.people.find((p) => p.id === focused.value)?.name,
 )
 const asOf = computed(() =>
   report.value
@@ -840,15 +832,8 @@ function changeDept() {
   options.value = { ...options.value, people: [] }
   search()
 }
-function shiftDate(days: number) {
-  const date = new Date(filter.value.date + 'T12:00:00Z')
-  date.setUTCDate(date.getUTCDate() + days)
-  pickDate(date.toISOString().slice(0, 10))
-}
-function changeWorkDate(event: Event) {
-  const input = event.target as HTMLInputElement
-  if (input.value && input.validity.valid) pickDate(input.value)
-  else input.value = filter.value.date
+function changePersonDate(date: string) {
+  if (date !== reportFilters.value.date) void updateQuery({ view: 'map', date, visit: undefined }, true)
 }
 function pickDate(v: string) {
   filter.value.date = v
@@ -960,8 +945,7 @@ onBeforeUnmount(() => {
 .team-crumb,
 .data-asof,
 .team-back,
-.team-filter-group,
-.team-date {
+.team-filter-group {
   display: inline-flex;
   align-items: center;
 }
@@ -996,8 +980,7 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: #667888;
 }
-.view-more,
-.team-date button {
+.view-more {
   display: grid;
   place-items: center;
   border: 0;
@@ -1022,28 +1005,15 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 550;
 }
-.team-date {
-  height: 34px;
-  border: 1px solid #d3dce5;
-  border-radius: 5px;
-  box-sizing: border-box;
+.day-workspace .field-title {
+  flex-wrap: wrap;
+  gap: 6px 16px;
 }
-.team-date button {
-  width: 26px;
-  height: 100%;
-}
-.team-date button:disabled {
-  color: #b4bec6;
-  cursor: default;
-}
-.team-date input {
-  min-width: 0;
-  border: 0;
-  padding: 0 4px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 500;
+.day-date {
+  --date-height: 38px;
+  --date-step-width: 34px;
+  --date-font-size: 17px;
+  --date-weight: 650;
 }
 .team-filters :deep(.el-select__wrapper) {
   min-height: 34px;
