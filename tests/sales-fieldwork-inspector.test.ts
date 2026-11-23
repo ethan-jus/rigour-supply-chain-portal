@@ -46,8 +46,10 @@ it('按连续段核对设备采集、服务端接收和精度，缺口不合并�
     global: { stubs: { ...stubs, ElDrawer: true }, directives: { loading: () => {} } },
   })
   await flushPromises()
-  expect(view.text()).toContain('缺口 25 分')
+  expect(view.text()).not.toContain('缺口 25 分')
   await view.findAll('.timeline-tabs button')[1]!.trigger('click')
+  expect(view.find('.sampling-gaps').text()).toContain('10:04–10:29')
+  expect(view.find('.sampling-gaps').text()).toContain('缺口 25 分')
   await view.findAll('.leg')[1]!.trigger('click')
   expect(view.find('.leg-samples').text()).toContain('路段 2 的定位样点')
   expect(view.find('.leg-samples tbody').text()).toContain('P2-1')

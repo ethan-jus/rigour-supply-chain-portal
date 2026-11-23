@@ -230,6 +230,15 @@
             >
           </button>
           <p v-if="!track?.legs.length" class="timeline-empty">缺少连续可用的定位样点</p>
+          <section v-if="track?.gaps.length" class="sampling-gaps">
+            <h3>采样缺口 · {{ track.gaps.length }} 处</h3>
+            <ul>
+              <li v-for="gap in track.gaps" :key="gap.from + gap.to">
+                <time>{{ fieldClock(gap.from) }}–{{ fieldClock(gap.to) }}</time>
+                <span>缺口 {{ Math.round((Date.parse(gap.to) - Date.parse(gap.from)) / 60_000) }} 分</span>
+              </li>
+            </ul>
+          </section>
           <section v-if="activeLeg" class="leg-samples">
             <h3>路段 {{ legIndex + 1 }} 的定位样点</h3>
             <table>
@@ -435,7 +444,6 @@ interface DisplayEvent {
   kind: string
   mark: string
   time: string
-  timestamp: string
   title: string
   subtitle: string
   reason: string
@@ -500,7 +508,7 @@ const events = computed<DisplayEvent[]>(() => {
     ]),
   )
   const visitTypes = new Map(data?.visits.map((v) => [v.visitId, v.visitType]))
-  const base = props.daily
+  return props.daily
     ? reportEvents(props.daily).map((e) => ({
         id: e.id,
         kind: e.kind,
@@ -511,7 +519,6 @@ const events = computed<DisplayEvent[]>(() => {
               ' – ' +
               (e.visit.departed ? fieldClock(e.visit.departed) : '拜访中')
             : fieldClock(e.at),
-        timestamp: e.at,
         title: e.title,
         visitType: ({ FIRST_VISIT: '初访', REVISIT: '回访' } as Record<string, string>)[
           visitTypes.get(e.id) ?? ''
@@ -531,23 +538,6 @@ const events = computed<DisplayEvent[]>(() => {
         position: positions.get(e.id) ?? null,
       }))
     : []
-  const gaps = (data?.gaps || []).map((g, i) => ({
-    id: 'gap-' + i,
-    kind: 'gap',
-    mark: '断',
-    time: fieldClock(g.from),
-    timestamp: g.from,
-    title: '轨迹采样缺口',
-    subtitle:
-      '至 ' +
-      fieldClock(g.to) +
-      ' · 缺口 ' +
-      Math.round((Date.parse(g.to) - Date.parse(g.from)) / 60_000) +
-      ' 分',
-    reason: '',
-    position: null,
-  }))
-  return [...base, ...gaps].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
 })
 const punchCount = computed(() => props.daily?.punchCount ?? track.value?.punches.length ?? 0)
 const visitCount = computed(() => props.daily?.visits.length ?? track.value?.visits.length ?? 0)
@@ -696,18 +686,20 @@ async function refreshMap() {
       overlays.push(
         new sdk.Polyline({
           ...line,
-          strokeColor: '#c64c1c',
-          strokeWeight: 4,
+          strokeColor: '#d32638',
+          strokeOpacity: 1,
+          strokeWeight: 6,
+          zIndex: 65,
           isOutline: true,
           outlineColor: '#ffffff',
-          borderWeight: 1,
+          borderWeight: 2,
           lineJoin: 'round',
           lineCap: 'round',
         }),
       )
     if (traceTab.value === 'legs' && activeLeg.value)
       for (const line of fieldMapPaths([activeLeg.value]))
-        overlays.push(new sdk.Polyline({ ...line, strokeColor: '#2356a2', strokeWeight: 6 }))
+        overlays.push(new sdk.Polyline({ ...line, strokeColor: '#2356a2', strokeWeight: 6, strokeOpacity: 1, zIndex: 66 }))
     if (traceTab.value === 'legs')
       for (const p of activeLeg.value?.points ?? []) {
         const pos = coord(p.longitude, p.latitude)
@@ -1184,7 +1176,6 @@ onBeforeUnmount(() => {
   background: #f6e5e7;
   color: #91434b;
 }
-.event > b.gap,
 .event-reason {
   color: #855013;
 }
@@ -1239,13 +1230,27 @@ onBeforeUnmount(() => {
 .leg {
   gap: 5px 8px;
 }
+.sampling-gaps,
 .leg-samples {
   padding: 7px 8px;
   border-top: 1px solid var(--map-line);
 }
+.sampling-gaps h3,
 .leg-samples h3 {
   margin: 0 0 5px;
   font-size: 13px;
+}
+.sampling-gaps ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sampling-gaps li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  color: var(--map-muted);
+  font-variant-numeric: tabular-nums;
 }
 .leg-samples table {
   width: 100%;
