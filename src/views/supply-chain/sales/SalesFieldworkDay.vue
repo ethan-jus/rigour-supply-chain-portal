@@ -682,24 +682,22 @@ async function refreshMap() {
     }
     map.clearMap()
     const overlays: Overlay[] = []
-    for (const line of paths)
-      overlays.push(
-        new sdk.Polyline({
-          ...line,
-          strokeColor: '#d32638',
-          strokeOpacity: 1,
-          strokeWeight: 6,
-          zIndex: 65,
-          isOutline: true,
-          outlineColor: '#ffffff',
-          borderWeight: 2,
-          lineJoin: 'round',
-          lineCap: 'round',
-        }),
-      )
+    const routeStyle = {
+      showDir: true,
+      dirColor: '#ffffff',
+      strokeOpacity: 1,
+      strokeWeight: 8,
+      isOutline: true,
+      outlineColor: '#ffffff',
+      borderWeight: 2,
+      lineJoin: 'round',
+      lineCap: 'round',
+    }
+    for (const { path } of paths)
+      overlays.push(new sdk.Polyline({ path, ...routeStyle, strokeColor: '#d32638', zIndex: 65 }))
     if (traceTab.value === 'legs' && activeLeg.value)
-      for (const line of fieldMapPaths([activeLeg.value]))
-        overlays.push(new sdk.Polyline({ ...line, strokeColor: '#2356a2', strokeWeight: 6, strokeOpacity: 1, zIndex: 66 }))
+      for (const { path } of fieldMapPaths([activeLeg.value]))
+        overlays.push(new sdk.Polyline({ path, ...routeStyle, strokeColor: '#2356a2', zIndex: 66 }))
     if (traceTab.value === 'legs')
       for (const p of activeLeg.value?.points ?? []) {
         const pos = coord(p.longitude, p.latitude)
