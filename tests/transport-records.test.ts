@@ -267,8 +267,12 @@ describe('统一运输记录 V2.6', () => {
       })
       await flushPromises()
       expect(wrapper.text()).toContain(record().documentNo)
+      expect(wrapper.text()).toContain('配送方式')
       expect(api.dictionaries).toHaveBeenCalledWith(
-        [{ moduleCode: '', code: 'COST_CARRIER' }],
+        [
+          { moduleCode: '', code: 'COST_CARRIER' },
+          { moduleCode: '', code: 'COST_DELIVERY_MODE' },
+        ],
         'inline',
       )
     } finally {
@@ -567,7 +571,7 @@ describe('统一运输记录 V2.6', () => {
     expect(scroller.scrollTop).toBe(0)
     expect(scroller.scrollLeft).toBe(120)
   })
-  it('按系统员工、部门和订单关联状态筛选，隐藏员工关联和联系电话筛选', async () => {
+  it('按配送方式、系统员工、部门和订单关联状态筛选', async () => {
     api.employees.mockResolvedValue([
       { employeeCode: 'EMP1', employeeName: '同名员工', departmentName: '销售部' },
       { employeeCode: 'EMP2', employeeName: '同名员工', departmentName: '销售部' },
@@ -599,12 +603,14 @@ describe('统一运输记录 V2.6', () => {
     expect(wrapper.find('input[aria-label="联系电话"]').exists()).toBe(false)
     select('订单关联状态').vm.$emit('update:modelValue', 'LINKED')
     select('数据来源').vm.$emit('update:modelValue', 'MANUAL_ENTRY')
+    select('配送方式').vm.$emit('update:modelValue', 'SELF')
     await flushPromises()
     expect(employee.exists()).toBe(true)
     await wrapper.get('form[aria-label="查询条件"]').trigger('submit')
     await flushPromises()
     const query = api.list.mock.calls.at(-1)![0]
     expect(query.sourceSystem).toBe('MANUAL_ENTRY')
+    expect(query.deliveryModeCode).toBe('SELF')
     expect(query.orderPlacerEmployeeCode).toBe('EMP2')
     expect(query.orderPlacerDepartment).toBe('销售部')
     expect(query.businessOrderNo).toBe('XS001')
@@ -613,6 +619,10 @@ describe('统一运输记录 V2.6', () => {
     expect(query.platformEmployeeName).toBeUndefined()
     expect(query.employeeRelationState).toBeUndefined()
     expect(query.mappedEmployeeCode).toBeUndefined()
+    await wrapper.get('form[aria-label="查询条件"]').findAll('button')
+      .find((button) => button.text() === '重置')!.trigger('click')
+    await flushPromises()
+    expect(api.list.mock.calls.at(-1)![0].deliveryModeCode).toBeUndefined()
   })
 
   it('车型取最新平台资料；手工和缺失资料保持横线，不按物流公司猜测', () => {

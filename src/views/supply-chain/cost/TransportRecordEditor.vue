@@ -127,7 +127,7 @@
               <span>{{ transportChannelName }}</span>
             </el-form-item>
             <el-form-item
-              v-if="!selfDelivery || (shippingLocked && (form.carrierCode || shipmentCarriers))"
+              v-if="!selfDelivery"
               label="物流公司"
               :required="!readonly && !shippingLocked && form.deliveryModeCode !== 'SELF'"
               :error="fieldErrors.carrierCode"
@@ -145,7 +145,7 @@
                   :value="o.value" /></el-select
             ></el-form-item>
             <el-form-item
-              v-if="!selfDelivery || (shippingLocked && shipmentTrackingNumbers)"
+              v-if="!selfDelivery"
               label="快递单号"
               :required="!readonly && !shippingLocked && form.deliveryModeCode !== 'SELF'"
               :error="fieldErrors.platformOrderNo"

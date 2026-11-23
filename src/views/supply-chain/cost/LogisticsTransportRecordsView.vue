@@ -38,6 +38,21 @@
         </div>
         <div class="list-filter-field list-filter-field--select">
           <el-select
+            v-model="filters.deliveryModeCode"
+            clearable
+            placeholder="配送方式"
+            aria-label="配送方式"
+          >
+            <el-option
+              v-for="o in costOptions('COST_DELIVERY_MODE')"
+              :key="o.value"
+              :label="o.label"
+              :value="o.value"
+            />
+          </el-select>
+        </div>
+        <div class="list-filter-field list-filter-field--select">
+          <el-select
             v-model="filters.typeCode"
             clearable
             placeholder="运输类型"
@@ -467,6 +482,7 @@ let applied: TransportQuery = { begin: 0, step: 20 },
 const columns = [
   { key: 'platformNo', label: '快递单号', width: 200 },
   { key: 'carrier', label: '物流公司', width: 120 },
+  { key: 'deliveryMode', label: '配送方式', width: 135 },
   { key: 'orderedAt', label: '下单／发货时间', width: 190 },
   { key: 'salesPeople', label: '销售业务员', width: 145 },
   { key: 'huolalaPeople', label: '货拉拉下单人', width: 145 },
@@ -546,18 +562,27 @@ function value(
     date: source?.useTime.slice(0, 10) || r.data.costDate,
     orderedAt: transportTimeOf(r, platform, shipments[r.id]),
     platformNo:
-      source?.orderNo ||
-      shipments[r.id]?.flatMap((s) => s.latest.trackingNumbers).join('、') ||
-      r.data.ledger?.platformOrderNo ||
-      '-',
+      r.data.ledger?.deliveryModeCode === 'SELF'
+        ? '-'
+        : source?.orderNo ||
+          shipments[r.id]?.flatMap((s) => s.latest.trackingNumbers).join('、') ||
+          r.data.ledger?.platformOrderNo ||
+          '-',
+    deliveryMode: costLabel(
+      'COST_DELIVERY_MODE',
+      platform ? 'THIRD_PARTY' : r.data.ledger?.deliveryModeCode,
+    ),
     amount: money(r.data.amount),
     status: statusName(r.statusCode, r.businessStatusCode),
     creator: platform ? '系统同步' : displayRecordActor(r.createdBy),
-    carrier: platform
-      ? '货拉拉'
-      : r.data.ledger?.carrierCode
-        ? costLabel('COST_CARRIER', r.data.ledger.carrierCode)
-        : shipments[r.id]?.[0]?.latest.carrierName || r.data.logistics?.carrierName,
+    carrier:
+      r.data.ledger?.deliveryModeCode === 'SELF'
+        ? '-'
+        : platform
+          ? '货拉拉'
+          : r.data.ledger?.carrierCode
+            ? costLabel('COST_CARRIER', r.data.ledger.carrierCode)
+            : shipments[r.id]?.[0]?.latest.carrierName || r.data.logistics?.carrierName,
     vehicle: vehicleOf(platform),
     platformStatus: source?.status,
     mappedEmployee:
@@ -1102,7 +1127,7 @@ onMounted(async () => {
     applied = { ...applied, statusCode: status }
   }
   const initialLoad = load()
-  void loadCostDictionaryCodes(['COST_CARRIER'], false, 'inline')
+  void loadCostDictionaryCodes(['COST_CARRIER', 'COST_DELIVERY_MODE'], false, 'inline')
   void loadEmployeeDirectory()
   openTransportLink()
   await initialLoad
