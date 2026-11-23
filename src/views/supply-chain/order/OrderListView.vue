@@ -785,7 +785,7 @@ import {
   paymentDictionaryOptions,
 } from '@/utils/order-register-status'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { businessMonth } from '@/utils/business-date'
+import { businessMonth, businessMonthRange } from '@/utils/business-date'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderPackageSyncButton from '@/components/supply/OrderPackageSyncButton.vue'
@@ -1240,8 +1240,15 @@ async function exportCsv() {
 }
 
 watch(
-  () => [route.query.homeTask, route.query.orderNo],
-  ([task, orderNo]) => {
+  () => [route.query.homeTask,route.query.orderNo,route.query.ownerStaffCode,route.query.month],
+  ([task,orderNo,owner,month]) => {
+    if (typeof owner==='string' && owner && typeof month==='string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      clearFilters()
+      filters.ownerEmployeeCode=owner
+      filters.orderDateRange=businessMonthRange(month)
+      search()
+      return
+    }
     if (task !== 'shipment' && task !== 'unpaid' && typeof orderNo !== 'string') return
     clearFilters()
     pageFilters.orderStatusCode = task === 'shipment' ? 'SUBMITTED' : ''
@@ -1254,7 +1261,7 @@ watch(
 onMounted(() => {
   void loadOrderDictionaries()
   void loadOptions()
-  if (!route.query.orderNo && !['shipment', 'unpaid'].includes(String(route.query.homeTask)))
+  if (!route.query.orderNo && !route.query.ownerStaffCode && !['shipment', 'unpaid'].includes(String(route.query.homeTask)))
     void loadOrders()
 })
 

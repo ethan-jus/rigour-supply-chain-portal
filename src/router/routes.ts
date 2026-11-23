@@ -267,12 +267,13 @@ export const constantRoutes: RouteRecordRaw[] = [
       {
         path: 'sales',
         name: 'SupplySalesDashboard',
-        component: () => import('@/views/supply-chain/sales/IndexView.vue'),
+        component: () => import('@/views/supply-chain/sales/SalesFieldwork.vue'),
         meta: {
-          title: '销售管控台',
+          title: '团队外勤',
           requiresAuth: true,
           applicationCode: 'SUPPLY_CHAIN',
           pageKey: 'dashboard',
+          inlineSubviewNavigation: true,
           permission: 'sales:dashboard:read',
         },
       },

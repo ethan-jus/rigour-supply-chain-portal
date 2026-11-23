@@ -14,7 +14,7 @@
       <div class="inspector-map-wrap"><div ref="mapElement" class="inspector-map" /><span v-if="mapMessage" class="inspector-map-message">{{ mapMessage }}</span></div>
       <dl class="inspector-facts"><div><dt>常用区域</dt><dd>尚无本人确认的区域</dd></div><div><dt>居住地属性</dt><dd>未确认</dd></div><div><dt>离开出发区域</dt><dd>暂无区域依据，无法判断</dd></div></dl>
       <ol class="inspector-events"><li v-for="event in locationEvents" :key="event.id"><time>{{ fieldClock(event.at) }}</time><div><strong>{{ event.title }}</strong><p>{{ event.detail }}</p></div></li></ol>
-      <dl class="inspector-facts"><div><dt>签到至首访</dt><dd>{{ elapsed(firstPunch?.clientOccurredAt||firstPunch?.serverReceivedAt,firstVisit?.checkedInAt) }}</dd></div><div><dt>末访离店至签退</dt><dd>{{ elapsed(lastVisit?.checkedOutAt,lastPunch?.clientOccurredAt||lastPunch?.serverReceivedAt) }}</dd></div><div><dt>已记录里程（估算）</dt><dd>{{ fieldDistance(track.distanceAvailable?track.totalDistanceMeters:null) }}</dd></div></dl>
+      <dl class="inspector-facts"><div><dt>签到至首访</dt><dd>{{ elapsed(firstPunch?.clientOccurredAt||firstPunch?.serverReceivedAt,firstVisit?.checkedInAt) }}</dd></div><div><dt>末访离店至签退</dt><dd>{{ elapsed(lastVisit?.checkedOutAt,lastPunch?.clientOccurredAt||lastPunch?.serverReceivedAt) }}</dd></div><div><dt>已记录里程（估算）</dt><dd>{{ fieldDistance(track.distanceAvailable?track.totalDistanceMeters:null,track.confirmedTrack) }}</dd></div></dl>
       <p class="inspector-note">时间差表示两个已记录事件的间隔。轨迹缺口 {{ track.gaps.length }} 处；不能据此认定连续停留、居家或无工作。</p>
     </template>
     <SalesFieldworkCasePanel v-if="canRead && relatedCases.length" :cases="relatedCases" @changed="changed" />

@@ -16,7 +16,7 @@ export const scmReportRoutes = [
   {
     path: 'sales/overview',
     name: 'SupplySalesOverview',
-    component: () => import('@/views/supply-chain/sales/SalesTeamOverview.vue'),
+    component: () => import('@/views/supply-chain/sales/SalesOverview.vue'),
     meta: {
       title: '销售总览',
       applicationCode: 'SUPPLY_CHAIN',
@@ -40,7 +40,7 @@ export const scmReportRoutes = [
   {
     path: 'sales/customer-followups',
     name: 'SupplySalesCustomerFollowups',
-    component: () => import('@/views/supply-chain/sales/SalesActionsView.vue'),
+    component: () => import('@/views/supply-chain/sales/SalesCustomerTasks.vue'),
     meta: {
       title: '客户跟进',
       applicationCode: 'SUPPLY_CHAIN',

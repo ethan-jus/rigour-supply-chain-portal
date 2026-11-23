@@ -1877,13 +1877,13 @@ onActivated(() => {
   activatedOnce = true
 })
 watch(
-  () => route.path,
+  () => [route.path,route.query.team,route.query.storeId],
   () => {
     createOpen.value = false
     resubmitLead.value = null
     statusEditing.value = null
     reviewing.value = null
-    team.value = false
+    team.value = view.value==='MINE' && route.query.team==='1'
     columns.value = [...defaultColumns.value]
     reviewMode.value = false
     Object.keys(filters).forEach((key) => {

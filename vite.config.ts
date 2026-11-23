@@ -52,9 +52,17 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     optimizeDeps: {
-      // 自动导入插件生成的样式依赖不会出现在启动扫描中。预构建全部组件样式，
-      // 避免首次打开懒加载页面时重新打包依赖、整页刷新并丢失内存会话。
-      include: [...elementPlusStyles, 'pdfjs-dist'],
+      // 预构建自动导入的样式和懒加载页面的依赖，避免首次打开时重新打包导致导航失败。
+      include: [
+        ...elementPlusStyles,
+        'pdfjs-dist',
+        'echarts/charts',
+        'echarts/components',
+        'echarts/core',
+        'echarts/features',
+        'echarts/renderers',
+        'exceljs',
+      ],
     },
     server: {
       // 允许手机、飞书 WebView 通过本机局域网 IP 访问开发SCDP。

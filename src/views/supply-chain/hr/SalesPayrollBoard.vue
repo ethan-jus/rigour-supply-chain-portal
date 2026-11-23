@@ -122,7 +122,7 @@
           >
           <el-tab-pane label="整单结清"
             ><el-table :data="active.orders" empty-text="本月没有结清订单">
-              <el-table-column prop="orderNo" label="订单" /><el-table-column
+              <el-table-column prop="orderNo" label="订单"><template #default="{row}"><router-link v-if="row.orderNo && canOrders" :to="{path:'/supply-chain/order/sales-orders',query:{orderNo:row.orderNo}}">{{row.orderNo}}</router-link><span v-else>{{row.orderNo||'—'}}</span></template></el-table-column><el-table-column
                 prop="settledOn"
                 label="首次结清日"
               /><el-table-column label="业绩基数"
@@ -134,7 +134,7 @@
           >
           <el-tab-pane label="提成明细"
             ><el-table :data="active.details" empty-text="无商品行计提记录">
-              <el-table-column prop="orderNo" label="订单" /><el-table-column
+              <el-table-column prop="orderNo" label="订单"><template #default="{row}"><router-link v-if="row.orderNo && canOrders" :to="{path:'/supply-chain/order/sales-orders',query:{orderNo:row.orderNo}}">{{row.orderNo}}</router-link><span v-else>{{row.orderNo||'—'}}</span></template></el-table-column><el-table-column
                 prop="product"
                 label="商品"
               /><el-table-column label="规则"
@@ -172,6 +172,7 @@
 </template>
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import {useNavigationStore} from '@/stores/navigation'
 import { useRoute } from 'vue-router'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { businessMonth, businessDateTime } from '@/utils/business-date'
@@ -180,6 +181,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { apiClient } from '@/api/core/client'
 import SupplyActionLabel from '@/components/supply/SupplyActionLabel.vue'
+const canOrders=computed(()=>useNavigationStore().hasPath('SUPPLY_CHAIN','/supply-chain/order/sales-orders'))
 const canPublish = computed(() => useAuthStore().hasPermission('hr:payroll:publish'))
 async function publish(r: PayBoardEmployee) {
   if (!r.payrollId) return
@@ -232,6 +234,9 @@ watch(
   },
   { immediate: true },
 )
+watch([source,()=>route.query.employee],([available,employee])=>{
+  if(!personal.value && typeof employee==='string'){term.value=employee;const match=available.find(p=>p.code===employee);if(match)show(match)}
+})
 watch([month, personal], load, { immediate: true })
 onBeforeUnmount(() => request?.abort())
 const rows = computed(() =>

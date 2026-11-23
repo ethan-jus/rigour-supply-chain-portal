@@ -114,6 +114,8 @@ export interface ReceivableQuery {
   size: number
   regionCode?: string
   ownerStaffCode?: string
+  departmentId?: number
+  includeSubDepartments?: boolean
   customerId?: string
   aging?: string
   collector?: string

@@ -7,7 +7,8 @@
       </div>
       <div class="heading-actions">
         <DhbPageSyncButton
-          :scope="isAreaPage ? 'AREA' : 'CLIENT_TYPE'"
+          v-if="!isAreaPage"
+          scope="CLIENT_TYPE"
           :label="pageConfig.shortTitle"
           @completed="loadRows"
         />
@@ -227,7 +228,7 @@ const pageConfig = computed(() =>
     ? {
         title: '归属地区',
         shortTitle: '地区',
-        description: '查看客户归属地区，作为客户档案和销售订单的地区编码来源。',
+        description: '手动维护客户归属地区，供客户档案和新订单使用。',
       }
     : {
         title: '客户类型',

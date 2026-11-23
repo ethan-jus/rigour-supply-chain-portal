@@ -331,6 +331,49 @@ describe('供应链工作台', () => {
     expect(sidebar.get('.secondary-nav').text()).toContain('销售管控台')
     expect(router.currentRoute.value.path).toBe('/supply-chain/sales')
   })
+  it('keeps configured menu icons across sales pages and applies updates from the menu tree', async () => {
+    const overview = {
+      ...node('supply.sales.overview', '销售总览', '/supply-chain/sales/overview'),
+      iconKey: 'TrendLine',
+    }
+    const board = {
+      ...node('supply.tabs.sales.fieldwork', '团队外勤', null, [
+        node('supply.sales.dashboard', '工作日', '/supply-chain/sales'),
+        node('supply.sales.location', '轨迹对比', '/supply-chain/sales/exceptions/location', [], false),
+      ]),
+      iconKey: 'Route',
+    }
+    const sales = {
+      ...node('supply.sales.menu', '销售', null, [node('team', '团队经营', null, [overview, board])]),
+      iconKey: 'Route',
+    }
+    const { global, router } = await render([home, sales])
+    await router.push(overview.routePath!)
+    const sidebar = mount(ConsoleSidebar, { props: { nodes: [home, sales] }, global })
+    wrappers.push(sidebar)
+
+    const salesIcon = () => sidebar.get('button[aria-label="销售"] svg path').attributes('d')
+    const menuIcon = (path: string) => sidebar.get(`a.secondary-link[href="${path}"] svg path`).attributes('d')
+    const original = salesIcon()
+    expect(original).toContain('M5 6a2 2')
+    expect(menuIcon('/supply-chain/sales')).toBe(original)
+    const overviewIcon = menuIcon(overview.routePath!)
+    await router.push('/supply-chain/sales')
+    await flushPromises()
+    expect(salesIcon()).toBe(original)
+    expect(menuIcon(overview.routePath!)).toBe(overviewIcon)
+    expect(sidebar.get('.secondary-nav [aria-current="page"]').text()).toBe('团队外勤')
+    expect(sidebar.text()).not.toContain('轨迹对比')
+
+    const refreshed = structuredClone(sales)
+    refreshed.iconKey = 'Target'
+    refreshed.children[0]!.children[0]!.iconKey = 'Sliders'
+    await sidebar.setProps({ nodes: [home, refreshed] })
+    expect(salesIcon()).not.toBe(original)
+    expect(menuIcon(overview.routePath!)).not.toBe(overviewIcon)
+    expect(router.currentRoute.value.path).toBe('/supply-chain/sales')
+  })
+
   it.each(['auto', 'pinned'] as const)('%s 模式浏览其他菜单不改变当前高亮，实际切换页面才更新', async (mode) => {
     const nodes = [home, node('supply.order.menu', '订单管理', null, [order, payments])]
     const { global, workspace, router } = await render(nodes)

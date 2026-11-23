@@ -1,7 +1,6 @@
 import { apiClient } from './client'
 import type { DhbSyncOrchestrationResult } from './dhb-orchestration'
 export type DhbPageScope =
-  | 'SALESPERSON'
   | 'ORDER_SALES_PACKAGE'
   | 'VOUCHER_BACKFILL'
   | 'SALES_ORDER'
@@ -11,7 +10,6 @@ export type DhbPageScope =
   | 'TRANSFER'
   | 'CUSTOMER'
   | 'ADDRESS'
-  | 'AREA'
   | 'CLIENT_TYPE'
   | 'CATEGORY'
   | 'BRAND'

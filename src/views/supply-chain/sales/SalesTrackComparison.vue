@@ -1,301 +1,547 @@
 <template>
-  <div class="track-comparison">
-    <el-result
-      v-if="!canViewTracks"
-      icon="warning"
-      title="无精确轨迹查看权限"
-      sub-title="当前账号需同时具备销售看板和敏感位置查看权限，请联系管理员授权。"
-    />
-    <template v-else>
-    <div class="track-toolbar">
-      <el-select v-model="salesProfileId" placeholder="选择销售" filterable class="sales-select">
-        <el-option v-for="person in people" :key="person.salesProfileId" :label="person.salesNo" :value="person.salesProfileId" />
-      </el-select>
-      <label><span>主路线</span><el-date-picker v-model="dateA" type="date" value-format="YYYY-MM-DD" :clearable="false" /></label>
-      <label><span>对比路线</span><el-date-picker v-model="dateB" type="date" value-format="YYYY-MM-DD" :clearable="true" placeholder="可选" /></label>
-      <el-button type="primary" :loading="loading" :disabled="!salesProfileId" @click="loadTracks">查看路线</el-button>
-    </div>
-
-    <el-alert
-      v-if="!amapConfigured"
-      title="地图暂不可用"
-      description="其他作业记录仍可查看。"
-      type="warning"
-      :closable="false"
-      show-icon
-    />
-    <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
-
-    <div class="track-metrics">
-      <article class="route-card route-card--a">
-        <span><i />主路线 · {{ dateA }}</span>
-        <strong>{{ trackA?.distanceAvailable ? formatDistance(trackA.totalDistanceMeters) : '无法计算' }}</strong>
-        <p>{{ trackA ? `${trackA.visits.length} 家拜访 · 连续采样时长 ${formatMinutes(trackA.trackedDurationMinutes)}` : errorA || '请选择后查看' }}</p>
-      </article>
-      <article class="route-card route-card--b">
-        <span><i />对比路线 · {{ dateB || '未选择' }}</span>
-        <strong>{{ trackB?.distanceAvailable ? formatDistance(trackB.totalDistanceMeters) : '无法计算' }}</strong>
-        <p>{{ trackB ? `${trackB.visits.length} 家拜访 · 连续采样时长 ${formatMinutes(trackB.trackedDurationMinutes)}` : errorB || '可选择另一工作日叠加对比' }}</p>
-      </article>
-      <article class="route-card">
-        <span>拜访门店重合</span>
-        <strong>{{ overlapLabel }}</strong>
-        <p>仅表示两日拜访门店集合重合度，不自动判定路线或工作异常。</p>
-      </article>
-    </div>
-
-    <el-card shadow="never" class="map-card">
-      <template #header>
-        <div class="map-heading">
-          <div><strong>跨日路线对比</strong><small>蓝色为主路线，紫色虚线为对比路线；低精度定位点不参与连线和里程。</small></div>
-          <el-tag type="danger" effect="plain">敏感位置 · 查看已审计</el-tag>
-        </div>
-      </template>
-      <div v-if="loading" class="map-state"><el-icon class="is-loading"><Loading /></el-icon> 正在加载精确轨迹</div>
-      <div v-else-if="amapConfigured && (trackA || trackB)" ref="mapContainer" class="track-map" />
-      <el-empty v-else description="请选择销售和工作日查看轨迹" />
-    </el-card>
-
-    <el-card v-if="trackA?.visits.length || trackB?.visits.length" shadow="never">
-      <template #header><strong>拜访顺序对比</strong></template>
-      <div class="sequence-grid">
-        <div>
-          <span class="sequence-title sequence-title--a">{{ dateA }}</span>
-          <ol><li v-for="visit in trackA?.visits || []" :key="visit.visitId"><strong>{{ visit.storeName }}</strong><span>{{ visitTypeLabel(visit.visitType) }} · {{ statusLabel(visit.reviewStatus) }}</span></li></ol>
-        </div>
-        <div>
-          <span class="sequence-title sequence-title--b">{{ dateB || '未选择对比日期' }}</span>
-          <ol><li v-for="visit in trackB?.visits || []" :key="visit.visitId"><strong>{{ visit.storeName }}</strong><span>{{ visitTypeLabel(visit.visitType) }} · {{ statusLabel(visit.reviewStatus) }}</span></li></ol>
-        </div>
+  <el-result
+    v-if="!canViewTracks"
+    icon="warning"
+    title="无精确轨迹查看权限"
+    sub-title="需具备销售看板和精确位置查看权限。"
+  />
+  <div v-else class="track-comparison">
+    <el-alert v-if="peopleError" :title="peopleError" type="error" :closable="false" />
+    <div v-if="mode" class="compare-settings" role="group" aria-label="轨迹对比条件">
+      <el-button
+        :type="mode === 'day' ? 'primary' : 'default'"
+        :aria-pressed="mode === 'day'"
+        @click="changeMode('day')"
+        >同人跨日</el-button
+      >
+      <el-button
+        :type="mode === 'person' ? 'primary' : 'default'"
+        :aria-pressed="mode === 'person'"
+        @click="changeMode('person')"
+        >同日跨人</el-button
+      >
+      <el-date-picker
+        v-if="mode === 'day'"
+        :model-value="lanes[1]?.date"
+        type="date"
+        value-format="YYYY-MM-DD"
+        :clearable="false"
+        :disabled-date="isFuture"
+        placeholder="对照工作日"
+        aria-label="对照工作日"
+        @update:model-value="changeDate"
+      />
+      <div v-else class="list-filter-field list-filter-field--person">
+        <el-select
+          :model-value="lanes[1]?.person"
+          filterable
+          :disabled="!otherPeople.length"
+          placeholder="选择对照业务员"
+          aria-label="对照业务员"
+          @update:model-value="changePerson"
+        >
+          <el-option
+            v-for="person in otherPeople"
+            :key="person.id"
+            :label="person.name"
+            :value="person.id"
+          />
+        </el-select>
       </div>
-    </el-card>
-
-    <el-alert
-      title="使用边界"
-      description="路线相似、定位中断或低精度点只能作为复核线索，不能单独判定销售未工作；应结合门店签到、停留、录音、拜访结果和主管复核结论。"
-      type="info"
-      :closable="false"
-      show-icon
-    />
-    </template>
+    </div>
+    <div class="compare-grid" v-loading="loading">
+      <section v-for="lane in lanes" :key="lane.title" class="compare-panel">
+        <h2>{{ lane.title }}</h2>
+        <p v-if="mode" class="compare-identity">
+          <strong>{{
+            people.find((person) => person.id === lane.person)?.name ?? '暂无可对照人员'
+          }}</strong>
+          <time :datetime="lane.date">{{ lane.date }}</time>
+        </p>
+        <div v-else class="compare-filters">
+          <label>
+            <span>员工</span>
+            <div class="list-filter-field list-filter-field--person">
+              <el-select
+                v-model="lane.person"
+                size="small"
+                filterable
+                placeholder="选择销售"
+                :aria-label="lane.title + '员工'"
+                @change="loadTracks"
+              >
+                <el-option
+                  v-for="person in people"
+                  :key="person.id"
+                  :label="person.name"
+                  :value="person.id"
+                />
+              </el-select>
+            </div>
+          </label>
+          <label>
+            <span>日期</span>
+            <el-date-picker
+              v-model="lane.date"
+              class="compare-date"
+              type="date"
+              size="small"
+              format="YYYY/MM/DD"
+              value-format="YYYY-MM-DD"
+              :aria-label="lane.title + '日期'"
+              :disabled-date="isFuture"
+              :clearable="false"
+              @change="loadTracks"
+            />
+          </label>
+        </div>
+        <div class="compare-map-frame">
+          <div
+            :ref="(element) => bindMap(lane.title, element)"
+            class="compare-map"
+            :aria-label="lane.title + '拜访轨迹'"
+          />
+          <p v-if="lane.message" class="compare-map-state" role="status">{{ lane.message }}</p>
+        </div>
+        <div class="compare-strip">
+          <span>已记录路段</span>
+          <strong>{{
+            fieldDistance(
+              lane.track?.distanceAvailable ? lane.track.totalDistanceMeters : null,
+              true,
+            )
+          }}</strong>
+          <span v-if="lane.track?.gaps?.length">{{ lane.track.gaps.length }} 处采样缺口</span>
+        </div>
+        <div v-if="lane.summary" class="compare-metrics">
+          <span
+            ><b>{{ mode && lane.track ? lane.track.visits.length : lane.summary.visits }}</b>
+            {{ mode && lane.track ? '次到店' : '次完成拜访' }}</span
+          >
+          <span
+            ><b>{{ lane.summary.punches }}</b> 次打卡</span
+          >
+          <span
+            >工作时长 <b>{{ duration(lane.summary.workMinutes) }}</b
+            ><sup v-if="lane.summary.active">暂</sup
+            ><sup v-else-if="lane.summary.missingCheckout">待核</sup></span
+          >
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Loading } from '@element-plus/icons-vue'
-import { apiClient } from '@/api'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import {
+  fieldDistance,
+  fieldMapPaths,
+  fieldworkTrack,
+  type FieldTrack,
+} from '@/api/core/sales-fieldwork'
+import {
+  duration,
+  readFieldReport,
+  type ReportOption,
+  type ReportSummary,
+} from '@/api/core/sales-fieldwork-report'
 import { useAuthStore } from '@/stores/auth'
 import { isAmapJsConfigured, loadAmapJsApi } from '@/utils/amap-js-api'
+import { businessDate } from '@/utils/business-date'
 
-interface Person { salesProfileId: string; salesNo: string }
-interface TrackPoint { longitude: number; latitude: number; qualityStatus: string }
-interface TrackVisit {
-  visitId: string; sequence: number; storeId: string | null; storeName: string
-  longitude: number | null; latitude: number | null; visitType: string; reviewStatus: string
-}
-interface WorkDayTrack {
-  workDayId: string; businessDate: string; status: string; totalDistanceMeters: number
-  trackedDurationMinutes: number; points: TrackPoint[]; visits: TrackVisit[]; distanceAvailable: boolean; legs: Array<{points: TrackPoint[]}>
-}
+const props = defineProps<{
+  staffOptions?: ReportOption[]
+  initialPerson?: string
+  initialDate?: string
+  mode?: 'day' | 'person'
+  compareDate?: string
+  comparePerson?: string
+}>()
+const emit = defineEmits<{
+  change: [state: { mode: 'day' | 'person'; date: string; person: string }]
+}>()
+const auth = useAuthStore()
+const canViewTracks = computed(
+  () =>
+    auth.hasPermission('sales:dashboard:read') &&
+    auth.hasPermission('sales:location:sensitive:read'),
+)
+
+type Coordinate = [number, number]
 interface MapInstance {
-  add(overlays: unknown | unknown[]): void
-  setFitView(overlays?: unknown[]): void
+  add(overlays: unknown[]): void
+  setFitView(overlays: unknown[], immediately: boolean, padding: number[], maxZoom: number): void
   destroy(): void
 }
-interface AmapNamespace {
-  Map: new (container: HTMLElement, options: Record<string, unknown>) => MapInstance
+interface Amap {
+  Map: new (el: HTMLElement, options: Record<string, unknown>) => MapInstance
   Polyline: new (options: Record<string, unknown>) => unknown
   Marker: new (options: Record<string, unknown>) => unknown
 }
-
-const today = localDate(new Date())
-const yesterday = localDate(new Date(Date.now() - 86_400_000))
-const people = ref<Person[]>([])
-const salesProfileId = ref('')
-const dateA = ref(today)
-const dateB = ref(yesterday)
-const trackA = ref<WorkDayTrack | null>(null)
-const trackB = ref<WorkDayTrack | null>(null)
-const errorA = ref('')
-const errorB = ref('')
-const errorMessage = ref('')
-const loading = ref(false)
-const mapContainer = ref<HTMLElement | null>(null)
-const amapConfigured = isAmapJsConfigured()
-const auth = useAuthStore()
-const canViewTracks = computed(() =>
-  auth.hasPermission('sales:dashboard:read')
-  && auth.hasPermission('sales:location:sensitive:read'),
+interface Lane {
+  title: string
+  person: string
+  date: string
+  track: FieldTrack | null
+  summary: ReportSummary | null
+  message: string
+}
+const today = businessDate(new Date())
+const isFuture = (value: Date) => businessDate(value) > today
+const firstDay = props.initialDate || today
+const dayBefore = (day: string) =>
+  businessDate(new Date(Date.parse(day + 'T12:00:00+08:00') - 86_400_000)) || today
+const lanes = ref<Lane[]>([
+  {
+    title: '主工作日',
+    date: firstDay,
+    person: props.initialPerson || '',
+    track: null,
+    summary: null,
+    message: '请选择员工和工作日',
+  },
+  {
+    title: '对比日',
+    date: dayBefore(firstDay),
+    person: props.initialPerson || '',
+    track: null,
+    summary: null,
+    message: '请选择员工和工作日',
+  },
+])
+const people = ref<ReportOption[]>([])
+const otherPeople = computed(() =>
+  people.value.filter((person) => person.id !== lanes.value[0]?.person),
 )
-let map: MapInstance | null = null
+const peopleError = ref('')
+const loading = ref(false)
+const mapElements = new Map<string, HTMLElement>()
+const maps = new Map<string, MapInstance>()
+let active: AbortController | undefined
+let rosterRequest: AbortController | undefined
 
-const overlapLabel = computed(() => {
-  if (!trackA.value || !trackB.value) return '--'
-  const first = new Set(trackA.value.visits.map((visit) => visit.storeId).filter(Boolean))
-  const second = new Set(trackB.value.visits.map((visit) => visit.storeId).filter(Boolean))
-  const union = new Set([...first, ...second])
-  if (!union.size) return '0%'
-  const intersection = [...first].filter((storeId) => second.has(storeId)).length
-  return `${Math.round(intersection / union.size * 100)}%`
-})
-
-function localDate(date: Date): string {
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+function changeMode(mode: 'day' | 'person') {
+  emit('change', { mode, date: props.compareDate || '', person: props.comparePerson || '' })
 }
-
-function formatDistance(value: number): string {
-  return value >= 1000 ? `${(value / 1000).toFixed(1)} km` : `${value} m`
+function changeDate(date: string) {
+  if (date) emit('change', { mode: 'day', date, person: props.comparePerson || '' })
 }
-
-function formatMinutes(value: number): string {
-  if (value < 60) return `${value} 分钟`
-  return `${Math.floor(value / 60)}小时${value % 60 ? `${value % 60}分` : ''}`
+function changePerson(person: string) {
+  emit('change', { mode: 'person', date: props.compareDate || '', person })
 }
-
-function statusLabel(value: string): string {
-  return ({ IN_PROGRESS: '进行中', PENDING_REVIEW: '待复核', EFFECTIVE: '有效', INEFFECTIVE: '无效' } as Record<string, string>)[value] || `未知状态（${value}）`
+function scopeComparison() {
+  const main = lanes.value[0]!
+  const other = lanes.value[1]!
+  if (!props.mode) return
+  main.date = props.initialDate || today
+  main.person =
+    people.value.find((person) => person.id === props.initialPerson)?.id ||
+    people.value[0]?.id ||
+    ''
+  other.date = props.mode === 'day' ? props.compareDate || dayBefore(main.date) : main.date
+  other.person =
+    props.mode === 'day'
+      ? main.person
+      : otherPeople.value.find((person) => person.id === props.comparePerson)?.id ||
+        otherPeople.value[0]?.id ||
+        ''
 }
-
-function visitTypeLabel(value: string): string {
-  return ({ FIRST_VISIT: '首访', REVISIT: '复访' } as Record<string, string>)[value] || `未知拜访类型（${value}）`
+function bindMap(title: string, element: unknown) {
+  if (element instanceof HTMLElement) mapElements.set(title, element)
+  else mapElements.delete(title)
 }
-
-function errorOf(error: unknown): string {
-  if (error && typeof error === 'object' && 'message' in error) return String(error.message)
-  return '轨迹读取失败'
+function resetTracks() {
+  active?.abort()
+  maps.forEach((map) => map.destroy())
+  maps.clear()
+  loading.value = false
+  for (const lane of lanes.value) {
+    lane.track = null
+    lane.summary = null
+    lane.message = props.mode ? '暂无可对照人员' : '请选择员工和工作日'
+  }
 }
 
 async function loadPeople() {
   if (!canViewTracks.value) return
+  rosterRequest?.abort()
+  const request = new AbortController()
+  rosterRequest = request
+  peopleError.value = ''
   try {
-    const page = await apiClient.get('/sales/management/fieldwork', { params: { date: today, pageSize: 100 } }) as { items: Array<{salesProfileId:string;employeeName:string}> }
-    people.value = page.items.map(person => ({ salesProfileId: person.salesProfileId, salesNo: person.employeeName }))
-    salesProfileId.value ||= people.value[0]?.salesProfileId || ''
+    const rows =
+      props.staffOptions ??
+      (await readFieldReport({ date: firstDay, size: 1 }, request.signal)).people
+    if (request.signal.aborted) return
+    people.value = rows
+    for (const lane of lanes.value) {
+      if (!rows.some((person) => person.id === lane.person)) lane.person = rows[0]?.id || ''
+    }
   } catch (error) {
-    errorMessage.value = errorOf(error)
+    if (!request.signal.aborted)
+      peopleError.value = error instanceof Error ? error.message : '读取员工失败'
   }
 }
 
-async function fetchTrack(date: string): Promise<{ track: WorkDayTrack | null; error: string }> {
-  if (!canViewTracks.value || !date) return { track: null, error: '' }
+async function drawMap(lane: Lane, track: FieldTrack, signal: AbortSignal) {
+  if (!isAmapJsConfigured()) {
+    lane.message = '地图暂不可用'
+    return
+  }
+  const paths = fieldMapPaths(track.legs ?? [])
+  const markers = [
+    ...track.visits.map((visit) => ({
+      longitude: visit.longitude,
+      latitude: visit.latitude,
+      text: String(visit.sequence),
+      title: visit.storeName,
+    })),
+    ...(track.punches ?? []).map((punch) => ({
+      longitude: punch.longitude,
+      latitude: punch.latitude,
+      text: punch.eventType === 'CHECK_IN' ? '签到' : '签退',
+      title: '',
+    })),
+  ].filter((mark) => mark.longitude != null && mark.latitude != null)
+  const firstMarker = markers[0]
+  const center =
+    paths[0]?.path[0] ??
+    (firstMarker ? ([firstMarker.longitude!, firstMarker.latitude!] as Coordinate) : null)
+  if (!center) {
+    lane.message = '当日暂无可用位置'
+    return
+  }
+
+  const sdk = (await loadAmapJsApi()) as unknown as Amap
+  const container = mapElements.get(lane.title)
+  if (signal.aborted || !container || !canViewTracks.value) return
+  const map = new sdk.Map(container, {
+    center,
+    viewMode: '2D',
+    resizeEnable: true,
+    mapStyle: 'amap://styles/whitesmoke',
+  })
+  maps.set(lane.title, map)
+  const overlays = paths.map(
+    (route) =>
+      new sdk.Polyline({
+        ...route,
+        strokeColor: props.mode ? '#3572bd' : '#137d70',
+        strokeWeight: 4,
+      }),
+  )
+  const markerGroups = new Map<string, typeof markers>()
+  markers.forEach((mark, index) => {
+    const key = props.mode
+      ? mark.longitude!.toFixed(5) + ',' + mark.latitude!.toFixed(5)
+      : String(index)
+    const group = markerGroups.get(key) ?? []
+    group.push(mark)
+    markerGroups.set(key, group)
+  })
+  for (const group of markerGroups.values()) {
+    const mark = group[0]!
+    const label = document.createElement('span')
+    label.className = 'scdp-compare-marker'
+    label.textContent = group.map((item) => item.text).join('·')
+    overlays.push(
+      new sdk.Marker({
+        content: label,
+        position: [mark.longitude, mark.latitude],
+        title: group.map((item) => item.title || item.text).join('、'),
+      }),
+    )
+  }
+  map.add(overlays)
+  map.setFitView(overlays, true, [22, 22, 22, 22], 17)
+  lane.message = ''
+}
+
+async function loadLane(lane: Lane, signal: AbortSignal) {
+  if (!lane.person || !lane.date) return
+  lane.message = '正在读取轨迹'
+  const [track, report] = await Promise.allSettled([
+    fieldworkTrack(lane.person, lane.date, signal),
+    readFieldReport({ date: lane.date, person: lane.person, size: 1 }, signal),
+  ])
+  if (signal.aborted || !canViewTracks.value) return
+  if (report.status === 'fulfilled') lane.summary = report.value.summary ?? null
+  if (track.status === 'rejected') {
+    lane.message = track.reason instanceof Error ? track.reason.message : '当日暂无轨迹'
+    return
+  }
+  lane.track = track.value
   try {
-    const track = await apiClient.get(`/sales/management/profiles/${salesProfileId.value}/track`, { params: { date } }) as WorkDayTrack
-    return { track, error: '' }
+    await drawMap(lane, track.value, signal)
   } catch (error) {
-    return { track: null, error: errorOf(error) }
+    if (!signal.aborted) lane.message = error instanceof Error ? error.message : '地图加载失败'
   }
 }
 
 async function loadTracks() {
-  if (!canViewTracks.value || !salesProfileId.value || !dateA.value) return
-  loading.value = true
-  errorMessage.value = ''
-  destroyMap()
-  const [first, second] = await Promise.all([fetchTrack(dateA.value), fetchTrack(dateB.value)])
-  trackA.value = first.track
-  errorA.value = first.error
-  trackB.value = second.track
-  errorB.value = second.error
-  loading.value = false
-  if (!trackA.value && !trackB.value) errorMessage.value = [errorA.value, errorB.value].filter(Boolean).join('；')
-  await renderMap()
-}
-
-async function loadAmap(): Promise<AmapNamespace> {
-  if (!canViewTracks.value) throw new Error('无精确轨迹查看权限')
-  return await loadAmapJsApi() as unknown as AmapNamespace
-}
-
-async function renderMap() {
-  if (!canViewTracks.value || !amapConfigured || (!trackA.value && !trackB.value)) return
-  await nextTick()
-  if (!mapContainer.value) return
-  try {
-    const amap = await loadAmap()
-    const routeA = acceptedPath(trackA.value)
-    const routeB = acceptedPath(trackB.value)
-    const center = routeA[0] || routeB[0]
-    if (!center) return
-    map = new amap.Map(mapContainer.value, { zoom: 13, center })
-    const overlays: unknown[] = []
-    for (const leg of trackA.value?.legs || []) addRoute(amap, leg.points.map(p => [p.longitude, p.latitude]), '#2468f2', 'solid', overlays)
-    for (const leg of trackB.value?.legs || []) addRoute(amap, leg.points.map(p => [p.longitude, p.latitude]), '#8b5cf6', 'dashed', overlays)
-    addVisitMarkers(amap, trackA.value, 'A', '#2468f2', overlays)
-    addVisitMarkers(amap, trackB.value, 'B', '#8b5cf6', overlays)
-    map.add(overlays)
-    map.setFitView(overlays)
-  } catch (error) {
-    errorMessage.value = errorOf(error)
-  }
-}
-
-function acceptedPath(track: WorkDayTrack | null): Array<[number, number]> {
-  return (track?.points || []).filter((point) => point.qualityStatus === 'ACCEPTED')
-    .map((point) => [point.longitude, point.latitude])
-}
-
-function addRoute(amap: AmapNamespace, path: Array<[number, number]>, color: string,
-                  strokeStyle: string, overlays: unknown[]) {
-  if (path.length < 2) return
-  overlays.push(new amap.Polyline({ path, strokeColor: color, strokeWeight: 6, strokeOpacity: .85, strokeStyle, showDir: true }))
-}
-
-function addVisitMarkers(amap: AmapNamespace, track: WorkDayTrack | null, prefix: string,
-                         color: string, overlays: unknown[]) {
-  for (const visit of track?.visits || []) {
-    if (visit.longitude == null || visit.latitude == null) continue
-    const label = document.createElement('span')
-    label.textContent = `${prefix}${visit.sequence} · ${visit.storeName}`
-    label.style.color = color
-    label.style.fontWeight = '600'
-    overlays.push(new amap.Marker({
-      position: [visit.longitude, visit.latitude],
-      title: `${prefix}${visit.sequence} ${visit.storeName}`,
-      label: { content: label, direction: 'top' },
-    }))
-  }
-}
-
-function destroyMap() {
-  map?.destroy()
-  map = null
-}
-
-onMounted(async () => {
   if (!canViewTracks.value) return
-  await loadPeople()
-  if (salesProfileId.value) await loadTracks()
+  resetTracks()
+  const request = new AbortController()
+  active = request
+  loading.value = true
+  await Promise.all(lanes.value.map((lane) => loadLane(lane, request.signal)))
+  if (!request.signal.aborted) loading.value = false
+}
+
+watch(
+  () => [auth.user?.tenantId, auth.user?.id, auth.user?.permissions, props.staffOptions],
+  async (_value, _oldValue, onCleanup) => {
+    let interrupted = false
+    onCleanup(() => {
+      interrupted = true
+    })
+    resetTracks()
+    people.value = []
+    await loadPeople()
+    if (!interrupted && people.value.length) {
+      scopeComparison()
+      await loadTracks()
+    }
+  },
+  { immediate: true, deep: true },
+)
+watch(
+  () => [
+    props.mode,
+    props.compareDate,
+    props.comparePerson,
+    props.initialPerson,
+    props.initialDate,
+  ],
+  () => {
+    if (!props.mode || !people.value.length) return
+    scopeComparison()
+    void loadTracks()
+  },
+)
+onBeforeUnmount(() => {
+  rosterRequest?.abort()
+  resetTracks()
 })
-onBeforeUnmount(destroyMap)
 </script>
 
 <style scoped lang="scss">
-@use '@/assets/styles/variables' as *;
+@use '@/assets/styles/list-filters';
 
-.track-comparison { display: grid; gap: $spacing-lg; }
-.track-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: $spacing-md; padding: $spacing-md; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-lg; }
-.track-toolbar label { display: flex; flex-direction: column; gap: 5px; color: $color-text-secondary; font-size: $font-size-xs; }
-.sales-select { width: 210px; }
-.track-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: $spacing-md; }
-.route-card { padding: 18px; background: $color-bg-white; border: 1px solid $color-border-base; border-radius: $border-radius-lg; }
-.route-card > span { display: flex; align-items: center; gap: 7px; color: $color-text-secondary; font-size: $font-size-xs; }
-.route-card i { width: 18px; height: 4px; background: $color-primary; border-radius: 4px; }
-.route-card--b i { background: #8b5cf6; }
-.route-card strong { display: block; margin-top: 10px; color: $color-text-primary; font-size: 26px; }
-.route-card p { margin: 7px 0 0; color: $color-text-secondary; font-size: $font-size-xs; line-height: 1.5; }
-.map-heading { display: flex; align-items: center; justify-content: space-between; gap: $spacing-md; }
-.map-heading > div { display: flex; flex-direction: column; gap: 4px; }
-.map-heading small { color: $color-text-secondary; }
-.track-map { width: 100%; height: 520px; background: $color-bg-muted; border-radius: $border-radius-base; }
-.map-state { display: grid; min-height: 360px; color: $color-text-secondary; place-content: center; }
-.sequence-grid { display: grid; grid-template-columns: 1fr 1fr; gap: $spacing-lg; }
-.sequence-title { display: block; padding-left: 8px; color: $color-primary; font-weight: 700; border-left: 4px solid $color-primary; }
-.sequence-title--b { color: #8b5cf6; border-color: #8b5cf6; }
-.sequence-grid ol { display: grid; gap: 8px; padding-left: 30px; }
-.sequence-grid li { padding: 8px 10px; background: $color-bg-muted; border-radius: $border-radius-base; }
-.sequence-grid li strong, .sequence-grid li span { display: block; }
-.sequence-grid li span { margin-top: 3px; color: $color-text-secondary; font-size: $font-size-xs; }
-@media (max-width: 900px) { .track-metrics, .sequence-grid { grid-template-columns: 1fr; } .track-map { height: 400px; } }
+.track-comparison,
+.compare-grid {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.compare-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.compare-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d5dfe2;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a3340;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.compare-panel h2 {
+  margin: 0;
+  padding: 7px 9px;
+  border-bottom: 1px solid #e0e7e9;
+  font-size: 15px;
+}
+.compare-settings,
+.compare-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.compare-settings .el-button + .el-button {
+  margin-left: 0;
+}
+.compare-settings :deep(.el-date-editor.el-input) {
+  width: 146px;
+}
+.compare-identity {
+  padding: 7px 9px;
+  margin: 0;
+  gap: 10px;
+  color: #495f6e;
+}
+.compare-map-frame {
+  --comparison-redesign-map: clamp(240px, 42vh, 440px);
+}
+.compare-identity + .compare-map-frame {
+  height: var(--comparison-redesign-map);
+}
+.compare-filters,
+.compare-filters label,
+.compare-strip,
+.compare-metrics {
+  display: flex;
+  align-items: center;
+  gap: 5px 10px;
+  flex-wrap: wrap;
+}
+.compare-filters,
+.compare-strip,
+.compare-metrics {
+  padding: 5px 9px;
+}
+.compare-filters label {
+  color: #495f6e;
+  font-size: 12px;
+}
+.compare-filters :deep(.compare-date) {
+  width: 128px;
+}
+.compare-map-frame {
+  position: relative;
+  height: clamp(200px, 34vh, 360px);
+  border-block: 1px solid #e0e7e9;
+  background: #eaf0ed;
+}
+.compare-map {
+  height: 100%;
+}
+.compare-map-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 8px;
+  color: #495f6e;
+}
+.compare-strip {
+  background: #f7faf9;
+  color: #495f6e;
+  font-size: 12px;
+}
+.compare-metrics {
+  border-top: 1px solid #e0e7e9;
+}
+.compare-metrics sup {
+  margin-left: 3px;
+  color: #855013;
+}
+:global(.scdp-compare-marker) {
+  padding: 2px 5px;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  background: #2456a6;
+  color: #fff;
+  font: 600 11px sans-serif;
+  white-space: nowrap;
+}
+@media (max-width: 800px) {
+  .compare-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 </style>

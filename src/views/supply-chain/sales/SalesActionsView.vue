@@ -1,15 +1,33 @@
 <template>
   <section class="finance-report">
     <header>
-      <SupplyPageTitle>{{ risk ? '风险处置' : '客户跟进' }}</SupplyPageTitle>
+      <SupplyPageTitle>风险处置</SupplyPageTitle>
     </header>
-    <section class="finance-panel">
+    <el-radio-group v-model="tab" size="small" aria-label="风险分类">
+      <el-radio-button value="main">回款风险</el-radio-button>
+      <el-radio-button v-if="canRisk" value="field">外勤疑点</el-radio-button>
+      <el-radio-button value="actions">催收记录</el-radio-button>
+    </el-radio-group>
+    <FieldRiskQueue v-if="tab === 'field' && canRisk" />
+    <section v-if="tab === 'main'" class="finance-panel">
       <header>
-        <h2>{{ risk ? '待处置对象' : '待跟进客户' }}</h2>
+        <h2>{{ overdueOnly ? '合同逾期' : '待处置对象' }}</h2>
+        <label
+          >截至日
+          <el-date-picker
+            v-model="cutoff"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+            :disabled-date="future"
+            aria-label="回款风险截至日"
+            @change="turn(1)"
+        /></label>
         <router-link
-          v-if="risk && fieldwork"
-          :to="{ path: '/supply-chain/sales', query: { pendingOnly: '1' } }"
-          >核查外勤疑点</router-link
+          v-if="overdueOnly"
+          class="risk-show-all"
+          :to="{ name: 'SupplySalesRiskCases', query: { asOf: cutoff } }"
+          >查看全部风险</router-link
         >
         <el-button text :loading="busy" @click="load">刷新</el-button>
       </header>
@@ -18,13 +36,23 @@
         v-if="!error"
         v-loading="busy"
         :data="candidates"
-        :empty-text="risk ? '暂无逾期、近期到期或账期待核的订单' : '该范围暂无待跟进客户'"
+        empty-text="暂无逾期、近期到期或账期待核的订单"
       >
-        <el-table-column
-          prop="object"
-          :label="risk ? '订单' : '客户'"
-          min-width="125"
-        /><el-table-column prop="reason" :label="risk ? '待办原因' : '跟进依据'" min-width="150" />
+        <el-table-column prop="object" label="订单" min-width="125" /><el-table-column
+          prop="reason"
+          label="待办原因"
+          min-width="150"
+        />
+        <el-table-column label="合同到期" width="123"
+          ><template #default="{ row }">{{
+            row.dueDate || '到期日待核'
+          }}</template></el-table-column
+        >
+        <el-table-column label="截至日未收（元）" align="right" min-width="135"
+          ><template #default="{ row }">{{
+            row.balance?.toLocaleString('zh-CN', { minimumFractionDigits: 2 })
+          }}</template></el-table-column
+        >
         <el-table-column prop="owner" label="负责人" min-width="100" />
         <el-table-column v-if="write" label="操作" width="100"
           ><template #default="{ row }"
@@ -33,7 +61,7 @@
         >
       </el-table>
       <CompactPagination
-        v-if="risk && total > 25"
+        v-if="total > 25"
         :current-page="page"
         :page-size="25"
         :page-sizes="[25]"
@@ -41,33 +69,52 @@
         @current-change="turn"
       />
     </section>
-    <section class="finance-panel">
-      <h2>跟进记录</h2>
-      <BiOperationsWorkbench :key="kind" :kind="kind" :action-seed="seed" />
+    <section v-if="tab === 'actions'" class="finance-panel">
+      <h2>催收记录</h2>
+      <BiOperationsWorkbench kind="COLLECTION" :action-seed="seed" />
     </section>
   </section>
 </template>
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useNavigationStore } from '@/stores/navigation'
+import FieldRiskQueue from './FieldRiskQueue.vue'
 import { useAuthStore } from '@/stores/auth'
-import { businessPeriodRange, businessDateRange } from '@/utils/business-date'
+import { businessDate } from '@/utils/business-date'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import CompactPagination from '@/components/supply/CompactPagination.vue'
 import BiOperationsWorkbench from '../bi/components/BiOperationsWorkbench.vue'
 import { getReceivables } from '@/api/core/receivables'
-import { getSupplyDashboardOverview } from '@/api/core/bi'
 import type { BiActionSeed } from '@/api/core/bi-operations'
 const route = useRoute(),
-  auth = useAuthStore(),
-  nav = useNavigationStore()
-const risk = computed(() => route.meta.routeKey === 'supply.sales.risk-cases'),
-  kind = computed(() => (risk.value ? 'COLLECTION' : 'CUSTOMER'))
-const fieldwork = computed(() => nav.hasPath('SUPPLY_CHAIN', '/supply-chain/sales')),
+  auth = useAuthStore()
+const tab = ref('main'),
+  cutoff = ref(businessDate(new Date()))
+const future = (date: Date) => businessDate(date) > businessDate(new Date())
+const overdueOnly = computed(() => route.query.overdue === '1')
+function cutoffFromRoute() {
+  const value = String(route.query.asOf || '')
+  try {
+    return businessDate(value) === value && value <= businessDate(new Date())
+      ? value
+      : businessDate(new Date())
+  } catch {
+    return businessDate(new Date())
+  }
+}
+const canRisk = computed(
+    () => auth.hasPermission('sales:dashboard:read') && auth.hasPermission('sales:risk:read'),
+  ),
   write = computed(() => auth.hasPermission('analytics:operations:write'))
 const candidates = ref<
-    { object: string; reason: string; owner: string | null; seed: BiActionSeed }[]
+    {
+      object: string
+      reason: string
+      owner: string | null
+      seed: BiActionSeed
+      dueDate?: string | null
+      balance?: number
+    }[]
   >([]),
   seed = ref<BiActionSeed | null>(null),
   busy = ref(false),
@@ -82,51 +129,44 @@ async function load() {
   candidates.value = []
   seed.value = null
   try {
-    const [from, asOf] = businessPeriodRange('month')
-    if (risk.value) {
-      const report = await getReceivables({
-        from,
-        asOf,
-        aging: 'ACTIONABLE',
-        page: page.value,
-        size: 25,
-      })
-      if (token !== run) return
-      total.value = report.balanceCount
-      candidates.value = report.balances.map((r) => ({
-        object: r.orderNo,
-        reason:
-          (r.dueDate ? '合同到期 ' + r.dueDate : '到期日待核') +
-          ' · 未收 ' +
-          r.remaining.toLocaleString() +
-          ' 元',
-        owner: r.owner,
-        seed: {
-          kind: 'COLLECTION',
-          businessRef: 'order-id:' + r.orderId,
-          businessLabel: r.orderNo,
-          cityCode: r.regionCode,
-          employeeCode: r.employeeCode,
-          assignee: r.employeeCode,
-        },
-      }))
-    } else {
-      const report = await getSupplyDashboardOverview(businessDateRange(from, asOf))
-      if (token !== run) return
-      candidates.value = report.customerChurnRiskRanking.map((r) => ({
-        object: r.customerName || r.customerCode,
-        reason: r.inactiveDays + ' 天未下单 · ' + r.segmentName,
-        owner: r.ownerStaffName,
-        seed: {
-          kind: 'CUSTOMER',
-          businessRef: 'customer-code:' + r.customerCode,
-          businessLabel: r.customerName || r.customerCode,
-          cityCode: r.regionCode,
-          employeeCode: r.ownerStaffCode,
-          assignee: r.ownerStaffCode,
-        },
-      }))
-    }
+    const requestedFrom = String(route.query.from || '')
+    const departmentId = Number(route.query.departmentId)
+    const report = await getReceivables({
+      from:
+        /^\d{4}-\d{2}-\d{2}$/.test(requestedFrom) && requestedFrom <= cutoff.value
+          ? requestedFrom
+          : cutoff.value.slice(0, 7) + '-01',
+      asOf: cutoff.value,
+      ownerStaffCode:
+        typeof route.query.ownerStaffCode === 'string' ? route.query.ownerStaffCode : undefined,
+      departmentId:
+        Number.isSafeInteger(departmentId) && departmentId > 0 ? departmentId : undefined,
+      includeSubDepartments: route.query.includeSubDepartments === 'true',
+      aging: overdueOnly.value ? 'OVERDUE' : 'ACTIONABLE',
+      page: page.value,
+      size: 25,
+    })
+    if (token !== run) return
+    total.value = report.balanceCount
+    candidates.value = report.balances.map((r) => ({
+      object: r.orderNo,
+      reason: !r.dueDate
+        ? '缺少合同到期日'
+        : r.overdueDays && r.overdueDays > 0
+          ? '已逾期 ' + r.overdueDays + ' 天'
+          : '近期到期',
+      dueDate: r.dueDate,
+      balance: r.remaining,
+      owner: r.owner,
+      seed: {
+        kind: 'COLLECTION',
+        businessRef: 'order-id:' + r.orderId,
+        businessLabel: r.orderNo,
+        cityCode: r.regionCode,
+        employeeCode: r.employeeCode,
+        assignee: r.employeeCode,
+      },
+    }))
   } catch (e) {
     if (token === run) error.value = e instanceof Error ? e.message : '对象列表读取失败'
   } finally {
@@ -135,14 +175,22 @@ async function load() {
 }
 function start(value: BiActionSeed) {
   seed.value = { ...value }
+  tab.value = 'actions'
 }
 function turn(v: number) {
   page.value = v
   void load()
 }
 watch(
-  kind,
+  [
+    () => route.fullPath,
+    () => auth.user?.tenantId,
+    () => auth.user?.id,
+    () => auth.user?.permissions,
+  ],
   () => {
+    tab.value = 'main'
+    cutoff.value = cutoffFromRoute()
     page.value = 1
     void load()
   },

@@ -12,6 +12,7 @@ declare module 'vue-router' {
     applicationCode?: string
     keepAlive?: boolean
     pageKey?: string
+    inlineSubviewNavigation?: boolean
   }
 }
 

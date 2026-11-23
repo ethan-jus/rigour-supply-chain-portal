@@ -30,6 +30,8 @@ const props = withDefaults(
     ownerStaffCode?: string
     kind?: BiActionSeed['kind']
     actionSeed?: BiActionSeed | null
+    actionToOpen?: BiAction | null
+    showTaskNumber?: boolean
     regions?: Option[]
     salesOwners?: Option[]
   }>(),
@@ -266,6 +268,13 @@ watch(
   },
   { immediate: true },
 )
+watch(
+  () => props.actionToOpen,
+  (action) => {
+    if (action && canRead.value) void editAction(action)
+  },
+  { immediate: true },
+)
 watch(statusFilter, () => {
   page.value = 1
   void reload()
@@ -454,6 +463,7 @@ onMounted(async () => {
           </section>
         </form>
         <el-table :data="actions" empty-text="当前范围暂无跟进事项" aria-label="运营跟进列表">
+          <el-table-column v-if="showTaskNumber" prop="id" label="任务编号" min-width="145" show-overflow-tooltip />
           <!-- @vue-generic {BiAction} -->
           <el-table-column label="跟进对象" min-width="180"
             ><template #default="{ row }">

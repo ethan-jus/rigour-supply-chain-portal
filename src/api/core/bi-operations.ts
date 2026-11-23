@@ -67,8 +67,8 @@ export interface BiActionEvent {
 }
 const root = '/analytics/supply/dashboard'
 const options = { stayOnUnauthorized: true }
-export const getBiActions = (params: BiActionQuery) =>
-  apiClient.get<BiActionPage, BiActionPage>(`${root}/actions`, { ...options, params })
+export const getBiActions = (params: BiActionQuery, signal?: AbortSignal) =>
+  apiClient.get<BiActionPage, BiActionPage>(`${root}/actions`, { ...options, params, signal })
 export const createBiAction = (command: BiActionCommand) =>
   apiClient.post<BiAction, BiAction>(`${root}/actions`, command, options)
 export const updateBiAction = (id: string, command: BiActionUpdate) =>

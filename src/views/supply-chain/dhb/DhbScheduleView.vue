@@ -24,7 +24,7 @@
     <section class="business-plan" aria-labelledby="business-title">
       <div class="flow-area">
         <h2 id="business-title">订货宝业务同步流程</h2>
-        <p>按固定顺序依次执行，三个步骤共用同一个定时计划。</p>
+        <p>先同步客户资料，再同步订单和款项，共用一个定时计划。</p>
         <ol class="flow" aria-label="业务同步顺序">
           <li v-for="(step, i) in steps" :key="step.title">
             <span class="flow-icon"
@@ -126,7 +126,7 @@
 import SupplyPageHelp from '@/components/supply/SupplyPageHelp.vue'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { User, Document, Tickets, Right, Refresh, InfoFilled } from '@element-plus/icons-vue'
+import { Document, Tickets, Right, Refresh, InfoFilled } from '@element-plus/icons-vue'
 import SyncScheduleForm from '@/components/supply/SyncScheduleForm.vue'
 import { getDhbSyncTasks } from '@/api/core/dhb-orchestration'
 import {
@@ -141,12 +141,11 @@ import {
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { displayDateTime } from '@/utils/business-date'
 const { can } = useSupplyPermissions()
-const canDhb = computed(() => can('integration:dhb:write') && can('hr:employee:sync'))
+const canDhb = computed(() => can('integration:dhb:write'))
 const canBi = computed(() => can('integration:dhb:write') && can('analytics:refresh:write'))
 const steps = [
-  { title: '业务员与员工关联', text: '先匹配员工，再补订货宝关联', icon: User },
-  { title: '客户资料', text: '按客户编码同步门店与归属', icon: Document },
-  { title: '订单与发货', text: '销售订单 · 发货物流 · 回付款', icon: Tickets },
+  { title: '客户资料', text: '同步门店资料，归属地区在系统内维护', icon: Document },
+  { title: '订单与款项', text: '销售订单 · 回款 · 付款', icon: Tickets },
 ]
 const connectors = ref<string[]>([]),
   connector = ref('')

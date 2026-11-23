@@ -71,6 +71,7 @@ export interface StoreQuery {
   recordStatus?: string
   businessStatus?: string
   phase?: string
+  followup?: 'VISITED_NO_ORDER'
   protection?: string
   cursor?: string
   size: number
