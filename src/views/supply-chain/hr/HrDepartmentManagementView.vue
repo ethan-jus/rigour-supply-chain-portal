@@ -509,26 +509,23 @@ async function save() {
   }
 }
 async function remove(row: HrDepartment) {
-  if (row.statusCode === 'ACTIVE') {
-    ElMessage.warning('请先通过编辑停用部门，再执行删除')
-    return
-  }
   if (rows.value.some((child) => child.parentId === row.id)) {
-    ElMessage.warning('请先移动或删除下级部门')
+    await ElMessageBox.alert('请先移动或删除下级部门。', '无法删除部门', { type: 'warning' }).catch(() => {})
     return
   }
   try {
     await ElMessageBox.confirm(
-      `删除部门“${row.departmentName}”？有员工或任职历史引用的部门须保留为停用状态。`,
+      `永久删除部门“${row.departmentName}”（${row.departmentCode}）？删除后无法恢复。`,
       '删除部门',
-      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+      { type: 'warning', confirmButtonText: '永久删除', cancelButtonText: '取消' },
     )
     await hrOrganizationApi.deleteDepartment(row.id, row.revision)
     rows.value = rows.value.filter((item) => item.id !== row.id)
     if (await load()) ElMessage.success('部门已删除')
     else ElMessage.warning('部门已删除，请刷新列表确认')
   } catch (error) {
-    if (error !== 'cancel' && error !== 'close') ElMessage.error(message(error, '删除失败'))
+    if (error !== 'cancel' && error !== 'close')
+      await ElMessageBox.alert(message(error, '删除失败'), '无法删除部门', { type: 'error' }).catch(() => {})
   }
 }
 onMounted(() => load(true))

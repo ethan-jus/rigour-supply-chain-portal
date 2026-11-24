@@ -282,12 +282,24 @@ describe('部门维护：真实表格与表单交互', () => {
     expect(button('删除')).toBeUndefined()
     expect(wrapper!.text()).toContain('杭州市')
   })
-  it('未停用部门不发送删除请求', async () => {
+  it('正常的叶子部门经确认后可以永久删除', async () => {
+    rows = [row(3, '合肥')]
+    vi.mocked(hrOrganizationApi.deleteDepartment).mockImplementationOnce(async () => { rows = [] })
+    await render()
+    await button('删除').trigger('click')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(expect.stringContaining('合肥”（DEP3）'), '删除部门', expect.anything())
+    expect(hrOrganizationApi.deleteDepartment).toHaveBeenCalledWith(3, 1)
+    expect(wrapper!.text()).not.toContain('合肥')
+  })
+  it('取消删除时保留原记录', async () => {
+    rows = [row(3, '合肥')]
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
     await render()
     await button('删除').trigger('click')
     await flushPromises()
     expect(hrOrganizationApi.deleteDepartment).not.toHaveBeenCalled()
-    expect(ElMessage.warning).toHaveBeenCalledWith('请先通过编辑停用部门，再执行删除')
+    expect(wrapper!.text()).toContain('合肥')
   })
 })
 describe('部门层级边界', () => {
