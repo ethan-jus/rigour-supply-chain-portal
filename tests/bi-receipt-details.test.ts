@@ -11,7 +11,7 @@ beforeEach(() => {
   queryDetails.mockReset()
   queryDetails.mockResolvedValue({ total: 23, amount: 216, items: [] })
 })
-function open(kind: 'receipts' | 'unpaid', selected = query) {
+function open(kind: 'receipts' | 'unpaid', selected: typeof query & { customerRegionCode?: string } = query) {
   return mount(BiReceiptDetails, {
     props: { kind, query: selected, cityName: '河北省' },
     global: { plugins: [ElementPlus] },
@@ -32,11 +32,15 @@ describe('城市回款分析明细', () => {
       wrapper.unmount()
     },
   )
-  it('缺少城市时不扩大成全部数据；接口失败显示重试', async () => {
-    const wrapper = open('receipts', { ...query, regionCode: '' })
+  it('仅筛客户地区时保留地区，缺少日期时禁止查询，接口拒绝时显示错误', async () => {
+    const onlyRegion = { ...query, regionCode: '', customerRegionCode: 'HB' }
+    const wrapper = open('receipts', { ...onlyRegion, from: '' })
     await flushPromises()
     expect(queryDetails).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('城市或日期范围缺失')
+    expect(wrapper.text()).toContain('日期范围缺失')
+    await wrapper.setProps({ query: onlyRegion })
+    await flushPromises()
+    expect(queryDetails).toHaveBeenLastCalledWith({ ...onlyRegion, kind: 'receipts', begin: 0, step: 20 })
     queryDetails.mockRejectedValueOnce(new Error('无权查看该范围'))
     await wrapper.setProps({ query })
     await flushPromises()

@@ -25,6 +25,11 @@ vi.mock('@/views/supply-chain/bi/components/BiSalesMeetingPresentation.vue', () 
     template: '<main>销售设计看板</main>',
   },
 }))
+vi.mock('@/api/core/bi', () => ({
+  getDepartmentDashboardFilters: async () => ({
+    departments: [{ code: 'HZ', name: '杭州', parentCode: null }], customerRegions: [],
+  }),
+}))
 const paths = [
   ['/supply-chain/bi', 'overview'],
   ['/supply-chain/bi/city-operating', 'city-operating'],
@@ -42,6 +47,7 @@ async function render(url: string) {
   await router.push(url)
   await router.isReady()
   const wrapper = mount(RouterView, { global: { plugins: [router] } })
+  await flushPromises()
   return { router, wrapper }
 }
 describe('替换原看板页面', () => {
