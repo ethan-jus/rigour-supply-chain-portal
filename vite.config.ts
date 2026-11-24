@@ -94,6 +94,7 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     build: {
+      rollupOptions: { input: { console: 'index.html', salesDownload: 'sales-download/index.html' } },
       sourcemap: false,
       chunkSizeWarningLimit: 800,
     },
