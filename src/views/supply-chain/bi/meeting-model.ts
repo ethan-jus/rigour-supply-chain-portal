@@ -17,6 +17,7 @@ export interface MeetingSnapshot {
   query: SupplyDashboardQuery
   previousQuery: SupplyDashboardQuery
   cacheBypass?: boolean
+  deferRankings?: boolean
   trust: SupplyDashboardDataTrust | null
   comparisonError?: string
   trustError?: string

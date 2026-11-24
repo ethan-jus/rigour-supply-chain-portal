@@ -405,10 +405,14 @@ export interface SupplyDashboardOperatingAnalysis {
   }[]
 }
 
-export const getSupplyDashboardOperatingAnalysis = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass'> = {}) =>
+export const getSupplyDashboardOperatingAnalysis = (
+  params: SupplyDashboardQuery,
+  feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass' | 'signal'> = {},
+  cityBoard = false,
+) =>
   apiClient.get<SupplyDashboardOperatingAnalysis>(
     '/analytics/supply/dashboard/operating-analysis',
-    { params, ...options, ...feedback },
+    { params: cityBoard ? { ...params, cityBoard } : params, ...options, ...feedback },
   )
 const SUPPLY_DASHBOARD_REFRESH_PATH = '/analytics/supply/dashboard/refresh-runs'
 const SUPPLY_DASHBOARD_TRUST_PATH = '/analytics/supply/dashboard/trust'
@@ -418,7 +422,7 @@ const options = { stayOnUnauthorized: true }
 export const getSupplyDashboardOverview = (
   params: SupplyDashboardQuery,
   feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass' | 'signal'> = {},
-  projection?: 'OPERATING' | 'OPERATING_COMPARISON',
+  projection?: 'OPERATING' | 'OPERATING_COMPARISON' | 'SALES' | 'SALES_COMPARISON' | 'CITY' | 'CITY_COMPARISON',
 ) =>
   apiClient.get<SupplyDashboardOverview>(SUPPLY_DASHBOARD_PATH, {
     params: projection ? { ...params, projection } : params,

@@ -639,27 +639,29 @@ const productRanking = computed(() =>
   ),
 )
 const months = computed(() => activeOrderMonths(orders.value, ...props.initialRange))
-const matrix = computed(() =>
-  groupRiskOrders(orders.value, (o) => [
-    riskDisplayRegion(props.data!, o, filters.value.region),
-  ]).map((city) => ({
+const matrix = computed(() => {
+  if (!props.data) return []
+  const data = props.data
+  const selected = filters.value.region
+  const cells = new Map<string, Map<string, typeof orders.value>>()
+  const groups = groupRiskOrders(orders.value, (order) => {
+    const city = riskDisplayRegion(data, order, selected)
+    const month = order.orderDate.slice(0, 7)
+    const byMonth = cells.get(city.key) ?? new Map()
+    const matching = byMonth.get(month) ?? []
+    matching.push(order)
+    byMonth.set(month, matching)
+    cells.set(city.key, byMonth)
+    return [city]
+  })
+  return groups.map((city) => ({
     ...city,
     cells: months.value.map((month) => {
-      const matching = orders.value.filter(
-        (o) =>
-          riskDisplayRegion(props.data!, o, filters.value.region).key === city.key &&
-          o.orderDate.startsWith(month),
-      )
-      const amount = orderAmount(matching)
-      return {
-        month,
-        amount,
-        count: matching.length,
-        risk: matrixCellRisk(matching),
-      }
+      const matching = cells.get(city.key)?.get(month) ?? []
+      return { month, amount: orderAmount(matching), count: matching.length, risk: matrixCellRisk(matching) }
     }),
-  })),
-)
+  }))
+})
 const hasFilters = computed(() =>
   Object.values(filters.value).some((v) => (Array.isArray(v) ? v.length : v)),
 )

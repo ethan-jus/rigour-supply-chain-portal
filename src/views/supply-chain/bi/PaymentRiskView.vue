@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPaymentRisk, type PaymentRiskData } from '@/api/core/payment-risk'
 import PaymentRiskBoard from './components/PaymentRiskBoard.vue'
@@ -40,8 +40,12 @@ const currentMonth = new Intl.DateTimeFormat('sv-SE', {
 }).format(new Date())
 const range = ref<[string, string]>([`${currentMonth.slice(0, 4)}-01`, currentMonth])
 let request = 0
+let activeRequest: AbortController | undefined
 async function load(months: [string, string], cacheBypass = false) {
   const version = ++request
+  activeRequest?.abort()
+  const controller = new AbortController()
+  activeRequest = controller
   range.value = months
   loading.value = true
   error.value = ''
@@ -56,7 +60,7 @@ async function load(months: [string, string], cacheBypass = false) {
       customerRegionCode: scope.customerRegion.value || undefined,
       ownerStaffCode:
         typeof route.query.ownerStaffCode === 'string' ? route.query.ownerStaffCode : undefined,
-    }, cacheBypass)
+    }, cacheBypass, controller.signal)
     if (version === request) data.value = result
   } catch (cause) {
     if (version === request)
@@ -67,8 +71,18 @@ async function load(months: [string, string], cacheBypass = false) {
 }
 watch(
   () => [productView.value, directory.value, scope.department.value, scope.customerRegion.value, route.query.ownerStaffCode],
-  () => { if (productView.value && directory.value) void load(range.value) },
+  () => {
+    if (productView.value && directory.value) void load(range.value)
+    else {
+      request++
+      activeRequest?.abort()
+    }
+  },
   { immediate: true },
 )
+onBeforeUnmount(() => {
+  request++
+  activeRequest?.abort()
+})
 </script>
 <style scoped>.risk-dimension { margin-bottom: 12px }</style>

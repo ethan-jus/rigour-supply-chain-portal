@@ -147,26 +147,7 @@ async function load(cacheBypass = false) {
       if (selected && !departments.some(d => d.code === selected)) throw new Error('所选部门不在可查看范围')
       const base = { ...query, regionCode: selected }
       const previous = { ...previousQuery, regionCode: selected }
-      const [current, last, analysis, lastAnalysis, personalGoals] = await Promise.allSettled([
-        getSupplyDashboardOverview(base, { cacheBypass }), getSupplyDashboardOverview(previous, { cacheBypass }),
-        getSupplyDashboardOperatingAnalysis(base, { cacheBypass }), getSupplyDashboardOperatingAnalysis(previous, { cacheBypass }),
-        getSalesDashboardAnalysis(base, cacheBypass),
-      ])
-      if (request !== sequence) return
-      if (current.status === 'rejected') throw current.reason
-      snapshot.value = citySnapshot.value = {
-        current: current.value,
-        previous: last.status === 'fulfilled' ? last.value : null,
-        comparisonError: last.status === 'rejected' ? '前期比较读取失败' : undefined,
-        query: base,
-        previousQuery: previous,
-        analysis: analysis.status === 'fulfilled' ? analysis.value : null,
-        analysisError: analysis.status === 'rejected' ? '复购与部门到账数据读取失败，请刷新重试' : undefined,
-        previousAnalysis: lastAnalysis.status === 'fulfilled' ? lastAnalysis.value : null,
-        personalGoals: personalGoals.status === 'fulfilled' ? personalGoals.value : null,
-        regions,
-        trust: null,
-      }
+      await loadDepartment(request, base, previous, regions, cacheBypass)
       return
     }
     if (props.embedded && !cityMode.value) {
@@ -236,6 +217,58 @@ async function load(cacheBypass = false) {
     if (request === sequence) loading.value = false
   }
 }
+async function loadDepartment(
+  request: number,
+  query: SupplyDashboardQuery,
+  previousQuery: SupplyDashboardQuery,
+  regions: NonNullable<MeetingSnapshot['regions']>,
+  cacheBypass: boolean,
+) {
+  const controller = new AbortController()
+  overviewRequest = controller
+  const feedback = { cacheBypass, signal: controller.signal, errorFeedback: 'inline' as const }
+  let pending: Partial<MeetingSnapshot> = {}
+  let departmentSnapshot: MeetingSnapshot | null = null
+  const apply = (updates: Partial<MeetingSnapshot>) => {
+    if (request !== sequence) return
+    if (departmentSnapshot)
+      departmentSnapshot = snapshot.value = citySnapshot.value = { ...departmentSnapshot, ...updates }
+    else pending = { ...pending, ...updates }
+  }
+  try {
+    const current = getSupplyDashboardOverview(query, feedback, 'CITY')
+    const background = Promise.all([
+      getSupplyDashboardOverview(previousQuery, feedback, 'CITY_COMPARISON').then(
+        (previous) => apply({ previous }),
+        () => apply({ comparisonError: '前期比较读取失败' }),
+      ),
+      getSupplyDashboardOperatingAnalysis(query, feedback, true).then(
+        (analysis) => apply({ analysis }),
+        () => apply({ analysisError: '复购与部门到账数据读取失败，请刷新重试' }),
+      ),
+      getSupplyDashboardOperatingAnalysis(previousQuery, feedback, true).then(
+        (previousAnalysis) => apply({ previousAnalysis }),
+        () => apply({ comparisonError: '前期比较读取失败' }),
+      ),
+      getSalesDashboardAnalysis(query, cacheBypass, 'RANKING', feedback).then(
+        (personalGoals) => apply({ personalGoals }),
+        () => apply({ personalGoals: null }),
+      ),
+    ])
+    const data = await current
+    if (request !== sequence) return
+    departmentSnapshot = snapshot.value = citySnapshot.value = {
+      current: data, previous: null, query, previousQuery, regions, cacheBypass,
+      deferRankings: true, trust: null, ...pending,
+    }
+    loading.value = false
+    await background
+  } finally {
+    controller.abort()
+    if (overviewRequest === controller) overviewRequest = null
+  }
+}
+
 async function loadOperatingOverview(
   request: number,
   query: SupplyDashboardQuery,

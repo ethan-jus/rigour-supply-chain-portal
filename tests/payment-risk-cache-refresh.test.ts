@@ -19,7 +19,7 @@ it('默认打开商品账龄，可切换合同到期，手动刷新强制回源'
     await flushPromises()
     expect(wrapper.find('.payment-risk-board').exists()).toBe(true)
     expect(getPaymentRisk).toHaveBeenCalledTimes(1)
-    expect(getPaymentRisk).toHaveBeenLastCalledWith(expect.any(Object), false)
+    expect(getPaymentRisk).toHaveBeenLastCalledWith(expect.any(Object), false, expect.any(AbortSignal))
 
     await wrapper.findAll('input[type="radio"]')[1]!.setValue(true)
     await flushPromises()
@@ -31,9 +31,9 @@ it('默认打开商品账龄，可切换合同到期，手动刷新强制回源'
     await flushPromises()
     expect(wrapper.find('.payment-risk-board').exists()).toBe(true)
     expect(getPaymentRisk).toHaveBeenCalledTimes(2)
-    expect(getPaymentRisk).toHaveBeenLastCalledWith(expect.any(Object), false)
+    expect(getPaymentRisk).toHaveBeenLastCalledWith(expect.any(Object), false, expect.any(AbortSignal))
     await wrapper.get('button[aria-label="刷新数据"]').trigger('click')
     await flushPromises()
-    expect(getPaymentRisk).toHaveBeenLastCalledWith(expect.any(Object), true)
+    expect(getPaymentRisk).toHaveBeenLastCalledWith(expect.any(Object), true, expect.any(AbortSignal))
   } finally { wrapper.unmount() }
 })

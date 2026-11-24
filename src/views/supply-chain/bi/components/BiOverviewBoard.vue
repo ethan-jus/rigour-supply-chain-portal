@@ -794,7 +794,9 @@ const rankingSection = ref<HTMLElement | null>(null)
 const rankingVisible = ref(false)
 const rankings = ref<Partial<Record<OverviewRankingKind, RankingState>>>({})
 const rankingKind = computed<OverviewRankingKind>(() => (categoryMode.value ? 'CATEGORY' : 'PRODUCT'))
-const lazyRanking = computed(() => !props.cityContext && !!props.snapshot?.current.operatingDetails)
+const lazyRanking = computed(() =>
+  props.cityContext ? !!props.snapshot?.deferRankings : !!props.snapshot?.current.operatingDetails,
+)
 const rankingQuery = computed(() => (props.loading || !lazyRanking.value ? null : props.snapshot?.query ?? null))
 const activeRanking = computed(() => rankings.value[rankingKind.value])
 const products = computed(() => {
