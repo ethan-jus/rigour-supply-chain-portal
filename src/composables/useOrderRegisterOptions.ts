@@ -39,69 +39,18 @@ export function useOrderRegisterOptions({ salesDepartmentsOnly = false }: { sale
     return fallback
   }
 
-/** 归属地区编码 → 该地区及其下属的城市名（HR 员工档案按城市记录，且不带“市”后缀）。 */
-  function cityNamesOf(regionCode: string | null | undefined): string[] {
-    const code = regionCode?.trim()
-    if (!code) return []
-    const root = areaTree.value.find((node) => node.code === code)
-      ?? areaTree.value.flatMap((node) => flattenNodes(node)).find((node) => node.code === code)
-    if (!root) return []
-    const names = new Set<string>()
-    const collect = (node: AreaNode) => {
-      const name = node.name?.trim()
-      if (name && (node.children?.length ?? 0) === 0) names.add(name.replace(/市$/, ''))
-      node.children?.forEach(collect)
-    }
-    collect(root)
-    // 省/大区本身不是城市时不参与匹配，只取下属城市。
-    if (!names.size) {
-      const name = root.name?.trim()
-      if (name && /市$/.test(name)) names.add(name.replace(/市$/, ''))
-    }
-    return [...names].slice(0, 15)
-  }
-
-  function flattenNodes(node: AreaNode): AreaNode[] {
-    return [node, ...(node.children ?? []).flatMap(flattenNodes)]
-  }
-
-  /**
-   * 历史订单查询包括已离职员工，不按在职状态限制；传归属地区时按下属城市级联过滤。
-   * 地区下没有可匹配城市（如“全国/散客”）时退回全量，避免下拉为空。
-   */
-  async function searchEmployees(keyword: string, regionCode?: string | null) {
+  // 客户归属地区与销售主部门独立，跨地区成交的业务员同样可选。
+  let employeeRequest = 0
+  async function searchEmployees(keyword: string) {
+    const request = ++employeeRequest
     employeeLoading.value = true
     try {
-      const cities = cityNamesOf(regionCode)
-      const text = keyword?.trim() || undefined
-      if (!cities.length) {
-        const result = await getHrEmployees({
-          begin: 0,
-          step: 50,
-          keyword: text,
-        })
-        employeeOptions.value = result.items
-        return
-      }
-      const pages = await Promise.all(
-        cities.map((city) =>
-          getHrEmployees({
-            begin: 0,
-            step: 50,
-            keyword: text,
-            cityName: city,
-          }),
-        ),
-      )
-      const merged = new Map<string, HrEmployeeRecord>()
-      pages.forEach((page) =>
-        page.items.forEach((item) => merged.set(item.employeeCode, item)),
-      )
-      employeeOptions.value = [...merged.values()]
+      const result = await getHrEmployees({ begin: 0, step: 50, keyword: keyword.trim() || undefined })
+      if (request === employeeRequest) employeeOptions.value = result.items
     } catch (reason) {
-      optionError.value = errorMessage(reason, '业务员选项加载失败')
+      if (request === employeeRequest) optionError.value = errorMessage(reason, '业务员选项加载失败')
     } finally {
-      employeeLoading.value = false
+      if (request === employeeRequest) employeeLoading.value = false
     }
   }
 

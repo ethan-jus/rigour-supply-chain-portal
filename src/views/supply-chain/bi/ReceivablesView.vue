@@ -24,7 +24,8 @@
             aria-label="统计期间及余额截至日"
           />
         </div>
-        <div class="list-filter-field list-filter-field--select">
+        <BiDepartmentFilters v-if="departmentScope" light />
+        <div v-else class="list-filter-field list-filter-field--select">
           <el-select v-model="city" clearable filterable aria-label="城市" placeholder="城市"
             ><el-option
               v-for="v in options?.regions"
@@ -386,6 +387,9 @@
   </section>
 </template>
 <script setup lang="ts">
+import BiDepartmentFilters from './components/BiDepartmentFilters.vue'
+import { useDashboardFilters } from './department-filters'
+const departmentScope = useDashboardFilters()
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useNavigationStore } from '@/stores/navigation'
@@ -615,6 +619,7 @@ function search() {
   query.value = {
     from: dates.value[0],
     asOf: dates.value[1],
+    customerRegionCode: departmentScope?.customerRegion.value || undefined,
     regionCode: city.value || undefined,
     ownerStaffCode: owner.value || undefined,
     customerId: customer.value?.id,
@@ -625,7 +630,7 @@ function search() {
 }
 function reset() {
   dates.value = businessPeriodRange('month')
-  city.value = ''
+  city.value = departmentScope?.department.value || ''
   owner.value = ''
   collector.value = ''
   dispute.value = ''
@@ -726,7 +731,7 @@ async function download() {
   }
 }
 watch(
-  () => [route.path, route.query.regionCode, route.query.ownerStaffCode, route.query.month,
+  () => [route.path, route.query.regionCode, route.query.customerRegionCode, route.query.ownerStaffCode, route.query.month,
     route.query.from, route.query.asOf],
   () => {
     const month = String(route.query.month || '')
@@ -738,7 +743,7 @@ watch(
       const r = businessMonthRange(month)
       dates.value = [r[0], r[1] < businessDate(new Date()) ? r[1] : businessDate(new Date())]
     }
-    city.value = String(route.query.regionCode || '')
+    city.value = departmentScope?.department.value || String(route.query.regionCode || '')
     owner.value = String(route.query.ownerStaffCode || '')
     tab.value = risk.value ? 'balances' : 'receipts'
     search()

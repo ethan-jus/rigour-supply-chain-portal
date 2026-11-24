@@ -1,7 +1,7 @@
 <template>
   <div class="city-board-shell" :class="{ 'is-embedded': embedded }">
     <BiOverviewBoard
-      :snapshot="regionCode ? snapshot : null"
+      :snapshot="snapshot"
       :year="year || Number(month.slice(0, 4))"
       :selected-month="annual ? null : Number(month.slice(5, 7))"
       :scope-label="demo ? '设计演示 · 非真实经营数据' : scopeLabel"
@@ -9,7 +9,7 @@
       :loading="loading || false"
       :error="
         error ||
-        (!loading && allSnapshot && !cityContext.options.length ? '当前授权范围暂无可查看城市' : '')
+        (!loading && allSnapshot && !cityContext.options.length ? '当前授权范围暂无可查看部门' : '')
       "
       @period="(value, selected) => emit('period', value, selected)"
       @refresh="emit('refresh')"
@@ -83,13 +83,13 @@ const cityContext = computed(() => {
   const options = citySelectionOptions(props.allSnapshot)
   return {
     code: props.regionCode,
-    name: options.find((row) => row.code === props.regionCode)?.name || '',
+    name: options.find((row) => row.code === props.regionCode)?.name || '全部授权部门',
     options,
   }
 })
 const childDepartments = computed(() =>
   (props.allSnapshot?.regions || [])
-    .filter((row) => row.parentOptionValue === props.regionCode)
+    .filter((row) => (row.parentOptionValue || '') === props.regionCode)
     .map((row) => ({
       code: row.optionValue,
       name: row.optionLabel,
@@ -98,7 +98,7 @@ const childDepartments = computed(() =>
           ?.salesAmount ?? 0,
       receipts:
         props.snapshot?.analysis?.cityReceipts?.find((r) => r.regionCode === row.optionValue)
-          ?.receiptAmount ?? 0,
+          ?.receiptAmount ?? (props.snapshot?.analysis ? 0 : null),
     })),
 )
 function chooseCity(code?: string) {

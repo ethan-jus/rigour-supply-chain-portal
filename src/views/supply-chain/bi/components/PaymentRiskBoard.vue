@@ -31,21 +31,22 @@
             </div>
           </el-config-provider>
         </div>
-        <div class="dimension-filter">
+        <BiDepartmentFilters v-if="departmentScope" />
+        <div v-else class="dimension-filter">
           <el-select
             v-model="queryFilters.region"
-            aria-label="城市"
-            placeholder="全部城市"
+            aria-label="部门"
+            placeholder="全部部门"
             filterable
             clearable
             value-on-clear=""
             :teleported="false"
             :fit-input-width="true"
             popper-class="risk-dimension-popper"
-            no-match-text="未找到匹配城市"
-            no-data-text="暂无城市"
+            no-match-text="未找到匹配部门"
+            no-data-text="暂无部门"
           >
-            <el-option label="全部城市" value="" />
+            <el-option label="全部部门" value="" />
             <el-option
               v-for="city in cities"
               :key="city.key"
@@ -219,7 +220,7 @@
         <section class="risk-panel matrix-panel">
           <div class="section-title">
             <div>
-              <h2 title="按订单月份统计未结清订单全额，点击单元格查看订单">城市月度未回款</h2>
+              <h2 title="按订单月份统计未结清订单全额，点击单元格查看订单">部门月度未回款</h2>
             </div>
             <div class="segmented">
               <button :class="{ active: !countMode }" @click="countMode = false">金额</button>
@@ -228,7 +229,7 @@
           </div>
           <div
             class="matrix-risk-legend"
-            aria-label="城市月份风险颜色说明"
+            aria-label="部门月份风险颜色说明"
             title="按单元格内最高风险着色，0 表示正常"
           >
             <span class="normal-key"><i />正常（0）</span>
@@ -241,7 +242,7 @@
             <table class="supply-report-table risk-matrix">
               <thead>
                 <tr>
-                  <th>城市</th>
+                  <th>部门</th>
                   <th v-for="month in months" :key="month">
                     {{ month.slice(2).replace('-', '/') }}
                   </th>
@@ -444,7 +445,7 @@
         <details class="calculation-notes">
           <summary>统计口径</summary>
           <p>
-            按截止日核对订单原额、有效核销与应收调整。每单取最高风险；并列时归属商品金额最大的产品。分类、产品和风险金额合计均等于未收款总额。分类缺失归待确认，账龄截至所选期间末日，按北京时间自然日计算。
+            已结清订单退出商品账龄风险。其余订单按截止日计算剩余未收，包含有效核销和应收调整。整单取最高风险商品，同风险取商品金额最大者。分类缺失显示待确认。账龄按北京时间计算，历史月份截至所选月末，当月截至查询日。
           </p>
         </details>
       </section>
@@ -461,11 +462,12 @@
             <thead>
               <tr>
                 <th>订单号 / 客户</th>
-                <th>城市 / 业务员</th>
+                <th>部门 / 业务员</th>
                 <th>订单日期</th>
                 <th>账龄</th>
-                <th>订单应收（统计金额）</th>
-                <th>已回款（不抵扣）</th>
+                <th>订单原额</th>
+                <th>已核销</th>
+                <th>剩余未收</th>
                 <th>归属产品与整单风险</th>
               </tr>
             </thead>
@@ -476,13 +478,14 @@
                   ><small>{{ order.customerName || '客户待确认' }}</small>
                 </td>
                 <td>
-                  {{ order.regionName || '城市待确认'
+                  {{ order.regionName || '部门待确认'
                   }}<small>{{ order.ownerStaffName || '业务员待确认' }}</small>
                 </td>
                 <td>{{ order.orderDate }}</td>
                 <td>{{ order.ageDays }}天</td>
                 <td>{{ yuan(order.orderAmount) }}</td>
                 <td>{{ yuan(order.paidAmount) }}</td>
+                <td>{{ yuan(orderAmount([order])) }}</td>
                 <td>
                   <span
                     v-for="(product, index) in order.products"
@@ -514,10 +517,14 @@
 </template>
 
 <script setup lang="ts">
+import BiDepartmentFilters from './BiDepartmentFilters.vue'
+import { useDashboardFilters } from '../department-filters'
+const departmentScope = useDashboardFilters()
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import type { EChartsCoreOption } from 'echarts/core'
 import type { PaymentRiskData } from '@/api/core/payment-risk'
+import { businessMonthRange } from '@/utils/business-date'
 import { downloadBlob } from '@/utils/file-download'
 import { buildPaymentRiskExcel } from '../payment-risk-export'
 import {
@@ -609,7 +616,7 @@ const cities = computed(() => {
   return groupRiskOrders(data.orders, (o) =>
     riskRegionPath(data, o.regionCode || unknownKey).map((code) => ({
       key: code,
-      name: data.regions?.find((r) => r.code === code)?.name || o.regionName || '城市待确认',
+      name: data.regions?.find((r) => r.code === code)?.name || o.regionName || '部门待确认',
     })),
   )
 })
@@ -671,7 +678,12 @@ const dateText = (value?: string | null) =>
         day: '2-digit',
       }).format(new Date(value))
     : '—'
-const asOf = computed(() => dateText(props.data?.generatedAt))
+const asOf = computed(() => {
+  const queryDate = dateText(props.data?.generatedAt)
+  if (queryDate === '—') return queryDate
+  const [, monthEnd] = businessMonthRange(props.initialRange[1])
+  return monthEnd < queryDate ? monthEnd : queryDate
+})
 const updated = computed(() =>
   props.data?.dataUpdatedAt
     ? new Date(props.data.dataUpdatedAt).toLocaleString('zh-CN', {
@@ -894,7 +906,8 @@ async function exportDetails() {
       orders: sortedOrders.value,
       range: [...props.initialRange],
       scope: [
-        ['城市', label(selected.region, cities.value)],
+        ['部门', label(selected.region, cities.value)],
+        ['客户归属地区', departmentScope?.options.value?.customerRegions.find(r => r.code === departmentScope.customerRegion.value)?.name || '全部'],
         ['业务员', label(selected.owner, people.value)],
         ['产品分类', selected.categories.length
           ? selected.categories.map((id) => props.data?.categories.find((c) => c.id === id)?.name || '分类待确认').join('、')

@@ -16,6 +16,7 @@ export interface MeetingSnapshot {
   previous: SupplyDashboardOverview | null
   query: SupplyDashboardQuery
   previousQuery: SupplyDashboardQuery
+  cacheBypass?: boolean
   trust: SupplyDashboardDataTrust | null
   comparisonError?: string
   trustError?: string

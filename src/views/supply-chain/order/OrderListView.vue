@@ -66,10 +66,10 @@
             check-strictly
             :render-after-expand="false"
             :default-expanded-keys="areaTree.map((row) => row.code)"
-            aria-label="归属地区"
+            aria-label="客户归属地区"
             clearable
             filterable
-            placeholder="归属地区"
+            placeholder="客户归属地区"
             popper-class="order-register-tree-popper"
           />
         </div>
@@ -1265,14 +1265,6 @@ onMounted(() => {
     void loadOrders()
 })
 
-/** 归属地区变化时清空业务员并按地区级联重载业务员选项。 */
-watch(
-  () => filters.regionCode,
-  (value) => {
-    filters.ownerEmployeeCode = ''
-    void searchEmployees('', value)
-  },
-)
 </script>
 
 <style scoped>

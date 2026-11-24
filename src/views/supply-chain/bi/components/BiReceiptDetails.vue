@@ -96,8 +96,8 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    if (!props.query.regionCode || !props.query.from || !props.query.to)
-      throw new Error('城市或日期范围缺失，请刷新看板后重试')
+    if (!props.query.from || !props.query.to)
+      throw new Error('日期范围缺失，请刷新看板后重试')
     const result = await getSupplyReceiptDetails({
       ...props.query,
       kind: props.kind,

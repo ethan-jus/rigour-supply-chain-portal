@@ -19,12 +19,12 @@ export async function buildPaymentRiskExcel(context: PaymentRiskExportContext) {
   sheet.columns = [
     { header: '订单号', width: 28 },
     { header: '客户', width: 32 },
-    { header: '城市', width: 18 },
+    { header: '部门', width: 18 },
     { header: '业务员', width: 18 },
     { header: '订单日期', width: 16 },
     { header: '账龄（天）', width: 14 },
     { header: '订单原额（元）', width: 28 },
-    { header: '已回款（元）', width: 24 },
+    { header: '已核销（元）', width: 24 },
     { header: '剩余未收（元）', width: 22 },
     { header: '归属产品分类', width: 22 },
     { header: '归属产品', width: 32 },
@@ -35,7 +35,7 @@ export async function buildPaymentRiskExcel(context: PaymentRiskExportContext) {
     sheet.addRow([
       order.orderNo,
       order.customerName || '客户待确认',
-      order.regionName || '城市待确认',
+      order.regionName || '部门待确认',
       order.ownerStaffName || '业务员待确认',
       order.orderDate,
       order.ageDays,
@@ -71,7 +71,7 @@ export async function buildPaymentRiskExcel(context: PaymentRiskExportContext) {
     ['导出范围', '当前查询及下钻的全部订单，不受明细分页限制；仅包含当前账号有权查看的数据。'],
     [
       '统计口径',
-      '每单一行；统计金额为订单原额扣除已回款后的剩余金额。归属最高风险产品，同风险取商品金额最大者。金额单位为元。',
+      '每单一行。已结清订单退出商品账龄风险。剩余未收按截止日的有效核销和应收调整计算。归属最高风险产品，同风险取商品金额最大者。金额单位为元。',
     ],
     ['数据时间', '查询时间不代表来源已完整同步。'],
   ])

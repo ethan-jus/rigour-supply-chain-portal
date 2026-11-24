@@ -114,7 +114,7 @@ describe('订单主数据选项级联', () => {
     expect(options.departmentOptionsTree.value).toEqual([])
   })
 
-  it.each([undefined, 'WH'])('搜索历史业务员包括已离职员工（地区：%s）', async (regionCode) => {
+  it('搜索历史业务员包括已离职员工', async () => {
     const options = useOrderRegisterOptions()
     await options.loadOptions()
     const staff = [
@@ -126,38 +126,20 @@ describe('订单主数据选项级联', () => {
       items: staff.filter(item => !params.employmentStatus || item.employmentStatus === params.employmentStatus),
     }))
 
-    await options.searchEmployees('测试', regionCode)
+    await options.searchEmployees('测试')
 
     expect(options.employeeOptions.value.map(item => item.employeeCode)).toEqual(['EMP-ACTIVE', 'EMP-LEFT'])
     const params = mocks.getEmployees.mock.calls.at(-1)![0]
     expect(params.keyword).toBe('测试')
     expect(params.employmentStatus).toBeUndefined()
-    expect(params.cityName).toBe(regionCode ? '武汉' : undefined)
+    expect(params.cityName).toBeUndefined()
   })
 
-  it('选中城市时按去掉“市”后缀的城市名级联业务员', async () => {
+  it('跨市成交可以按无锡员工张三搜索，不加员工所在城市条件', async () => {
     const options = useOrderRegisterOptions()
-    await options.loadOptions()
-    mocks.getEmployees.mockClear()
-
-    await options.searchEmployees('', 'WH')
-
-    expect(mocks.getEmployees).toHaveBeenCalledTimes(1)
-    expect(mocks.getEmployees).toHaveBeenCalledWith(
-      expect.objectContaining({ cityName: '武汉' }),
-    )
-    expect(options.employeeOptions.value.map((item) => item.employeeCode)).toEqual(['EMP-武汉'])
-  })
-
-  it('选中省份时汇总其下属城市并合并去重', async () => {
-    const options = useOrderRegisterOptions()
-    await options.loadOptions()
-    mocks.getEmployees.mockClear()
-
-    await options.searchEmployees('', 'ZJ')
-
-    const cities = mocks.getEmployees.mock.calls.map((call) => call[0].cityName).sort()
-    expect(cities).toEqual(['杭州', '金华'])
-    expect(options.employeeOptions.value).toHaveLength(2)
+    mocks.getEmployees.mockResolvedValue({ items: [employee('WX-1', '张三', '无锡')] })
+    await options.searchEmployees('张三')
+    expect(mocks.getEmployees).toHaveBeenLastCalledWith({ begin: 0, step: 50, keyword: '张三' })
+    expect(options.employeeOptions.value[0]?.employeeCode).toBe('WX-1')
   })
 })

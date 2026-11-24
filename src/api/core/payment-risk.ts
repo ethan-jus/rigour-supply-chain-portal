@@ -45,6 +45,7 @@ export const getPaymentRisk = (params: {
   from: string
   to: string
   regionCode?: string
+  customerRegionCode?: string
   ownerStaffCode?: string
   productCategoryIds?: string[]
   riskLevel?: PaymentRiskLevel

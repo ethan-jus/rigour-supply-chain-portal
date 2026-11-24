@@ -143,7 +143,7 @@ export function overviewLine(
 }
 
 export function aggregateGoals(
-  analysis: SupplyDashboardOperatingAnalysis | null | undefined,
+  analysis: Pick<SupplyDashboardOperatingAnalysis, 'cityMonthlyGoals'> | null | undefined,
   month: number | null,
 ) {
   const rows = analysis?.cityMonthlyGoals?.filter((row) => month == null || row.month === month)

@@ -167,6 +167,112 @@ describe('会议数据加载与隔离', () => {
 })
 
 describe('年度经营总览下钻', () => {
+  it('总览先显示本期，晚到的对比和状态独立补齐', async () => {
+    let finishAccess!: (value: { accessLevel: string; globalGovernance: boolean }) => void
+    let finishPrevious!: (value: ReturnType<typeof meetingFixture>['previous']) => void
+    let finishTrust!: (value: { overallDescription: string }) => void
+    const fixture = meetingFixture()
+    mocks.access.mockReturnValue(new Promise((resolve) => (finishAccess = resolve)))
+    mocks.overview.mockImplementation((_query, _feedback, projection) =>
+      projection === 'OPERATING_COMPARISON'
+        ? new Promise((resolve) => (finishPrevious = resolve))
+        : Promise.resolve(fixture.current),
+    )
+    mocks.trust.mockReturnValue(new Promise((resolve) => (finishTrust = resolve)))
+    const wrapper = mount(BiMeetingPresentation, {
+      props: { embedded: true, query: {}, scopeLabel: '当前授权范围' },
+      global: {
+        stubs: {
+          BiOverviewBoard: {
+            name: 'BiOverviewBoard',
+            props: ['snapshot', 'loading'],
+            template: '<div />',
+          },
+        },
+      },
+    })
+    await flushPromises()
+    const board = wrapper.getComponent({ name: 'BiOverviewBoard' })
+    expect(mocks.overview.mock.calls.map(([, , projection]) => projection)).toEqual(['OPERATING'])
+    expect(board.props('snapshot')).toBeNull()
+    finishAccess({ accessLevel: 'TENANT', globalGovernance: true })
+    await flushPromises()
+    expect(board.props('loading')).toBe(false)
+    expect(board.props('snapshot')).toMatchObject({ current: fixture.current, previous: null })
+    expect(mocks.overview.mock.calls.map(([, , projection]) => projection)).toEqual([
+      'OPERATING',
+      'OPERATING_COMPARISON',
+    ])
+    expect(mocks.analysis).not.toHaveBeenCalled()
+    expect(mocks.filters).not.toHaveBeenCalled()
+    finishPrevious(fixture.previous)
+    await flushPromises()
+    expect(board.props('snapshot').previous).toEqual(fixture.previous)
+    expect(board.props('snapshot').trust).toBeNull()
+    finishTrust({ overallDescription: '可用' })
+    await flushPromises()
+    expect(board.props('snapshot').trust.overallDescription).toBe('可用')
+    wrapper.unmount()
+  })
+
+  it('总览授权拒绝时保留空态，并取消同时发出的本期请求', async () => {
+    mocks.access.mockResolvedValue({ accessLevel: 'DENIED', reason: '无经营权限' })
+    const wrapper = mount(BiMeetingPresentation, {
+      props: { embedded: true, query: {}, scopeLabel: '当前授权范围' },
+      global: {
+        stubs: {
+          BiOverviewBoard: {
+            name: 'BiOverviewBoard',
+            props: ['snapshot', 'error'],
+            template: '<div />',
+          },
+        },
+      },
+    })
+    await flushPromises()
+    const board = wrapper.getComponent({ name: 'BiOverviewBoard' })
+    expect(board.props('snapshot')).toBeNull()
+    expect(board.props('error')).toContain('无经营权限')
+    expect(mocks.overview).toHaveBeenCalledOnce()
+    expect(mocks.overview.mock.calls[0][1].signal.aborted).toBe(true)
+    expect(mocks.trust).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('快速换月会取消旧请求，旧对比晚到也不会覆盖新一期', async () => {
+    const fixture = meetingFixture()
+    let finishOldComparison!: (value: ReturnType<typeof meetingFixture>['previous']) => void
+    mocks.overview.mockImplementation((query, _feedback, projection) =>
+      query.from.startsWith('2026-08') && projection === 'OPERATING_COMPARISON'
+        ? new Promise((resolve) => (finishOldComparison = resolve))
+        : Promise.resolve(fixture.current),
+    )
+    const wrapper = mount(BiMeetingPresentation, {
+      props: { embedded: true, query: {}, scopeLabel: '当前授权范围' },
+      global: {
+        stubs: {
+          BiOverviewBoard: {
+            name: 'BiOverviewBoard',
+            props: ['snapshot', 'loading'],
+            emits: ['period'],
+            template: '<div />',
+          },
+        },
+      },
+    })
+    await flushPromises()
+    const board = wrapper.getComponent({ name: 'BiOverviewBoard' })
+    const oldSignal = mocks.overview.mock.calls[1][1].signal
+    board.vm.$emit('period', 2026, 7)
+    await flushPromises()
+    expect(oldSignal.aborted).toBe(true)
+    expect(board.props('snapshot').query.from).toContain('2026-07')
+    finishOldComparison(fixture.previous)
+    await flushPromises()
+    expect(board.props('snapshot').previous).toEqual(fixture.current)
+    wrapper.unmount()
+  })
+
   it('城市详情保留全年及上年范围，城市列表不被当前选择截断', async () => {
     const wrapper = mount(BiMeetingPresentation, {
       props: {

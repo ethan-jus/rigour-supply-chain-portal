@@ -30,7 +30,7 @@ describe('财务回款独立权限', () => {
     const options = usePaymentFilterOptions()
     await Promise.all([options.loadOptions(), options.loadOptions()])
     expect(getPaymentFilterOptions).toHaveBeenCalledTimes(1)
-    await options.searchEmployees('张', 'BJ')
+    await options.searchEmployees('张')
     expect(options.employeeOptions.value.map(row => row.employeeCode)).toEqual(['E1'])
     expect(options.areaLabel('BJ')).toBe('北京')
     const scope = effectScope()

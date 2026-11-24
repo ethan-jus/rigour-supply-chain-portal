@@ -4,7 +4,10 @@ import ElementPlus from 'element-plus'
 import PaymentRiskView from '@/views/supply-chain/bi/PaymentRiskView.vue'
 import { getPaymentRisk } from '@/api/core/payment-risk'
 
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('@/api/core/bi', () => ({ getDepartmentDashboardFilters: vi.fn().mockResolvedValue({
+  departments: [], customerRegions: [], defaultDepartmentCode: null,
+}) }))
 vi.mock('@/api/core/payment-risk', () => ({ getPaymentRisk: vi.fn() }))
 
 it('默认打开商品账龄，可切换合同到期，手动刷新强制回源', async () => {
