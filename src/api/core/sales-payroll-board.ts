@@ -6,6 +6,9 @@ export interface SettledOrder {
   settledOn: string | null
   basis: number | null
   state: string
+  settlementPaymentNo?: string | null
+  paymentOwnerCode?: string | null
+  paymentOwnerName?: string | null
 }
 export interface PayBoardEmployee {
   department?: string | null

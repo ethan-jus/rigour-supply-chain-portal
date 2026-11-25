@@ -69,6 +69,17 @@ export interface PerformancePolicy {
   secondMonthTarget: number
   laterMonthTarget: number
 }
+export interface PayrollCollectionEvidence {
+  sourceId: string
+  orderNo: string
+  date: string
+  amount: number
+  kind: string
+  settlementPaymentNo?: string | null
+  paymentOwnerCode?: string | null
+  paymentOwnerName?: string | null
+}
+
 export interface PerformanceResult {
   assessmentOverride?:
     | import('./hr-attendance/models/AttendanceAssessmentOverride').AttendanceAssessmentOverride
@@ -90,7 +101,7 @@ export interface PerformanceResult {
     deduction: number | null
     evidenceComplete: boolean
   }[]
-  sources: { sourceId: string; orderNo: string; date: string; amount: number; kind: string }[]
+  sources: PayrollCollectionEvidence[]
   issues: string[]
 }
 export interface PayrollRule {
@@ -223,7 +234,7 @@ export interface PayrollPerformanceExport {
     quantities: { unitCode: string; quantity: number }[]
   }[]
   salesAmount: number
-  collectionAmount: number
+  collectionAmount: number | null
   refundAmount: number
   collectionTarget: number | null
   salesTarget: number | null

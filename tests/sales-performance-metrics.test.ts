@@ -1,7 +1,8 @@
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { defineComponent } from 'vue'
+import { defineComponent, type Component } from 'vue'
 import { businessMonth } from '@/utils/business-date'
+import SalesPayrollBoard from '@/views/supply-chain/hr/SalesPayrollBoard.vue'
 import SalesTeamOverview from '@/views/supply-chain/sales/SalesTeamOverview.vue'
 import { summarizeOverviewGoal } from '@/views/supply-chain/sales/sales-overview-model'
 
@@ -12,12 +13,12 @@ vi.mock('@/stores/navigation', () => ({ useNavigationStore: () => ({ hasPath: ()
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ hasPermission: () => false }) }))
 vi.mock('vue-router', async (importActual) => ({
   ...(await importActual<typeof import('vue-router')>()),
-  useRoute: () => ({ meta: { routeKey: 'supply.sales.performance' } }),
+  useRoute: () => ({ meta: { routeKey: 'supply.sales.performance' }, query: {} }),
 }))
 
 const table = defineComponent({ props: ['data'], template: '<div />' })
-function render() {
-  return shallowMount(SalesTeamOverview, {
+function render(component: Component = SalesTeamOverview) {
+  return shallowMount(component, {
     global: {
       stubs: {
         ElTable: table,
@@ -28,6 +29,7 @@ function render() {
         ElDrawer: true,
         ElAlert: true,
         ElSkeleton: true,
+        ElEmpty: true,
         ElTabs: true,
         ElTabPane: true,
         RouterLink: true,
@@ -117,6 +119,48 @@ describe('人员月度达成', () => {
     await flushPromises()
     await page.findAll('.score-tabs button')[1]!.trigger('click')
     expect(page.findAll('.stat-grid strong')[0]!.text()).toBe('66.7%')
+    page.unmount()
+  })
+})
+
+describe('销售薪酬看板整单结清汇总', () => {
+  it('同一订单同时出现在旧口径管理岗和结清回款人时只汇总一次', async () => {
+    const order = {
+      orderNo: 'SO-1',
+      settledOn: '2026-11-21',
+      basis: 10000,
+      state: 'ELIGIBLE',
+    }
+    api.hr.mockResolvedValue({
+      month: '2026-11',
+      employees: [
+        {
+          code: 'A',
+          name: '城市总',
+          role: 'CITY_MANAGER',
+          status: 'READY',
+          basis: 10000,
+          basisSource: 'ORDER',
+          orders: [{ ...order, id: '1' }],
+          issues: [],
+        },
+        {
+          code: 'B',
+          name: '结清回款人',
+          role: 'SALES',
+          status: 'READY',
+          basis: 10000,
+          basisSource: 'SETTLEMENT_PAYMENT',
+          orders: [{ ...order, id: 'FULL:1', settlementPaymentNo: 'RC-2', paymentOwnerCode: 'B' }],
+          issues: [],
+        },
+      ],
+    })
+    const page = render(SalesPayrollBoard)
+    await flushPromises()
+    expect(page.findAll('.stat-grid strong').slice(0, 2).map((stat) => stat.text()))
+      .toEqual(['10,000.00', '1'])
+    expect(page.getComponent(table).props('data')).toHaveLength(2)
     page.unmount()
   })
 })

@@ -140,6 +140,15 @@ describe('项目业绩汇总主表', () => {
     delete (missing.clothSales[0] as Partial<PayrollPerformanceExport['clothSales'][number]>).quantities
     expect(() => appendPayrollPerformance(new Workbook(), [record], [missing])).toThrow('按单位付清数量')
   })
+  it('待核回款不以零金额或零完成率导出', () => {
+    const book = new Workbook()
+    appendPayrollPerformance(book, [record], [{ ...report(), collectionAmount: null }])
+    expect(book.worksheets[0]!.getCell('X4').value).toBe('-')
+    expect(book.worksheets[0]!.getCell('Y4').value).toBe('-')
+    const city = book.getWorksheet('城市业绩汇总')!
+    expect(city.getCell('H3').value).toBe('-')
+    expect(city.getCell('J3').value).toContain('回款业绩待核')
+  })
   it('单位名称和新增单位从当前字典读取，不依赖床/套映射', () => {
     seedBusinessDictionaryForTest('', 'PRODUCT_UNIT', [{ code: 'SET', name: '业务套装' }, { code: 'BED', name: '整床' }, { code: 'ROLL', name: '卷' }])
     const data = report()

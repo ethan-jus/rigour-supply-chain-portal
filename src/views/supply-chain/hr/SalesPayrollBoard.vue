@@ -36,7 +36,7 @@
       <section class="finance-panel">
         <header>
           <h2>月度核算</h2>
-          <small>首次整单结清按所属月归集，已确认工资引用锁定快照。</small>
+          <small>首次整单结清按所属月归集。启用回款人规则的月份按结清回款人归属，已确认工资使用保存的快照。</small>
         </header>
         <el-table :data="rows" row-key="code" @row-click="show">
           <el-table-column label="员工" min-width="115"
@@ -104,7 +104,7 @@
       <div v-if="active" class="finance-report">
         <small
           >{{ status(active) }} ·
-          {{ active.basisSource === 'SNAPSHOT' ? '工资快照' : '订单结清事实'
+          {{ active.basisSource === 'SNAPSHOT' ? '工资快照' : active.basisSource === 'SETTLEMENT_PAYMENT' ? '结清回款记录' : '订单结清事实'
           }}<template v-if="active.revision">
             · 版本 {{ active.revision }} · {{ businessDateTime(active.updatedAt!) }}</template
           ></small
@@ -125,7 +125,20 @@
               <el-table-column prop="orderNo" label="订单"><template #default="{row}"><router-link v-if="row.orderNo && canOrders" :to="{path:'/supply-chain/order/sales-orders',query:{orderNo:row.orderNo}}">{{row.orderNo}}</router-link><span v-else>{{row.orderNo||'—'}}</span></template></el-table-column><el-table-column
                 prop="settledOn"
                 label="首次结清日"
-              /><el-table-column label="业绩基数"
+              />
+              <template
+                v-if="active.basisSource === 'SETTLEMENT_PAYMENT' || active.orders?.some(
+                  (order) => order.settlementPaymentNo || order.paymentOwnerCode
+                )"
+              >
+                <el-table-column prop="settlementPaymentNo" label="结清回款单号" min-width="142">
+                  <template #default="{ row }">{{ row.settlementPaymentNo || '—' }}</template>
+                </el-table-column>
+                <el-table-column label="结清回款人" min-width="110">
+                  <template #default="{ row }">{{ row.paymentOwnerName || row.paymentOwnerCode || '待核' }}</template>
+                </el-table-column>
+              </template>
+              <el-table-column label="业绩基数"
                 ><template #default="{ row }">{{
                   row.state === 'REVIEW' ? '待核' : money(row.basis)
                 }}</template></el-table-column
@@ -267,7 +280,9 @@ const cards = computed(() => {
   const locked = data.filter((r) => ['CONFIRMED', 'PAID'].includes(r.status))
   const orders = new Map(
     data.flatMap((r) =>
-      r.orders.filter((o) => o.basis != null).map((o) => [o.id || o.orderNo, o.basis!] as const),
+      r.orders
+        .filter((o) => o.basis != null)
+        .map((o) => [o.id?.replace(/^FULL:/, '') || o.orderNo, o.basis!] as const),
     ),
   )
   return [
