@@ -111,7 +111,7 @@ describe('回款商品分摊', () => {
   })
 
   it('财务无订单查看权限时不挂载订单详情，避免隐藏组件请求订单字典导致403', async () => {
-    mocks.can.mockImplementation((permission?: string) => permission !== 'order:read')
+    mocks.can.mockImplementation((permission?: string) => permission !== 'order:register-orders:read')
     const wrapper = mountPage()
     await flushPromises()
     expect(wrapper.findComponent({ name: 'OrderRegisterDetailDrawer' }).exists()).toBe(false)

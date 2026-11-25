@@ -357,7 +357,7 @@ watch(
           step: 200,
           orderNo: order.orderNo,
         })
-        payments.value = page.items
+        payments.value = page.items.filter(row => String(row.orderId) === String(orderId))
       } catch (reason) {
         loadError.value = errorMessage(reason, '回款记录加载失败，可到订单回款按订单号查询')
       } finally {

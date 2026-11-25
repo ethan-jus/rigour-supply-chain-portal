@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import Dialog from '@/views/supply-chain/order/components/OrderAttributionReviewDialog.vue'
 import OrderDetail from '@/views/supply-chain/order/components/OrderRegisterDetailDrawer.vue'
-import { getSalesOrder } from '@/api/core/order-sales'
+import { getRegisterOrderDetail } from '@/api/core/order-sales'
 import { orderLifecycleEvents } from '@/api/core/order-history-sync'
 import { getOrderRegisterPayments } from '@/api/core/order-register'
 import { useAuthStore } from '@/stores/auth'
@@ -17,7 +17,7 @@ import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
 vi.mock('@/api/core/order-attribution-review', () => ({
   attributionReviewApi: { context: vi.fn(), propose: vi.fn(), decide: vi.fn() },
 }))
-vi.mock('@/api/core/order-sales', () => ({ getSalesOrder: vi.fn() }))
+vi.mock('@/api/core/order-sales', () => ({ getRegisterOrderDetail: vi.fn() }))
 vi.mock('@/api/core/order-history-sync', () => ({ orderLifecycleEvents: vi.fn().mockResolvedValue([]) }))
 vi.mock('@/api/core/order-register', () => ({ getOrderRegisterPayments: vi.fn().mockResolvedValue({ items: [] }) }))
 let wrapper: VueWrapper
@@ -182,7 +182,7 @@ it('申请人不能审核自己的申请', async () => {
 
 it('订单详情只对有查看权的角色开放，点击后读取当前订单的申请', async () => {
   const pinia = authorize([])
-  vi.mocked(getSalesOrder, { partial: true }).mockResolvedValue({ id: '123', orderNo: 'DD123', lines: [] })
+  vi.mocked(getRegisterOrderDetail, { partial: true }).mockResolvedValue({ id: '123', orderNo: 'DD123', lines: [] })
   vi.mocked(orderLifecycleEvents).mockResolvedValue([])
   vi.mocked(getOrderRegisterPayments, { partial: true }).mockResolvedValue({ items: [] })
   wrapper = mount(OrderDetail, {

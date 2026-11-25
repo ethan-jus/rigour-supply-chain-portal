@@ -47,6 +47,7 @@ it('按权限读取照片目录，点击后才取照片并在离开时释放本�
   await flushPromises()
   expect(apiClient.get).toHaveBeenCalledTimes(1)
   expect(apiClient.get).toHaveBeenCalledWith('/sales/management/visits/capture-1/evidence', {
+    signal: expect.any(AbortSignal),
     stayOnUnauthorized: true,
   })
   const button = [...document.querySelectorAll('button')].find((b) =>

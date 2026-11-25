@@ -1,5 +1,8 @@
 <template>
   <div class="order-register-page supply-page supply-page--business-main">
+    <el-alert v-if="optionError" type="warning" :closable="false" show-icon>
+      {{ optionError }} <el-button link @click="loadOptions">重新加载筛选条件</el-button>
+    </el-alert>
     <OrderRegisterFilterCard class="order-register-filter--compact" :loading="loading" @search="search" @reset="resetFilters">
       <template #primary>
         <div class="list-filter-field list-filter-field--date-range">
@@ -512,7 +515,7 @@ const {
   areaTree,
   departmentOptionsTree,
   employeeOptions, collectorOptions, searchCollectors,
-  employeeLoading,
+  employeeLoading, optionError,
   areaTreeProps,
   departmentTreeProps,
   loadOptions,

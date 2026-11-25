@@ -13,6 +13,7 @@ export function usePaymentFilterOptions(page: RegisterPage = 'payments') {
   function fetchOptions() {
     if (options.value) return Promise.resolve(options.value)
     if (!pending) pending = getPaymentFilterOptions(page).then(value => {
+      optionError.value = ''
       options.value = value
       return value
     }).finally(() => { pending = undefined })
@@ -26,7 +27,7 @@ export function usePaymentFilterOptions(page: RegisterPage = 'payments') {
       employeeOptions.value = [...new Map(data.employees
         .filter(row => !text || `${row.employeeName} ${row.employeeCode}`.toLocaleLowerCase().includes(text))
         .map(row => [row.employeeCode, row])).values()]
-    } catch (e) { optionError.value = e instanceof Error ? e.message : '回款筛选选项加载失败' }
+    } catch (e) { optionError.value = e instanceof Error ? e.message : '筛选条件加载失败' }
     finally { employeeLoading.value = false }
   }
   const collectorKeyword = ref('')
