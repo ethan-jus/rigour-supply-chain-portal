@@ -74,18 +74,25 @@ export function money(value: string | null | undefined): string {
 export const signed = (v: string | null | undefined) =>
   v == null ? '—' : `${Number(v) > 0 ? '+' : ''}${money(v)}`
 export const percent = (v: string | null | undefined) => (v == null ? '—' : `${v}%`)
+export const paymentStatusNames: Record<string, string> = {
+  PAID: '已付款',
+  UNPAID: '未付款',
+  PARTIAL_PAID: '部分付款',
+  NOT_REQUIRED: '无需付款',
+  NEEDS_REVIEW: '待核对',
+  UNKNOWN: '未记录',
+}
 export const statusName = (v: string) =>
   ({
     CONFIRMED: '已确认',
     DRAFT: '待确认',
     VOID: '已作废',
-    PAID: '已付款',
-    UNPAID: '未付款',
-    UNKNOWN: '未记录',
+    ...paymentStatusNames,
   })[v] || '未记录'
 
 /** 运输资料完整度与其他成本确认状态分别按来源呈现。 */
-export function recordStatusName(row: Pick<CostRecord, 'source' | 'status'>) {
+export function recordStatusName(row: Pick<CostRecord, 'source' | 'status' | 'costTreatment'>) {
+  if (row.costTreatment === 'REVIEW') return '待核对'
   if (row.source === 'ORDER')
     return { CONFIRMED: '已完善', DRAFT: '待完善', VOID: '已作废' }[row.status] || '未记录'
   return statusName(row.status)
@@ -134,10 +141,13 @@ export function dictionaryCodeForKey(key: string | null | undefined): string | u
 }
 
 export function dictionaryValue(key: string, fallback = key): string {
+  // 看板按配送用途归集，包含未关联销售单的运输记录。
+  if (key === 'dict:COST_TRANSPORT_PURPOSE:DELIVERY') return '订单配送'
   const match = dictionaryKey.exec(key)
   if (!match) return fallback
   const code = match[2]!
   const label = costLabel(match[1]!, code)
+  if (key === 'dict:COST_LOGISTICS_LEG:DELIVERY' && label === code) return '城市仓到客户'
   return label === code && fallback !== key ? fallback : label
 }
 export function recordItem(row: Pick<CostRecord, 'itemKey' | 'itemName'>): string {

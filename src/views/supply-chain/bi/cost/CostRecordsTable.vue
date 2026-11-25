@@ -26,7 +26,7 @@
           <th scope="col">费用项目</th>
           <th scope="col">费用归属</th>
           <th scope="col">费用日期</th>
-          <th scope="col" class="numeric">金额（元）</th>
+          <th scope="col" class="numeric">{{ review ? '参考金额（元）' : '金额（元）' }}</th>
           <th scope="col" class="record-status">单据状态</th>
           <th scope="col" class="record-status">付款状态</th>
           <th scope="col" class="record-actions">操作</th>
@@ -63,6 +63,6 @@
 <script setup lang="ts">
 import type { CostRecord } from '@/api/core/bi-cost-dashboard'
 import { categories, money, statusName, recordStatusName, recordItem } from './cost-presentation'
-defineProps<{ rows: CostRecord[] }>()
+defineProps<{ rows: CostRecord[]; review?: boolean }>()
 const emit = defineEmits<{ detail: [record: CostRecord] }>()
 </script>

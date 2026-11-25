@@ -13,23 +13,25 @@
         <thead>
           <tr>
             <th>部门</th>
-            <th class="numeric">采购货款</th>
-            <th class="numeric">采购运费</th>
-            <th class="numeric">采购成本合计</th>
+            <th v-if="columns.purchaseGoods" class="numeric">采购货款</th>
+            <th v-if="columns.purchaseFreight" class="numeric">采购运费</th>
+            <th v-if="columns.purchaseTotal" class="numeric">采购成本合计</th>
             <th v-for="type in transportTypes" :key="type.key" class="numeric">{{ type.label }}</th>
-            <th class="numeric">物流成本合计</th>
+            <th v-if="columns.logistics" class="numeric">物流成本合计</th>
             <th>明细</th>
           </tr>
         </thead>
         <tbody>
-          <template v-for="row in rows" :key="row.departmentId"
+          <template v-for="row in visibleRows" :key="row.departmentId"
             ><tr>
               <td>{{ row.departmentName }}</td>
-              <td class="numeric">{{ money(row.purchaseGoods) }}</td>
-              <td class="numeric">{{ money(row.purchaseFreight) }}</td>
-              <td class="numeric">
+              <td v-if="columns.purchaseGoods" class="numeric">{{ money(row.purchaseGoods) }}</td>
+              <td v-if="columns.purchaseFreight" class="numeric">
+                {{ money(row.purchaseFreight) }}
+              </td>
+              <td v-if="columns.purchaseTotal" class="numeric">
                 <button class="text-button" @click="detail(row, 'purchase')">
-                  {{ sum(row.purchaseGoods, row.purchaseFreight) }}
+                  {{ purchaseTotal(row) }}
                 </button>
               </td>
               <td v-for="type in transportTypes" :key="type.key" class="numeric">
@@ -37,7 +39,7 @@
                   {{ money(row.transportTypes?.find((t) => t.key === type.key)?.amount || '0') }}
                 </button>
               </td>
-              <td class="numeric">
+              <td v-if="columns.logistics" class="numeric">
                 <button class="text-button" @click="detail(row, 'freight')">
                   {{ money(row.logistics) }}
                 </button>
@@ -45,15 +47,16 @@
               <td>
                 <button
                   class="text-button"
-                  :disabled="!row.people.length"
+                  v-if="row.people.length"
                   @click="expanded = expanded === row.departmentId ? '' : row.departmentId"
                 >
                   {{ expanded === row.departmentId ? '收起人员' : '按人员展开' }}
                 </button>
+                <span v-else>—</span>
               </td>
             </tr>
             <tr v-if="expanded === row.departmentId">
-              <td :colspan="6 + transportTypes.length">
+              <td :colspan="columnCount">
                 <table :aria-label="row.departmentName + '人员物流成本'">
                   <thead>
                     <tr>
@@ -82,10 +85,8 @@
               </td>
             </tr>
           </template>
-          <tr v-if="!rows.length">
-            <td :colspan="6 + transportTypes.length" class="empty">
-              当前期间暂无已确认采购及物流成本
-            </td>
+          <tr v-if="!visibleRows.length">
+            <td :colspan="columnCount" class="empty">当前期间暂无非零采购及物流成本</td>
           </tr>
         </tbody>
       </table>
@@ -100,20 +101,57 @@ import {
   type CostQuery,
 } from '@/api/core/bi-cost-dashboard'
 import { errorMessage } from '@/api/core/error'
-import { money, dictionaryValue } from './cost-presentation'
+import { loadCostDictionaryCodes } from '../../cost/cost-dictionaries'
+import { transportTypes as standardTransportTypes } from '../../cost/transport-records'
+import { dictionaryCodeForKey, dictionaryValue, money } from './cost-presentation'
 const props = defineProps<{ query: CostQuery }>()
 const emit = defineEmits<{ detail: [query: CostQuery] }>()
 const rows = ref<CostDepartmentSummary[]>([]),
   loading = ref(false),
   error = ref(''),
   expanded = ref('')
+
+const hasAmount = (amount: string) => Number(amount) !== 0
+const visibleRows = computed(() =>
+  rows.value
+    .filter(
+      (row) =>
+        [row.purchaseGoods, row.purchaseFreight, row.logistics].some(hasAmount) ||
+        row.transportTypes?.some((type) => hasAmount(type.amount)),
+    )
+    .map((row) => ({ ...row, people: row.people.filter((person) => hasAmount(person.amount)) })),
+)
+const columns = computed(() => ({
+  purchaseGoods: visibleRows.value.some((row) => hasAmount(row.purchaseGoods)),
+  purchaseFreight: visibleRows.value.some((row) => hasAmount(row.purchaseFreight)),
+  purchaseTotal: visibleRows.value.some((row) => purchaseCents(row) !== 0n),
+  logistics: visibleRows.value.some((row) => hasAmount(row.logistics)),
+}))
 const transportTypes = computed(() => {
-  const types = new Map<string, { key: string; label: string }>()
-  for (const row of rows.value)
-    for (const type of row.transportTypes || [])
-      types.set(type.key, { key: type.key, label: dictionaryValue(type.key, type.label) })
-  return [...types.values()]
+  const types = new Map<string, string>()
+  for (const row of visibleRows.value) {
+    for (const type of row.transportTypes || []) {
+      if (hasAmount(type.amount)) types.set(type.key, type.label)
+    }
+  }
+  return [...types].map(([key, label]) => ({ key, label: transportLabel(key, label) }))
 })
+const columnCount = computed(
+  () => 2 + Object.values(columns.value).filter(Boolean).length + transportTypes.value.length,
+)
+
+const transportDictionary = (key: string) => dictionaryCodeForKey(key) ?? 'COST_TRANSPORT_PURPOSE'
+function transportLabel(key: string, label: string) {
+  const code = key.slice(key.lastIndexOf(':') + 1)
+  const savedName = label && label !== key && label !== code ? label : undefined
+  return dictionaryValue(
+    `dict:${transportDictionary(key)}:${code}`,
+    savedName ??
+      standardTransportTypes.find((type) => type.value === code)?.label ??
+      '未记录运输类型',
+  )
+}
+
 function transportDetail(row: CostDepartmentSummary, key: string) {
   emit('detail', {
     scope: 'opex',
@@ -146,7 +184,10 @@ async function load() {
       },
       controller.signal,
     )
-    if (current === serial) rows.value = value
+    if (current !== serial) return
+    rows.value = value
+    const dictionaries = transportTypes.value.map((type) => transportDictionary(type.key))
+    if (dictionaries.length) void loadCostDictionaryCodes(dictionaries, false, 'inline')
   } catch (e) {
     if (current === serial) error.value = errorMessage(e, '部门成本读取失败')
   } finally {
@@ -158,14 +199,17 @@ onBeforeUnmount(() => {
   serial++
   controller?.abort()
 })
-function sum(a: string, b: string) {
-  const cents = (value: string) => {
-    const negative = value.startsWith('-')
-    const [whole, fraction = ''] = value.replace(/^-/, '').split('.')
-    const amount = BigInt(whole || '0') * 100n + BigInt((fraction + '00').slice(0, 2))
-    return negative ? -amount : amount
-  }
-  const total = cents(a) + cents(b)
+function cents(value: string) {
+  const negative = value.startsWith('-')
+  const [whole, fraction = ''] = value.replace(/^-/, '').split('.')
+  const amount = BigInt(whole || '0') * 100n + BigInt((fraction + '00').slice(0, 2))
+  return negative ? -amount : amount
+}
+function purchaseCents(row: CostDepartmentSummary) {
+  return cents(row.purchaseGoods) + cents(row.purchaseFreight)
+}
+function purchaseTotal(row: CostDepartmentSummary) {
+  const total = purchaseCents(row)
   const absolute = total < 0 ? -total : total
   return money(
     `${total < 0 ? '-' : ''}${absolute / 100n}.${(absolute % 100n).toString().padStart(2, '0')}`,

@@ -302,7 +302,8 @@ describe('cost Excel export', () => {
     const note = restored.getWorksheet('导出说明')!
     expect(note.getCell('B2').value).toBe('2026年10月 / 本期 / 武汉市 / 经营费用 / 未付款')
     expect(note.getCell('B3').value).toBe('2026-10-01 至 2026-10-22')
-    expect(note.getCell('B5').value).toBe('3 笔')
+    expect(note.getCell('A5').value).toBe('明细行数')
+    expect(note.getCell('B5').value).toBe('3 行')
     expect(note.getCell('B6').value).toBe('60.10 元')
     expect(JSON.stringify(restored.model)).not.toMatch(
       /internal-source|internal-snapshot|DIRECT|LINKED|REVIEW|587201Z|统计处理|成本处理|计入成本金额/,
@@ -343,11 +344,11 @@ describe('cost Excel export', () => {
     await expect(buildCostDashboardWorkbook(csv(data), '', ['来源ID'])).rejects.toThrow()
     await expect(
       buildCostDashboardWorkbook(csv(data.slice(0, -1)), '', ['单据号']),
-    ).rejects.toThrow('笔数')
+    ).rejects.toThrow('行数')
   })
   it('rejects incomplete or mismatched exports instead of downloading a partial report', async () => {
     expect(() => parseCostCsv('"broken')).toThrow('不完整')
-    await expect(buildCostDashboardWorkbook(csv(data.slice(0, -1)))).rejects.toThrow('笔数')
+    await expect(buildCostDashboardWorkbook(csv(data.slice(0, -1)))).rejects.toThrow('行数')
     await expect(
       buildCostDashboardWorkbook(csv(data.map((row, i) => (i === 5 ? row.slice(0, -1) : row)))),
     ).rejects.toThrow('明细')

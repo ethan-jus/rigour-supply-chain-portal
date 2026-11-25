@@ -1,8 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import DepartmentAnalysis from '@/views/supply-chain/bi/cost/CostDepartmentAnalysis.vue'
-const api = vi.hoisted(() => ({ load: vi.fn() }))
+import { clearBusinessDictionariesForTest } from '@/utils/business-dictionary'
+const api = vi.hoisted(() => ({ load: vi.fn(), dictionary: vi.fn() }))
 vi.mock('@/api/core/bi-cost-dashboard', () => ({ getCostDepartments: api.load }))
+vi.mock('@/api/core/business-settings', () => ({ resolveBizDict: api.dictionary }))
+
+beforeEach(() => {
+  clearBusinessDictionariesForTest()
+  api.dictionary.mockReset().mockResolvedValue({ items: [] })
+})
+
 describe('部门采购与物流成本', () => {
   it('部门金额与业务员清晰展示，采购和人员下钻保留各自归属条件', async () => {
     api.load.mockResolvedValue([
@@ -29,6 +37,8 @@ describe('部门采购与物流成本', () => {
       expect.objectContaining({ snapshotId: 'snapshot-one', city: 'WH' }),
       expect.any(AbortSignal),
     )
+    expect(w.get('thead').text()).toContain('订单配送')
+    expect(w.get('thead').text()).not.toContain('销售订单配送')
     expect(w.text()).toContain('112.40')
     expect(w.text()).toContain('30.50')
     expect(w.text()).toContain('10.00')
@@ -85,7 +95,79 @@ describe('部门采购与物流成本', () => {
     ])
     await flushPromises()
     expect(w.text()).not.toContain('旧部门')
-    expect(w.text()).toContain('暂无已确认')
+    expect(w.text()).toContain('暂无非零采购及物流成本')
+    w.unmount()
+  })
+
+  it('隐藏全零行列，沿用订单配送名称和下钻编码', async () => {
+    const delivery = 'dict:COST_TRANSPORT_PURPOSE:DELIVERY'
+    const transfer = 'dict:COST_TRANSPORT_PURPOSE:TRANSFER'
+    const zeroDepartment = {
+      departmentId: 'department:10',
+      departmentName: '西安市',
+      purchaseGoods: '0',
+      purchaseFreight: '0.00',
+      logistics: '0.00',
+      people: [],
+      transportTypes: [{ key: transfer, label: 'TRANSFER', amount: '0.00' }],
+    }
+    const logisticsDepartment = {
+      ...zeroDepartment,
+      departmentId: 'department:20',
+      departmentName: '广州市',
+      logistics: '110.07',
+      transportTypes: [
+        { key: delivery, label: 'DELIVERY', amount: '110.07' },
+        ...zeroDepartment.transportTypes,
+      ],
+      people: [
+        { employeeCode: 'employee:E1', employeeName: '张三', role: '业务员', amount: '110.07' },
+        { employeeCode: 'employee:E2', employeeName: '李四', role: '业务员', amount: '0.00' },
+      ],
+    }
+    let finishDictionary: (result: unknown) => void = () => {}
+    api.dictionary.mockImplementationOnce(
+      () => new Promise((resolve) => (finishDictionary = resolve)),
+    )
+    api.load
+      .mockResolvedValueOnce([zeroDepartment, logisticsDepartment])
+      .mockResolvedValueOnce([zeroDepartment])
+    const w = mount(DepartmentAnalysis, { props: { query: { year: 2026, month: 11 } } })
+    await flushPromises()
+
+    const table = w.get('table[aria-label="部门采购及物流成本"]')
+    expect(
+      table
+        .get('thead')
+        .findAll('th')
+        .map((th) => th.text()),
+    ).toEqual(['部门', '订单配送', '物流成本合计', '明细'])
+    expect(table.text()).toContain('广州市')
+    expect(table.text()).not.toContain('西安市')
+    expect(api.dictionary).toHaveBeenCalledWith('COST_TRANSPORT_PURPOSE', 'inline')
+    finishDictionary({
+      items: [{ dictionaryItemCode: 'DELIVERY', dictionaryItemName: '销售订单配送', ordinal: 30 }],
+    })
+    await flushPromises()
+    expect(table.get('thead').text()).toContain('订单配送')
+    expect(table.get('thead').text()).not.toContain('销售订单配送')
+    await table.get('tbody tr td:nth-child(2) button').trigger('click')
+    expect(w.emitted('detail')?.[0]?.[0]).toMatchObject({
+      department: 'department:20',
+      category: 'freight',
+      dimension: 'leg',
+      dimensionKey: delivery,
+    })
+    await table.get('tbody tr td:last-child button').trigger('click')
+    expect(table.get('td[colspan]').attributes('colspan')).toBe('4')
+    const people = table.get('table[aria-label="广州市人员物流成本"]')
+    expect(people.text()).toContain('张三')
+    expect(people.text()).not.toContain('李四')
+
+    await w.setProps({ query: { year: 2026, month: 10 } })
+    await flushPromises()
+    expect(w.get('td.empty').text()).toBe('当前期间暂无非零采购及物流成本')
+    expect(w.get('td.empty').attributes('colspan')).toBe('2')
     w.unmount()
   })
 })

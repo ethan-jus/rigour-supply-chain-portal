@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
+import CostDashboardView from '@/views/supply-chain/bi/CostDashboardView.vue'
 import { useCostDashboard } from '@/views/supply-chain/bi/cost/use-cost-dashboard'
 import {
   bars,
@@ -13,7 +14,7 @@ import {
   visibleDetailDimensions,
   resolveObjectLabels,
 } from '@/views/supply-chain/bi/cost/cost-presentation'
-import type { CostReport } from '@/api/core/bi-cost-dashboard'
+import type { CostRecord, CostReport } from '@/api/core/bi-cost-dashboard'
 import { costLabel, loadCostDictionaryCodes } from '@/views/supply-chain/cost/cost-dictionaries'
 const api = vi.hoisted(() => ({
   getCostReport: vi.fn(),
@@ -110,6 +111,79 @@ beforeEach(() => {
   }))
 })
 describe('成本看板正式查询交互', () => {
+  it('付款状态在明细表和详情中明确展示，筛选按原状态编码查询', async () => {
+    const states = [
+      ['PAID', '已付款'],
+      ['UNPAID', '未付款'],
+      ['PARTIAL_PAID', '部分付款'],
+      ['NOT_REQUIRED', '无需付款'],
+      ['NEEDS_REVIEW', '待核对'],
+      ['UNKNOWN', '未记录'],
+    ] as const
+    const rows: CostRecord[] = states.map(([payment], index) => ({
+      source: 'ORDER',
+      sourceId: `transport-${index}`,
+      documentNo: `CST-${index}`,
+      title: '订单配送',
+      category: 'freight',
+      city: 'WH',
+      cityName: '武汉市',
+      date: '2026-10-16',
+      amount: '25.71',
+      status: 'CONFIRMED',
+      payment,
+      sourceSystem: 'HUOLALA',
+      employeeName: null,
+    }))
+    api.getCostRecords.mockResolvedValue({
+      meta: report().meta,
+      summary: { count: rows.length, confirmed: '154.26', draft: '0.00', missing: 0 },
+      page: 1,
+      size: 20,
+      items: rows,
+    })
+    api.getCostDetail.mockResolvedValue({
+      record: rows[2],
+      dimensions: {},
+      originalNumbers: [],
+    })
+    const wrapper = mount(CostDashboardView, {
+      global: {
+        stubs: {
+          CostOverview: true,
+          CostDepartmentAnalysis: true,
+          CostExportDialog: true,
+          RouterLink: true,
+        },
+      },
+    })
+    await flushPromises()
+    await wrapper.get('.cost-tabs button:last-child').trigger('click')
+    await flushPromises()
+    expect(
+      wrapper
+        .findAll('.cost-records-table tbody tr')
+        .map((row) => row.get('td:nth-child(9)').text()),
+    ).toEqual(states.map(([, label]) => label))
+    const select = wrapper.get('select[aria-label="付款状态"]')
+    expect(select.findAll('option').map((option) => option.text())).toEqual([
+      '全部',
+      ...states.map(([, label]) => label),
+    ])
+    for (const [payment] of states) {
+      await select.setValue(payment)
+      await flushPromises()
+      expect(api.getCostWorkspace).toHaveBeenLastCalledWith(
+        expect.objectContaining({ payment, page: 1 }),
+        expect.any(AbortSignal),
+      )
+    }
+    await wrapper.get('.cost-records-table tbody tr:nth-child(3) button').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('section[aria-labelledby="cost-detail-title"]').text()).toContain('部分付款')
+    wrapper.unmount()
+  })
+
   it('未提交搜索草稿不会改变明细和导出范围，查询后统一应用并可清除', async () => {
     const { state, wrapper } = setup()
     await flushPromises()
@@ -134,6 +208,198 @@ describe('成本看板正式查询交互', () => {
     expect(state.request.value.search).toBeUndefined()
     wrapper.unmount()
   })
+  it('列表控制只更新已提交的查询并且总览不沿用隐藏的付款状态', async () => {
+    const wrapper = mount(CostDashboardView, {
+      global: {
+        stubs: {
+          CostOverview: true,
+          CostDepartmentAnalysis: true,
+          CostExportDialog: true,
+          RouterLink: true,
+        },
+      },
+    })
+    await flushPromises()
+    await wrapper.get('.cost-tabs button:last-child').trigger('click')
+    await flushPromises()
+    await wrapper.get('input[aria-label="搜索单据"]').setValue('已提交单号')
+    await wrapper.get('form.ledger-filters').trigger('submit')
+    await flushPromises()
+    await wrapper.get('input[aria-label="搜索单据"]').setValue('尚未查询单号')
+    await wrapper.get('select[aria-label="付款状态"]').setValue('PAID')
+    await flushPromises()
+    expect(api.getCostWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({ payment: 'PAID', search: '已提交单号', page: 1 }),
+      expect.any(AbortSignal),
+    )
+    await wrapper.get('select[aria-label="每页行数"]').setValue(50)
+    await flushPromises()
+    expect(api.getCostWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({ payment: 'PAID', search: '已提交单号', page: 1, size: 50 }),
+      expect.any(AbortSignal),
+    )
+    expect(wrapper.get<HTMLInputElement>('input[aria-label="搜索单据"]').element.value).toBe(
+      '尚未查询单号',
+    )
+    await wrapper.get('.cost-tabs button:first-child').trigger('click')
+    await flushPromises()
+    expect(api.getCostReport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ payment: 'ALL', search: undefined }),
+      expect.any(AbortSignal),
+    )
+    await wrapper.get('.cost-tabs button:last-child').trigger('click')
+    await flushPromises()
+    expect(wrapper.get<HTMLSelectElement>('select[aria-label="付款状态"]').element.value).toBe(
+      'PAID',
+    )
+    wrapper.unmount()
+  })
+
+  it('刷新导致明细页码越界时，在同一新批次重新读取最后一页', async () => {
+    const { state, wrapper } = setup()
+    await flushPromises()
+    state.openRecords({ payment: 'PAID' })
+    await flushPromises()
+    const next = report('s2')
+    const result = {
+      report: next,
+      records: {
+        meta: next.meta,
+        summary: { count: 21, documentCount: 19, confirmed: '100.00', draft: '0.00', missing: 0 },
+        page: 3,
+        size: 20,
+        items: [],
+      },
+    }
+    api.getCostWorkspace.mockClear()
+    api.getCostWorkspace
+      .mockResolvedValueOnce(result)
+      .mockResolvedValueOnce({ ...result, records: { ...result.records, page: 2 } })
+    state.filters.page = 3
+    await state.load(true)
+    expect(api.getCostWorkspace).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ snapshotId: undefined, payment: 'PAID', page: 3 }),
+      expect.any(AbortSignal),
+    )
+    expect(api.getCostWorkspace).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ snapshotId: 's2', payment: 'PAID', page: 2 }),
+      expect.any(AbortSignal),
+    )
+    expect(state.filters.page).toBe(2)
+    expect(state.records.value?.page).toBe(2)
+    expect(state.report.value?.meta.snapshotId).toBe('s2')
+    wrapper.unmount()
+  })
+
+  it('分析弹窗先加载样本明细使用的费用项目字典', async () => {
+    const { state, wrapper } = setup()
+    await flushPromises()
+    const result = report()
+    result.majorRecords = [{ itemKey: 'dict:COST_LOGISTICS_FEE_TYPE:FREIGHT' } as CostRecord]
+    api.getCostReport.mockResolvedValueOnce(result)
+    let finishDictionary!: () => void
+    vi.mocked(loadCostDictionaryCodes).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishDictionary = resolve)),
+    )
+    const opening = state.openAnalysis({ city: 'WH' })
+    await flushPromises()
+    expect(loadCostDictionaryCodes).toHaveBeenLastCalledWith(
+      ['COST_LOGISTICS_FEE_TYPE'],
+      false,
+      'inline',
+    )
+    expect(state.modalLoading.value).toBe(true)
+    expect(state.modalReport.value).toBeNull()
+    finishDictionary()
+    await opening
+    expect(state.modalReport.value?.majorRecords).toHaveLength(1)
+    expect(state.modalLoading.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('从总览定位待核对原单，分别显示单据数和明细行数并隐藏导出', async () => {
+    const summary = report()
+    summary.current.reviewCount = 1
+    summary.meta.exportAllowed = true
+    const row: CostRecord = {
+      source: 'HR',
+      sourceId: 'reimbursement-1',
+      documentNo: 'BX-001',
+      title: '来源凭证待核对',
+      category: 'expense',
+      city: 'WH',
+      cityName: '武汉市',
+      date: '2026-10-16',
+      amount: '250.00',
+      status: 'CONFIRMED',
+      payment: 'PAID',
+      sourceSystem: 'MANUAL',
+      employeeName: null,
+      costTreatment: 'REVIEW',
+    }
+    api.getCostReport.mockResolvedValue(summary)
+    api.getCostRecords.mockResolvedValue({
+      meta: summary.meta,
+      summary: { count: 2, documentCount: 1, confirmed: '0.00', draft: '0.00', missing: 0 },
+      page: 1,
+      size: 20,
+      items: [row],
+    })
+    api.getCostDetail.mockResolvedValue({
+      record: row,
+      dimensions: { 待核对原因: '原费用发生变化' },
+      originalNumbers: [],
+      sourceRoute: '/cost/source/BX-001',
+    })
+    const wrapper = mount(CostDashboardView, {
+      global: {
+        stubs: {
+          EchartsChart: true,
+          CostRing: true,
+          CostDepartmentAnalysis: true,
+          CostExportDialog: true,
+          RouterLink: true,
+        },
+      },
+    })
+    await flushPromises()
+    await wrapper.get('.review-scopes button').trigger('click')
+    await flushPromises()
+    expect(api.getCostWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({ scope: 'opex', status: 'REVIEW', snapshotId: 's1' }),
+      expect.any(AbortSignal),
+    )
+    expect(wrapper.text()).toContain('待核对来源明细')
+    expect(wrapper.text()).toContain('匹配单据1 笔')
+    expect(wrapper.text()).toContain('明细行2 行')
+    expect(wrapper.text()).toContain('待核对来源金额暂未计入成本')
+    expect(wrapper.get('.cost-records-table tbody tr').text()).toContain('待核对')
+    expect(wrapper.find('.record-export-controls').exists()).toBe(false)
+    await wrapper.get('.cost-records-table tbody tr button').trigger('click')
+    await flushPromises()
+    expect(api.getCostDetail).toHaveBeenLastCalledWith(
+      'HR',
+      'reimbursement-1',
+      expect.objectContaining({ status: 'REVIEW' }),
+    )
+    expect(wrapper.get('section[aria-labelledby="cost-detail-title"]').text()).toContain(
+      '原费用发生变化',
+    )
+    expect(
+      wrapper.get('section[aria-labelledby="cost-detail-title"] router-link-stub').attributes('to'),
+    ).toBe('/cost/source/BX-001')
+    await wrapper.get('.analysis-controls button').trigger('click')
+    await flushPromises()
+    expect(api.getCostWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({ scope: 'opex', status: 'CONFIRMED' }),
+      expect.any(AbortSignal),
+    )
+    expect(wrapper.find('.cost-dashboard cost-export-dialog-stub').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('快捷期间使用接口业务截止日，跨年上月仍保留归属及采购口径', async () => {
     const { state, wrapper } = setup()
     await flushPromises()
