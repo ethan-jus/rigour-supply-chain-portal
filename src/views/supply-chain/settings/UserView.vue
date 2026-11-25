@@ -692,9 +692,9 @@ async function remove(row: SupplyMember) {
   }
   try {
     await ElMessageBox.confirm(
-      `删除“${row.name}”的供应链资格和角色分配？历史业务和统一登录账号会保留。`,
-      '删除用户',
-      { type: 'warning' },
+      `永久删除${row.name}的登录账号“${row.username}”？登录凭证和所有会话将被清除，历史业务记录会保留。其他应用仍在使用的账号会被阻止删除。`,
+      '永久删除账号',
+      { type: 'warning', confirmButtonText: '永久删除', cancelButtonText: '取消' },
     )
     await supplyAccessApi.deleteMember(row.id, row.version)
     await load()

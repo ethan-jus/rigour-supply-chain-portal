@@ -266,7 +266,7 @@ export const supplyAccessApi = {
       reason: null,
     }),
   deleteMember: (id: string, version: number) =>
-    apiClient.delete(SUPPLY_SETTINGS_BASE + '/users/' + id, { params: { version } }),
+    apiClient.delete(SUPPLY_SETTINGS_BASE + '/users/' + id + '/login-account', { params: { version } }),
   previewBatch: (data: BatchRoleCommand) =>
     apiClient.post<{
       applicationVersion: number
