@@ -81,6 +81,7 @@ for (const [i, name] of ['李明', '陈晨', '王宁', '刘洋', '周敏', '赵�
     dimensionType: 'SALES_OWNER',
     code: `XS00${i + 1}`,
     name,
+    parentCode: `C${city}`,
     cityCode: `C${city}`,
     cityName: cityNames[city]!,
     departmentName: '销售部',

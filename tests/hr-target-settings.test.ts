@@ -24,19 +24,33 @@ const person: api.TargetSubject = {
   departmentName: '北京一部',
   employmentStatus: 'ACTIVE',
   writable: true,
+  parentCode: 'BJ',
+}
+const department: api.TargetSubject = {
+  dimensionType: 'CITY',
+  code: 'BJ',
+  name: '北京一部',
+  cityCode: 'BJ',
+  cityName: '北京一部',
+  departmentName: null,
+  employmentStatus: null,
+  writable: true,
 }
 const settings = (): api.TargetSettings => ({
   month: '2026-10',
-  subjects: [person],
-  targets: targetMetrics.map((m) => ({
-    month: '2026-10',
-    dimensionType: 'SALES_OWNER',
-    code: 'NEW',
-    name: '新销售',
-    metric: m.code,
-    value: '123',
-    revision: 0,
-  })),
+  archived: false,
+  subjects: [department, person],
+  targets: [department, person].flatMap((subject) =>
+    targetMetrics.map((m) => ({
+      month: '2026-10',
+      dimensionType: subject.dimensionType,
+      code: subject.code,
+      name: subject.name,
+      metric: m.code,
+      value: '123',
+      revision: 0,
+    })),
+  ),
 })
 let wrapper: VueWrapper | undefined
 beforeEach(() => {
@@ -52,10 +66,8 @@ afterEach(() => {
 async function open() {
   wrapper = mount(Targets, { attachTo: document.body, global: { plugins: [ElementPlus] } })
   await flushPromises()
-  await wrapper
-    .findAll('button')
-    .find((b) => b.text().includes('销售指标'))!
-    .trigger('click')
+  expect(wrapper.text()).not.toContain('新销售')
+  await wrapper.get('button[aria-label="展开北京一部"]').trigger('click')
   await flushPromises()
   return wrapper
 }
@@ -79,7 +91,8 @@ describe('HR有效指标与简化编辑', () => {
       },
     ])
     await open()
-    await click('记录')
+    await wrapper!.get('button[aria-label="查看新销售修改记录"]').trigger('click')
+    await flushPromises()
     const fields = [...document.querySelectorAll('.target-history-item dl > div')]
     const values = Object.fromEntries(
       fields.map((field) => [
@@ -142,7 +155,7 @@ describe('HR有效指标与简化编辑', () => {
     reason.value = '月度调整'
     reason.dispatchEvent(new Event('input', { bubbles: true }))
     const saved = settings()
-    const savedSales = saved.targets.find((t) => t.metric === 'SALES_AMOUNT')!
+    const savedSales = saved.targets.find((t) => t.code === 'NEW' && t.metric === 'SALES_AMOUNT')!
     savedSales.value = 888
     savedSales.revision = 1
     vi.mocked(api.getTargetSettings).mockResolvedValue(saved)
@@ -153,10 +166,67 @@ describe('HR有效指标与简化编辑', () => {
   })
   it('does not expose editing for read-only subjects', async () => {
     const data = settings()
-    data.subjects = [{ ...person, writable: false }]
+    data.subjects = [department, { ...person, writable: false }]
     vi.mocked(api.getTargetSettings).mockResolvedValue(data)
     const page = await open()
     expect(page.find('button[aria-label="修改新销售指标"]').exists()).toBe(false)
+  })
+  it('keeps standalone sales rows collapsed with the first-level departments', async () => {
+    const data = settings()
+    data.subjects = [department, { ...person, parentCode: null }]
+    vi.mocked(api.getTargetSettings).mockResolvedValueOnce(data)
+    wrapper = mount(Targets, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('北京一部')
+    expect(wrapper.text()).not.toContain('新销售')
+    const group = wrapper.get('.target-group-toggle')
+    expect(group.attributes('aria-expanded')).toBe('false')
+    await group.trigger('click')
+    expect(wrapper.text()).toContain('新销售')
+  })
+  it('excludes sales-root employees from the management tree and preserves standalone scoped sellers', async () => {
+    const data = settings()
+    const direct = {
+      ...person,
+      code: 'ROOT',
+      name: '直属人员',
+      parentCode: 'SALES',
+      departmentName: '销售部',
+    }
+    data.subjects = [department, { ...person, parentCode: null }, direct]
+    data.targets.push(
+      ...data.targets
+        .filter((t) => t.code === person.code)
+        .map((t) => ({ ...t, code: direct.code, name: direct.name })),
+    )
+    vi.mocked(api.getTargetSettings).mockResolvedValue(data)
+    wrapper = mount(Targets, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    await wrapper.get('.target-group-toggle').trigger('click')
+    expect(wrapper.text()).toContain('新销售')
+    expect(wrapper.text()).not.toContain('直属人员')
+    for (const label of ['下月', '本月']) {
+      await click(label)
+      expect(wrapper.find('button[aria-label="修改直属人员指标"]').exists()).toBe(false)
+    }
+  })
+  it('keeps missing historical cells distinct from zero', async () => {
+    const archive = settings()
+    archive.archived = true
+    archive.subjects = [
+      { ...person, parentCode: null, historicalPlacementUnknown: true, writable: false },
+    ]
+    archive.targets = archive.targets.filter(
+      (t) => t.code === person.code && t.metric === 'SALES_AMOUNT',
+    )
+    archive.targets[0]!.value = '0'
+    vi.mocked(api.getTargetSettings).mockResolvedValueOnce(archive)
+    wrapper = mount(Targets, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('历史归属待核实')
+    const values = wrapper.findAll('tbody td.target-number').map((cell) => cell.text())
+    expect(values).toEqual(['—', '—', '—', '0', '—'])
+    expect(wrapper.find('button[aria-label="修改新销售指标"]').exists()).toBe(false)
   })
   it('rejects incomplete HR data, negative amounts and fractional customer counts', () => {
     expect(() => targetCell({ ...settings(), targets: [] }, person, 'SALES_AMOUNT')).toThrow(

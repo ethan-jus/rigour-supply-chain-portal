@@ -16,6 +16,8 @@ export interface TargetSubject {
   departmentName: string | null
   employmentStatus: string | null
   writable: boolean
+  parentCode?: string | null
+  historicalPlacementUnknown?: boolean
 }
 export interface TargetValue {
   month: string
@@ -30,6 +32,7 @@ export interface TargetSettings {
   month: string
   subjects: TargetSubject[]
   targets: TargetValue[]
+  archived?: boolean
 }
 export interface TargetChange {
   dimensionType: TargetDimension

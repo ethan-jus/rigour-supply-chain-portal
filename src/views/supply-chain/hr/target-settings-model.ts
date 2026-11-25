@@ -49,3 +49,56 @@ export function targetValueError(metric: TargetMetric, value: string): string | 
 export function targetKey(subject: TargetSubject) {
   return `${subject.dimensionType}:${subject.code}`
 }
+
+interface TargetNode {
+  subject: TargetSubject
+  children: TargetNode[]
+}
+
+export function targetTree(subjects: TargetSubject[]) {
+  const nodes = subjects.map<TargetNode>((subject) => ({ subject, children: [] }))
+  const departments = new Map(
+    nodes
+      .filter(({ subject }) => subject.dimensionType === 'CITY')
+      .map((node) => [node.subject.code, node]),
+  )
+  const roots: TargetNode[] = []
+  for (const node of nodes) {
+    const parentCode = node.subject.parentCode
+    const parent = parentCode ? departments.get(parentCode) : undefined
+    if (parent && parent !== node) parent.children.push(node)
+    else roots.push(node)
+  }
+  return roots
+}
+
+export function targetTreeRows(
+  roots: TargetNode[],
+  query: string,
+  expanded: Set<string>,
+  collapsed: Set<string>,
+) {
+  const term = query.trim().toLowerCase()
+  function prune(nodes: TargetNode[]): TargetNode[] {
+    return nodes.flatMap((node) => {
+      if (
+        [node.subject.name, node.subject.code].some((value) => value.toLowerCase().includes(term))
+      )
+        return [node]
+      const children = prune(node.children)
+      return children.length ? [{ ...node, children }] : []
+    })
+  }
+  function flatten(
+    nodes: TargetNode[],
+    depth: number,
+  ): { subject: TargetSubject; depth: number; hasChildren: boolean; open: boolean }[] {
+    return nodes.flatMap(({ subject, children }) => {
+      const hasChildren = children.length > 0
+      const key = targetKey(subject)
+      const open = hasChildren && (term ? !collapsed.has(key) : expanded.has(key))
+      return [{ subject, depth, hasChildren, open }, ...(open ? flatten(children, depth + 1) : [])]
+    })
+  }
+  return flatten(term ? prune(roots) : roots, 0)
+}
