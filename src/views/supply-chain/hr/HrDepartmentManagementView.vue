@@ -73,13 +73,16 @@
               link
               type="primary"
               :aria-label="`查看${row.departmentName}详情，部门编码 ${row.departmentCode}`"
-              @click="detailRecord = row as HrDepartment"
+              @click="detailRecord = row as DepartmentManagementNode"
             >{{ row.departmentCode }}</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="负责人" min-width="110" show-overflow-tooltip
-          ><template #default="{ row }">{{ row.leaderName || '-' }}</template></el-table-column
-        >
+        <el-table-column label="负责人" min-width="110" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.leaderName" class="department-leader">{{ row.leaderName }}</span>
+            <template v-else>-</template>
+          </template>
+        </el-table-column>
         <el-table-column
           prop="contactPhone"
           label="联系电话"
@@ -87,7 +90,7 @@
           :formatter="displayCell"
         />
         <el-table-column
-          prop="establishedDate"
+          prop="effectiveEstablishedDate"
           label="设立时间"
           width="120"
           :formatter="displayCell"
@@ -153,7 +156,12 @@
         </div>
         <div>
           <dt>设立日期</dt>
-          <dd>{{ detailRecord.establishedDate || '-' }}</dd>
+          <dd>
+            {{ detailRecord.effectiveEstablishedDate || '-' }}
+            <template v-if="!detailRecord.establishedDate && detailRecord.effectiveEstablishedDate">
+              （取自下级）
+            </template>
+          </dd>
         </div>
         <div>
           <dt>显示顺序</dt>
@@ -251,7 +259,7 @@
               type="date"
               value-format="YYYY-MM-DD"
               format="YYYY-MM-DD"
-              placeholder="请选择设立日期"
+              placeholder="留空时取下级最早日期"
               style="width: 100%"
             />
           </el-form-item>
@@ -322,6 +330,8 @@ import {
   departmentTree,
   filterDepartmentTreeFields,
   departmentParentTree,
+  departmentManagementTree,
+  type DepartmentManagementNode,
   type DepartmentNode,
 } from '@/utils/hr-department-tree'
 
@@ -353,7 +363,7 @@ const editing = ref<number | null>(null),
   editingRecord = ref<HrDepartment | null>(null),
   keyword = ref(''),
   departmentCodeFilter = ref('')
-const detailRecord = ref<HrDepartment | null>(null)
+const detailRecord = ref<DepartmentManagementNode | null>(null)
 const loadError = ref(''),
   saveError = ref(''),
   expandedKeys = ref<string[]>([])
@@ -367,7 +377,7 @@ const form = reactive<HrDepartmentCommand>({
   leaderEmployeeCode: null,
   establishedDate: null,
 })
-const allTree = computed(() => departmentTree(rows.value))
+const allTree = computed(() => departmentManagementTree(rows.value))
 const tree = computed(() =>
   filterDepartmentTreeFields(allTree.value, keyword.value, departmentCodeFilter.value),
 )
@@ -602,12 +612,16 @@ onMounted(() => load(true))
   border: 1px solid #e2e8f0;
   border-radius: 8px;
 }
+.department-name,
+.department-leader {
+  font-size: calc(var(--app-font-size-base) + 1px);
+  font-weight: 600;
+}
 .department-name {
   display: inline-flex;
   gap: 8px;
   align-items: center;
   vertical-align: middle;
-  font-weight: 500;
 }
 .department-name .el-icon {
   color: #6688ad;

@@ -111,6 +111,46 @@ afterEach(() => {
 })
 
 describe('部门维护：真实表格与表单交互', () => {
+  it('同级先按排序值再按设立日期，父级沿用下级最早日期且过滤时保持该日期', async () => {
+    rows = [
+      row(1, '总部'),
+      row(2, '待设立区', 1, 5),
+      { ...row(3, '东区', 1, 5), establishedDate: '2021-07-01' },
+      row(4, '西区', 1, 5),
+      { ...row(5, '西区一组', 4, 1), establishedDate: '2022-06-01' },
+      { ...row(6, '西区二组', 4, 2), establishedDate: '2024-10-01' },
+      { ...row(7, '西区一组分部', 5), establishedDate: '2020-03-01' },
+      { ...row(8, '优先区', 1, 4), establishedDate: '2025-12-01' },
+    ]
+    await render()
+    const names = wrapper!.findAll('tr.el-table__row').map((r) => r.get('.department-name').text())
+    expect(names).toEqual([
+      '总部', '优先区', '西区', '西区一组', '西区一组分部', '西区二组', '东区', '待设立区',
+    ])
+    const byName = (name: string) =>
+      wrapper!.findAll('tr.el-table__row').find((r) => r.get('.department-name').text() === name)!
+    expect(byName('西区').text()).toContain('2020-03-01')
+    expect(byName('西区一组').text()).toContain('2022-06-01')
+
+    await wrapper!.get('input[aria-label="部门名称筛选"]').setValue('西区二组')
+    await flushPromises()
+    expect(byName('西区').text()).toContain('2020-03-01')
+    await byName('西区').get('button[aria-label="查看西区详情，部门编码 DEP4"]').trigger('click')
+    await flushPromises()
+    expect(wrapper!.get('[role="dialog"]').text()).toMatch(/2020-03-01\s*（取自下级）/)
+    wrapper!
+      .findAllComponents(Dialog)
+      .find((dialog) => dialog.props('title') === '部门详情')!
+      .vm.$emit('close')
+    await flushPromises()
+    await byName('西区')
+      .findAll('button')
+      .find((b) => b.text() === '编辑')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper!.getComponent({ name: 'ElDatePicker' }).props('modelValue')).toBeNull()
+  })
+
   it('展示多级部门并可展开收起，搜索子部门保留祖先链', async () => {
     await render()
     const headers = wrapper!.findAll('.el-table__header th').map((cell) => cell.text())

@@ -2,6 +2,9 @@ import type { HrDepartment } from '@/api/core/hr'
 
 export type DepartmentTreeNode<T> = T & { children: DepartmentTreeNode<T>[] }
 export type DepartmentNode = DepartmentTreeNode<HrDepartment>
+export type DepartmentManagementNode = DepartmentTreeNode<
+  HrDepartment & { effectiveEstablishedDate: string | null }
+>
 
 export interface DepartmentScopeRow {
   id: number
@@ -66,6 +69,41 @@ export function departmentTree<T extends Pick<HrDepartment, 'id' | 'parentId' | 
   return roots
 }
 
+export function departmentManagementTree(rows: HrDepartment[]): DepartmentManagementNode[] {
+  const compareDepartments = (a: DepartmentManagementNode, b: DepartmentManagementNode) =>
+    a.sortOrder - b.sortOrder ||
+    Number(!a.effectiveEstablishedDate) - Number(!b.effectiveEstablishedDate) ||
+    (a.effectiveEstablishedDate ?? '').localeCompare(b.effectiveEstablishedDate ?? '') ||
+    a.id - b.id
+
+  function prepare(node: DepartmentNode): {
+    displayNode: DepartmentManagementNode
+    earliestInBranch: string | null
+  } {
+    let earliestChild: string | null = null
+    const children: DepartmentManagementNode[] = []
+    for (const child of node.children) {
+      const { displayNode, earliestInBranch } = prepare(child)
+      children.push(displayNode)
+      if (earliestInBranch && (!earliestChild || earliestInBranch < earliestChild)) {
+        earliestChild = earliestInBranch
+      }
+    }
+    const storedDate = node.establishedDate || null
+    return {
+      displayNode: {
+        ...node,
+        effectiveEstablishedDate: storedDate ?? earliestChild,
+        children: children.sort(compareDepartments),
+      },
+      earliestInBranch:
+        storedDate && (!earliestChild || storedDate < earliestChild) ? storedDate : earliestChild,
+    }
+  }
+
+  return departmentTree(rows).map((node) => prepare(node).displayNode).sort(compareDepartments)
+}
+
 export function filterDepartmentTree(nodes: DepartmentNode[], keyword: string): DepartmentNode[] {
   const key = keyword.trim().toLocaleLowerCase()
   if (!key) return nodes
@@ -77,11 +115,11 @@ export function filterDepartmentTree(nodes: DepartmentNode[], keyword: string): 
   })
 }
 
-export function filterDepartmentTreeFields(
-  nodes: DepartmentNode[],
+export function filterDepartmentTreeFields<T extends HrDepartment>(
+  nodes: DepartmentTreeNode<T>[],
   name: string,
   code: string,
-): DepartmentNode[] {
+): DepartmentTreeNode<T>[] {
   const nameKey = name.trim().toLocaleLowerCase(),
     codeKey = code.trim().toLocaleLowerCase()
   if (!nameKey && !codeKey) return nodes
