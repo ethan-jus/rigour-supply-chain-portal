@@ -302,6 +302,7 @@
       :date="detail.date"
       :record="detail"
       :visit-type="events.find(event => event.id === detail?.id)?.visitType"
+      from-fieldwork
       same-day-map
       :can-map="canLocation && !!track"
       @close="detail = null"

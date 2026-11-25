@@ -27,7 +27,7 @@
         </template>
         <template v-else-if="tab==='photos'"><p v-if="extraLoading" role="status">正在读取门头照…</p><el-alert v-if="photoError" :title="photoError" type="error" :closable="false" /><div v-if="!canPhotos" class="evidence-empty">暂无现场照片查看权限</div><article v-for="photo in photos" :key="photo.evidenceId" class="photo-evidence"><el-image v-if="photoUrls[photo.evidenceId]" :src="photoUrls[photo.evidenceId]" :alt="visit.storeName + '门头照'" fit="contain" :preview-src-list="[photoUrls[photo.evidenceId]!]" preview-teleported /><button v-else class="photo-load" :disabled="loadingPhoto===photo.evidenceId" @click="loadPhoto(photo)"><Camera />{{ loadingPhoto===photo.evidenceId?'读取中':'查看门头照' }}</button><div><strong>门头照</strong><span>{{ photo.captureSource==='APP_CAMERA'?'App 现场拍摄':photo.captureSource==='FILE_IMPORT'?'历史导入':'其他采集来源' }}</span><span>{{ fieldClock(photo.capturedAt) }}</span><span>{{ photo.distanceToTargetMeters==null?'距离未获得':`距门店 ${Math.round(photo.distanceToTargetMeters)}m` }}</span></div></article><el-empty v-if="canPhotos&&!photos.length&&!extraLoading&&!photoError" description="暂无门头照" :image-size="56" /></template>
         <slot v-else-if="inline && tab === 'rules'" name="facts" />
-        <SalesVisitHistory v-else-if="inline && tab === 'history' && canRisk" :visit-id="visit.visitId" through-visit @open-capture="emit('capture', $event)" />
+        <SalesVisitHistory v-else-if="inline && tab === 'history' && canRisk" :visit-id="visit.visitId" :from-fieldwork="fromFieldwork" through-visit @open-capture="emit('capture', $event)" />
         <div v-else-if="!inline" class="position-detail"><div><span>到店</span><strong>{{ fieldClock(visit.checkedInAt) }}</strong></div><div><span>离店</span><strong>{{ fieldClock(visit.checkedOutAt) }}</strong></div><div><span>停留</span><strong>{{ visit.dwellMinutes }}分钟</strong></div><div><span>门店坐标</span><strong>{{ visit.longitude==null?'未获得':`${visit.longitude}, ${visit.latitude}` }}</strong></div></div>
       <section v-if="inline && tab === 'rules' && canRisk" aria-label="核查事项">
           <el-alert v-if="caseError" :title="caseError" type="error" :closable="false" />
@@ -36,7 +36,7 @@
         </section>
         </div>
       </section>
-      <aside v-if="!inline" class="evidence-side"><SalesVisitHistory v-if="canRisk" :visit-id="visit.visitId" @open="emit('history',$event)" /><SalesFieldworkCasePanel v-if="canRisk && !caseError" :cases="cases" @changed="updateCase" /><el-alert v-if="caseError" :title="caseError" type="error" :closable="false" /></aside>
+      <aside v-if="!inline" class="evidence-side"><SalesVisitHistory v-if="canRisk" :visit-id="visit.visitId" :from-fieldwork="fromFieldwork" @open="emit('history',$event)" /><SalesFieldworkCasePanel v-if="canRisk && !caseError" :cases="cases" @changed="updateCase" /><el-alert v-if="caseError" :title="caseError" type="error" :closable="false" /></aside>
     </div>
   </div>
 </template>
@@ -49,7 +49,7 @@ import { visitAnalysis,visitRecordings,visitPhotos,visitCases,evidenceBlob,retry
 import type { HistoryCapture } from '@/api/core/sales-fieldwork-evidence'
 import SalesFieldworkCasePanel from './SalesFieldworkCasePanel.vue'
 const SalesVisitHistory=defineAsyncComponent(()=>import('./SalesVisitHistory.vue'))
-const props=defineProps<{visit:TrackVisit;employeeName:string;inline?:boolean;totalMillis?:number|null}>(),emit=defineEmits<{back:[];history:[visit:TrackVisit];capture:[item:HistoryCapture];changed:[item:FieldworkCase]}>(),auth=useAuthStore()
+const props=defineProps<{visit:TrackVisit;employeeName:string;inline?:boolean;fromFieldwork?:boolean;totalMillis?:number|null}>(),emit=defineEmits<{back:[];history:[visit:TrackVisit];capture:[item:HistoryCapture];changed:[item:FieldworkCase]}>(),auth=useAuthStore()
 const panel = ref<HTMLElement | null>(null)
 let audioRequested = false
 const tab=ref(props.inline ? 'content' : 'audio'),loading=ref(false),error=ref(''),caseError=ref(''),query=ref(''),analysis=ref<VisitAnalysis|null>(null),clips=ref<RecordingClip[]>([]),photos=ref<PhotoEvidence[]>([]),cases=ref<FieldworkCase[]>([])

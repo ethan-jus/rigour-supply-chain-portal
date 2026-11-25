@@ -27,12 +27,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { fieldClock, type TrackVisit } from '@/api/core/sales-fieldwork'
 import { visitHistory, type VisitHistory, type HistoryCapture } from '@/api/core/sales-fieldwork-evidence'
-const props=defineProps<{visitId:string;throughVisit?:boolean}>(),emit=defineEmits<{open:[visit:TrackVisit];openCapture:[item:HistoryCapture]}>(),auth=useAuthStore()
+const props=defineProps<{visitId:string;throughVisit?:boolean;fromFieldwork?:boolean}>(),emit=defineEmits<{open:[visit:TrackVisit];openCapture:[item:HistoryCapture]}>(),auth=useAuthStore()
 const history=ref<VisitHistory|null>(null),loading=ref(false),error=ref(''),page=ref(1)
 const owner=computed(()=>JSON.stringify([auth.user?.tenantId,auth.user?.id,auth.user?.permissions]))
 const currentCount=computed(()=>history.value?.current.captureStatus==='CANCELLED'?0:1)
 let generation=0,controller:AbortController|null=null
-async function load(){const current=++generation;controller?.abort();controller=new AbortController();history.value=null;error.value='';loading.value=true;if(!auth.hasPermission('sales:risk:read')){loading.value=false;error.value='暂无历史核查权限';return}try{const result=await visitHistory(props.visitId,page.value,controller.signal,props.throughVisit);if(current===generation)history.value=result}catch(e){if(current===generation)error.value=e instanceof Error?e.message:'历史记录读取失败'}finally{if(current===generation)loading.value=false}}
+async function load(){const current=++generation;controller?.abort();controller=new AbortController();history.value=null;error.value='';loading.value=true;if(!auth.hasPermission('sales:risk:read')){loading.value=false;error.value='暂无历史核查权限';return}try{const result=await visitHistory(props.visitId,page.value,controller.signal,props.throughVisit,props.fromFieldwork);if(current===generation)history.value=result}catch(e){if(current===generation)error.value=e instanceof Error?e.message:'历史记录读取失败'}finally{if(current===generation)loading.value=false}}
 function move(step:number){page.value+=step;void load()}
 function open(item:HistoryCapture){if(props.throughVisit){emit('openCapture',item);return}emit('open',{visitId:item.visitId,storeId:null,sequence:0,storeName:item.storeName||'历史门店',checkedInAt:item.checkedInAt,checkedOutAt:item.checkedOutAt,dwellMinutes:item.checkedOutAt?Math.max(0,Math.floor((Date.parse(item.checkedOutAt)-Date.parse(item.checkedInAt))/60000)):0,reviewStatus:item.captureStatus,visitType:'UNKNOWN',longitude:null,latitude:null})}
 watch(()=>props.visitId,()=>{page.value=1;void load()})

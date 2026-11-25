@@ -151,6 +151,7 @@
       v-if="evidence && visit"
       :visit="evidence"
       :employee-name="visit.name"
+      from-fieldwork
       @back="evidence = null"
       @history="evidence = $event"
       @changed="$emit('changed')"
