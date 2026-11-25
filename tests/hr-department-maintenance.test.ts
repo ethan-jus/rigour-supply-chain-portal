@@ -163,9 +163,9 @@ describe('部门维护：真实表格与表单交互', () => {
     expect(wrapper!.find('[role="dialog"]').exists()).toBe(false)
     expect(ElMessage.success).toHaveBeenCalledWith('部门已保存')
   })
-  it('居中弹窗保存负责人电话和设立日期，审计信息只读且不进入请求', async () => {
+  it('从负责人展示联系电话，点击编码查看详情，保存时只提交部门可维护字段', async () => {
     vi.mocked(hrOrganizationApi.saveDepartment).mockImplementation(async (_id, command) => {
-      const saved = { ...row(5, command.departmentName), ...command, revision: 1 }
+      const saved = { ...row(5, command.departmentName), ...command, contactPhone: '13800000001', revision: 1 }
       rows.push(saved)
       return saved
     })
@@ -176,16 +176,16 @@ describe('部门维护：真实表格与表单交互', () => {
       .findAllComponents({ name: 'ElSelect' })
       .find((c) => c.props('placeholder') === '搜索并选择在职员工')!
       .vm.$emit('update:modelValue', 'EMP1')
-    await wrapper!.get('input[placeholder="请输入联系电话"]').setValue('0571-12345678')
+    expect(wrapper!.find('input[placeholder="请输入联系电话"]').exists()).toBe(false)
     wrapper!.getComponent({ name: 'ElDatePicker' }).vm.$emit('update:modelValue', '2020-05-06')
     await button('确定').trigger('click')
     await flushPromises()
     const command = vi.mocked(hrOrganizationApi.saveDepartment).mock.calls[0][1]
     expect(command).toMatchObject({
       leaderEmployeeCode: 'EMP1',
-      contactPhone: '0571-12345678',
       establishedDate: '2020-05-06',
     })
+    expect(command).not.toHaveProperty('contactPhone')
     expect(command).not.toHaveProperty('createdBy')
     expect(command).not.toHaveProperty('updatedBy')
     expect(command).not.toHaveProperty('createdTime')
@@ -193,12 +193,14 @@ describe('部门维护：真实表格与表单交互', () => {
       .findAll('tr.el-table__row')
       .find((r) => r.text().includes('运营部'))!
     expect(readonlyRow.text()).toContain('2020-05-06')
+    expect(readonlyRow.text()).toContain('13800000001')
+    expect(readonlyRow.findAll('button').some((b) => b.text() === '查看')).toBe(false)
     await readonlyRow
-      .findAll('button')
-      .find((b) => b.text() === '查看')!
+      .get('button[aria-label="查看运营部详情，部门编码 DEP5"]')
       .trigger('click')
     await flushPromises()
     const readonlyDialog = wrapper!.get('[role="dialog"]')
+    expect(readonlyDialog.text()).toContain('13800000001')
     expect(readonlyDialog.text()).toContain('2020-05-06')
     expect(readonlyDialog.text()).toContain('管理员')
     expect(readonlyDialog.findAll('input, textarea')).toHaveLength(0)

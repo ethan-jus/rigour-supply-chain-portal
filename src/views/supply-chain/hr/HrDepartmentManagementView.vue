@@ -67,15 +67,25 @@
         <el-table-column label="直属下级数" width="120" align="right"
           ><template #default="{ row }">{{ row.children.length }}</template></el-table-column
         >
-        <el-table-column
-          prop="departmentCode"
-          label="部门编码"
-          min-width="210"
-          :formatter="displayCell"
-        />
+        <el-table-column prop="departmentCode" label="部门编码" min-width="210">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              :aria-label="`查看${row.departmentName}详情，部门编码 ${row.departmentCode}`"
+              @click="detailRecord = row as HrDepartment"
+            >{{ row.departmentCode }}</el-button>
+          </template>
+        </el-table-column>
         <el-table-column label="负责人" min-width="110" show-overflow-tooltip
           ><template #default="{ row }">{{ row.leaderName || '-' }}</template></el-table-column
         >
+        <el-table-column
+          prop="contactPhone"
+          label="联系电话"
+          width="145"
+          :formatter="displayCell"
+        />
         <el-table-column
           prop="establishedDate"
           label="设立时间"
@@ -91,11 +101,8 @@
           >
         </el-table-column>
         <!-- @vue-generic {DepartmentNode} -->
-        <el-table-column label="操作" width="250" fixed="right">
+        <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="detailRecord = row as HrDepartment"
-              >查看</el-button
-            >
             <el-button
               v-if="can('hr:department:create-child', 'hr:department:create')"
               link
@@ -238,14 +245,6 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="联系电话">
-            <el-input
-              v-model="form.contactPhone"
-              placeholder="请输入联系电话"
-              maxlength="32"
-              clearable
-            />
-          </el-form-item>
           <el-form-item label="设立日期">
             <el-date-picker
               v-model="form.establishedDate"
@@ -366,7 +365,6 @@ const form = reactive<HrDepartmentCommand>({
   statusCode: 'ACTIVE',
   revision: 0,
   leaderEmployeeCode: null,
-  contactPhone: null,
   establishedDate: null,
 })
 const allTree = computed(() => departmentTree(rows.value))
@@ -437,7 +435,6 @@ function edit(row?: HrDepartment, parentId: number | null = null) {
           statusCode: row.statusCode,
           revision: row.revision,
           leaderEmployeeCode: row.leaderEmployeeCode ?? null,
-          contactPhone: row.contactPhone ?? null,
           establishedDate: row.establishedDate ?? null,
         }
       : {
@@ -447,7 +444,6 @@ function edit(row?: HrDepartment, parentId: number | null = null) {
           statusCode: 'ACTIVE',
           revision: 0,
           leaderEmployeeCode: null,
-          contactPhone: null,
           establishedDate: null,
         },
   )
@@ -482,7 +478,6 @@ async function save() {
       departmentName: form.departmentName.trim(),
       parentId: form.parentId || null,
       leaderEmployeeCode: form.leaderEmployeeCode || null,
-      contactPhone: form.contactPhone?.trim() || null,
       establishedDate: form.establishedDate || null,
     })
     visible.value = false

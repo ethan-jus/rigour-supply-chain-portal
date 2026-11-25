@@ -209,7 +209,6 @@ export interface HrDepartmentCommand {
   statusCode: string
   revision: number
   leaderEmployeeCode: string | null
-  contactPhone: string | null
   establishedDate: string | null
 }
 export interface HrEmployeeCommand {
