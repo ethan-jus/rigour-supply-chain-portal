@@ -1,8 +1,8 @@
 {
-  "android": { "version": "0.2.19", "url": "/downloads/sales/rigour-sales-0.2.19.apk" },
+  "android": { "version": "0.2.20", "url": "/downloads/sales/rigour-sales-0.2.20.apk" },
   "ios": {
-    "version": "0.2.19 (224)",
-    "url": "https://scm.wpbsaedu.cn/downloads/ios-test/224-2d69cb2a82ba/manifest.plist"
+    "version": "0.2.20 (225)",
+    "url": "https://scm.wpbsaedu.cn/downloads/ios-test/225-15a9d51c57bf/manifest.plist"
   },
   "harmony": null
 }
