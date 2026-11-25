@@ -76,6 +76,13 @@
         <el-table-column label="负责人" min-width="110" show-overflow-tooltip
           ><template #default="{ row }">{{ row.leaderName || '-' }}</template></el-table-column
         >
+        <el-table-column
+          prop="establishedDate"
+          label="设立时间"
+          width="120"
+          :formatter="displayCell"
+        />
+        <el-table-column prop="sortOrder" label="排序" width="80" align="right" />
         <el-table-column label="状态" width="90">
           <template #default="{ row }"
             ><el-tag :type="row.statusCode === 'ACTIVE' ? 'success' : 'info'">{{

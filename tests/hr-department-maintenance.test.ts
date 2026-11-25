@@ -113,7 +113,14 @@ afterEach(() => {
 describe('部门维护：真实表格与表单交互', () => {
   it('展示多级部门并可展开收起，搜索子部门保留祖先链', async () => {
     await render()
-    expect(wrapper!.findAll('tr.el-table__row').filter((r) => r.isVisible())).toHaveLength(4)
+    const headers = wrapper!.findAll('.el-table__header th').map((cell) => cell.text())
+    const visibleRows = wrapper!.findAll('tr.el-table__row').filter((r) => r.isVisible())
+    expect(headers).toEqual(expect.arrayContaining(['设立时间', '排序']))
+    expect(visibleRows[0]!.findAll('td')[headers.indexOf('排序')]!.text()).toBe('0')
+    const finance = visibleRows.find((r) => r.text().includes('财务部'))!
+    expect(finance.findAll('td')[headers.indexOf('排序')]!.text()).toBe('10')
+    expect(finance.findAll('td')[headers.indexOf('设立时间')]!.text()).toBe('-')
+    expect(visibleRows).toHaveLength(4)
     await button('收起全部').trigger('click')
     await flushPromises()
     expect(wrapper!.findAll('tr.el-table__row').filter((r) => r.isVisible())).toHaveLength(1)
@@ -182,10 +189,10 @@ describe('部门维护：真实表格与表单交互', () => {
     expect(command).not.toHaveProperty('createdBy')
     expect(command).not.toHaveProperty('updatedBy')
     expect(command).not.toHaveProperty('createdTime')
-    expect(wrapper!.get('.el-table').text()).not.toContain('2020-05-06')
     const readonlyRow = wrapper!
       .findAll('tr.el-table__row')
       .find((r) => r.text().includes('运营部'))!
+    expect(readonlyRow.text()).toContain('2020-05-06')
     await readonlyRow
       .findAll('button')
       .find((b) => b.text() === '查看')!
