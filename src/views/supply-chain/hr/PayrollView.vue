@@ -749,9 +749,22 @@
                   :formatter="displayCell"
                 /><el-table-column
                   prop="date"
-                  label="回款日期"
+                  label="依据日期"
                   :formatter="displayCell"
-                /><el-table-column label="金额（元）" align="right"
+                />
+                <template
+                  v-if="detail.calculation.performanceDetail.sources?.some(
+                    (source) => source.settlementPaymentNo || source.paymentOwnerCode
+                  )"
+                >
+                  <el-table-column label="结清回款单号" min-width="145">
+                    <template #default="{ row }">{{ row.settlementPaymentNo || '—' }}</template>
+                  </el-table-column>
+                  <el-table-column label="结清回款人" min-width="112">
+                    <template #default="{ row }">{{ row.paymentOwnerName || row.paymentOwnerCode || '—' }}</template>
+                  </el-table-column>
+                </template>
+                <el-table-column label="金额（元）" align="right"
                   ><template #default="{ row }">{{
                     costMoney(row.amount)
                   }}</template></el-table-column

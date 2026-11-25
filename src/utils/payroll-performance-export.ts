@@ -171,7 +171,7 @@ export function appendPayrollPerformance(
       ),
       ...fields('CLOTH'),
       numeric(row.collectionTarget),
-      row.collectionAmount,
+      numeric(row.collectionAmount),
       ratio(page, line, 24, 23, row.collectionAmount, row.collectionTarget),
       numeric(row.salesTarget),
       row.salesAmount,
@@ -230,7 +230,7 @@ export function appendPayrollPerformance(
   source.addRow([])
   for (const [label, text] of [
     ['销售', '销售按下单月，按订单应付金额分摊整单优惠。'],
-    ['回款', '按当月首次整单付清业绩（含跨月订单），未付清订单不计入。'],
+    ['回款', '按当月首次整单付清业绩（含跨月订单）汇总。启用回款人规则的月份以结清回款人归属，已确认工资使用保存的快照。'],
     ['台呢数量', '三组型号按本月首次整单付清订单中的台呢数量统计，包含跨月订单；按订单原单位分别汇总，不换算、不跨单位相加。'],
     ['提成', '主表沿用已保存工资；历史补算先导出提成试算差异，不在导出时保存工资。'],
     ['过程', '应/实打卡和拜访来自保存的日明细；扣款采用保存的过程绩效扣款。'],
@@ -314,6 +314,9 @@ function appendCitySummary(workbook: Workbook, data: PayrollPerformanceExport[],
       rows.some((r) => read(r) == null)
         ? '-'
         : Math.round(rows.reduce((sum, r) => sum + read(r)!, 0) * 100) / 100
+    const notes: string[] = []
+    if (rows.some((r) => r.collectionAmount == null)) notes.push('回款业绩待核')
+    if (rows.some((r) => r.commission == null)) notes.push('提成待核')
     sheet.addRow([
       ++i,
       rows[0]!.cityName || '-',
@@ -324,9 +327,7 @@ function appendCitySummary(workbook: Workbook, data: PayrollPerformanceExport[],
       total((r) => r.salesAmount),
       total((r) => r.collectionAmount),
       total((r) => r.commission),
-      rows.some((r) => r.commission == null)
-        ? '提成未全部核定，不能将部分金额当作总提成'
-        : '已保存工资快照；仅限本次导出人员',
+      notes.length ? notes.join('，') : '仅限本次导出人员',
     ])
   }
   tableStyle(sheet, 10, 2)

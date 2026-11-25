@@ -334,6 +334,37 @@ describe('工资列表汇总', () => {
     ).toBe('当月考勤尚未确认')
     expect(checks.some((field) => field.find('dt').text() === '实际发放（元）')).toBe(true)
   })
+  it('工资绩效明细展示保存的结清回款人、回款单号与整单金额', async () => {
+    row.calculation.performanceDetail = {
+      processBudget: null,
+      processDeduction: null,
+      processPay: null,
+      collectionBudget: 750,
+      collectionTarget: 5000,
+      collections: 10000,
+      collectionPay: 750,
+      total: 750,
+      days: [],
+      issues: [],
+      sources: [{
+        sourceId: 'FULL:1',
+        orderNo: 'SO-1',
+        date: '2026-09-03',
+        amount: 10000,
+        kind: 'FULLY_PAID',
+        settlementPaymentNo: 'RC-2',
+        paymentOwnerCode: 'E2',
+        paymentOwnerName: '结清人员乙',
+      }],
+    }
+    await openList()
+    await button('明细').trigger('click')
+    await flushPromises()
+    const payer = wrapper.get('[label="结清回款人"]')
+    expect(payer.text()).toBe('结清人员乙')
+    expect(wrapper.get('[label="结清回款单号"]').text()).toBe('RC-2')
+    expect(wrapper.get('[label="金额（元）"]').text()).toContain('10,000.00')
+  })
   it('汇总接口失败时保留已查询到的工资明细，显示汇总错误，不伪造为零', async () => {
     vi.mocked(api.getPayrollSummary).mockRejectedValueOnce({
       code: 'SERVICE_UNAVAILABLE',
