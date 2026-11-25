@@ -12,6 +12,7 @@ const department = {
   sortOrder: 0,
   statusCode: 'ACTIVE',
   revision: 1,
+  contactPhone: '13800000001',
 }
 const command: HrDepartmentCommand = {
   parentId: null,
@@ -20,7 +21,6 @@ const command: HrDepartmentCommand = {
   statusCode: 'ACTIVE',
   revision: 0,
   leaderEmployeeCode: null,
-  contactPhone: null,
   establishedDate: null,
 }
 beforeEach(() => vi.resetAllMocks())
