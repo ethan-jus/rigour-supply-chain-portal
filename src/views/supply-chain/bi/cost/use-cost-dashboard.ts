@@ -29,6 +29,18 @@ import {
   visibleDetailDimensions,
 } from './cost-presentation'
 import { loadCostDictionaryCodes } from '../../cost/cost-dictionaries'
+
+function reportDictionaryCodes(result: CostReport, records: CostRecord[] = []) {
+  return [
+    ...new Set([
+      ...objectDictionaryCodes(result),
+      ...[...result.majorRecords, ...records]
+        .map((row) => dictionaryCodeForKey(row.itemKey))
+        .filter((code): code is string => !!code),
+    ]),
+  ]
+}
+
 export function useCostDashboard() {
   const report = ref<CostReport | null>(null),
     records = ref<CostRecords | null>(null),
@@ -66,7 +78,8 @@ export function useCostDashboard() {
   const request = computed<CostQuery>(() => ({
     ...filters,
     ...(section.value === 'records' ? drill.value : {}),
-    status: 'CONFIRMED',
+    status: section.value === 'records' && filters.status === 'REVIEW' ? 'REVIEW' : 'CONFIRMED',
+    payment: section.value === 'records' ? filters.payment : 'ALL',
     snapshotId: snapshot.value,
   }))
   function clearDrill() {
@@ -102,7 +115,28 @@ export function useCostDashboard() {
     try {
       const q = { ...request.value }
       // 明细页由一次在线授权同时返回汇总和分页，避免重复权限和快照读取。
-      const workspace = section.value === 'records' ? await getCostWorkspace(q, signal) : null
+      let workspace = section.value === 'records' ? await getCostWorkspace(q, signal) : null
+      if (serial !== generation) return
+      if (workspace) {
+        const { records: rows, report: summary } = workspace
+        if (rows.meta.snapshotId !== summary.meta.snapshotId)
+          throw new Error('费用数据批次不一致，请刷新后重试')
+        const lastPage = Math.max(1, Math.ceil(rows.summary.count / rows.size))
+        if (rows.page > lastPage) {
+          workspace = await getCostWorkspace(
+            { ...q, snapshotId: summary.meta.snapshotId, page: lastPage },
+            signal,
+          )
+          if (serial !== generation) return
+          if (
+            workspace.report.meta.snapshotId !== summary.meta.snapshotId ||
+            workspace.records.meta.snapshotId !== summary.meta.snapshotId
+          )
+            throw new Error('费用数据批次不一致，请刷新后重试')
+          if (workspace.records.page !== lastPage)
+            throw new Error('费用明细页码不一致，请刷新后重试')
+        }
+      }
       const result = workspace?.report ?? (await getCostReport(q, signal))
       if (serial !== generation) return
       snapshot.value = result.meta.snapshotId
@@ -111,20 +145,12 @@ export function useCostDashboard() {
       cities.value = result.cities
       filters.year ??= Number(result.meta.period.from.slice(0, 4))
       filters.month ??= Number(result.meta.period.from.slice(5, 7))
-      if (section.value === 'records') {
-        const rows = workspace!.records
-        if (serial !== generation) return
-        if (rows.meta.snapshotId !== result.meta.snapshotId)
-          throw new Error('费用数据批次不一致，请刷新后重试')
-        records.value = rows
+      if (workspace) {
+        filters.page = workspace.records.page
+        records.value = workspace.records
       }
       report.value = resolveObjectLabels(result)
-      const codes = [
-        ...objectDictionaryCodes(result),
-        ...(workspace?.records.items ?? [])
-          .map((row) => dictionaryCodeForKey(row.itemKey))
-          .filter((code): code is string => !!code),
-      ]
+      const codes = reportDictionaryCodes(result, workspace?.records.items)
       if (codes.length)
         void loadCostDictionaryCodes(codes, resetSnapshot, 'inline').then(() => {
           if (serial === generation) report.value = resolveObjectLabels(result)
@@ -180,6 +206,7 @@ export function useCostDashboard() {
   function goSection(value: typeof section.value) {
     section.value = value
     clearDrill()
+    filters.status = 'CONFIRMED'
     if (value === 'overview') filters.scope = 'opex'
     if (value === 'analysis' && perspective.value === 'objects') setDefaultTopic()
     else if (value === 'analysis' && filters.scope === 'purchase') {
@@ -236,12 +263,10 @@ export function useCostDashboard() {
     try {
       const result = await getCostReport(modalQuery.value, signal)
       if (serial !== modalGeneration) return
+      const codes = reportDictionaryCodes(result)
+      if (codes.length) await loadCostDictionaryCodes(codes, false, 'inline')
+      if (serial !== modalGeneration) return
       modalReport.value = resolveObjectLabels(result)
-      const codes = objectDictionaryCodes(result)
-      if (codes.length)
-        void loadCostDictionaryCodes(codes, false, 'inline').then(() => {
-          if (serial === modalGeneration) modalReport.value = resolveObjectLabels(result)
-        })
     } catch (e) {
       if (serial === modalGeneration && !signal.aborted)
         modalError.value = errorMessage(e, '费用变动读取失败')
@@ -273,7 +298,7 @@ export function useCostDashboard() {
     filters.dimensionKey = undefined
     filters.search = undefined
     recordSearch.value = ''
-    filters.status = 'CONFIRMED'
+    filters.status = extra.status === 'REVIEW' ? 'REVIEW' : 'CONFIRMED'
     filters.payment = extra.payment || 'ALL'
     filters.missingAmount = extra.missingAmount || false
     filters.page = 1
@@ -320,6 +345,9 @@ export function useCostDashboard() {
   function searchRecords() {
     // 输入草稿不改变已显示的结果及导出范围，提交查询后统一应用。
     filters.search = recordSearch.value.trim() || undefined
+    reloadRecords()
+  }
+  function reloadRecords() {
     filters.page = 1
     void load()
   }
@@ -385,5 +413,6 @@ export function useCostDashboard() {
     openDetail,
     clearLedgerDrill,
     searchRecords,
+    reloadRecords,
   }
 }

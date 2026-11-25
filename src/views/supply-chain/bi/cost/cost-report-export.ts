@@ -43,6 +43,11 @@ export function parseCostCsv(content: string): string[][] {
   return rows
 }
 
+// CSV 前缀用于防公式注入；Excel 将这些值明确保存为字符串。
+function restoreCsvText(value: string) {
+  return /^'[\s]*[=+@-]|^'[\t\r]/.test(value) ? value.slice(1) : value
+}
+
 const required = [
   '单据号',
   '事项',
@@ -98,23 +103,26 @@ export async function buildCostDashboardWorkbook(
     throw new Error('导出明细不完整，请重新导出')
   const metadata = new Map<string, string>()
   for (const row of parsed.slice(0, headerIndex)) {
-    for (let i = 0; i + 1 < row.length; i += 2) metadata.set(row[i]!, row[i + 1]!)
+    for (let i = 0; i + 1 < row.length; i += 2) metadata.set(row[i]!, restoreCsvText(row[i + 1]!))
   }
-  if (Number(metadata.get('匹配笔数')) !== details.length)
-    throw new Error('导出笔数与明细不一致，请重新导出')
+  const currentFormat = metadata.has('明细行数')
+  const rowCount = metadata.get('明细行数') ?? metadata.get('匹配笔数')
+  if (rowCount === undefined || Number(rowCount) !== details.length)
+    throw new Error('导出行数与明细不一致，请重新导出')
   const get = (row: string[], label: string) => row[headers.indexOf(label)] ?? ''
-  if (outputColumns.includes('费用项目')) {
-    const codes = details
-      .map((row) => dictionaryCodeForKey(get(row, '费用项目')))
-      .filter((code): code is string => !!code)
-    if (codes.length) await loadCostDictionaryCodes(codes, false, 'inline')
-  }
+  const dimensionValue = metadata.get('维度选项')
+  const itemKeys = outputColumns.includes('费用项目')
+    ? details.map((row) => get(row, '费用项目'))
+    : []
+  const codes = [...itemKeys, dimensionValue]
+    .map(dictionaryCodeForKey)
+    .filter((code): code is string => !!code)
+  if (codes.length) await loadCostDictionaryCodes(codes, false, 'inline')
   const rows = details.map((row) =>
     outputColumns.map((label) => {
-      let value = get(row, label)
-      // CSV 的前缀只用于防公式注入；XLSX 明确以字符串存储，可还原业务原文。
-      if (/^'[\s]*[=+@-]|^'[\t\r]/.test(value)) value = value.slice(1)
+      const value = restoreCsvText(get(row, label))
       if (
+        !currentFormat &&
         label === '确认状态' &&
         (get(row, '来源服务') === 'ORDER' || get(row, '费用类别') === '物流运输费用')
       )
@@ -137,18 +145,16 @@ export async function buildCostDashboardWorkbook(
   )
   const notes = [
     ...(context ? [['导出范围', context]] : []),
-    ...['本期', '可比期', '匹配笔数', '已确认金额']
+    ...['本期', '可比期', '部门筛选', '分析维度']
       .filter((key) => metadata.has(key))
-      .map((key) => [
-        key === '已确认金额' ? '统计金额' : key,
-        `${metadata.get(key)}${key === '已确认金额' ? ' 元' : key === '匹配笔数' ? ' 笔' : ''}`,
-      ]),
+      .map((key) => [key, metadata.get(key)]),
+    ...(dimensionValue ? [['维度选项', dictionaryValue(dimensionValue)]] : []),
+    ...(metadata.has('匹配单据数') ? [['匹配单据数', `${metadata.get('匹配单据数')} 笔`]] : []),
+    ['明细行数', `${rowCount} 行`],
+    ...(metadata.has('已确认金额') ? [['统计金额', `${metadata.get('已确认金额')} 元`]] : []),
     ['纳入范围', '运输记录仅统计已完善单据；其他成本沿用各自确认口径，关联报销不重复计入。'],
     ['分摊口径', '金额按费用归属列示。已分摊的单据显示该归属分到的金额。'],
-    [
-      '付款状态',
-      '薪酬按月度薪酬发放登记，其他费用按原单登记；未付款金额不代表银行流水或工资待发净额。',
-    ],
+    ['付款状态', '货拉拉运输按平台付款资料，薪酬按月度发放登记，其他费用按原单登记。'],
   ]
   const summary = workbook.addWorksheet('导出说明')
   summary.addRow(['项目', '内容'])

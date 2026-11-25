@@ -79,7 +79,7 @@
           v-for="card in cards.filter((c) => c.reviewCount)"
           :key="card.scope"
           class="text-button"
-          @click="emit('scope', card.scope)"
+          @click="emit('records', { scope: card.scope, status: 'REVIEW' })"
         >
           {{ card.label }} {{ card.reviewCount }} 笔 →
         </button>
@@ -164,10 +164,12 @@
         <button class="text-button" @click="emit('cities')">完整归属分析 →</button>
       </div>
       <CostComparisonBars
-        :groups="report.cityGroups"
+        v-if="comparisonCityGroups.length"
+        :groups="comparisonCityGroups"
         :comparable="report.meta.comparisonAvailable"
         @select="(city) => emit('analysis', { city })"
       />
+      <p v-else class="empty">当前范围暂无非零费用</p>
     </section>
     <section class="cost-panel overview-changes">
       <div class="panel-heading">
@@ -297,6 +299,13 @@ const changes = computed(() =>
 )
 const hasUnassigned = computed(() => props.report.cities.some((c) => c.key === 'UNKNOWN'))
 const coverageNotice = computed(() => comparisonCoverageNotice(props.report))
+const comparisonCityGroups = computed(() =>
+  props.report.cityGroups.filter(
+    (group) =>
+      Number(group.current) !== 0 ||
+      (props.report.meta.comparisonAvailable && Number(group.previous) !== 0),
+  ),
+)
 const payrollRecorded = computed(() => payrollHasRecords(props.report))
 const periodRange = computed(
   () => `${props.report.meta.period.from} — ${props.report.meta.period.to}`,

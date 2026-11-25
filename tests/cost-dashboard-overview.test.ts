@@ -118,6 +118,47 @@ function sample(): CostReport {
 }
 
 describe('成本总览的业务口径及展示', () => {
+  it('归属对比隐藏全零归属，保留只在可比期发生费用的归属', async () => {
+    const report = sample()
+    report.cityGroups = [
+      { key: 'TY', label: '太原市', current: '46.70', previous: '0.00' },
+      { key: 'XA', label: '西安市', current: '0.00', previous: null },
+      { key: 'LY', label: '洛阳市', current: '0.00', previous: '0.00' },
+      { key: 'GZ', label: '广州市', current: '0.00', previous: '23.01' },
+    ].map((group) => ({
+      ...group,
+      delta: null,
+      growth: null,
+      share: null,
+      count: 1,
+      missing: false,
+    }))
+    const wrapper = mount(CostOverview, {
+      props: { report, available: [], comparisonLabel: '较上期' },
+      global: { stubs: { EchartsChart: true, CostRing: true } },
+    })
+    const comparison = () => wrapper.get('[aria-label="费用金额对比"]')
+    expect(
+      comparison()
+        .findAll('li')
+        .map((row) => row.get('button').text()),
+    ).toEqual(['太原市 →'])
+    await wrapper.setProps({
+      report: { ...report, meta: { ...report.meta, comparisonAvailable: true } },
+    })
+    expect(
+      comparison()
+        .findAll('li')
+        .map((row) => row.get('button').text()),
+    ).toEqual(['太原市 →', '广州市 →'])
+    await wrapper.setProps({
+      report: { ...report, cityGroups: report.cityGroups.filter((group) => group.key === 'LY') },
+    })
+    expect(wrapper.find('[aria-label="费用金额对比"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('当前范围暂无非零费用')
+    wrapper.unmount()
+  })
+
   it('默认按月展示，按日查看时标明计入本月但未进入日趋势的金额', async () => {
     const report = {
       ...sample(),

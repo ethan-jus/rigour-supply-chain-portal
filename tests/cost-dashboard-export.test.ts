@@ -80,12 +80,18 @@ describe('成本报表与筛选、快照保持一致', () => {
   })
   it('exports the selected attribution and snapshot, retains it for paging, and clears it after refresh', async () => {
     const { state, request, wrapper } = setup()
+    request.value = { ...request.value, payment: 'PARTIAL_PAID' }
     api.createCostExport.mockResolvedValueOnce(task('e1', 'RUNNING'))
     await state.startExport()
     expect(api.createCostExport).toHaveBeenCalledWith(
-      expect.objectContaining({ city: 'COST_HEADQUARTERS', snapshotId: 's1' }),
+      expect.objectContaining({
+        city: 'COST_HEADQUARTERS',
+        payment: 'PARTIAL_PAID',
+        snapshotId: 's1',
+      }),
     )
     expect(state.exportContext.value).toContain('总部')
+    expect(state.exportContext.value).toContain('部分付款')
     request.value = { ...request.value, page: 2, size: 50 }
     expect(state.exportTask.value?.id).toBe('e1')
     request.value = { ...request.value, snapshotId: undefined }

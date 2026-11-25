@@ -109,19 +109,20 @@
     <div v-if="loading" class="cost-message loading" role="status">正在读取费用数据…</div>
     <main v-else-if="report">
       <div v-if="report.meta.excludedScopes.length" class="cost-message notice" role="status">
-        当前可查看范围不包含：{{
+        当前账号无法查看以下费用类别的原始台账：{{
           report.meta.excludedScopes.join('、')
-        }}。本期和可比期使用相同的查看范围。
+        }}。其他已授权来源的费用仍按其类别计入，本期和可比期使用相同的查看范围。
       </div>
       <div v-if="report.meta.dataState === 'STALE'" class="cost-message notice" role="alert">
         数据更新延迟，当前展示上次更新的费用数据。更新时间：{{ updatedAt }}。
       </div>
       <div
-        v-if="section !== 'overview' && report.current.reviewCount"
+        v-if="section !== 'overview' && !reviewMode && report.current.reviewCount"
         class="cost-message notice"
         role="status"
       >
         待核对来源 {{ report.current.reviewCount }} 笔，暂未计入。请在对应原单核对。
+        <button class="text-button" @click="openCurrentReview">查看待核对来源 →</button>
       </div>
       <div
         v-if="
@@ -442,8 +443,15 @@
       </template>
       <template v-else>
         <div class="analysis-controls">
-          <h2>支出明细</h2>
-          <div v-if="report.meta.exportAllowed" class="record-export-controls">
+          <h2>{{ reviewMode ? '待核对来源明细' : '支出明细' }}</h2>
+          <button
+            v-if="reviewMode"
+            class="text-button"
+            @click="openRecords({ scope: filters.scope })"
+          >
+            返回支出明细
+          </button>
+          <div v-else-if="report.meta.exportAllowed" class="record-export-controls">
             <span v-if="exportError || exportLabel" class="muted" role="status">
               {{ exportError || exportLabel }}
             </span>
@@ -469,11 +477,11 @@
             </select></label
           ><label
             >付款状态
-            <select v-model="filters.payment" aria-label="付款状态" @change="searchRecords">
+            <select v-model="filters.payment" aria-label="付款状态" @change="reloadRecords">
               <option value="ALL">全部</option>
-              <option value="PAID">已付款</option>
-              <option value="UNPAID">未付款</option>
-              <option value="UNKNOWN">未记录</option>
+              <option v-for="(label, code) in paymentStatusNames" :key="code" :value="code">
+                {{ label }}
+              </option>
             </select></label
           ><input
             v-model="recordSearch"
@@ -489,36 +497,43 @@
               :aria-pressed="filters.periodSide === 'current'"
               @click="changeSide('current')"
             >
-              本期费用明细</button
+              {{ reviewMode ? '本期待核对明细' : '本期费用明细' }}</button
             ><button
               :class="{ active: filters.periodSide === 'previous' }"
               :aria-pressed="filters.periodSide === 'previous'"
               @click="changeSide('previous')"
             >
-              可比期费用明细
+              {{ reviewMode ? '可比期待核对明细' : '可比期费用明细' }}
             </button>
           </div>
-          <span class="muted">金额按费用归属列示，已分摊的单据显示该归属分到的金额。</span>
+          <span class="muted">{{
+            reviewMode
+              ? '待核对来源金额暂未计入成本，请在原业务单据核对。'
+              : '金额按费用归属列示，已分摊的单据显示该归属分到的金额。'
+          }}</span>
         </div>
         <template v-if="records"
           ><div class="metric-strip">
-            <div>
-              <span>匹配记录</span><strong>{{ records.summary.count }} 笔</strong>
+            <div v-if="records.summary.documentCount != null">
+              <span>匹配单据</span><strong>{{ records.summary.documentCount }} 笔</strong>
             </div>
             <div>
+              <span>明细行</span><strong>{{ records.summary.count }} 行</strong>
+            </div>
+            <div v-if="!reviewMode">
               <span>计入成本金额</span><strong>{{ money(records.summary.confirmed) }} 元</strong>
             </div>
           </div>
-          <CostRecordsTable :rows="records.items" @detail="openDetail" />
+          <CostRecordsTable :rows="records.items" :review="reviewMode" @detail="openDetail" />
           <div class="pagination">
             <label
               >每页
-              <select v-model.number="filters.size" aria-label="每页笔数" @change="searchRecords">
+              <select v-model.number="filters.size" aria-label="每页行数" @change="reloadRecords">
                 <option :value="20">20</option>
                 <option :value="50">50</option>
                 <option :value="100">100</option>
               </select>
-              笔</label
+              行</label
             ><span
               >第 {{ filters.page }} /
               {{ Math.max(1, Math.ceil(records.summary.count / (filters.size || 20))) }} 页</span
@@ -654,7 +669,7 @@
               </dd>
             </div>
             <div>
-              <dt>计入金额</dt>
+              <dt>{{ detail.record.costTreatment === 'REVIEW' ? '参考金额' : '计入金额' }}</dt>
               <dd>
                 {{ detail.record.amount === null ? '未填' : `${money(detail.record.amount)} 元` }}
               </dd>
@@ -716,7 +731,7 @@
           </dd>
           <dt>付款状态</dt>
           <dd>
-            人力薪酬按月度薪酬登记发放状态展示：已发放为已付款，其余为未付款；部分登记但尚未发完仍为未付款。其他费用沿用原台账的付款状态。状态不代表银行实际支付额、逾期或现金流；工资待发净额请查看原工资单。
+            货拉拉运输按平台账单与付款资料显示付款状态。人力薪酬按月度薪酬登记发放状态展示，已发放为已付款，尚未发完为未付款。其他费用沿用原台账的付款状态。状态不代表银行实际支付额、逾期或现金流；工资待发净额请查看原工资单。
           </dd>
           <dt>数据更新</dt>
           <dd>
@@ -729,17 +744,17 @@
         </dl>
       </section>
     </div>
+    <CostExportDialog
+      v-model="exportDialogOpen"
+      v-model:fields="exportFields"
+      :columns="costDashboardExportColumns"
+      :scope="`全部匹配明细（${records?.summary.count ?? 0} 行）`"
+      :empty="!records?.summary.count"
+      :busy="exportSubmitting"
+      :error="exportError"
+      @confirm="confirmCustomExport"
+    />
   </div>
-  <CostExportDialog
-    v-model="exportDialogOpen"
-    v-model:fields="exportFields"
-    :columns="costDashboardExportColumns"
-    :scope="`全部匹配单据（${records?.summary.count ?? 0} 条）`"
-    :empty="!records?.summary.count"
-    :busy="exportSubmitting"
-    :error="exportError"
-    @confirm="confirmCustomExport"
-  />
 </template>
 
 <script setup lang="ts">
@@ -771,6 +786,7 @@ import {
   money,
   percent,
   signed,
+  paymentStatusNames,
   statusName,
   recordStatusName,
   matrixTotal,
@@ -812,7 +828,18 @@ const {
   openDetail,
   clearLedgerDrill,
   searchRecords,
+  reloadRecords,
 } = useCostDashboard()
+const reviewMode = computed(() => request.value.status === 'REVIEW')
+function openCurrentReview() {
+  openRecords({
+    ...request.value,
+    status: 'REVIEW',
+    payment: 'ALL',
+    periodSide: 'current',
+    missingAmount: false,
+  })
+}
 const pendingQuery = ref<CostQuery | null>(null)
 const pendingRange = computed(() => {
   const period = report.value?.meta.period

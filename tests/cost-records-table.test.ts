@@ -50,11 +50,13 @@ describe('成本看板支出明细', () => {
       expect(cells[1]!.text()).toBe(rows[index]!.title)
       expect(cells[5]!.text()).toBe('2026-09（所属月）')
       expect(cells[6]!.text()).toBe('1,234.50')
-      expect(cells[7]!.text()).toBe('已确认')
+      expect(cells[7]!.text()).toBe(index === 0 ? '已确认' : '待核对')
       expect(cells[8]!.text()).toBe(payment)
     }
     await rendered[1]!.get('button').trigger('click')
     expect(wrapper.emitted('detail')).toEqual([[rows[1]]])
+    await wrapper.setProps({ review: true })
+    expect(wrapper.findAll('thead th')[6]!.text()).toBe('参考金额（元）')
     wrapper.unmount()
   })
 
