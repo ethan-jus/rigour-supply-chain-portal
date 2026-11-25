@@ -41,7 +41,8 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { useWorkspaceMediaVisibility } from '@/utils/background-media'
 import { ArrowLeft, Camera, Search, VideoPlay } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { fieldClock, type TrackVisit } from '@/api/core/sales-fieldwork'
@@ -61,10 +62,13 @@ const lines=computed(()=>currentAnalysis.value?.segments.filter(s=>!query.value|
 const failed=computed(()=>currentAnalysis.value?.status==='FAILED')
 const transcriptEmpty=computed(()=>loading.value?'正在读取':!analysis.value?.processingEnabled?'暂未启用转写':failed.value?'转写失败，原录音已保留':currentAnalysis.value?.status==='SUCCEEDED'?'未识别到可读文字':'尚未生成原文')
 let generation=0,mediaGeneration=0,aborter:AbortController|null=new AbortController(),seekTo=0
+let mediaRequest = new AbortController()
+let mediaActive = true
+const mediaVisible = useWorkspaceMediaVisibility()
 const photoRequests=new Set<string>()
 function analysisLabel(status:string){return ({PENDING:'待转写',PROCESSING:'转写中',SUCCEEDED:'已转写',FAILED:'转写失败'} as Record<string,string>)[status]||status}
 function resetAudio(){mediaGeneration++;player.value?.pause();if(audioUrl.value)URL.revokeObjectURL(audioUrl.value);audioUrl.value='';currentMs.value=-1;seekTo=0;mediaLoading.value=false}
-function clearMedia(){resetAudio();Object.values(photoUrls.value).forEach(URL.revokeObjectURL);photoUrls.value={};photoRequests.clear();loadingPhoto.value=''}
+function clearMedia(){mediaRequest.abort();mediaRequest=new AbortController();resetAudio();Object.values(photoUrls.value).forEach(URL.revokeObjectURL);photoUrls.value={};photoRequests.clear();loadingPhoto.value=''}
 async function load(){
   const current=++generation;aborter?.abort();aborter=new AbortController();clearMedia();error.value='';caseError.value='';analysis.value=null;clips.value=[];photos.value=[];cases.value=[];loading.value=true
   const errors:string[]=[]
@@ -119,19 +123,20 @@ function playNext() {
   void playAt(0)
 }
 async function playAt(ms:number){
-  if(!selectedClip.value||!canAudio.value)return
+  if(!mediaActive||!mediaVisible.value||!selectedClip.value||!canAudio.value)return
   seekTo=ms/1000
   if(audioUrl.value&&player.value){player.value.currentTime=seekTo;await player.value.play().catch(()=>{});return}
   const media=++mediaGeneration,current=generation,clip=selectedClip.value;mediaLoading.value=true
-  try{const body=await evidenceBlob(props.visit.visitId,'recordings/clips',clip,aborter?.signal);if(media!==mediaGeneration||current!==generation)return;audioUrl.value=URL.createObjectURL(body);await nextTick()}
+  try{const body=await evidenceBlob(props.visit.visitId,'recordings/clips',clip,mediaRequest.signal);if(media!==mediaGeneration||current!==generation)return;audioUrl.value=URL.createObjectURL(body);await nextTick()}
   catch(e){if(media===mediaGeneration)error.value=e instanceof Error?e.message:'录音读取失败'}finally{if(media===mediaGeneration)mediaLoading.value=false}
 }
 function onMetadata(){if(player.value){player.value.currentTime=Math.min(seekTo,Number.isFinite(player.value.duration)?player.value.duration:seekTo);void player.value.play().catch(()=>{})}}
 function onTime(){currentMs.value=(player.value?.currentTime||0)*1000}
 async function loadPhoto(photo:PhotoEvidence){
-  if(photoRequests.has(photo.evidenceId)||photoUrls.value[photo.evidenceId])return
-  const current=generation;loadingPhoto.value=photo.evidenceId;photoRequests.add(photo.evidenceId)
-  try{const body=await evidenceBlob(props.visit.visitId,'evidence/photos',photo.evidenceId,aborter?.signal);if(current===generation)photoUrls.value[photo.evidenceId]=URL.createObjectURL(body)}catch(e){if(current===generation)error.value=e instanceof Error?e.message:'照片读取失败'}finally{if(current===generation){photoRequests.delete(photo.evidenceId);if(loadingPhoto.value===photo.evidenceId)loadingPhoto.value=''}}
+  if(!mediaActive||!mediaVisible.value||photoRequests.has(photo.evidenceId)||photoUrls.value[photo.evidenceId])return
+  const { signal } = mediaRequest
+  loadingPhoto.value=photo.evidenceId;photoRequests.add(photo.evidenceId)
+  try{const body=await evidenceBlob(props.visit.visitId,'evidence/photos',photo.evidenceId,signal);if(!signal.aborted)photoUrls.value[photo.evidenceId]=URL.createObjectURL(body)}catch(e){if(!signal.aborted)error.value=e instanceof Error?e.message:'照片读取失败'}finally{if(!signal.aborted){photoRequests.delete(photo.evidenceId);if(loadingPhoto.value===photo.evidenceId)loadingPhoto.value=''}}
 }
 async function retry(){if(!selectedClip.value||retrying.value)return;const current=generation;retrying.value=true;try{const result=await retryAnalysis(props.visit.visitId,selectedClip.value);if(current===generation)analysis.value=result}catch(e){if(current===generation)error.value=e instanceof Error?e.message:'重试失败'}finally{retrying.value=false}}
 function updateCase(item:FieldworkCase){cases.value=cases.value.map(c=>c.id===item.id?item:c);emit('changed',item)}
@@ -146,7 +151,9 @@ watch(tab, (value) => {
   }
 })
 onMounted(() => { if (!props.inline) void load() })
-onDeactivated(clearMedia)
+onActivated(() => { mediaActive = true })
+onDeactivated(() => { mediaActive = false; clearMedia() })
+watch(mediaVisible, (visible) => { if (!visible) clearMedia() })
 onBeforeUnmount(()=>{generation++;aborter?.abort();clearMedia()})
 </script>
 <style scoped lang="scss">

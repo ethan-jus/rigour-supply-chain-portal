@@ -182,7 +182,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           applicationCode: 'SUPPLY_CHAIN',
           routeKey: 'supply.order.sales-orders',
           pageKey: 'sales-orders',
-          permission: 'order:read',
+          permission: 'order:register-orders:read',
         },
       },
       {
@@ -208,7 +208,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           applicationCode: 'SUPPLY_CHAIN',
           routeKey: 'supply.order.sales-payments',
           pageKey: 'sales-payments',
-          permission: 'order:payment:read',
+          permission: 'order:register-payments:read',
         },
       },
       {
@@ -247,7 +247,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           applicationCode: 'SUPPLY_CHAIN',
           routeKey: 'supply.order.lines',
           pageKey: 'order-lines',
-          permission: 'order:read',
+          permission: 'order:register-lines:read',
         },
       },
       {

@@ -20,9 +20,9 @@
             v-for="tab in workspaceTabs"
             :key="tab.id"
             class="workspace-tab"
-            :class="{ 'is-active': activeTabId === tab.id }"
+            :class="{ 'is-active': selectedTabId === tab.id }"
             role="tab"
-            :aria-selected="activeTabId === tab.id"
+            :aria-selected="selectedTabId === tab.id"
             :aria-current="activeTabId === tab.id ? 'page' : undefined"
             :title="tab.title"
             tabindex="0"
@@ -50,21 +50,30 @@
           <ConsoleAccountMenu />
         </div>
       </header>
-      <nav v-if="pageGroup" class="console-subviews" :aria-label="pageGroup.displayName">
+      <nav v-if="pageGroup && !pendingNavigation" class="console-subviews" :aria-label="pageGroup.displayName">
         <strong>{{ pageGroup.displayName }}</strong>
         <router-link v-for="node in pageGroup.children.filter(n => n.visible && n.routePath)" :key="node.id" :to="node.routePath!">{{ node.displayName }}</router-link>
       </nav>
       <main ref="contentViewport" class="console__content">
+        <div v-if="pendingNavigation" class="workspace-tab-pane workspace-tab-pane--pending" role="status">
+          <strong>{{ pendingNavigation.tab.title }}</strong>
+          <span>正在打开…</span>
+        </div>
         <template v-for="tab in workspaceTabs" :key="tab.id">
           <section
             v-if="workspaceTabErrors[tab.id]"
-            v-show="activeTabId === tab.id"
+            v-show="!pendingNavigation && activeTabId === tab.id"
             class="workspace-tab-pane workspace-tab-pane--error"
           >
             <strong>页面加载失败</strong>
             <span>{{ workspaceTabErrors[tab.id] }}</span>
           </section>
-          <ConsoleTabPane v-else :active="activeTabId === tab.id" :route="tab.route" />
+          <ConsoleTabPane
+            v-else
+            :active="activeTabId === tab.id"
+            :suspended="!!pendingNavigation"
+            :route="tab.route"
+          />
         </template>
       </main>
     </section>
@@ -169,6 +178,8 @@ function findCurrentPageName(nodes: NavigationNode[]): string | undefined {
 }
 
 const activeTabId = computed(() => workspaceTabId(applicationCode.value, route.path))
+const pendingNavigation = shallowRef<{ tab: WorkspaceTab }>()
+const selectedTabId = computed(() => pendingNavigation.value?.tab.id ?? activeTabId.value)
 
 function workspaceTabId(appCode: string, path: string) {
   return `${appCode}:${path}`
@@ -234,7 +245,25 @@ function upsertWorkspaceTab(currentRoute: RouteLocationNormalizedLoaded, pageTit
 }
 
 async function activateWorkspaceTab(tab: WorkspaceTab) {
-  if (route.fullPath !== tab.fullPath) await router.push(tab.fullPath)
+  if (pendingNavigation.value?.tab.id === tab.id) return
+  if (!pendingNavigation.value) {
+    if (route.fullPath === tab.fullPath) return
+    savePageScroll(route.path, applicationCode.value)
+  }
+  const pending = { tab }
+  pendingNavigation.value = pending
+  // Stop background media before routing, but keep the old pane's leave guards registered.
+  await nextTick()
+  if (pendingNavigation.value !== pending) return
+  try {
+    await router.push(tab.fullPath)
+  } finally {
+    if (pendingNavigation.value === pending) {
+      pendingNavigation.value = undefined
+      await nextTick()
+      restoreActivePageScroll()
+    }
+  }
 }
 
 async function closeWorkspaceTab(tab: WorkspaceTab) {
@@ -308,7 +337,7 @@ watch(
 )
 
 onBeforeRouteUpdate((_to, from) => {
-  savePageScroll(from.path, String(from.meta.applicationCode || ''))
+  if (!pendingNavigation.value) savePageScroll(from.path, String(from.meta.applicationCode || ''))
 })
 
 const supplyAccess = useSupplyAuthorizationStore()
@@ -473,6 +502,19 @@ onMounted(() => {
 
 .console:not(.console--supply-chain) .console__content {
   padding: 28px;
+}
+
+.workspace-tab-pane--pending {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 20px 16px;
+  color: var(--el-text-color-secondary);
+}
+
+.workspace-tab-pane--pending strong {
+  color: var(--el-text-color-primary);
+  font-size: 20px;
 }
 
 .workspace-tab-pane--error {

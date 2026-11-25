@@ -69,8 +69,11 @@ vi.mock('@/api/core/erp-product', () => ({
 vi.mock('@/api/core/erp-internal', () => ({
   getErpProductCategories: mocks.getCategories,
 }))
-vi.mock('@/composables/useOrderRegisterOptions', () => ({
-  useOrderRegisterOptions: () => ({
+vi.mock('@/composables/usePaymentFilterOptions', () => ({
+  usePaymentFilterOptions: () => ({
+    collectorOptions: [], searchCollectors: vi.fn(),
+    productSources: { products: mocks.getProducts, categories: mocks.getCategories },
+    displayProducts: async () => (await mocks.getProducts({})).items,
     areaTree: [],
     departmentOptionsTree: [],
     employeeOptions: [],

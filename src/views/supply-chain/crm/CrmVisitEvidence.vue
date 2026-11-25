@@ -23,7 +23,7 @@
           @click="loadMedia(photo.evidenceId, 'photo')"
           >查看照片</el-button
         >
-        <img v-else :src="urls[photo.evidenceId]" alt="本次拜访采集的门头照片" />
+        <img v-else :src="urls[photo.evidenceId]" alt="本次拜访采集的门头照片" decoding="async" />
       </div>
     </section>
     <section v-if="canAudio && recordings">
@@ -44,10 +44,11 @@
   </el-dialog>
 </template>
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { visitAnalysis,audioClock,recordingSpeaker,type VisitAnalysis } from '@/api/core/sales-fieldwork-review'
 import { apiClient } from '@/api/core/client'
+import { useWorkspaceMediaVisibility } from '@/utils/background-media'
 const props = defineProps<{ captureId: string; permissions: string[] }>()
 interface Photos {
   requiredStorefrontPhotoCount: number
@@ -76,11 +77,14 @@ const photos = ref<Photos | null>(null),
   recordings = ref<Recordings | null>(null)
 const urls = ref<Record<string, string>>({})
 let generation = 0
+let evidenceRequest: AbortController | undefined
 const base = () => `/sales/management/visits/${encodeURIComponent(props.captureId)}`
 const time = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12: false })
 const message = (e: unknown) => (e instanceof Error ? e.message : '证据读取失败，请重试')
 function clear() {
   generation++
+  evidenceRequest?.abort()
+  evidenceRequest = undefined
   Object.values(urls.value).forEach((url) => URL.revokeObjectURL(url))
   urls.value = {}
   analysis.value = null
@@ -95,20 +99,22 @@ async function openEvidence() {
   open.value = true
   loading.value = true
   const current = generation
+  evidenceRequest = new AbortController()
+  const { signal } = evidenceRequest
   const jobs: Promise<void>[] = []
   if (canPhoto.value)
     jobs.push(
-      apiClient.get<Photos>(`${base()}/evidence`, { stayOnUnauthorized: true }).then((v) => {
+      apiClient.get<Photos>(`${base()}/evidence`, { signal, stayOnUnauthorized: true }).then((v) => {
         if (current === generation) photos.value = v
       }),
     )
   if (canAudio.value)
     jobs.push(
-      apiClient.get<Recordings>(`${base()}/recordings`, { stayOnUnauthorized: true }).then((v) => {
+      apiClient.get<Recordings>(`${base()}/recordings`, { signal, stayOnUnauthorized: true }).then((v) => {
         if (current === generation) recordings.value = v
       }),
     )
-  if(canAudio.value) jobs.push(visitAnalysis(props.captureId).then(value=>{if(current===generation)analysis.value=value}))
+  if(canAudio.value) jobs.push(visitAnalysis(props.captureId, signal).then(value=>{if(current===generation)analysis.value=value}))
   const results = await Promise.allSettled(jobs)
   if (current !== generation) return
   error.value = results
@@ -126,6 +132,7 @@ async function loadMedia(id: string, kind: 'photo' | 'audio') {
     const path = kind === 'photo' ? 'evidence/photos' : 'recordings/clips'
     const blob = await apiClient.get<Blob>(`${base()}/${path}/${encodeURIComponent(id)}`, {
       responseType: 'blob',
+      signal: evidenceRequest?.signal,
       stayOnUnauthorized: true,
     })
     if (current === generation) urls.value[id] = URL.createObjectURL(blob)
@@ -135,7 +142,13 @@ async function loadMedia(id: string, kind: 'photo' | 'audio') {
     if (current === generation) loadingMedia.value = ''
   }
 }
-watch(()=>JSON.stringify([props.captureId,auth.user?.tenantId,auth.user?.id,props.permissions]),()=>{open.value=false;clear()})
+function closeEvidence() {
+  open.value = false
+  clear()
+}
+watch(()=>JSON.stringify([props.captureId,auth.user?.tenantId,auth.user?.id,props.permissions]),closeEvidence)
+onDeactivated(closeEvidence)
+watch(useWorkspaceMediaVisibility(), (visible) => { if (!visible) closeEvidence() })
 onBeforeUnmount(clear)
 </script>
 <style scoped>

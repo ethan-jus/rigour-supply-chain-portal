@@ -601,7 +601,7 @@ const {
   searchEmployees,
   areaLabel,
   employeeLabel,
-} = usePaymentFilterOptions({ salesDepartmentsOnly: true })
+} = usePaymentFilterOptions()
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
   categoryIds: [] as string[],
@@ -664,7 +664,7 @@ const paymentDetailVisible = ref(false)
 const selectedPayment = ref<OrderRegisterPaymentItem | null>(null)
 
 const { can } = useSupplyPermissions()
-const canReadOrders = computed(() => can('order:read'))
+const canReadOrders = computed(() => can('order:register-orders:read'))
 const canCheckPayments = computed(() => can('order:payment:check'))
 const checkVisible = ref(false)
 const checkTarget = ref<OrderRegisterPaymentItem | null>(null)

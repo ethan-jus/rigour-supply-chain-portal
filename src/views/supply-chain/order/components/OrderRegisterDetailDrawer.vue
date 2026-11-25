@@ -113,7 +113,7 @@
           <el-tab-pane v-if="can('order:read')" label="合同账期" name="terms" lazy>
             <ReceivablePlanTab v-if="detail && activeTab==='terms' && can('order:read')" :id="detail.id" :amount="detail.payableAmount"/>
           </el-tab-pane>
-          <el-tab-pane label="回款记录" name="payments">
+          <el-tab-pane v-if="can('order:register-payments:read')" label="回款记录" name="payments">
             <el-table
               v-loading="paymentsLoading"
               :data="payments"
@@ -268,7 +268,7 @@ import {
   sourceSystemLabel,
 } from '@/utils/order-register-status'
 import { orderLifecycleEvents, type SourceLifecycleEvent } from '@/api/core/order-history-sync'
-import { getSalesOrder, type SalesOrderDetail } from '@/api/core/order-sales'
+import { getRegisterOrderDetail, type SalesOrderDetail } from '@/api/core/order-sales'
 import { getOrderRegisterPayments, type OrderRegisterPaymentItem } from '@/api/core/order-register'
 import PaymentDetailDrawer from './PaymentDetailDrawer.vue'
 import ReceivablePlanTab from './ReceivablePlanTab.vue'
@@ -279,6 +279,7 @@ import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import OrderInvoicePanel from './OrderInvoicePanel.vue'
 
 const props = defineProps<{
+  page?: 'orders' | 'lines'
   modelValue: boolean
   orderId: string | number | null
   /** 打开时默认展示的页签；列表操作列的“发票”入口直接定位到发票页签。 */
@@ -320,7 +321,7 @@ async function refreshAttribution() {
   if (orderId === null) return
   emit('attribution-changed')
   try {
-    const current = await getSalesOrder(orderId)
+    const current = await getRegisterOrderDetail(props.page ?? 'orders', orderId)
     if (props.modelValue && props.orderId === orderId) detail.value = current
   } catch (reason) {
     if (props.modelValue && props.orderId === orderId)
@@ -341,13 +342,14 @@ watch(
     lifecycleError.value = ''
     activeTab.value = props.initialTab || 'overview'
     try {
-      const order = await getSalesOrder(orderId)
+      const order = await getRegisterOrderDetail(props.page ?? 'orders', orderId)
       detail.value = order
       try {
-        lifecycleEvents.value = await orderLifecycleEvents(orderId)
+        if (can('order:read')) lifecycleEvents.value = await orderLifecycleEvents(orderId)
       } catch {
         lifecycleError.value = '状态留痕加载失败，请稍后重试'
       }
+      if (!can('order:register-payments:read')) return
       paymentsLoading.value = true
       try {
         const page = await getOrderRegisterPayments({

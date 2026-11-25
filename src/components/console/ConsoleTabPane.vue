@@ -1,5 +1,5 @@
 <template>
-  <section v-show="active" class="workspace-tab-pane">
+  <section v-show="active && !suspended" class="workspace-tab-pane">
     <div v-if="renderError" class="workspace-tab-pane__error">
       <strong>页面加载失败</strong>
       <span>{{ renderError }}</span>
@@ -19,19 +19,22 @@
  * 多个菜单会复用同一个业务组件。为页签提供独立 routeLocationKey 后，
  * 非活动页不会再跟随全局路由变化而重置筛选；移除本组件也会一并释放缓存。
  */
-import { onErrorCaptured, provide, ref, watch } from 'vue'
+import { computed, onErrorCaptured, provide, ref, watch } from 'vue'
 import { routeLocationKey, type RouteLocationNormalizedLoaded } from 'vue-router'
 import { isPageRenderFailure } from '@/utils/page-error'
 import { publishRequestFailure } from '@/utils/request-feedback'
+import { workspaceMediaVisibilityKey } from '@/utils/background-media'
 
 const props = defineProps<{
   active: boolean
+  suspended?: boolean
   route: RouteLocationNormalizedLoaded
 }>()
 
 const renderError = ref('')
 
 provide(routeLocationKey, props.route)
+provide(workspaceMediaVisibilityKey, computed(() => props.active && !props.suspended))
 
 watch(
   () => props.route.fullPath,

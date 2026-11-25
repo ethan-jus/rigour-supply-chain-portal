@@ -70,7 +70,8 @@
   />
 </template>
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { useWorkspaceMediaVisibility } from '@/utils/background-media'
 import waveform from '@/assets/icons/fieldwork/audio-lines.svg'
 import { Loading, RefreshLeft, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import {
@@ -255,6 +256,12 @@ onBeforeUnmount(() => {
   lifetime.abort()
   reset()
 })
+function closePlayback() {
+  expanded.value = false
+  reset()
+}
+onDeactivated(closePlayback)
+watch(useWorkspaceMediaVisibility(), (visible) => { if (!visible) closePlayback() })
 </script>
 <style scoped>
 .playback-panel {

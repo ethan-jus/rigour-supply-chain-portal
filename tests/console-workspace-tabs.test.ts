@@ -11,6 +11,7 @@ import {
 import {
   createMemoryHistory,
   createRouter,
+  onBeforeRouteLeave,
   RouterView,
   useRoute,
   type Router,
@@ -20,11 +21,13 @@ import ConsoleShell from '@/layouts/ConsoleShell.vue'
 import SupplyPageTitle from '@/components/supply/SupplyPageTitle.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNavigationStore } from '@/stores/navigation'
+import { useWorkspaceMediaVisibility } from '@/utils/background-media'
 import type { NavigationNode } from '@/types/management'
 
 const lifecycle = {
   mounted: {} as Record<string, number>,
   unmounted: {} as Record<string, number>,
+  mayLeave: true,
 }
 
 const SharedStatePage = defineComponent({
@@ -34,6 +37,7 @@ const SharedStatePage = defineComponent({
     const route = useRoute()
     const pageKey = computed(() => String(route.meta.pageKey || 'unknown'))
     const state = ref('')
+    const mediaVisible = useWorkspaceMediaVisibility()
 
     onMounted(() => {
       lifecycle.mounted[pageKey.value] = (lifecycle.mounted[pageKey.value] ?? 0) + 1
@@ -41,16 +45,17 @@ const SharedStatePage = defineComponent({
     onUnmounted(() => {
       lifecycle.unmounted[pageKey.value] = (lifecycle.unmounted[pageKey.value] ?? 0) + 1
     })
+    onBeforeRouteLeave(() => lifecycle.mayLeave)
 
     // 模拟订单、ERP、CRM 等复用页面对 route.meta 的现有监听。
     watch(() => route.meta.pageKey, () => {
       state.value = ''
     })
 
-    return { pageKey, route, state }
+    return { mediaVisible, pageKey, route, state }
   },
   template: `
-    <article class="sentinel-page" :data-page="pageKey">
+    <article class="sentinel-page" :data-page="pageKey" :data-media-active="String(mediaVisible)">
       <SupplyPageTitle>静态回退标题</SupplyPageTitle>
       <input v-model="state" class="sentinel-input">
       <span class="sentinel-route">{{ route.fullPath }}</span>
@@ -163,7 +168,70 @@ describe('ConsoleShell 工作页签', () => {
   beforeEach(() => {
     lifecycle.mounted = {}
     lifecycle.unmounted = {}
+    lifecycle.mayLeave = true
     document.body.innerHTML = ''
+  })
+
+  it('点击缓存页签立即显示目标反馈，路由允许前隐藏业务内容', async () => {
+    const { wrapper, router } = await mountConsole()
+    await wrapper.get('.sentinel-input').setValue('缓存的筛选条件')
+    await router.push('/supply-chain/beta')
+    await flushPromises()
+
+    let finish!: (allowed: boolean) => void
+    const guard = router.beforeEach(() => new Promise<boolean>((resolve) => { finish = resolve }))
+    await tabByTitle(wrapper, '甲页面').trigger('click')
+    await flushPromises()
+    expect(tabByTitle(wrapper, '甲页面').attributes('aria-selected')).toBe('true')
+    expect(router.currentRoute.value.path).toBe('/supply-chain/beta')
+    expect(wrapper.get('.workspace-tab-pane--pending').text()).toContain('甲页面')
+    expect(wrapper.findAll('.sentinel-page').some((page) => page.isVisible())).toBe(false)
+    expect(wrapper.get('.sentinel-page[data-page="beta"]').attributes('data-media-active')).toBe('false')
+
+    finish(false)
+    await flushPromises()
+    expect(tabByTitle(wrapper, '乙页面').attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('.workspace-tab-pane--pending').exists()).toBe(false)
+    expect(wrapper.get('.sentinel-page').attributes('data-page')).toBe('beta')
+    expect(wrapper.get('.sentinel-page').attributes('data-media-active')).toBe('true')
+
+    lifecycle.mayLeave = false
+    await tabByTitle(wrapper, '甲页面').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/supply-chain/beta')
+    expect(wrapper.find('.workspace-tab-pane--pending').exists()).toBe(false)
+    lifecycle.mayLeave = true
+
+    await tabByTitle(wrapper, '甲页面').trigger('click')
+    await flushPromises()
+    finish(true)
+    await flushPromises()
+    expect(wrapper.get<HTMLInputElement>('.sentinel-input').element.value).toBe('缓存的筛选条件')
+    expect(lifecycle.mounted.alpha).toBe(1)
+    guard()
+    wrapper.unmount()
+  })
+
+  it('连续点击时迟到的旧导航不会覆盖最后一次选择', async () => {
+    const { wrapper, router } = await mountConsole()
+    await router.push('/supply-chain/beta')
+    await flushPromises()
+    let finish!: () => void
+    const guard = router.beforeEach((to) => {
+      if (to.path === '/supply-chain/alpha') return new Promise<void>((resolve) => { finish = resolve })
+    })
+    await tabByTitle(wrapper, '甲页面').trigger('click')
+    await flushPromises()
+    expect(tabByTitle(wrapper, '甲页面').attributes('aria-selected')).toBe('true')
+    await tabByTitle(wrapper, '乙页面').trigger('click')
+    await flushPromises()
+    finish()
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/supply-chain/beta')
+    expect(tabByTitle(wrapper, '乙页面').attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('.workspace-tab-pane--pending').exists()).toBe(false)
+    guard()
+    wrapper.unmount()
   })
 
   it('连续点击真实菜单链接只切换右侧页面，保留外壳、已打开页签和表单状态', async () => {

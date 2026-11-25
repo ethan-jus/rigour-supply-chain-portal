@@ -399,6 +399,9 @@ export const getSalesOrders = (params: SalesOrderQuery) =>
 export const getSalesOrderTotals = (params: SalesOrderQuery) =>
   apiClient.get<SalesOrderTotals>(`${ORDER_BASE_PATH}/totals`, { params, ...options })
 
+export const getRegisterOrderDetail = (page: 'orders' | 'lines', id: string | number) =>
+  apiClient.get<SalesOrderDetail>(`/orders/register/${page}/detail/${encodeURIComponent(String(id))}`, options)
+
 export const getSalesOrder = (id: string | number) =>
   apiClient.get<SalesOrderDetail>(`${ORDER_BASE_PATH}/${encodeURIComponent(String(id))}`, options)
 

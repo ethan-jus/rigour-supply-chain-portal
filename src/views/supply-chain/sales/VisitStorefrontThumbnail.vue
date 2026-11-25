@@ -6,7 +6,7 @@
       :aria-label="'查看' + storeName + '的门头照'"
       @click="preview = true"
     >
-      <img :src="url" alt="门头照" />
+      <img :src="url" alt="门头照" decoding="async" />
     </button>
     <button
       v-else-if="failed"
@@ -29,9 +29,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { ApiError } from '@/api/core/error'
 import { evidenceBlob, visitPhotos } from '@/api/core/sales-fieldwork-review'
+import { loadBackgroundMedia, useWorkspaceMediaVisibility } from '@/utils/background-media'
 
 const props = defineProps<{ visitId: string; storeName: string }>()
 const cell = ref<HTMLElement>()
@@ -41,27 +42,36 @@ const failed = ref(false)
 const failedLabel = ref('重试')
 const failureReason = ref('')
 const message = ref('加载中')
-const request = new AbortController()
+let request: AbortController | undefined
 let observer: IntersectionObserver | undefined
+let evidenceId: string | undefined
+const mediaVisible = useWorkspaceMediaVisibility()
 
 async function load() {
+  if (!mediaVisible.value || request) return
+  const current = new AbortController()
+  request = current
   failed.value = false
   try {
-    const { photos } = await visitPhotos(props.visitId, request.signal)
-    const photo = photos.find((item) => item.evidenceStatus === 'TECHNICALLY_VERIFIED') ?? photos[0]
-    if (!photo) {
+    const blob = await loadBackgroundMedia(current.signal, async () => {
+      if (!evidenceId) {
+        const { photos } = await visitPhotos(props.visitId, current.signal)
+        evidenceId = (photos.find((item) => item.evidenceStatus === 'TECHNICALLY_VERIFIED') ??
+          photos[0])?.evidenceId
+      }
+      current.signal.throwIfAborted()
+      return evidenceId
+        ? evidenceBlob(props.visitId, 'evidence/photos', evidenceId, current.signal)
+        : null
+    })
+    if (current.signal.aborted) return
+    if (!blob) {
       message.value = '—'
       return
     }
-    const blob = await evidenceBlob(
-      props.visitId,
-      'evidence/photos',
-      photo.evidenceId,
-      request.signal,
-    )
-    if (!request.signal.aborted) url.value = URL.createObjectURL(blob)
+    url.value = URL.createObjectURL(blob)
   } catch (error) {
-    if (request.signal.aborted) return
+    if (current.signal.aborted) return
     if (error instanceof ApiError && error.status === 403) message.value = '无权限'
     else {
       failureReason.value = error instanceof Error ? error.message : '门头照读取失败'
@@ -72,20 +82,36 @@ async function load() {
           : '重试'
       failed.value = true
     }
+  } finally {
+    if (request === current) request = undefined
   }
 }
-onMounted(() => {
+function observe() {
+  if (!mediaVisible.value || observer || request || !cell.value || url.value || failed.value || message.value !== '加载中') return
   observer = new IntersectionObserver((entries) => {
     if (entries.some((entry) => entry.isIntersecting)) {
-      observer?.disconnect()
+      disconnect()
       void load()
     }
   })
-  observer.observe(cell.value!)
-})
-onBeforeUnmount(() => {
+  observer.observe(cell.value)
+}
+function disconnect() {
   observer?.disconnect()
-  request.abort()
+  observer = undefined
+}
+function cancel() {
+  disconnect()
+  request?.abort()
+  request = undefined
+  preview.value = false
+}
+onMounted(observe)
+onActivated(observe)
+onDeactivated(cancel)
+watch(mediaVisible, (visible) => { if (visible) observe(); else cancel() }, { flush: 'post' })
+onBeforeUnmount(() => {
+  cancel()
   if (url.value) URL.revokeObjectURL(url.value)
 })
 </script>

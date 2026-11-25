@@ -78,11 +78,11 @@
             remote
             reserve-keyword
             placeholder="搜索回款人"
-            :remote-method="searchEmployees"
+            :remote-method="searchCollectors"
             :loading="employeeLoading"
           >
             <el-option
-              v-for="item in employeeOptions"
+              v-for="item in collectorOptions"
               :key="item.employeeCode"
               :label="item.employeeName"
               :value="item.employeeCode"
@@ -439,7 +439,7 @@
       </ListTableFooter>
     </el-card>
 
-    <OrderRegisterDetailDrawer
+    <OrderRegisterDetailDrawer page="lines"
       v-model="detailVisible"
       :order-id="detailOrderId"
       :initial-tab="detailTab"
@@ -475,10 +475,10 @@ import {
   type OrderRegisterLineItem,
   type OrderRegisterLinePage,
 } from '@/api/core/order-register'
-import { getErpManagedProducts, type ErpManagedProductSummary } from '@/api/core/erp-product'
+import type { PaymentFilterOptions } from '@/api/core/payment-filter-options'
 import { useOrderProductFilters } from '@/composables/useOrderProductFilters'
 import { useOrderRegisterCommonFilters } from '@/composables/useOrderRegisterQuery'
-import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
+import { usePaymentFilterOptions } from '@/composables/usePaymentFilterOptions'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
 const route = useRoute()
@@ -511,16 +511,16 @@ const lineColumns = useColumnSettings('order-lines', [
 const {
   areaTree,
   departmentOptionsTree,
-  employeeOptions,
+  employeeOptions, collectorOptions, searchCollectors,
   employeeLoading,
   areaTreeProps,
   departmentTreeProps,
   loadOptions,
   searchEmployees,
   areaLabel,
-  departmentLabel,
+  departmentLabel, productSources, displayProducts,
   employeeLabel,
-} = useOrderRegisterOptions({ salesDepartmentsOnly: true })
+} = usePaymentFilterOptions('lines')
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const paymentStatusOptions = computed(() => paymentDictionaryOptions('ORDER_COLLECTION_STATUS'))
 const pageFilters = reactive({
@@ -538,11 +538,11 @@ const {
   productOptions, productSearching, productLoadFailed, variantGroups, variantLoading, variantLoadFailed,
   loadCategoryOptions, resolveProductIds, searchProductOptions, loadVariants,
   onCategoryChange, onCategoryVisibleChange,
-} = useOrderProductFilters(pageFilters)
+} = useOrderProductFilters(pageFilters, productSources)
 /** 当前页商品的 ERP 档案：主图与单位配置。 */
 const productInfoFailed = ref(false)
 let productInfoRequest = 0
-const productInfo = ref(new Map<string, ErpManagedProductSummary>())
+const productInfo = ref(new Map<string, PaymentFilterOptions['products'][number]>())
 
 const loading = ref(false)
 const loadFailed = ref(false)
@@ -602,7 +602,8 @@ function productOf(row: OrderRegisterLineItem) {
 }
 
 function lineView(row: OrderRegisterLineItem): ConvertedLineQuantity {
-  return convertLine(row, productOf(row))
+  const p = productOf(row)
+  return convertLine(row, p ? { unitCode:p.unitCode ?? null, middleUnitCode:p.middleUnitCode ?? null, baseToMiddleRate:p.baseToMiddleRate ?? null, bigUnitCode:p.bigUnitCode ?? null, baseToBigRate:p.baseToBigRate ?? null, statisticsUnitLevel:p.statisticsUnitLevel ?? null } : undefined)
 }
 
 function productImage(row: OrderRegisterLineItem) {
@@ -657,9 +658,9 @@ async function loadProductInfo() {
     return
   }
   try {
-    const page = await getErpManagedProducts({ begin: 0, step: 200, productIds: ids })
+    const products = await displayProducts()
     if (request !== productInfoRequest) return
-    productInfo.value = new Map(page.items.map((item) => [String(item.id), item]))
+    productInfo.value = new Map(products.map((item) => [String(item.id), item]))
   } catch {
     if (request === productInfoRequest) productInfoFailed.value = true
   }

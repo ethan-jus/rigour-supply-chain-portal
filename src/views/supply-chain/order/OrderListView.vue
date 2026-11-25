@@ -104,11 +104,11 @@
             remote
             reserve-keyword
             placeholder="搜索回款人"
-            :remote-method="searchEmployees"
+            :remote-method="searchCollectors"
             :loading="employeeLoading"
           >
             <el-option
-              v-for="item in employeeOptions"
+              v-for="item in collectorOptions"
               :key="item.employeeCode"
               :label="item.employeeName"
               :value="item.employeeCode"
@@ -824,13 +824,13 @@ import { deleteSalesOrder } from '@/api/core/order-sales'
 import { useSupplyPermissions } from '@/composables/useSupplyPermissions'
 import { vClearFilterOnEmptyInput } from '@/utils/filter-select-clear'
 import { useOrderRegisterCommonFilters } from '@/composables/useOrderRegisterQuery'
-import { useOrderRegisterOptions } from '@/composables/useOrderRegisterOptions'
+import { usePaymentFilterOptions } from '@/composables/usePaymentFilterOptions'
 import { useColumnSettings } from '@/composables/useColumnSettings'
 
 const router = useRouter()
 const route = useRoute()
 const { can } = useSupplyPermissions()
-const canViewOrders = computed(() => can('order:read'))
+const canViewOrders = computed(() => can('order:register-orders:read'))
 const canInvoiceOrders = computed(() => can('order:invoice:write'))
 
 const orderColumns = useColumnSettings('order-list', [
@@ -864,7 +864,7 @@ const orderColumns = useColumnSettings('order-list', [
 const {
   areaTree,
   departmentOptionsTree,
-  employeeOptions,
+  employeeOptions, collectorOptions, searchCollectors,
   employeeLoading,
   creatorOptions,
   areaTreeProps,
@@ -874,7 +874,7 @@ const {
   areaLabel,
   departmentLabel,
   employeeLabel,
-} = useOrderRegisterOptions({ salesDepartmentsOnly: true })
+} = usePaymentFilterOptions('orders')
 const { filters, resetCommonFilters } = useOrderRegisterCommonFilters()
 const pageFilters = reactive({
   paymentOwnerEmployeeCode: '',
