@@ -70,7 +70,7 @@ export const scmReportRoutes = [
       applicationCode: 'SUPPLY_CHAIN',
       requiresAuth: true,
       routeKey: 'supply.sales.visits.records',
-      permission: 'sales:dashboard:read',
+      permission: 'sales:visit-record:read',
     },
   },
   {

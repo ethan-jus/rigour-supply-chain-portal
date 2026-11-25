@@ -62,6 +62,7 @@
           visit.playbackMillis ??
           (visit.verifiedFiles === visit.files ? visit.verifiedMillis : null)
         "
+        :from-fieldwork="fromFieldwork"
         inline
         @capture="history = $event"
         @changed="onChanged"
@@ -157,6 +158,7 @@ const props = defineProps<{
   record?: ReportVisit
   visitType?: string
   canMap: boolean
+  fromFieldwork?: boolean
   sameDayMap?: boolean
   region?: string
   rows?: ReportVisit[]

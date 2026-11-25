@@ -364,7 +364,7 @@ import {
 const auth = useAuthStore()
 const nav = useNavigationStore()
 const canOpen = (path: string) => nav.hasPath('SUPPLY_CHAIN', path)
-const canField = computed(() => auth.hasPermission('sales:dashboard:read'))
+const canField = computed(() => auth.hasPermission('sales:fieldwork:read'))
 const sectionName = computed(() => {
   const module = nav
     .getNavigation('SUPPLY_CHAIN')

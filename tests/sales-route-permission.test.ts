@@ -9,7 +9,8 @@ describe('销售管理路由权限', () => {
   })
 
   it.each([
-    ['sales', 'sales:dashboard:read'],
+    ['sales', 'sales:fieldwork:read'],
+    ['sales/visits/records', 'sales:visit-record:read'],
     ['sales/visits/plans', 'sales:visit-plan:read'],
     ['sales/visits/reviews', 'crm:store:visit-review'],
     ['sales/exceptions/location', 'sales:location:sensitive:read'],

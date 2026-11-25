@@ -747,7 +747,7 @@ async function load() {
   busy.value = true
   error.value = ''
   report.value = null
-  if (!auth.hasPermission('sales:dashboard:read')) {
+  if (!auth.hasPermission('sales:fieldwork:read')) {
     busy.value = false
     error.value = '暂无外勤监督权限'
     return

@@ -103,7 +103,7 @@ function cutoffFromRoute() {
   }
 }
 const canRisk = computed(
-    () => auth.hasPermission('sales:dashboard:read') && auth.hasPermission('sales:risk:read'),
+    () => auth.hasPermission('sales:fieldwork:read') && auth.hasPermission('sales:risk:read'),
   ),
   write = computed(() => auth.hasPermission('analytics:operations:write'))
 const candidates = ref<

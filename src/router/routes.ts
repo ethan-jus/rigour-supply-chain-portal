@@ -274,7 +274,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           applicationCode: 'SUPPLY_CHAIN',
           pageKey: 'dashboard',
           inlineSubviewNavigation: true,
-          permission: 'sales:dashboard:read',
+          permission: 'sales:fieldwork:read',
         },
       },
       {

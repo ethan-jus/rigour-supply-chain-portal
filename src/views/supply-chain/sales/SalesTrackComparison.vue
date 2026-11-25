@@ -164,7 +164,7 @@ const emit = defineEmits<{
 const auth = useAuthStore()
 const canViewTracks = computed(
   () =>
-    auth.hasPermission('sales:dashboard:read') &&
+    auth.hasPermission('sales:fieldwork:read') &&
     auth.hasPermission('sales:location:sensitive:read'),
 )
 

@@ -80,7 +80,7 @@ describe('销售精确轨迹权限', () => {
 
   it.each([
     [[] as string[]],
-    [['sales:dashboard:read']],
+    [['sales:fieldwork:read']],
     [['sales:location:sensitive:read']],
   ])('权限组合 %j 不完整时显示无权状态且不发请求', async (permissions) => {
     permissions.forEach((permission) => authPermissions.add(permission))
@@ -100,7 +100,7 @@ describe('销售精确轨迹权限', () => {
   })
 
   it('同时具备看板和敏感位置权限时才读取人员与轨迹', async () => {
-    authPermissions.add('sales:dashboard:read')
+    authPermissions.add('sales:fieldwork:read')
     authPermissions.add('sales:location:sensitive:read')
     const wrapper = mountTrackComparison()
     await flushPromises()
