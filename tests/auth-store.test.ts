@@ -5,6 +5,7 @@ vi.mock('@/auth/browser-session', () => ({ logoutBrowserSession: mocks.logout })
 vi.mock('@/utils/token', () => ({ getToken: () => null, removeToken: mocks.remove }))
 vi.mock('element-plus', () => ({ ElMessage: { error: mocks.error } }))
 import { useAuthStore } from '@/stores/auth'
+import { useSupplyAuthorizationStore } from '@/stores/supply-authorization'
 import {
   copyPayrollInterval,
   copyPayrollIntervalGroup,
@@ -52,4 +53,14 @@ describe('退出与后端会话一致', () => {
     expect(mocks.remove).not.toHaveBeenCalled()
     expect(window.location.hash).toBe('')
   })
+})
+
+it('授权上下文刷新后，当前会话显示关联员工的新姓名', () => {
+  const auth = useAuthStore()
+  const supply = useSupplyAuthorizationStore()
+  auth.user = { id: 'employee', username: 'login', displayName: '旧姓名', principalScope: 'TENANT', tenantId: 'tenant', tenantName: '公司', roles: [], permissions: [] }
+  supply.context = { initialized: true, canInitialize: false, mode: 'ACTIVE', version: 1, permissions: [], memberDisplayName: '关联员工姓名' }
+  expect(auth.user?.displayName).toBe('关联员工姓名')
+  supply.context = { ...supply.context, memberDisplayName: '改名后的员工' }
+  expect(auth.user?.displayName).toBe('改名后的员工')
 })

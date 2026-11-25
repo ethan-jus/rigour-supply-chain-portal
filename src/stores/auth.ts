@@ -21,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
     get(): UserInfo | null {
       const identity = sessionUser.value
       if (!identity || supply.context?.mode !== 'ACTIVE') return identity
-      return { ...identity, permissions: supply.context.permissions }
+      return { ...identity, displayName: supply.context.memberDisplayName ?? identity.displayName, permissions: supply.context.permissions }
     },
     set(identity: UserInfo | null) {
       if (sessionUser.value && (identity?.id !== sessionUser.value.id || identity?.tenantId !== sessionUser.value.tenantId)) {

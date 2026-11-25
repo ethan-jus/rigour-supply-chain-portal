@@ -2,6 +2,7 @@ import { apiClient } from '@/api'
 
 export const SUPPLY_SETTINGS_BASE = '/management/supply'
 export interface SupplyContext {
+  memberDisplayName?: string | null
   initialized: boolean
   canInitialize: boolean
   mode: 'PREPARING' | 'ACTIVE'
