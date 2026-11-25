@@ -657,7 +657,7 @@ describe('独立薪资规则入口', () => {
     const detail = wrapper.get('.record-detail')
     expect(detail.findAll('td').map((cell) => cell.text())).toContain('15')
     expect(detail.findAll('td').map((cell) => cell.text())).toContain('套装')
-    expect(resolveBizDict).toHaveBeenCalledWith('PRODUCT_UNIT')
+    expect(resolveBizDict).toHaveBeenCalledWith('PRODUCT_UNIT', undefined)
   })
   it('按规则分页，不把同一规则的商品标准拆到不同页；筛选后重新分组', async () => {
     const rows = [

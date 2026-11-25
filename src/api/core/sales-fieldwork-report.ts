@@ -14,6 +14,7 @@ export interface ReportVisit {
   arrived: string
   departed: string | null
   result: string | null
+  communicationResult?: string | null
   outcome: string | null
   intention: string | null
   planId: string | null
@@ -23,6 +24,7 @@ export interface ReportVisit {
   ruleVersion: string | null
   minimumMinutes: number | null
   objective: string | null
+  playbackMillis?: number | null
   hasStorefrontPhoto?: boolean
   photos: number
   files: number
@@ -52,6 +54,8 @@ export interface ReportEmployee extends Omit<FieldPersonDay, 'checkedInAt' | 'ch
   issues: { id: string; visitId: string | null; kind: string; title: string; status: string }[]
 }
 export interface ReportSummary {
+  signedInPeople?: number
+  visitingPeople?: number
   people: number
   punched: number
   punches: number
@@ -99,7 +103,10 @@ export interface ReportFilters {
   page?: number
   size?: number
 }
+export type LedgerSort = 'date' | 'store' | 'person' | 'department' | 'arrived' | 'departed'
 export interface LedgerFilters {
+  sort?: LedgerSort
+  ascending?: boolean
   from?: string
   to?: string
   city?: string
@@ -116,6 +123,7 @@ export interface LedgerFilters {
 }
 export interface ReportLedger {
   assessmentCounts?: Record<string, number>
+  storeRegions?: Record<string, string>
   storeVisitCounts?: Record<string, { storeVisits: number; salespersonVisits: number }>
   items: ReportVisit[]
   total: number
@@ -134,6 +142,32 @@ export function readFieldReport(params: ReportFilters, signal?: AbortSignal) {
     cacheBypass: true,
   }) as Promise<DailyReport>
 }
+export interface VisitContent {
+  submitted: boolean
+  form: {
+    businessType: string | null
+    businessStatus: string | null
+    statusReason: string | null
+    outcome: string
+    contacted: boolean
+    contacts: { name: string; role: string | null }[]
+    noIntention: boolean
+    businesses: { business: string; intention: string | null; progress: string | null }[]
+    noContactReason: string | null
+    noContactDetail: string | null
+    nextAction: string | null
+    nextDate: string | null
+  } | null
+}
+
+export function readVisitContent(visitId: string, signal: AbortSignal) {
+  return apiClient.get(`/sales/management/visits/${visitId}/content`, {
+    signal,
+    cacheBypass: true,
+    errorFeedback: 'inline',
+  }) as Promise<VisitContent>
+}
+
 export function readVisitLedger(params: LedgerFilters, signal?: AbortSignal) {
   return apiClient.get('/sales/management/visits/records', {
     params,

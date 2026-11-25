@@ -85,7 +85,7 @@ export function salesDashboardRows(
     .filter((p) => !search || `${p.name}${p.city}`.includes(search.trim()))
 }
 export function salesCustomerStats(snapshot: SalesDashboardSnapshot | null, annual: boolean) {
-  const source = snapshot?.analysis?.customerRetention
+  const source = snapshot?.current.operatingDetails?.customerRetention ?? snapshot?.analysis?.customerRetention
   const ready = meetingMetric(snapshot?.current, 'cooperated_customer_count') != null
   const customers = ready ? (source?.orderingCustomerCount ?? null) : null
   const returning = ready

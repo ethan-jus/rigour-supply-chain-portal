@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 import BiOverviewBoard from '@/views/supply-chain/bi/components/BiOverviewBoard.vue'
 import {
   aggregateGoals,
@@ -11,7 +11,57 @@ import {
 import { meetingFixture } from './fixtures/bi-meeting-data'
 import type { SupplyDashboardOperatingAnalysis } from '@/api/core/bi'
 
+const loadRanking = vi.hoisted(() => vi.fn())
+vi.mock('@/api/core/bi', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/api/core/bi')>(),
+  getOperatingOverviewRanking: loadRanking,
+}))
+
+beforeEach(() => loadRanking.mockReset().mockResolvedValue([]))
+afterEach(() => vi.unstubAllGlobals())
+
 describe('连续经营总览：年/月、真实聚合和目标口径', () => {
+  it('进入商品区才读取当前排名，切换品类单独查询，切回复用结果', async () => {
+    let enterViewport!: () => void
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback: IntersectionObserverCallback) {
+        enterViewport = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver)
+      }
+      observe() {}
+      disconnect() {}
+    })
+    loadRanking.mockImplementation(async (_query, kind) => [{
+      dimensionCode: '1',
+      dimensionName: kind === 'PRODUCT' ? '台呢' : '桌球用品',
+      salesAmount: 100,
+    }])
+    const snapshot = meetingFixture()
+    snapshot.current.operatingDetails = { customerRetention: null, cityReceipts: [], cityMonthlyGoals: [] }
+    snapshot.cacheBypass = true
+    const wrapper = mount(BiOverviewBoard, {
+      props: { snapshot, year: 2026, selectedMonth: 8, scopeLabel: '当前授权范围', loading: false, error: '' },
+      global: { stubs: { EchartsChart: true, ElDialog: true } },
+    })
+    await flushPromises()
+    expect(loadRanking).not.toHaveBeenCalled()
+    enterViewport()
+    await flushPromises()
+    expect(loadRanking).toHaveBeenCalledExactlyOnceWith(snapshot.query, 'PRODUCT',
+      expect.objectContaining({ cacheBypass: true, signal: expect.any(AbortSignal) }))
+    expect(wrapper.get('.product-table').text()).toContain('台呢')
+
+    const rankTab = (label: string) => wrapper.findAll('#overview-customers button').find((button) => button.text() === label)!
+    await rankTab('品类').trigger('click')
+    await flushPromises()
+    expect(loadRanking.mock.calls.map(([, kind]) => kind)).toEqual(['PRODUCT', 'CATEGORY'])
+    expect(wrapper.get('.product-table').text()).toContain('桌球用品')
+    await rankTab('商品').trigger('click')
+    await flushPromises()
+    expect(loadRanking).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('.product-table').text()).toContain('台呢')
+    wrapper.unmount()
+  })
+
   it('历史全年查询完整12个月，当年对齐上年截止日期', () => {
     const now = new Date('2026-09-23T06:00:00Z')
     expect(overviewPeriods(2025, null, now).current).toEqual({
@@ -129,6 +179,43 @@ describe('连续经营总览：年/月、真实聚合和目标口径', () => {
       '—',
     )
   })
+  it('部门对比默认前八名，原表展开全榜，切换指标后保持展开', async () => {
+    const snapshot = meetingFixture()
+    const ranking = Array.from({ length: 17 }, (_, i) => ({
+      ...snapshot.current.citySalesRanking[0]!,
+      dimensionCode: String(i), dimensionName: `部门${i + 1}`, salesAmount: 17 - i,
+    }))
+    snapshot.current.citySalesRanking = ranking
+    snapshot.current.operatingDetails = {
+      customerRetention: null,
+      cityMonthlyGoals: ranking.map(row => ({
+        regionCode: row.dimensionCode, regionName: row.dimensionName, month: 8,
+        salesTarget: 0, receiptTarget: 0, contactedStoreTarget: 0,
+        yangzhangguiSalesTarget: 0, orderedStoreTarget: 0, configuredCount: 0,
+      })),
+      cityReceipts: ranking.map((row, i) => ({
+        regionCode: row.dimensionCode, regionName: row.dimensionName, receiptAmount: i + 1,
+      })),
+    }
+    const wrapper = mount(BiOverviewBoard, {
+      props: { snapshot, year: 2026, selectedMonth: 8, scopeLabel: '当前授权范围', loading: false, error: '' },
+      global: { stubs: { EchartsChart: true, ElDialog: true } },
+    })
+    const names = () => wrapper.findAll('#department-comparison-table .city-link').map(el => el.text())
+    const toggle = wrapper.get('[aria-controls="department-comparison-table"]')
+    const ordered = ranking.map(row => row.dimensionName)
+    expect(names()).toEqual(ordered.slice(0, 8))
+    expect(toggle.text()).toBe('展开全部 17 个部门')
+    await toggle.trigger('click')
+    expect(names()).toEqual(ordered)
+    expect(wrapper.get('#department-comparison-table tbody tr:last-child .rank').text()).toBe('17')
+    await wrapper.findAll('button').find(b => b.text() === '本期到账排名')!.trigger('click')
+    expect(names()).toEqual(ordered.reverse())
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    await toggle.trigger('click')
+    expect(names()).toEqual(ordered.slice(0, 8))
+    wrapper.unmount()
+  })
   it('城市交易榜使用同批订单回款20/100，到账榜独立显示50且不带回款率列', async () => {
     const snapshot = meetingFixture()
     snapshot.current.citySalesRanking = [
@@ -146,7 +233,8 @@ describe('连续经营总览：年/月、真实聚合和目标口径', () => {
         rate: 0.2,
       },
     ]
-    snapshot.analysis = {
+    snapshot.current.operatingDetails = {
+      customerRetention: null,
       cityMonthlyGoals: [
         {
           regionCode: 'CITY1',
@@ -161,7 +249,7 @@ describe('连续经营总览：年/月、真实聚合和目标口径', () => {
         },
       ],
       cityReceipts: [{ regionCode: 'CITY1', regionName: '测试城市', receiptAmount: 50 }],
-    } as unknown as SupplyDashboardOperatingAnalysis
+    }
     const wrapper = mount(BiOverviewBoard, {
       props: {
         snapshot,
@@ -174,6 +262,7 @@ describe('连续经营总览：年/月、真实聚合和目标口径', () => {
       global: { stubs: { EchartsChart: true, ElDialog: true } },
     })
     const table = () => wrapper.get('.overview-cities table')
+    expect(wrapper.find('[aria-controls="department-comparison-table"]').exists()).toBe(false)
     expect(table().text()).toContain('本期回款额')
     expect(table().text()).toContain('本期回款率')
     expect(table().find('tbody tr').text()).toContain('20.0%')

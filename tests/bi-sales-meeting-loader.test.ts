@@ -80,7 +80,7 @@ describe('销售看板查询入口', () => {
     await flushPromises()
     await vi.advanceTimersByTimeAsync(300)
     await flushPromises()
-    expect(mocks.sales).toHaveBeenCalledWith(expect.any(Object), true)
+    expect(mocks.sales).toHaveBeenCalledWith(expect.any(Object), true, 'RANKING', expect.any(Object))
     expect(mocks.summary).toHaveBeenCalledWith(expect.any(Object), ['S1'], true)
     w.unmount()
   })
@@ -153,17 +153,35 @@ describe('销售看板查询入口', () => {
         to: '2026-07-31T23:59:59.999999+08:00',
       }),
       false,
+      'COMPARISON',
+      expect.any(Object),
     )
     expect(board(w).props('snapshot')).not.toBeNull()
     w.unmount()
   })
-  it('拒绝权限后不查询业务数据', async () => {
+  it('权限检查并行执行，访问被拒时不展示数据', async () => {
     mocks.access.mockResolvedValue({ accessLevel: 'DENIED', reason: '无权限' })
     const w = render()
     await flushPromises()
-    expect(mocks.overview).not.toHaveBeenCalled()
+    expect(mocks.overview).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), 'SALES')
     expect(board(w).props('snapshot')).toBeNull()
     expect(board(w).props('error')).toContain('无权限')
+    w.unmount()
+  })
+  it('上期请求未返回时先展示本期排名', async () => {
+    let resolve!: (value: unknown) => void
+    mocks.sales.mockImplementation((_query, _cacheBypass, projection) =>
+      projection === 'COMPARISON'
+        ? new Promise((done) => { resolve = done })
+        : Promise.resolve(salesDashboardFixture().sales),
+    )
+    const w = render()
+    await flushPromises()
+    expect(board(w).props('snapshot').sales.people.length).toBeGreaterThan(0)
+    expect(board(w).props('snapshot').previous).toBeNull()
+    resolve(salesDashboardFixture().sales)
+    await flushPromises()
+    expect(board(w).props('snapshot').previous).not.toBeNull()
     w.unmount()
   })
   it('一月选择全年仍对比上年同期，不退回月视图', async () => {
@@ -179,6 +197,8 @@ describe('销售看板查询入口', () => {
         to: '2025-01-24T23:59:59.999999+08:00',
       }),
       false,
+      'COMPARISON',
+      expect.any(Object),
     )
     w.unmount()
   })
@@ -195,6 +215,8 @@ describe('销售看板查询入口', () => {
         to: '2026-08-12T23:59:59.999999+08:00',
       }),
       false,
+      'RANKING',
+      expect.any(Object),
     )
     expect(mocks.sales).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -202,6 +224,8 @@ describe('销售看板查询入口', () => {
         to: '2026-08-11T23:59:59.999999+08:00',
       }),
       false,
+      'COMPARISON',
+      expect.any(Object),
     )
     w.unmount()
   })
@@ -218,6 +242,8 @@ describe('销售看板查询入口', () => {
     expect(mocks.sales).toHaveBeenCalledWith(
       expect.objectContaining({ regionCode: 'HZ', ownerStaffCode: 'S1', sourceSystemCode: 'DHB' }),
       false,
+      undefined,
+      expect.any(Object),
     )
     const detail = board(w).props('detail')
     expect(detail.current.collectionTrend[0].value).toBe(50)

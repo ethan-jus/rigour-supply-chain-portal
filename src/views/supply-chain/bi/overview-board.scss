@@ -553,18 +553,6 @@
     }
   }
 
-  .table-pager {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    button {
-      display: flex;
-      border: 1px solid #32516a;
-      background: transparent;
-      padding: 5px;
-      border-radius: 3px;
-    }
-  }
   .overview-customers-products {
     display: grid;
     grid-template-columns: 1fr 1fr;

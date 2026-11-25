@@ -4,7 +4,9 @@ import { apiClient } from './client'
 export interface SupplyDashboardQuery {
   from?: string
   to?: string
+  /** Operating department code, including descendants. */
   regionCode?: string
+  customerRegionCode?: string
   ownerStaffCode?: string
   customerTypeCode?: string
   productCategoryId?: string | number
@@ -243,6 +245,15 @@ export interface SupplyDashboardOverview {
   freshness: SupplyDashboardDataFreshness[]
   rolePerspectives: SupplyDashboardRolePerspective[]
   definitions: SupplyDashboardMetricDefinition[]
+  operatingDetails?: {
+    cityReceipts: {
+      regionCode: string
+      regionName: string | null
+      receiptAmount: number
+    }[]
+    customerRetention: SupplyDashboardOperatingAnalysis['customerRetention']
+    cityMonthlyGoals: SupplyDashboardOperatingAnalysis['cityMonthlyGoals']
+  } | null
 }
 
 export interface SupplyDashboardRefreshRun {
@@ -302,6 +313,15 @@ export interface SupplyDashboardDataTrust {
   latestRefreshRun: SupplyDashboardRefreshRun | null
   sources: SupplyDashboardDataTrustSource[]
 }
+
+export interface DashboardFilterNode { code: string; name: string; parentCode: string | null }
+export interface DepartmentDashboardFilters {
+  departments: DashboardFilterNode[]
+  customerRegions: DashboardFilterNode[]
+  defaultDepartmentCode: string | null
+}
+export const getDepartmentDashboardFilters = () =>
+  apiClient.get<DepartmentDashboardFilters>('/analytics/supply/dashboard/department-filters', { stayOnUnauthorized: true })
 
 export interface SupplyDashboardFilterOption {
   optionType: string
@@ -385,24 +405,49 @@ export interface SupplyDashboardOperatingAnalysis {
   }[]
 }
 
-export const getSupplyDashboardOperatingAnalysis = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass'> = {}) =>
+export const getSupplyDashboardOperatingAnalysis = (
+  params: SupplyDashboardQuery,
+  feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass' | 'signal'> = {},
+  cityBoard = false,
+) =>
   apiClient.get<SupplyDashboardOperatingAnalysis>(
     '/analytics/supply/dashboard/operating-analysis',
-    { params, ...options, ...feedback },
+    { params: cityBoard ? { ...params, cityBoard } : params, ...options, ...feedback },
   )
 const SUPPLY_DASHBOARD_REFRESH_PATH = '/analytics/supply/dashboard/refresh-runs'
 const SUPPLY_DASHBOARD_TRUST_PATH = '/analytics/supply/dashboard/trust'
 const SUPPLY_DASHBOARD_FILTER_OPTIONS_PATH = '/analytics/supply/dashboard/filter-options'
 const options = { stayOnUnauthorized: true }
 
-export const getSupplyDashboardOverview = (params: SupplyDashboardQuery, feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass'> = {}) =>
-  apiClient.get<SupplyDashboardOverview>(SUPPLY_DASHBOARD_PATH, { params, ...options, ...feedback })
+export const getSupplyDashboardOverview = (
+  params: SupplyDashboardQuery,
+  feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass' | 'signal'> = {},
+  projection?: 'OPERATING' | 'OPERATING_COMPARISON' | 'SALES' | 'SALES_COMPARISON' | 'CITY' | 'CITY_COMPARISON',
+) =>
+  apiClient.get<SupplyDashboardOverview>(SUPPLY_DASHBOARD_PATH, {
+    params: projection ? { ...params, projection } : params,
+    ...options,
+    ...feedback,
+  })
+
+export type OverviewRankingKind = 'PRODUCT' | 'CATEGORY'
+
+export const getOperatingOverviewRanking = (
+  params: SupplyDashboardQuery,
+  kind: OverviewRankingKind,
+  feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'cacheBypass' | 'signal'> = {},
+) =>
+  apiClient.get<SupplyDashboardProductSalesItem[]>(`${SUPPLY_DASHBOARD_PATH}/ranking`, {
+    params: { ...params, kind },
+    ...options,
+    ...feedback,
+  })
 
 export const createSupplyDashboardRefreshRun = (command: SupplyDashboardRefreshCommand = {}) =>
   apiClient.post<SupplyDashboardRefreshRun>(SUPPLY_DASHBOARD_REFRESH_PATH, command, options)
 
-export const getSupplyDashboardDataTrust = () =>
-  apiClient.get<SupplyDashboardDataTrust>(SUPPLY_DASHBOARD_TRUST_PATH, options)
+export const getSupplyDashboardDataTrust = (feedback: Pick<AxiosRequestConfig, 'signal'> = {}) =>
+  apiClient.get<SupplyDashboardDataTrust>(SUPPLY_DASHBOARD_TRUST_PATH, { ...options, ...feedback })
 
 export const getSupplyDashboardFilterOptions = () =>
   apiClient.get<SupplyDashboardFilterOptions>(SUPPLY_DASHBOARD_FILTER_OPTIONS_PATH, options)

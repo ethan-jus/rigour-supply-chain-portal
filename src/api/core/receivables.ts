@@ -112,6 +112,7 @@ export interface ReceivableQuery {
   asOf: string
   page: number
   size: number
+  customerRegionCode?: string
   regionCode?: string
   ownerStaffCode?: string
   departmentId?: number

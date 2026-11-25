@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { apiClient } from './client'
 import type { SupplyDashboardQuery } from './bi'
 export interface SalesAnalysis {
@@ -31,8 +32,17 @@ export interface SalesAnalysis {
   receiptSplit: { currentOrders: number; historicalOrders: number; otherOrders: number } | null
   productSyncedAt: string | null
 }
-export const getSalesDashboardAnalysis = (params: SupplyDashboardQuery, cacheBypass = false) =>
-  apiClient.get<SalesAnalysis>('/analytics/supply/dashboard/sales-analysis', { params, cacheBypass })
+export const getSalesDashboardAnalysis = (
+  params: SupplyDashboardQuery,
+  cacheBypass = false,
+  projection?: 'RANKING' | 'COMPARISON',
+  feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'signal'> = {},
+) =>
+  apiClient.get<SalesAnalysis>('/analytics/supply/dashboard/sales-analysis', {
+    params: projection ? { ...params, projection } : params,
+    cacheBypass,
+    ...feedback,
+  })
 
 export interface SalesDashboardSummary {
   sales: number

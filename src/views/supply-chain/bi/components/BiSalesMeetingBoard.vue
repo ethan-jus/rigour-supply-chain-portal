@@ -9,6 +9,7 @@
         </p>
       </div>
       <div class="sales-controls">
+        <BiDepartmentFilters :period="{ from: period.from, to: period.to }" />
         <span>{{ scopeLabel }}</span>
         <select :value="year" aria-label="年份" @change="setYear(Number(value($event)))">
           <option v-for="y in years" :key="y" :value="y">{{ y }}年</option>
@@ -55,15 +56,15 @@
           <span v-if="search.trim()">当前筛选 · {{ rows.length }} 位销售</span>
         </div>
         <div class="sales-controls">
-          <select :value="regionCode" aria-label="城市" @change="emit('city', value($event))">
-            <option value="">全部授权城市</option>
+          <select v-if="!departmentScope" :value="regionCode" aria-label="部门" @change="emit('city', value($event))">
+            <option value="">全部授权部门</option>
             <option v-for="city in cities" :key="city.code" :value="city.code">
               {{ city.name }}
             </option></select
           ><label class="sales-search"
             ><Search /><input
               v-model="search"
-              placeholder="搜索销售姓名或城市"
+              placeholder="搜索销售姓名或部门"
               aria-label="搜索销售"
           /></label>
         </div>
@@ -103,34 +104,35 @@
             <div class="sales-tabs">
               <button
                 :class="{ active: !receiptRank }"
-                @click="
-                  () => {
-                    receiptRank = false
-                    rankPage = 0
-                  }
-                "
+                @click="receiptRank = false"
               >
                 本期交易额排名</button
               ><button
                 :class="{ active: receiptRank }"
-                @click="
-                  () => {
-                    receiptRank = true
-                    rankPage = 0
-                  }
-                "
+                @click="receiptRank = true"
               >
                 本期到账排名
               </button>
             </div>
-            <span>点击销售姓名查看个人详情</span>
+            <div class="sales-ranking-actions">
+              <span>点击销售姓名查看个人详情</span>
+              <button
+                v-if="rows.length > previewCount"
+                type="button"
+                :aria-controls="rankingTableId"
+                :aria-expanded="rankingExpanded"
+                @click="rankingExpanded = !rankingExpanded"
+              >
+                {{ rankingExpanded ? `收起至前 ${previewCount} 名` : `展开全部 ${rows.length} 位销售` }}
+              </button>
+            </div>
           </div>
           <div class="sales-table-scroll">
-            <table class="supply-report-table sales-rank-table">
+            <table :id="rankingTableId" class="supply-report-table sales-rank-table">
               <thead>
                 <tr>
                   <th>排名</th>
-                  <th>销售 / 城市</th>
+                  <th>销售 / 部门</th>
                   <th>{{ receiptRank ? '本期到账' : '本期交易额' }}(元)</th>
                   <template v-if="!receiptRank"
                     ><th>本期回款额(元)</th>
@@ -143,7 +145,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in pageRows" :key="row.code">
+                <tr v-for="row in visibleRows" :key="row.code">
                   <td class="sales-rank">
                     <span v-if="row.rank <= 3" class="medal">{{ medals[row.rank - 1] }}</span
                     ><b v-else>{{ row.rank }}</b>
@@ -186,19 +188,7 @@
                   : '本期回款按本期订单累计统计，包含后续月份回款；回款和到账均包含待财务确认及已确认金额。'
               }}
             </p>
-            <div class="sales-pagination">
-              <span>共 {{ rows.length }} 位销售</span
-              ><button :disabled="rankPage === 0" aria-label="排名上一页" @click="rankPage--">
-                <ArrowLeft /></button
-              ><span>{{ rankPage + 1 }} / {{ Math.max(1, Math.ceil(rows.length / 8)) }}</span
-              ><button
-                :disabled="(rankPage + 1) * 8 >= rows.length"
-                aria-label="排名下一页"
-                @click="rankPage++"
-              >
-                <ArrowRight />
-              </button>
-            </div>
+            <span>共 {{ rows.length }} 位销售</span>
           </div>
           <p v-if="!dayMode" class="sales-note">月度指标由人事统一维护；0 表示不考核。</p>
         </section>
@@ -607,7 +597,7 @@
                 <p>
                   {{
                     item.history
-                      ? '不受本期订单日期限制，保留当前授权与城市范围。'
+                      ? '不受本期订单日期限制，保留当前授权与部门范围。'
                       : '包含这些订单在后续月份收到的款。'
                   }}
                 </p>
@@ -649,7 +639,10 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import BiDepartmentFilters from './BiDepartmentFilters.vue'
+import { useDashboardFilters } from '../department-filters'
+const departmentScope = useDashboardFilters()
+import { useId, computed, ref, watch } from 'vue'
 import { ElImage } from 'element-plus'
 import 'element-plus/es/components/image/style/css'
 import { ArrowLeft, ArrowRight, Close, FullScreen, Refresh, Search } from '@element-plus/icons-vue'
@@ -704,7 +697,7 @@ const emit = defineEmits<{
 const root = ref<HTMLElement>(),
   search = ref(''),
   receiptRank = ref(false),
-  rankPage = ref(0),
+  rankingExpanded = ref(false),
   receiptTrend = ref(false),
   showMonths = ref(false),
   showDefinitions = ref(false)
@@ -759,7 +752,9 @@ const person = computed(
 const rows = computed(() =>
   salesDashboardRows(props.snapshot, receiptRank.value, month.value, search.value),
 )
-const pageRows = computed(() => rows.value.slice(rankPage.value * 8, rankPage.value * 8 + 8))
+const rankingTableId = useId()
+const previewCount = 8
+const visibleRows = computed(() => rankingExpanded.value ? rows.value : rows.value.slice(0, previewCount))
 function scopedMetric(code: string, previous = false) {
   const original = meetingMetric(previous ? active.value?.previous : active.value?.current, code)
   if (!filtering.value || original == null) return original
@@ -954,15 +949,6 @@ function donut(amount: number | null, received: number | null) {
 watch(
   () => (search.value.trim() ? JSON.stringify(rows.value.map((p) => p.code).sort()) : null),
   (selection) => emit('filter', selection === null ? null : JSON.parse(selection)),
-)
-watch(search, () => {
-  rankPage.value = 0
-})
-watch(
-  () => props.snapshot,
-  () => {
-    rankPage.value = Math.min(rankPage.value, Math.max(0, Math.ceil(rows.value.length / 8) - 1))
-  },
 )
 watch(
   () => props.selectedCode,

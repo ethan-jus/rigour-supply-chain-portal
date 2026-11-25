@@ -1,6 +1,10 @@
 <template>
+  <el-alert v-if="filterError" type="error" :closable="false">
+    {{ filterError }} <el-button link @click="scope.load">重试</el-button>
+  </el-alert>
+  <p v-else-if="!directory" role="status">正在读取部门范围…</p>
   <BiSalesMeetingPresentation
-    v-if="section === 'sales'"
+    v-else-if="section === 'sales'"
     :key="route.fullPath"
     embedded
     :query="query"
@@ -28,6 +32,9 @@ import { businessDate } from '@/utils/business-date'
 import BiMeetingPresentation from './components/BiMeetingPresentation.vue'
 import BiSalesMeetingPresentation from './components/BiSalesMeetingPresentation.vue'
 
+import { provideDashboardFilters } from './department-filters'
+const scope = provideDashboardFilters()
+const { options: directory, error: filterError } = scope
 const route = useRoute()
 const router = useRouter()
 const section = computed(() => route.meta.dashboardSection)
@@ -36,6 +43,7 @@ const query = computed<SupplyDashboardQuery>(() => {
   for (const key of [
     'from',
     'to',
+    'customerRegionCode',
     'regionCode',
     'ownerStaffCode',
     'customerTypeCode',
@@ -45,10 +53,11 @@ const query = computed<SupplyDashboardQuery>(() => {
     const value = route.query[key]
     if (typeof value === 'string' && value) filters[key] = value
   }
+  filters.regionCode = scope.department.value || undefined
   return filters
 })
 const scopeLabel = computed(() =>
-  query.value.regionCode ? '当前授权范围 · 已筛选城市' : '当前授权范围',
+  query.value.regionCode ? '当前授权范围 · 已筛选部门' : '当前授权范围',
 )
 const initialPage = computed(() => {
   const page = Number(route.query.page)

@@ -43,6 +43,14 @@ Web 通过同源 `/auth/` 白名单代理调用 IAM，会话和密码校验由 I
 - 普通业务用户关联 HR 员工；功能、部门范围、客户范围、仓库授权分别计算。
 - 品牌 PNG 使用用户提供的原图：页面 `src/assets/brand/scdp-logo.png`，浏览器 `public/scdp-icon.png`。
 
+## 销售工作台下载
+
+供应链顶栏的「下载销售工作台」读取 `public/downloads/sales/releases.json`。Android 发版时，先将签名 APK 放在该目录，再更新对应的版本号和文件地址。APK 未纳入 Git，构建机需单独准备文件。iPhone 可填写 TestFlight 邀请链接，也可将 Ad Hoc IPA 和安装清单放到手机信任的 HTTPS 文件服务，再将 `ios.url` 指向该版本的 `.plist` 清单。Ad Hoc 安装包须包含目标设备的 UDID。尚未开放的平台保留 `null`。各平台二维码指向固定下载页，更新版本后可继续使用原码。
+
+鸿蒙沿用相同的版本清单。准备好 In-house 签名包及描述文件后，将两者放到支持匿名 HEAD 和分片下载的 HTTPS 文件服务，并将 `harmony` 填为 `{"version":"版本号","url":"https://分发域名/版本目录/manifest.json5"}`。二维码展示在登录后的工作台；手机用华为浏览器打开扫码页，点「下载安装」即可。转发后的二维码或链接同样可用。
+
+本机联调可通过局域网 IP 打开系统。电脑使用 localhost 时，在 `.env.development.local` 中把 `VITE_SALES_DOWNLOAD_ORIGIN` 设为手机可访问的开发站点地址（含协议和端口）。
+
 ## 验证
 
 ```bash

@@ -49,8 +49,10 @@ import { overviewPeriods } from '../overview-model'
 import { salesMonthPeriod, validSalesPeriod, type SalesPeriod } from '../sales-meeting-model'
 import type { SalesDashboardSnapshot } from '../sales-dashboard-model'
 import { biErrorMessage } from '../bi-error'
+import { useDashboardFilters } from '../department-filters'
 import BiSalesMeetingBoard from './BiSalesMeetingBoard.vue'
 const props = defineProps<{ query: SupplyDashboardQuery; scopeLabel: string; embedded?: boolean }>()
+const departmentScope = useDashboardFilters()
 defineEmits<{ close: [] }>()
 const today = businessDate(new Date())
 const period = ref<SalesPeriod>(
@@ -75,6 +77,8 @@ const loading = ref(false),
   detailError = ref('')
 let sequence = 0,
   detailSequence = 0
+let reportRequest: AbortController | undefined
+let detailRequest: AbortController | undefined
 const selectedOwners = ref<string[] | null>(null)
 const filteredSummary = ref<{
   current: SalesDashboardSummary
@@ -94,7 +98,6 @@ watch([selectedOwners, snapshot], () => {
   const owners = selectedOwners.value,
     data = snapshot.value
   const cacheBypass = summaryBypass
-  if (data) summaryBypass = false
   if (owners === null || !data) return
   if (!owners.length) {
     const zero = {
@@ -110,6 +113,7 @@ watch([selectedOwners, snapshot], () => {
   }
   summaryLoading.value = true
   summaryTimer = setTimeout(async () => {
+    if (data.previous) summaryBypass = false
     const base = { ...props.query, regionCode: region.value || props.query.regionCode }
     try {
       const [current, previous] = await Promise.all([
@@ -131,10 +135,11 @@ watch([selectedOwners, snapshot], () => {
     }
   }, 250)
 })
-async function fetchSnapshot(owner?: string, cacheBypass = false): Promise<SalesDashboardSnapshot> {
-  const access = await getBiEffectiveScope()
-  if (access.accessLevel === 'DENIED')
-    throw new Error(access.reason || '当前账号无销售经营数据权限')
+async function fetchSnapshot(
+  owner: string | undefined,
+  feedback: { cacheBypass: boolean; signal: AbortSignal; errorFeedback: 'inline' },
+  publish: (snapshot: SalesDashboardSnapshot) => void,
+) {
   if (props.query.productCategoryId)
     throw new Error('请取消全局商品分类筛选；商品筛选位于个人详情的商品分析区域。')
   const annual = annualMode.value
@@ -155,16 +160,22 @@ async function fetchSnapshot(owner?: string, cacheBypass = false): Promise<Sales
   }
   const query = { ...base, ...dates.current },
     previousQuery = { ...base, ...dates.previous }
-  const results = await Promise.allSettled([
-    getSupplyDashboardOverview(query, { cacheBypass }),
-    getSupplyDashboardOverview(previousQuery, { cacheBypass }),
-    getSupplyDashboardOperatingAnalysis(query, { cacheBypass }),
-    getSalesDashboardAnalysis(query, cacheBypass),
-    getSalesDashboardAnalysis(previousQuery, cacheBypass),
+  const { cacheBypass } = feedback
+  const previousResults = Promise.allSettled([
+    getSupplyDashboardOverview(previousQuery, feedback, 'SALES_COMPARISON'),
+    getSalesDashboardAnalysis(previousQuery, cacheBypass, 'COMPARISON', feedback),
   ] as const)
-  const [current, previous, analysis, sales, previousSales] = results
-  if (current.status === 'rejected') throw current.reason
-  if (sales.status === 'rejected') throw sales.reason
+  const legacyOptions = !departmentScope && !owner
+    ? getSupplyDashboardOperatingAnalysis(query, feedback, true).then((data) => data, () => null)
+    : Promise.resolve(null)
+  const [current, sales] = await Promise.all([
+    getSupplyDashboardOverview(query, feedback, 'SALES'),
+    getSalesDashboardAnalysis(query, cacheBypass, owner ? undefined : 'RANKING', feedback),
+    getBiEffectiveScope(feedback).then((access) => {
+      if (access.accessLevel === 'DENIED')
+        throw new Error(access.reason || '当前账号无销售经营数据权限')
+    }),
+  ])
   // Use the sales-analysis series so the summary and ranking share the same scoped payment facts.
   // Payment facts retain the receipt owner captured when the receipt was synchronized.
   function ownerCash(overview: SupplyDashboardOverview, source: SalesAnalysis) {
@@ -196,70 +207,84 @@ async function fetchSnapshot(owner?: string, cacheBypass = false): Promise<Sales
       })),
     }
   }
-  return {
-    current: ownerCash(current.value, sales.value),
-    previous:
-      previous.status === 'fulfilled' && previousSales.status === 'fulfilled'
-        ? ownerCash(previous.value, previousSales.value)
-        : null,
-    analysis: analysis.status === 'fulfilled' ? analysis.value : null,
-    sales: sales.value,
-    previousSales: previousSales.status === 'fulfilled' ? previousSales.value : null,
-    notice: [
-      previous.status === 'rejected' || previousSales.status === 'rejected'
-        ? '上期数据读取失败，请刷新重试。'
-        : '',
-      analysis.status === 'rejected' ? '客户统计读取失败，请刷新重试。' : '',
-      props.query.customerTypeCode || props.query.sourceSystemCode
+  let result: SalesDashboardSnapshot = {
+    current: ownerCash(current, sales),
+    previous: null,
+    analysis: null,
+    sales,
+    previousSales: null,
+    notice: props.query.customerTypeCode || props.query.sourceSystemCode
         ? '保留原报表筛选，当前展示筛选范围内的业绩。'
         : '',
-    ]
-      .filter(Boolean)
-      .join(' '),
   }
+  publish(result)
+  await Promise.all([
+    previousResults.then(([previous, previousSales]) => {
+      result = previous.status === 'fulfilled' && previousSales.status === 'fulfilled'
+        ? { ...result, previous: ownerCash(previous.value, previousSales.value), previousSales: previousSales.value }
+        : { ...result, notice: ['上期数据读取失败，请刷新重试。', result.notice].filter(Boolean).join(' ') }
+      publish(result)
+    }),
+    legacyOptions.then((analysis) => {
+      if (!analysis) return
+      result = { ...result, analysis }
+      publish(result)
+    }),
+  ])
 }
 async function load(cacheBypass = false) {
   summaryBypass = cacheBypass
   const request = ++sequence
   ++detailSequence
+  reportRequest?.abort()
+  detailRequest?.abort()
+  const controller = new AbortController()
+  reportRequest = controller
   snapshot.value = null
   detail.value = null
   loading.value = true
   error.value = ''
   detailError.value = ''
   try {
-    const result = await fetchSnapshot(undefined, cacheBypass)
-    if (request !== sequence) return
-    snapshot.value = result
-    if (!region.value || !cities.value.length)
-      cities.value = [
-        ...new Map(
-          (result.analysis?.cityMonthlyGoals || []).map((c) => [
-            c.regionCode,
-            { code: c.regionCode, name: c.regionName },
-          ]),
-        ).values(),
-      ]
-    if (selectedCode.value) await selectPerson(selectedCode.value, cacheBypass)
+    if (selectedCode.value) void selectPerson(selectedCode.value, cacheBypass)
+    await fetchSnapshot(undefined, { cacheBypass, signal: controller.signal, errorFeedback: 'inline' }, (result) => {
+      if (request !== sequence) return
+      snapshot.value = result
+      loading.value = false
+      if (result.analysis && (!region.value || !cities.value.length))
+        cities.value = [
+          ...new Map((result.analysis.cityMonthlyGoals ?? []).map((c) => [
+            c.regionCode, { code: c.regionCode, name: c.regionName },
+          ])).values(),
+        ]
+    })
   } catch (reason) {
     if (request === sequence) error.value = biErrorMessage(reason, '销售看板读取失败')
   } finally {
+    controller.abort()
     if (request === sequence) loading.value = false
   }
 }
 async function selectPerson(code: string, cacheBypass = false) {
   const request = ++detailSequence
+  detailRequest?.abort()
   selectedCode.value = code
   detail.value = null
   detailError.value = ''
   detailLoading.value = !!code
   if (!code) return
+  const controller = new AbortController()
+  detailRequest = controller
   try {
-    const result = await fetchSnapshot(code, cacheBypass)
-    if (request === detailSequence) detail.value = result
+    await fetchSnapshot(code, { cacheBypass, signal: controller.signal, errorFeedback: 'inline' }, (result) => {
+      if (request !== detailSequence) return
+      detail.value = result
+      detailLoading.value = false
+    })
   } catch (reason) {
     if (request === detailSequence) detailError.value = biErrorMessage(reason, '个人业绩读取失败')
   } finally {
+    controller.abort()
     if (request === detailSequence) detailLoading.value = false
   }
 }
@@ -291,6 +316,8 @@ onBeforeUnmount(() => {
   sequence++
   detailSequence++
   summarySequence++
+  reportRequest?.abort()
+  detailRequest?.abort()
   clearTimeout(summaryTimer)
 })
 </script>

@@ -1282,7 +1282,7 @@ onMounted(load)
 .menu-icon-popover .icon-picker__grid {
   display: grid;
   max-height: 236px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 4px;
   padding-right: 2px;
   overflow-y: auto;

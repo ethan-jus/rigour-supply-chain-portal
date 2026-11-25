@@ -86,7 +86,7 @@ describe('风险回款看板导出入口', () => {
     const wrapper = render()
     try {
       for (const [label, value] of [
-        ['城市', 'SC'],
+        ['部门', 'SC'],
         ['业务员', 'A'],
         ['风险等级', 'HIGH'],
       ]) {

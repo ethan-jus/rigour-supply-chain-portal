@@ -3,26 +3,31 @@
     <el-radio-button :value="true">商品账龄</el-radio-button>
     <el-radio-button :value="false">合同到期</el-radio-button>
   </el-radio-group>
-  <ReceivablesView v-if="!productView" />
+  <el-alert v-if="filterError" type="error">{{ filterError }} <el-button link @click="scope.load">重试</el-button></el-alert>
+  <p v-else-if="!directory" role="status">正在读取部门范围…</p>
+  <ReceivablesView v-else-if="!productView" />
   <PaymentRiskBoard v-else
     :data="data"
     :loading="loading"
     :error="error"
     :initial-range="range"
     :initial-region="
-      typeof route.query.regionCode === 'string' ? route.query.regionCode : undefined
+      scope.department.value || undefined
     "
     @load="load"
   />
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPaymentRisk, type PaymentRiskData } from '@/api/core/payment-risk'
 import PaymentRiskBoard from './components/PaymentRiskBoard.vue'
 
 import ReceivablesView from './ReceivablesView.vue'
+import { provideDashboardFilters } from './department-filters'
+const scope = provideDashboardFilters()
+const { options: directory, error: filterError } = scope
 const productView = ref(true)
 const route = useRoute()
 const data = ref<PaymentRiskData | null>(null)
@@ -35,8 +40,12 @@ const currentMonth = new Intl.DateTimeFormat('sv-SE', {
 }).format(new Date())
 const range = ref<[string, string]>([`${currentMonth.slice(0, 4)}-01`, currentMonth])
 let request = 0
+let activeRequest: AbortController | undefined
 async function load(months: [string, string], cacheBypass = false) {
   const version = ++request
+  activeRequest?.abort()
+  const controller = new AbortController()
+  activeRequest = controller
   range.value = months
   loading.value = true
   error.value = ''
@@ -47,10 +56,11 @@ async function load(months: [string, string], cacheBypass = false) {
     const result = await getPaymentRisk({
       from: new Date(`${months[0]}-01T00:00:00+08:00`).toISOString(),
       to: end,
-      regionCode: typeof route.query.regionCode === 'string' ? route.query.regionCode : undefined,
+      regionCode: scope.department.value || undefined,
+      customerRegionCode: scope.customerRegion.value || undefined,
       ownerStaffCode:
         typeof route.query.ownerStaffCode === 'string' ? route.query.ownerStaffCode : undefined,
-    }, cacheBypass)
+    }, cacheBypass, controller.signal)
     if (version === request) data.value = result
   } catch (cause) {
     if (version === request)
@@ -60,9 +70,19 @@ async function load(months: [string, string], cacheBypass = false) {
   }
 }
 watch(
-  () => [productView.value, route.query.regionCode, route.query.ownerStaffCode],
-  () => { if (productView.value) void load(range.value) },
+  () => [productView.value, directory.value, scope.department.value, scope.customerRegion.value, route.query.ownerStaffCode],
+  () => {
+    if (productView.value && directory.value) void load(range.value)
+    else {
+      request++
+      activeRequest?.abort()
+    }
+  },
   { immediate: true },
 )
+onBeforeUnmount(() => {
+  request++
+  activeRequest?.abort()
+})
 </script>
 <style scoped>.risk-dimension { margin-bottom: 12px }</style>

@@ -1,4 +1,5 @@
 import { h, type Component } from 'vue'
+import menuSprite from '@/assets/icons/menu-lucide.svg?no-inline'
 import {
   House, Setting, Menu, Document, List, User, UserFilled, Avatar, Lock, Key,
   OfficeBuilding, Folder, FolderOpened, Shop, Goods, Box, Van, Location,
@@ -16,6 +17,13 @@ function outlineIcon(path: string): Component {
     'stroke-linejoin': 'round',
     'aria-hidden': 'true',
   }, [h('path', { d: path })])
+}
+
+function lucideIcon(name: string): Component {
+  return () => h('svg', {
+    viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2,
+    'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true',
+  }, [h('use', { href: menuSprite + '#' + name })])
 }
 
 /** 选择、预览、导航共用的内置图标清单，数据库只保存稳定 key。 */
@@ -41,6 +49,14 @@ export const MENU_ICONS: { key: string; label: string; component: Component }[] 
   ['Sliders', '滑杆', outlineIcon('M3 6h7m4 0h7 M3 12h11m4 0h3 M3 18h3m4 0h11 M10 4v4m4 2v4M7 16v4')],
   ['Target', '目标', outlineIcon('M12 3a9 9 0 1 0 9 9 M12 7a5 5 0 1 0 5 5 M12 12l8-8m-4 0h4v4')],
   ['Receipt', '凭单', outlineIcon('M5 3l3 1 4-1 4 1 3-1v18l-3-1-4 1-4-1-3 1z M8 8h8 M8 12h8 M8 16h4')],
+  ['LucideHouse', '首页线框', lucideIcon('House')],
+  ['LucideChartNoAxesCombined', 'BI线框', lucideIcon('ChartNoAxesCombined')],
+  ['LucideBriefcaseBusiness', '订单线框', lucideIcon('BriefcaseBusiness')],
+  ['LucideUsersRound', 'HR线框', lucideIcon('UsersRound')],
+  ['LucideBoxes', 'ERP线框', lucideIcon('Boxes')],
+  ['LucideContactRound', 'CRM线框', lucideIcon('ContactRound')],
+  ['LucideBookOpen', '成本线框', lucideIcon('BookOpen')],
+  ['LucideMapPinned', '销售线框', lucideIcon('MapPinned')],
 ].map(([key, label, component]) => ({ key: key as string, label: label as string, component: component as Component }))
 const byKey = new Map(MENU_ICONS.map(item => [item.key, item.component]))
 export function builtinMenuIcon(key: string | null): Component | undefined { return byKey.get(key || '') }

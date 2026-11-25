@@ -71,6 +71,8 @@ import { overviewPeriods } from '../overview-model'
 import BiCityMeetingBoard from './BiCityMeetingBoard.vue'
 import { cityMeetingRows, citySelectionOptions } from '../city-meeting-model'
 
+import { useDashboardFilters } from '../department-filters'
+const scope = useDashboardFilters()
 const props = defineProps<{
   query: SupplyDashboardQuery
   scopeLabel: string
@@ -115,8 +117,10 @@ const regionCode = ref(props.query.regionCode || '')
 const loading = ref(false)
 const error = ref('')
 let sequence = 0
+let overviewRequest: AbortController | null = null
 async function load(cacheBypass = false) {
   const request = ++sequence
+  overviewRequest?.abort()
   loading.value = true
   error.value = ''
   try {
@@ -124,12 +128,6 @@ async function load(cacheBypass = false) {
       props.embedded || cityMode.value
         ? overviewPeriods(year.value, overviewMonth.value)
         : meetingPeriods(month.value)
-    const access = await getBiEffectiveScope()
-    if (request !== sequence) return
-    if (access.accessLevel === 'DENIED') {
-      snapshot.value = null
-      throw new Error(access.reason || '当前账号无经营数据权限')
-    }
     // Preserve every applied business filter. The server remains authoritative for authorization.
     const query = {
       ...props.query,
@@ -141,21 +139,38 @@ async function load(cacheBypass = false) {
       ...periods.previous,
       ...(cityMode.value ? { regionCode: undefined } : {}),
     }
+    if (scope && cityMode.value) {
+      const departments = scope.options.value?.departments || []
+      const regions = departments.map(d => ({ optionType: 'REGION', optionValue: d.code,
+        optionLabel: d.name, parentOptionValue: d.parentCode, usageCount: 0 }))
+      const selected = props.query.regionCode
+      if (selected && !departments.some(d => d.code === selected)) throw new Error('所选部门不在可查看范围')
+      const base = { ...query, regionCode: selected }
+      const previous = { ...previousQuery, regionCode: selected }
+      await loadDepartment(request, base, previous, regions, cacheBypass)
+      return
+    }
+    if (props.embedded && !cityMode.value) {
+      await loadOperatingOverview(request, query, previousQuery, cacheBypass)
+      return
+    }
+    const access = await getBiEffectiveScope()
+    if (request !== sequence) return
+    if (access.accessLevel === 'DENIED') {
+      snapshot.value = null
+      throw new Error(access.reason || '当前账号无经营数据权限')
+    }
     const [
       currentResult,
       previousResult,
       trustResult,
       analysisResult,
-      previousAnalysisResult,
       regionsResult,
     ] = await Promise.allSettled([
       getSupplyDashboardOverview(query, { cacheBypass }),
       getSupplyDashboardOverview(previousQuery, { cacheBypass }),
       access.globalGovernance ? getSupplyDashboardDataTrust() : Promise.resolve(null),
       getSupplyDashboardOperatingAnalysis(query, { cacheBypass }),
-      props.embedded && !cityMode.value
-        ? getSupplyDashboardOperatingAnalysis(previousQuery, { cacheBypass })
-        : Promise.resolve(null),
       getSupplyDashboardFilterOptions(),
     ])
     if (request !== sequence) return
@@ -169,8 +184,6 @@ async function load(cacheBypass = false) {
       previous: previousResult.status === 'fulfilled' ? previousResult.value : null,
       query,
       previousQuery,
-      previousAnalysis:
-        previousAnalysisResult.status === 'fulfilled' ? previousAnalysisResult.value : null,
       analysis: analysisResult.status === 'fulfilled' ? analysisResult.value : null,
       analysisError:
         analysisResult.status === 'rejected' ? '复购与城市到账数据读取失败，请刷新重试' : undefined,
@@ -204,6 +217,99 @@ async function load(cacheBypass = false) {
     if (request === sequence) loading.value = false
   }
 }
+async function loadDepartment(
+  request: number,
+  query: SupplyDashboardQuery,
+  previousQuery: SupplyDashboardQuery,
+  regions: NonNullable<MeetingSnapshot['regions']>,
+  cacheBypass: boolean,
+) {
+  const controller = new AbortController()
+  overviewRequest = controller
+  const feedback = { cacheBypass, signal: controller.signal, errorFeedback: 'inline' as const }
+  let pending: Partial<MeetingSnapshot> = {}
+  let departmentSnapshot: MeetingSnapshot | null = null
+  const apply = (updates: Partial<MeetingSnapshot>) => {
+    if (request !== sequence) return
+    if (departmentSnapshot)
+      departmentSnapshot = snapshot.value = citySnapshot.value = { ...departmentSnapshot, ...updates }
+    else pending = { ...pending, ...updates }
+  }
+  try {
+    const current = getSupplyDashboardOverview(query, feedback, 'CITY')
+    const background = Promise.all([
+      getSupplyDashboardOverview(previousQuery, feedback, 'CITY_COMPARISON').then(
+        (previous) => apply({ previous }),
+        () => apply({ comparisonError: '前期比较读取失败' }),
+      ),
+      getSupplyDashboardOperatingAnalysis(query, feedback, true).then(
+        (analysis) => apply({ analysis }),
+        () => apply({ analysisError: '复购与部门到账数据读取失败，请刷新重试' }),
+      ),
+      getSupplyDashboardOperatingAnalysis(previousQuery, feedback, true).then(
+        (previousAnalysis) => apply({ previousAnalysis }),
+        () => apply({ comparisonError: '前期比较读取失败' }),
+      ),
+      getSalesDashboardAnalysis(query, cacheBypass, 'RANKING', feedback).then(
+        (personalGoals) => apply({ personalGoals }),
+        () => apply({ personalGoals: null }),
+      ),
+    ])
+    const data = await current
+    if (request !== sequence) return
+    departmentSnapshot = snapshot.value = citySnapshot.value = {
+      current: data, previous: null, query, previousQuery, regions, cacheBypass,
+      deferRankings: true, trust: null, ...pending,
+    }
+    loading.value = false
+    await background
+  } finally {
+    controller.abort()
+    if (overviewRequest === controller) overviewRequest = null
+  }
+}
+
+async function loadOperatingOverview(
+  request: number,
+  query: SupplyDashboardQuery,
+  previousQuery: SupplyDashboardQuery,
+  cacheBypass: boolean,
+) {
+  const controller = new AbortController()
+  overviewRequest = controller
+  const feedback = { cacheBypass, signal: controller.signal }
+  try {
+    const [access, current] = await Promise.all([
+      getBiEffectiveScope({ signal: controller.signal }).then((scope) => {
+        if (scope.accessLevel === 'DENIED') throw new Error(scope.reason || '当前账号无经营数据权限')
+        return scope
+      }),
+      getSupplyDashboardOverview(query, feedback, 'OPERATING'),
+    ])
+    if (request !== sequence) return
+    snapshot.value = { current, previous: null, query, previousQuery, cacheBypass, trust: null }
+    loading.value = false
+
+    const apply = (updates: Partial<MeetingSnapshot>) => {
+      if (request === sequence && snapshot.value) snapshot.value = { ...snapshot.value, ...updates }
+    }
+    await Promise.all([
+      getSupplyDashboardOverview(previousQuery, feedback, 'OPERATING_COMPARISON').then(
+        (previous) => apply({ previous }),
+        (reason) => apply({ comparisonError: biErrorMessage(reason, '前期比较读取失败') }),
+      ),
+      access.globalGovernance
+        ? getSupplyDashboardDataTrust({ signal: controller.signal }).then(
+            (trust) => apply({ trust }),
+            () => apply({ trustError: '数据来源状态读取失败' }),
+          )
+        : Promise.resolve(),
+    ])
+  } finally {
+    controller.abort()
+    if (overviewRequest === controller) overviewRequest = null
+  }
+}
 function changeMonth(value: string) {
   month.value = value
   year.value = Number(value.slice(0, 4))
@@ -227,6 +333,10 @@ async function openCity(code?: string) {
 }
 async function selectCity(code: string, cacheBypass = false) {
   if (!snapshot.value || !code) return
+  if (scope) {
+    emit('city', { ...snapshot.value.query, regionCode: code })
+    return
+  }
   if (
     code &&
     !citySelectionOptions(snapshot.value).some((row) => row.code === code && row.selectable)
@@ -281,7 +391,7 @@ async function selectCity(code: string, cacheBypass = false) {
   }
 }
 function openCityReport(page: number) {
-  const query = page === 1 ? snapshot.value?.query : citySnapshot.value?.query
+  const query = scope ? citySnapshot.value?.query : page === 1 ? snapshot.value?.query : citySnapshot.value?.query
   if (query) emit('report', page, query)
 }
 function openReport(page: number) {
@@ -290,5 +400,6 @@ function openReport(page: number) {
 onMounted(() => void load())
 onBeforeUnmount(() => {
   sequence++
+  overviewRequest?.abort()
 })
 </script>

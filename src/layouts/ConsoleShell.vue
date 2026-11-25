@@ -44,6 +44,7 @@
         </div>
         <div class="topbar__right">
           <ConsoleEntrySearch :entries="entries" />
+          <ConsoleSalesDownload v-if="applicationCode === 'SUPPLY_CHAIN'" />
           <ConsoleDisplaySettings />
           <span class="tenant-pill"><OfficeBuilding />{{ tenantLabel }}</span>
           <ConsoleAccountMenu />
@@ -72,6 +73,7 @@
 
 <script setup lang="ts">
 import ConsoleDisplaySettings from '@/components/console/ConsoleDisplaySettings.vue'
+import ConsoleSalesDownload from '@/components/console/ConsoleSalesDownload.vue'
 import { isPageRenderFailure } from '@/utils/page-error'
 import { publishRequestFailure } from '@/utils/request-feedback'
 /**

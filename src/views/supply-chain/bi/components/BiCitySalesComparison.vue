@@ -7,12 +7,22 @@
     </div>
     <div class="ranking-toolbar">
       <div class="segmented" aria-label="销售排名指标">
-        <button :class="{ active: !receipt }" @click="selectMetric(false)">本期交易额排名</button>
-        <button :class="{ active: receipt }" @click="selectMetric(true)">本期到账排名</button>
+        <button :class="{ active: !receipt }" @click="receipt = false">本期交易额排名</button>
+        <button :class="{ active: receipt }" @click="receipt = true">本期到账排名</button>
       </div>
+      <button
+        v-if="rows.length > previewCount"
+        type="button"
+        class="outline"
+        :aria-controls="tableId"
+        :aria-expanded="expanded"
+        @click="expanded = !expanded"
+      >
+        {{ expanded ? `收起至前 ${previewCount} 名` : `展开全部 ${rows.length} 位销售` }}
+      </button>
     </div>
     <div class="overview-table-scroll">
-      <table class="supply-report-table" :class="{ 'with-cohort': !receipt }">
+      <table :id="tableId" class="supply-report-table" :class="{ 'with-cohort': !receipt }">
         <thead>
           <tr>
             <th>排名</th>
@@ -29,11 +39,11 @@
         <tbody>
           <tr v-for="(row, index) in visibleRows" :key="row.code">
             <td>
-              <span class="rank" :aria-label="`第${page * 8 + index + 1}名`"
-                ><span v-if="page * 8 + index < 3" class="rank-medal" aria-hidden="true">{{
-                  ['🥇', '🥈', '🥉'][page * 8 + index]
+              <span class="rank" :aria-label="`第${index + 1}名`"
+                ><span v-if="index < 3" class="rank-medal" aria-hidden="true">{{
+                  ['🥇', '🥈', '🥉'][index]
                 }}</span
-                ><span v-else>{{ page * 8 + index + 1 }}</span></span
+                ><span v-else>{{ index + 1 }}</span></span
               >
             </td>
             <th>{{ row.name }}<small v-if="row.employmentStatus === 'LEFT'">已离职</small></th>
@@ -86,7 +96,7 @@
       </table>
       <p v-if="!rows.length" class="empty-data">
         {{
-          snapshot?.analysisError && receipt ? '本期到账明细暂未就绪' : '当前城市暂无销售业绩数据'
+          snapshot?.analysisError && receipt ? '本期到账明细暂未就绪' : '当前部门暂无销售业绩数据'
         }}
       </p>
     </div>
@@ -96,18 +106,7 @@
           ? '按到账日期统计；业绩归属优先回款经办人，缺失时按客户当前归属业务员。'
           : '本期回款按本期订单累计统计，包含后续月份回款；回款和到账均包含待财务确认及已确认金额。'
       }}</span>
-      <div class="table-pager">
-        <span>共 {{ rows.length }} 位销售</span>
-        <template v-if="rows.length > 8">
-          <button aria-label="上一页销售" :disabled="page === 0" @click="page--">
-            <ArrowLeft />
-          </button>
-          <span>{{ page + 1 }} / {{ Math.ceil(rows.length / 8) }}</span>
-          <button aria-label="下一页销售" :disabled="(page + 1) * 8 >= rows.length" @click="page++">
-            <ArrowRight />
-          </button>
-        </template>
-      </div>
+      <span>共 {{ rows.length }} 位销售</span>
     </div>
     <p v-if="unlistedReceipts != null && unlistedReceipts > 0.01" class="sales-target-note">
       归属异常待核对：{{ money(unlistedReceipts) }} 元（回款经办人和客户当前归属业务员均缺失）。
@@ -116,8 +115,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { computed, ref, useId } from 'vue'
 import {
   moneyYuan as money,
   percentage,
@@ -129,22 +127,14 @@ import { completionGradient } from '../overview-model'
 import { citySalesRows } from '../city-meeting-model'
 const props = defineProps<{ snapshot: MeetingSnapshot | null; annual: boolean; cityName: string }>()
 const receipt = defineModel<boolean>('receipt', { default: false })
-const page = ref(0)
+const tableId = useId()
+const previewCount = 8
+const expanded = ref(false)
 const rows = computed(() => citySalesRows(props.snapshot, receipt.value, props.annual))
 const unlistedReceipts = computed(() => {
   if (!receipt.value || !props.snapshot?.analysis?.salesReceipts) return null
   const total = meetingMetric(props.snapshot.current, 'receipt_amount')
   return total == null ? null : total - rows.value.reduce((sum, row) => sum + (row.amount ?? 0), 0)
 })
-const visibleRows = computed(() => rows.value.slice(page.value * 8, page.value * 8 + 8))
-function selectMetric(value: boolean) {
-  receipt.value = value
-  page.value = 0
-}
-watch(
-  () => props.snapshot,
-  () => {
-    page.value = 0
-  },
-)
+const visibleRows = computed(() => expanded.value ? rows.value : rows.value.slice(0, previewCount))
 </script>

@@ -18,14 +18,13 @@ export function usePaymentFilterOptions({ salesDepartmentsOnly = false }: { sale
     }).finally(() => { pending = undefined })
     return pending
   }
-  async function searchEmployees(keyword = '', regionCode?: string | null) {
+  async function searchEmployees(keyword = '') {
     employeeLoading.value = true
     try {
       const data = await fetchOptions()
       const text = keyword.trim().toLocaleLowerCase()
       employeeOptions.value = [...new Map(data.employees
-        .filter(row => (!regionCode || row.regionCode?.includes(regionCode))
-          && (!text || `${row.employeeName} ${row.employeeCode}`.toLocaleLowerCase().includes(text)))
+        .filter(row => !text || `${row.employeeName} ${row.employeeCode}`.toLocaleLowerCase().includes(text))
         .map(row => [row.employeeCode, row])).values()]
     } catch (e) { optionError.value = e instanceof Error ? e.message : '回款筛选选项加载失败' }
     finally { employeeLoading.value = false }

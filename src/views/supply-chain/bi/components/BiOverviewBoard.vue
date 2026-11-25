@@ -9,9 +9,10 @@
     <header class="overview-header">
       <div class="overview-heading">
         <strong>供应链数字化平台</strong>
-        <h1>{{ cityContext ? '城市经营' : '经营总览' }}</h1>
+        <h1>{{ cityContext ? '部门经营' : '经营总览' }}</h1>
       </div>
       <div class="overview-filters">
+        <BiDepartmentFilters :period="snapshot?.query.from && snapshot.query.to ? { from: snapshot.query.from, to: snapshot.query.to } : undefined" />
         <span>{{ scopeLabel }}</span>
         <label
           >年份
@@ -47,7 +48,7 @@
         <button
           v-if="cityContext"
           class="icon-button"
-          aria-label="全屏城市看板"
+          aria-label="全屏部门看板"
           @click="toggleFullscreen"
         >
           <FullScreen />
@@ -58,7 +59,7 @@
         <span v-if="snapshot">· 对比 {{ previousLabel }} · 数据范围截至 {{ cutoff }}</span>
       </p>
     </header>
-    <nav class="overview-anchors" :aria-label="cityContext ? '城市经营章节' : '经营总览章节'">
+    <nav class="overview-anchors" :aria-label="cityContext ? '部门经营章节' : '经营总览章节'">
       <button
         v-for="(section, index) in sections"
         :key="section.id"
@@ -69,21 +70,21 @@
       </button>
     </nav>
     <div v-if="cityContext" class="city-context">
-      <label
-        >当前城市
+      <label v-if="!departmentScope"
+        >当前部门
         <select
-          aria-label="选择城市"
+          aria-label="选择部门"
           :value="cityContext.code"
           :disabled="!cityContext.options.length"
           @change="emit('city', ($event.target as HTMLSelectElement).value)"
         >
-          <option v-if="!cityContext.options.length" value="">暂无可查看城市</option>
+          <option v-if="!cityContext.options.length" value="">暂无可查看部门</option>
           <option v-for="city in cityContext.options" :key="city.code" :value="city.code">
             {{ city.name }}
           </option>
         </select>
       </label>
-      <h2>{{ cityContext.name || '城市经营' }}</h2>
+      <h2>{{ cityContext.name || '部门经营' }}</h2>
     </div>
     <div v-if="loading" class="overview-state" role="status">正在读取经营数据…</div>
     <div v-else-if="error" class="overview-state is-error" role="alert">
@@ -143,8 +144,8 @@
             {{
               goals
                 ? cityContext
-                  ? `${cityContext.name} · ${annual ? '12个月累计' : '城市目标'}`
-                  : `覆盖 ${goals.cityCount} 个城市 · ${annual ? '12个月累计' : '按城市汇总'}`
+                  ? `${cityContext.name} · ${annual ? '12个月累计' : '部门目标'}`
+                  : `覆盖 ${goals.cityCount} 个部门 · ${annual ? '12个月累计' : '按部门汇总'}`
                 : '目标覆盖范围暂未就绪'
             }}
           </p>
@@ -182,37 +183,47 @@
             </article>
           </div>
           <p class="goal-explanation">
-            目标取自人事指标设置，完成率按实际值 ÷ 对应目标计算；年度目标逐月累计，0 表示不考核。
+            <span v-if="snapshot?.query.customerRegionCode">实际值按所选客户地区统计，目标仍为部门完整目标。</span>目标取自人事指标设置，完成率按实际值 ÷ 对应目标计算；年度目标逐月累计，0 表示不考核。
           </p>
         </aside>
       </section>
       <section
         id="overview-cities"
         class="overview-cities"
-        :aria-label="cityContext ? '销售业绩对比' : '城市经营对比'"
+        :aria-label="cityContext ? '销售业绩对比' : '部门经营对比'"
       >
         <slot name="comparison">
           <div class="section-title">
-            <h2>城市经营对比</h2>
+            <h2>部门经营对比</h2>
             <button class="text-button" @click="emit('city')">
-              进入城市经营看板 <ArrowRight />
+              进入部门经营看板 <ArrowRight />
             </button>
           </div>
           <div class="ranking-toolbar">
             <div class="segmented">
-              <button :class="{ active: !cityReceipt }" @click="changeCityMetric(false)">
+              <button :class="{ active: !cityReceipt }" @click="cityReceipt = false">
                 本期交易额排名</button
-              ><button :class="{ active: cityReceipt }" @click="changeCityMetric(true)">
+              ><button :class="{ active: cityReceipt }" @click="cityReceipt = true">
                 本期到账排名
               </button>
             </div>
+            <button
+              v-if="cityCount > previewCount"
+              type="button"
+              class="outline"
+              aria-controls="department-comparison-table"
+              :aria-expanded="departmentsExpanded"
+              @click="departmentsExpanded = !departmentsExpanded"
+            >
+              {{ departmentsExpanded ? `收起至前 ${previewCount} 名` : `展开全部 ${cityCount} 个部门` }}
+            </button>
           </div>
           <div class="overview-table-scroll">
-            <table class="supply-report-table" :class="{ 'with-cohort': !cityReceipt }">
+            <table id="department-comparison-table" class="supply-report-table" :class="{ 'with-cohort': !cityReceipt }">
               <thead>
                 <tr>
                   <th>排名</th>
-                  <th>城市</th>
+                  <th>部门</th>
                   <th>本期{{ cityReceipt ? '到账' : '交易额' }}<small>（万元）</small></th>
                   <th v-if="!cityReceipt">本期回款额<small>（万元）</small></th>
                   <th v-if="!cityReceipt">本期回款率</th>
@@ -223,16 +234,16 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(city, index) in pageCities" :key="city.code">
+                <tr v-for="(city, index) in visibleDepartments" :key="city.code">
                   <td>
                     <span
-                      :class="['rank', ['gold', 'silver', 'bronze'][cityPage * 8 + index]]"
-                      :aria-label="`第${cityPage * 8 + index + 1}名${['，金牌', '，银牌', '，铜牌'][cityPage * 8 + index] || ''}`"
+                      :class="['rank', ['gold', 'silver', 'bronze'][index]]"
+                      :aria-label="`第${index + 1}名${['，金牌', '，银牌', '，铜牌'][index] || ''}`"
                     >
-                      <span v-if="cityPage * 8 + index < 3" class="rank-medal" aria-hidden="true">{{
-                        ['🥇', '🥈', '🥉'][cityPage * 8 + index]
+                      <span v-if="index < 3" class="rank-medal" aria-hidden="true">{{
+                        ['🥇', '🥈', '🥉'][index]
                       }}</span>
-                      <span v-else>{{ cityPage * 8 + index + 1 }}</span>
+                      <span v-else>{{ index + 1 }}</span>
                     </span>
                   </td>
                   <th>
@@ -289,30 +300,16 @@
                 </tr>
               </tbody>
             </table>
-            <p v-if="!cityRows.length" class="empty-data">当前范围暂无城市数据</p>
+            <p v-if="!cityRows.length" class="empty-data">当前范围暂无部门数据</p>
           </div>
           <div class="ranking-footer">
             <div>
               <span>本期回款及回款率按本期订单统计；本期到账按到账日期统计，包含历史订单。</span>
               <p v-if="nonCitySummary" class="section-description">
-                未纳入城市榜：{{ nonCitySummary }}；仍计入全国总额。
+                未纳入部门榜：{{ nonCitySummary }}；仍计入全国总额。
               </p>
             </div>
-            <div class="table-pager">
-              <span>共 {{ cityCount }} 个城市</span>
-              <template v-if="cityRows.length > 8">
-                <button aria-label="上一页城市" :disabled="cityPage === 0" @click="cityPage--">
-                  <ArrowLeft /></button
-                ><span>{{ cityPage + 1 }} / {{ Math.ceil(cityRows.length / 8) }}</span
-                ><button
-                  aria-label="下一页城市"
-                  :disabled="(cityPage + 1) * 8 >= cityRows.length"
-                  @click="cityPage++"
-                >
-                  <ArrowRight />
-                </button>
-              </template>
-            </div>
+            <span>共 {{ cityCount }} 个部门</span>
           </div>
         </slot>
       </section>
@@ -345,15 +342,22 @@
             }}
           </p>
         </article>
-        <article>
+        <article ref="rankingSection">
           <div class="section-title">
             <h2>商品贡献</h2>
             <div class="segmented small">
-              <button :class="{ active: !categoryMode }" @click="categoryMode = false">商品</button
-              ><button :class="{ active: categoryMode }" @click="categoryMode = true">品类</button>
+              <button :class="{ active: !categoryMode }" @click="selectRanking(false)">商品</button
+              ><button :class="{ active: categoryMode }" @click="selectRanking(true)">品类</button>
             </div>
           </div>
-          <table class="supply-report-table product-table">
+          <p v-if="lazyRanking && activeRanking?.status === 'loading'" class="empty-data" role="status">
+            正在读取排名…
+          </p>
+          <p v-else-if="lazyRanking && activeRanking?.status === 'error'" class="empty-data" role="alert">
+            {{ activeRanking.message }}
+            <button class="text-button" @click="loadRanking(rankingKind)">重试</button>
+          </p>
+          <table v-if="!lazyRanking || activeRanking?.status === 'ready'" class="supply-report-table product-table">
             <thead>
               <tr>
                 <th>{{ categoryMode ? '品类' : '商品名称' }}</th>
@@ -367,7 +371,9 @@
               </tr>
             </tbody>
           </table>
-          <p v-if="!products.length" class="empty-data">暂无商品数据</p>
+          <p v-if="(!lazyRanking || activeRanking?.status === 'ready') && !products.length" class="empty-data">
+            {{ categoryMode ? '暂无品类数据' : '暂无商品数据' }}
+          </p>
           <p class="section-description">未扣整单优惠；显示金额前6项，不能与折后交易额直接核平。</p>
         </article>
       </section>
@@ -458,7 +464,7 @@
     </template>
     <el-dialog
       v-model="showDefinitions"
-      :title="cityContext ? '城市经营统计口径' : '经营总览统计口径'"
+      :title="cityContext ? '部门经营统计口径' : '经营总览统计口径'"
       width="min(680px, 92vw)"
       append-to-body
       ><div class="overview-definitions">
@@ -474,13 +480,13 @@
           新增合作客户在期间内首次有效下单；复购客户在本月下单且月初前已有有效订单。年度复购为各月符合复购条件的客户全年去重。
         </p>
         <p>
-          城市名单来自部门管理中销售部下的启用城市部门，包含零成交城市。交易额及本期到账均沿用订单历史城市；已冻结订单优先使用冻结部门，冻结部门缺失时使用冻结地区，未冻结订单按原始订单地区映射城市。人员调动不改变历史城市。无法确定城市的记录单独列示，不计入城市榜，但保留在全国总额中。目标按授权城市汇总，年度累计12个月；历史年度使用当前开通城市名单。
+          部门名单来自部门管理中销售部下的启用部门，包含零成交部门。交易额及本期到账均沿用订单历史部门；已冻结订单优先使用冻结部门，冻结部门缺失时使用冻结地区，未冻结订单按原始订单地区映射部门。人员调动不改变历史部门。无法确定部门的记录单独列示，不计入部门榜，但保留在全国总额中。目标按授权部门汇总，年度累计12个月；历史年度使用当前开通部门名单。
         </p>
         <p v-if="cityContext">
-          销售交易额及本期回款按订单销售汇总；本期到账优先按回款经办人，缺失时按客户当前归属业务员汇总，均限定所选城市。个人月目标优先采用已配置值；未配置时交易额默认40,000元、到账默认20,000元，年度按12个月累计。
+          销售交易额及本期回款按订单销售汇总；本期到账优先按回款经办人，缺失时按客户当前归属业务员汇总，均限定所选部门。个人月目标优先采用已配置值；未配置时交易额默认40,000元、到账默认20,000元，年度按12个月累计。
         </p>
         <p>
-          城市成交客户不能直接相加替代全国去重客户。查询成功不代表来源已完整同步，缺失数据保持未知。
+          部门成交客户不能直接相加替代全国去重客户。查询成功不代表来源已完整同步，缺失数据保持未知。
         </p>
       </div></el-dialog
     >
@@ -495,8 +501,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onActivated, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, FullScreen, Refresh } from '@element-plus/icons-vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, ref, watch } from 'vue'
+import { ArrowRight, FullScreen, Refresh } from '@element-plus/icons-vue'
+import { getOperatingOverviewRanking, type OverviewRankingKind, type SupplyDashboardProductSalesItem } from '@/api/core/bi'
+import BiDepartmentFilters from './BiDepartmentFilters.vue'
+import { useDashboardFilters } from '../department-filters'
 import { businessDate, businessDateTime } from '@/utils/business-date'
 import {
   changeLabel,
@@ -519,7 +528,9 @@ import {
 } from '../overview-model'
 import EchartsChart from './EchartsChart.vue'
 import BiReceiptDetails from './BiReceiptDetails.vue'
+import { biErrorMessage } from '../bi-error'
 
+const departmentScope = useDashboardFilters()
 const receiptDetail = ref<'receipts' | 'unpaid' | null>(null)
 
 const props = defineProps<{
@@ -549,14 +560,14 @@ const years = Array.from({ length: thisYear - 1999 }, (_, i) => thisYear - i)
 const annual = computed(() => props.selectedMonth == null)
 const receiptMode = ref(false),
   cityReceipt = ref(false),
-  cityPage = ref(0),
+  departmentsExpanded = ref(false),
   categoryMode = ref(false),
   showDefinitions = ref(false),
   activeSection = ref(0)
 const sections = computed(() => [
   { id: 'overview-summary', label: '概览' },
   { id: 'overview-trend', label: '趋势与目标' },
-  { id: 'overview-cities', label: props.cityContext ? '销售业绩' : '城市对比' },
+  { id: 'overview-cities', label: props.cityContext ? '销售业绩' : '部门对比' },
   { id: 'overview-customers', label: '客户与商品' },
   { id: 'overview-receipts', label: '回款分析' },
 ])
@@ -581,23 +592,27 @@ const partial = computed(() => {
   }
 })
 const analysisReady = computed(() => metric('sales_amount') != null)
+const analysis = computed(() => props.snapshot?.current.operatingDetails ?? props.snapshot?.analysis)
+const previousAnalysis = computed(
+  () => props.snapshot?.previous?.operatingDetails ?? props.snapshot?.previousAnalysis,
+)
 const customers = computed(() =>
   analysisReady.value
-    ? finite(props.snapshot?.analysis?.customerRetention?.orderingCustomerCount)
+    ? finite(analysis.value?.customerRetention?.orderingCustomerCount)
     : null,
 )
 const repeat = computed(() =>
   analysisReady.value
     ? finite(
         annual.value
-          ? props.snapshot?.analysis?.customerRetention?.annualReturningCustomerCount
-          : props.snapshot?.analysis?.customerRetention?.returningCustomerCount,
+          ? analysis.value?.customerRetention?.annualReturningCustomerCount
+          : analysis.value?.customerRetention?.returningCustomerCount,
       )
     : null,
 )
 const newCustomers = computed(() =>
   analysisReady.value
-    ? finite(props.snapshot?.analysis?.customerRetention?.newCustomerCount)
+    ? finite(analysis.value?.customerRetention?.newCustomerCount)
     : null,
 )
 const repeatRate = computed(() => rate(repeat.value, customers.value))
@@ -613,7 +628,7 @@ const kpis = computed(() =>
     previous: meetingMetric(props.snapshot?.previous, row.code),
   })),
 )
-const goals = computed(() => aggregateGoals(props.snapshot?.analysis, props.selectedMonth))
+const goals = computed(() => aggregateGoals(analysis.value, props.selectedMonth))
 const yangzhangguiActual = computed(() => {
   const rows = props.snapshot?.current.cityTargetCompletions?.filter(
     (item) => item.metricCode === 'YANGZHANGGUI_SALES_AMOUNT',
@@ -688,10 +703,10 @@ const allCityRows = computed(() => {
   const current = props.snapshot?.current,
     previous = props.snapshot?.previous
   const ready = cityReceipt.value
-    ? props.snapshot?.analysis?.cityReceipts != null && metric('receipt_amount') != null
+    ? analysis.value?.cityReceipts != null && metric('receipt_amount') != null
     : metric('sales_amount') != null
   const comparisonReady = cityReceipt.value
-    ? props.snapshot?.previousAnalysis?.cityReceipts != null &&
+    ? previousAnalysis.value?.cityReceipts != null &&
       meetingMetric(previous, 'receipt_amount') != null
     : meetingMetric(previous, 'sales_amount') != null
   const ensure = (code: string, name: string) => {
@@ -706,16 +721,19 @@ const allCityRows = computed(() => {
       })
     return rows.get(code)!
   }
+  departmentScope?.options.value?.departments.forEach(dept => {
+    if ((dept.parentCode || '') === (props.snapshot?.query.regionCode || '')) ensure(dept.code, dept.name)
+  })
   goals.value?.cities.forEach((city) => {
     ensure(city.code, city.name).target = cityReceipt.value ? city.receipt : city.sales
   })
   if (cityReceipt.value) {
-    props.snapshot?.analysis?.cityReceipts?.forEach((row) => {
+    analysis.value?.cityReceipts?.forEach((row) => {
       ensure(row.regionCode, row.regionName || row.regionCode).amount = ready
         ? row.receiptAmount
         : null
     })
-    props.snapshot?.previousAnalysis?.cityReceipts?.forEach((row) => {
+    previousAnalysis.value?.cityReceipts?.forEach((row) => {
       ensure(row.regionCode, row.regionName || row.regionCode).previous = comparisonReady
         ? row.receiptAmount
         : null
@@ -736,33 +754,105 @@ const allCityRows = computed(() => {
     (a, b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity) || a.name.localeCompare(b.name),
   )
 })
-const cityRows = computed(() =>
-  allCityRows.value.filter((city) => goals.value?.cities.has(city.code)),
-)
-const cityCount = computed(() => goals.value?.cityCount ?? 0)
+const visibleDepartmentCodes = computed(() => new Set(departmentScope?.options.value?.departments
+  .filter(dept => (dept.parentCode || '') === (props.snapshot?.query.regionCode || ''))
+  .map(dept => dept.code)))
+const cityRows = computed(() => {
+  const selected = departmentScope?.options.value?.departments.find(d => d.code === props.snapshot?.query.regionCode)
+  if (selected && !props.cityContext) {
+    const code = cityReceipt.value ? 'receipt_amount' : 'sales_amount'
+    return [{ code: selected.code, name: selected.name, amount: metric(code),
+      previous: meetingMetric(props.snapshot?.previous, code), paid: metric('paid_amount'),
+      target: (cityReceipt.value ? goals.value?.receipt : goals.value?.sales) ?? null }]
+  }
+  return allCityRows.value.filter((city) => departmentScope?.options.value
+    ? visibleDepartmentCodes.value.has(city.code)
+    : goals.value?.cities.has(city.code))
+})
+const cityCount = computed(() => cityRows.value.length)
 const nonCitySummary = computed(() =>
   allCityRows.value
     .filter(
       (city) =>
         goals.value &&
-        !goals.value.cities.has(city.code) &&
+        (departmentScope ? ['UNKNOWN', 'OUTSIDE_CITY', 'MULTI'].includes(city.code) : !goals.value.cities.has(city.code)) &&
         city.amount != null &&
         city.amount !== 0,
     )
     .map((city) => `${city.name} ${money(city.amount)} 万元`)
     .join('；'),
 )
-const pageCities = computed(() => cityRows.value.slice(cityPage.value * 8, cityPage.value * 8 + 8))
-const products = computed(
-  () =>
-    (categoryMode.value
-      ? props.snapshot?.current.categorySalesRanking
-      : props.snapshot?.current.productSalesRanking
-    )?.slice(0, 6) || [],
+const previewCount = 8
+const visibleDepartments = computed(() =>
+  departmentsExpanded.value ? cityRows.value : cityRows.value.slice(0, previewCount),
 )
-function changeCityMetric(receipt: boolean) {
-  cityReceipt.value = receipt
-  cityPage.value = 0
+type RankingState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; rows: SupplyDashboardProductSalesItem[] }
+const rankingSection = ref<HTMLElement | null>(null)
+const rankingVisible = ref(false)
+const rankings = ref<Partial<Record<OverviewRankingKind, RankingState>>>({})
+const rankingKind = computed<OverviewRankingKind>(() => (categoryMode.value ? 'CATEGORY' : 'PRODUCT'))
+const lazyRanking = computed(() =>
+  props.cityContext ? !!props.snapshot?.deferRankings : !!props.snapshot?.current.operatingDetails,
+)
+const rankingQuery = computed(() => (props.loading || !lazyRanking.value ? null : props.snapshot?.query ?? null))
+const activeRanking = computed(() => rankings.value[rankingKind.value])
+const products = computed(() => {
+  if (lazyRanking.value) return activeRanking.value?.status === 'ready' ? activeRanking.value.rows : []
+  return (categoryMode.value
+    ? props.snapshot?.current.categorySalesRanking
+    : props.snapshot?.current.productSalesRanking)?.slice(0, 6) ?? []
+})
+let rankingRequest = new AbortController()
+
+watch(rankingQuery, () => {
+  rankingRequest.abort()
+  rankingRequest = new AbortController()
+  rankings.value = {}
+})
+watch(rankingSection, (section, _, onCleanup) => {
+  rankingVisible.value = false
+  if (!section || !lazyRanking.value) return
+  if (typeof IntersectionObserver === 'undefined') {
+    rankingVisible.value = true
+    return
+  }
+  const observer = new IntersectionObserver(
+    ([entry]) => { rankingVisible.value = entry?.isIntersecting === true },
+    { root: root.value },
+  )
+  observer.observe(section)
+  onCleanup(() => observer.disconnect())
+}, { flush: 'post' })
+watch([rankingQuery, rankingVisible, rankingKind], ([query, visible, kind]) => {
+  if (query && visible) void loadRanking(kind)
+}, { flush: 'post' })
+onBeforeUnmount(() => rankingRequest.abort())
+
+async function loadRanking(kind: OverviewRankingKind) {
+  const query = rankingQuery.value
+  const status = rankings.value[kind]?.status
+  if (!query || status === 'loading' || status === 'ready') return
+  const signal = rankingRequest.signal
+  rankings.value[kind] = { status: 'loading' }
+  try {
+    const rows = await getOperatingOverviewRanking(query, kind, {
+      cacheBypass: props.snapshot?.cacheBypass,
+      errorFeedback: 'inline',
+      signal,
+    })
+    if (!signal.aborted && rankingQuery.value === query) rankings.value[kind] = { status: 'ready', rows }
+  } catch (reason) {
+    if (!signal.aborted && rankingQuery.value === query) {
+      rankings.value[kind] = { status: 'error', message: biErrorMessage(reason, '排名读取失败') }
+    }
+  }
+}
+function selectRanking(category: boolean) {
+  categoryMode.value = category
+  rankingVisible.value = true
 }
 async function toggleFullscreen() {
   if (document.fullscreenElement) await document.exitFullscreen()
@@ -811,7 +901,6 @@ watch(
   () => props.loading,
   async (loading) => {
     if (loading || !props.snapshot) return
-    cityPage.value = 0
     await nextTick()
     if (!initialSectionApplied && props.initialPage) go(props.initialPage)
     initialSectionApplied = true

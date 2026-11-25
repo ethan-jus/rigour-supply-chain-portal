@@ -10,11 +10,12 @@ export interface TrackLeg { confirmed?: boolean; points: Array<Pick<TrackPoint, 
 export interface TrackVisit { visitId: string; storeId: string | null; sequence: number; storeName: string; longitude: number | null; latitude: number | null; checkedInAt: string; checkedOutAt: string | null; dwellMinutes: number; reviewStatus: string; visitType: string }
 export interface FieldTrack {
   workDayId: string; businessDate: string; status: string; distanceAvailable: boolean; totalDistanceMeters: number; trackedDurationMinutes: number
+  rejectedPointCount?: number
   confirmedTrack?: boolean
   points: TrackPoint[]; legs: Array<{ distanceMeters: number; confirmed?: boolean; points: TrackPoint[] }>
   gaps: Array<{ from: string; to: string; reason: string }>
   punches: Array<{ eventType: string; clientOccurredAt: string; serverReceivedAt: string; longitude: number; latitude: number }>
-  visits: TrackVisit[]; segments: Array<{ distanceMeters: number; distanceSource: string }>
+  visits: TrackVisit[]; segments: Array<{ fromSequence: number; toSequence: number; toVisitId: string; distanceMeters: number; distanceSource: string }>
 }
 export function fieldworkTrack(profile: string, date: string, signal?: AbortSignal) {
   return apiClient.get(`/sales/management/profiles/${encodeURIComponent(profile)}/track`, { params: { date }, signal, errorFeedback: 'inline', cacheBypass: true }) as Promise<FieldTrack>
@@ -29,23 +30,28 @@ export function fieldDistance(meters: number | null | undefined, showMeters = fa
 }
 
 export function fieldMapPaths(legs: TrackLeg[]): Array<{ path: Array<[number, number]>; showDir: boolean }> {
+  const valid = (point: TrackLeg['points'][number]) =>
+    Number.isFinite(point.longitude) && Math.abs(point.longitude) <= 180 &&
+    Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90
   const seen = new Set<string>()
   const routes = []
   for (const leg of legs) {
-    const coordinates = leg.points.map(p => [p.longitude, p.latitude] as [number, number])
-    if (!leg.confirmed) {
-      if (coordinates.length > 1) routes.push({ path: coordinates, showDir: true })
-      continue
-    }
     let path: Array<[number, number]> = []
-    for (let index = 1; index < coordinates.length; index++) {
-      const from = coordinates[index - 1]
-      const to = coordinates[index]
+    for (let index = 1; index < leg.points.length; index++) {
+      const previous = leg.points[index - 1]
+      const current = leg.points[index]
+      if (!valid(previous) || !valid(current)) {
+        if (path.length > 1) routes.push({ path, showDir: !leg.confirmed })
+        path = []
+        continue
+      }
+      const from: [number, number] = [previous.longitude, previous.latitude]
+      const to: [number, number] = [current.longitude, current.latitude]
       const a = from[1].toFixed(5) + ',' + from[0].toFixed(5)
       const b = to[1].toFixed(5) + ',' + to[0].toFixed(5)
       const key = a < b ? a + '|' + b : b + '|' + a
       if (a === b || seen.has(key)) {
-        if (path.length > 1) routes.push({ path, showDir: false })
+        if (path.length > 1) routes.push({ path, showDir: !leg.confirmed })
         path = []
         continue
       }
@@ -53,7 +59,7 @@ export function fieldMapPaths(legs: TrackLeg[]): Array<{ path: Array<[number, nu
       if (!path.length) path.push(from)
       path.push(to)
     }
-    if (path.length > 1) routes.push({ path, showDir: false })
+    if (path.length > 1) routes.push({ path, showDir: !leg.confirmed })
   }
   return routes
 }

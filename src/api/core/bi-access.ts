@@ -12,7 +12,7 @@ export interface BiEffectiveScope {
   globalGovernance: boolean
   unavailableSubjects: string[]
 }
-export const getBiEffectiveScope = (feedback: Pick<AxiosRequestConfig, 'errorFeedback'> = {}) =>
+export const getBiEffectiveScope = (feedback: Pick<AxiosRequestConfig, 'errorFeedback' | 'signal'> = {}) =>
   apiClient.get<BiEffectiveScope>('/analytics/supply-dashboard/effective-scope', {
     stayOnUnauthorized: true,
     ...feedback,
