@@ -127,6 +127,23 @@ export const ordersOf = (row: CostRecord, platform?: PlatformTransport | null) =
     ? row.data.ledger.sources.map((s) => s.orderCode).filter((s): s is string => !!s)
     : undefined) ??
   row.sources.map((s) => s.documentNo)
+
+export function shipmentOrderNumbers(shipments: ShipmentTransportSource[] = []): string[] {
+  return [
+    ...new Set(shipments.map((source) => source.salesOrderNo?.trim()).filter((no): no is string => !!no)),
+  ]
+}
+
+export function displayedOrderNumbers(
+  row: CostRecord,
+  platform?: PlatformTransport | null,
+  shipments?: ShipmentTransportSource[],
+): string[] {
+  return [...new Set([...ordersOf(row, platform), ...shipmentOrderNumbers(shipments)])].filter(
+    (no) => no?.trim(),
+  )
+}
+
 /** 历史记录可能只有原运输信息，详情仍展示已保存的收货方及地址。 */
 export function frozenTransportReceivers(row: CostRecord) {
   const points = (row.data.ledger?.receivingPoints || []).filter(

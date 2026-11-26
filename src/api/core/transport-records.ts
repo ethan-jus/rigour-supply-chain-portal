@@ -57,6 +57,7 @@ export interface ShipmentTransportSource {
     sourceFields: Record<string, unknown>
     goods: Record<string, unknown>[]
   }
+  salesOrderNo?: string | null
 }
 export interface TransportDetail {
   orderAllocations?: Record<string, number | null>

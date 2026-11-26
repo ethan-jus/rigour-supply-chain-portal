@@ -685,6 +685,94 @@ describe('通用手工账单', () => {
 })
 
 describe('物流详情的信息优先级', () => {
+  it('展示全部确认发货关联，已有分摊及编辑提交保留原销售单', async () => {
+    const d = detail()
+    const ledger = validManualLedger()
+    ledger.transportPurposeCode = 'DELIVERY'
+    ledger.feeItems = [{
+      ...ledger.feeItems[0]!,
+      feeKey: 'freight',
+      bearerCode: 'COMPANY',
+      allocationMethodCode: 'EQUAL',
+    }]
+    ledger.sources = [{
+      orderCode: 'SO1',
+      orderTypeCode: 'SALES_ORDER',
+      linkRoleCode: 'COST',
+      allocations: [
+        { feeKey: 'freight', receivingPointCode: 'TO0', cityCode: 'WH', basis: 1, amount: 100.01 },
+      ],
+    }]
+    d.record.data.ledger = ledger
+    d.orderAllocations = { SO1: 100.01 }
+    const sales = Array.from({ length: 8 }, (_, index) => `SO${index + 1}`)
+    const shipments = sales.map((salesOrderNo): ShipmentTransportSource => ({
+      id: `SHIP-${salesOrderNo}`,
+      costId: d.record.id,
+      salesOrderNo,
+      issue: null,
+      differencePending: false,
+      latest: {
+        shipmentId: `SHIP-${salesOrderNo}`,
+        shipmentNo: `FH-${salesOrderNo}`,
+        salesOrderId: salesOrderNo,
+        sourceStatus: 'receivedin',
+        shipTime: '2026-11-20T08:52:00Z',
+        sourceUpdatedAt: null,
+        carrierCode: 'SF',
+        carrierName: '顺丰',
+        deliveryModeCode: 'THIRD_PARTY',
+        deliveryModeName: '送货上门',
+        trackingNumbers: ['SF-TEST'],
+        receiver: null,
+        sourceFields: {},
+        goods: [],
+      },
+    }))
+    d.shipments = [...shipments, { ...shipments[0]!, id: 'SHIP-DUPLICATE' }, {
+      ...shipments[0]!,
+      id: 'SHIP-REVIEW',
+      salesOrderNo: null,
+      issue: '发货关联待核对',
+      differencePending: true,
+      latest: { ...shipments[0]!.latest, salesOrderId: 'SO-PENDING' },
+    }]
+    const w = mount(Editor, {
+      props: { modelValue: true, readonly: true, detail: d },
+      global,
+      attachTo: document.body,
+    })
+    try {
+      await flushPromises()
+      const orderSection = w.findAll('.transport-section')
+        .find((section) => section.find('h3').text() === '关联业务订单')!
+      const orderNumbers = () => orderSection.findAll('.el-table__body tr.el-table__row')
+        .map((row) => row.get('td').text())
+      expect(orderNumbers()).toEqual(sales)
+      const allocationTable = w.findAll('.el-table')
+        .find((table) => table.text().includes('分摊运输费用（元）'))!
+      const allocationRows = allocationTable.findAll('.el-table__body tr.el-table__row')
+      expect(allocationRows.map((row) => row.findAll('td').map((cell) => cell.text())))
+        .toEqual([['SO1', '100.01']])
+      expect(w.text()).toContain('7 笔订单通过发货关联展示')
+
+      await w.setProps({ readonly: false })
+      expect(orderNumbers()).toEqual(['SO1'])
+      await w.findAll('button').find((button) => button.text() === '保存运输记录')!.trigger('click')
+      await flushPromises()
+      expect(api.save).toHaveBeenCalledWith(
+        d.record.id,
+        expect.objectContaining({
+          draft: expect.objectContaining({ orderCodes: ['SO1'], orderAllocations: { SO1: 100.01 } }),
+        }),
+        [],
+      )
+    } finally {
+      w.unmount()
+      document.body.innerHTML = ''
+    }
+  })
+
   it.each([true, false])('立即送从发货来源回显公司，物流编辑保持只读（详情=%s）', async (readonly) => {
     const d = detail()
     d.record.data.ledger = validManualLedger()

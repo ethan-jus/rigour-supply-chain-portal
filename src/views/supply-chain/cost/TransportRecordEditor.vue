@@ -176,7 +176,7 @@
               >选择{{ type?.orderLabel || '业务订单' }}</el-button
             >
           </div>
-          <el-table :data="selected" border scrollbar-always-on empty-text="暂未关联业务订单"
+          <el-table :data="displayedOrders" border scrollbar-always-on empty-text="暂未关联业务订单"
             ><el-table-column
               prop="documentNo"
               label="业务单号"
@@ -406,6 +406,10 @@
               >均分</el-button
             >
           </div>
+          <p v-if="shipmentOnlyOrderNumbers.length" class="optional-label">
+            {{ shipmentOnlyOrderNumbers.length }} 笔订单通过发货关联展示。
+            {{ allocations.length ? '费用分摊以已保存的明细为准。' : '暂无已保存的订单分摊。' }}
+          </p>
           <el-table v-if="allocations.length" :data="allocations" border scrollbar-always-on
             ><el-table-column prop="code" label="业务单号" min-width="170" />
             <el-table-column v-if="allocations.length > 1" label="业务单金额（元）" align="right"
@@ -748,6 +752,7 @@ import {
   transportDraft,
   transportReceivingMethod,
   shipmentCarrierNames,
+  shipmentOrderNumbers,
   shipmentRemark,
   receivingMethods,
   transportTypes,
@@ -887,6 +892,17 @@ const type = computed(() => transportTypes.find((t) => t.value === form.value.tr
 const selected = ref<CostSource[]>([]),
   employees = ref<CostEmployee[]>([]),
   history = ref<CostAudit[]>([])
+const shipmentOnlyOrderNumbers = computed(() =>
+  props.readonly
+    ? shipmentOrderNumbers(shipmentSources.value).filter(
+        (no) => !selected.value.some((source) => source.documentNo === no),
+      )
+    : [],
+)
+const displayedOrders = computed(() => [
+  ...selected.value,
+  ...shipmentOnlyOrderNumbers.value.map((documentNo) => ({ documentNo })),
+])
 const orderBasedCity = computed(
   () => form.value.transportType === 'DELIVERY' || form.value.transportType === 'TRANSFER',
 )

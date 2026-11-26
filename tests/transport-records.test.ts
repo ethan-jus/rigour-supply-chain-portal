@@ -353,6 +353,7 @@ describe('统一运输记录 V2.6', () => {
     const shipment: ShipmentTransportSource = {
       id: 'FH-1',
       costId: combined.id,
+      salesOrderNo: 'DHB-S2',
       issue: null,
       differencePending: false,
       latest: {
@@ -385,6 +386,7 @@ describe('统一运输记录 V2.6', () => {
           ...shipment,
           id: 'FH-2',
           costId: dhb.id,
+          salesOrderNo: 'DHB-S1',
           latest: { ...shipment.latest, trackingNumbers: ['SF0123456789'] },
         }],
         COMBINED: [shipment],
@@ -425,6 +427,10 @@ describe('统一运输记录 V2.6', () => {
     expect(cell(2, '订单关联状态').text()).toBe('已关联')
     expect(cell(3, '订单关联状态').text()).toBe('已关联')
     expect(rows).toHaveLength(5)
+    expect(cell(4, '业务单号').findAll('.table-line').map((line) => line.text())).toEqual([
+      'DHB-S1',
+      'DHB-S2',
+    ])
     expect(cell(4, '快递单号').text()).toBe(combinedPlatform.source.order.orderNo)
     expect(rows.filter((_, index) =>
       cell(index, '快递单号').text() === combinedPlatform.source.order.orderNo,
@@ -449,7 +455,7 @@ describe('统一运输记录 V2.6', () => {
     expect(cells).toMatchObject({
       费用单号: combined.documentNo,
       快递单号: combinedPlatform.source.order.orderNo,
-      业务单号: 'DHB-S1',
+      业务单号: 'DHB-S1\nDHB-S2',
       销售业务员: '订货宝业务员（直营部）',
       货拉拉下单人: '王先生（本系统运营部）',
       '运输费用（元）': 137.64,
@@ -758,9 +764,46 @@ describe('统一运输记录 V2.6', () => {
   it('货拉拉业务明细按需勾选导出，平台费用只取一次总额', async () => {
     const p = platform()
     p.source.order.facts!.mappedDepartmentName = '本系统运营部'
+    const shipment: ShipmentTransportSource = {
+      id: 'SHIP-VERIFIED',
+      costId: 'C1',
+      issue: null,
+      differencePending: false,
+      salesOrderNo: 'SO-VERIFIED',
+      latest: {
+        shipmentId: 'SHIP-VERIFIED',
+        shipmentNo: 'FH-VERIFIED',
+        salesOrderId: '51',
+        sourceStatus: 'receivedin',
+        shipTime: '2026-11-10T03:02:00Z',
+        sourceUpdatedAt: null,
+        carrierCode: 'HLL',
+        carrierName: '货拉拉',
+        deliveryModeCode: 'THIRD_PARTY',
+        deliveryModeName: '送货上门',
+        trackingNumbers: [p.source.order.orderNo],
+        receiver: null,
+        sourceFields: {},
+        goods: [],
+      },
+    }
     api.list.mockResolvedValue({
       page: { total: 1, begin: 0, step: 20, items: [record()] },
       platformRecords: { C1: p },
+      shipmentRecords: {
+        C1: [
+          shipment,
+          { ...shipment, id: 'SHIP-DUPLICATE' },
+          {
+            ...shipment,
+            id: 'SHIP-REVIEW',
+            salesOrderNo: null,
+            issue: '待核对',
+            differencePending: true,
+            latest: { ...shipment.latest, salesOrderId: '52' },
+          },
+        ],
+      },
     } satisfies TransportPage)
     wrapper = mount(View, {
       global: {
@@ -769,6 +812,7 @@ describe('统一运输记录 V2.6', () => {
       },
     })
     await flushPromises()
+    expect(wrapper.find('.el-table__body tr.el-table__row').text()).toContain('已关联')
     await startExport(true)
     expect(api.selected).not.toHaveBeenCalled()
     expect(api.list).toHaveBeenCalledWith(expect.objectContaining({ begin: 0, step: 200 }), true)
@@ -803,6 +847,8 @@ describe('统一运输记录 V2.6', () => {
     expect(rows[0][headers.indexOf('下单／发货时间')]).toBe('2026-11-09 18:30:26')
     expect(rows[0][headers.indexOf('运输费用（元）')]).toBe(137.64)
     expect(rows[0][headers.indexOf('计入运输成本（元）')]).toBe(137.64)
+    expect(rows[0][headers.indexOf('业务单号')]).toBe('SO-VERIFIED')
+    expect(rows[0][headers.indexOf('订单分摊费用（元）')]).toBe('')
     expect(rows[0][headers.indexOf('快递单号')]).toBe('3624071813921329726')
     expect(rows[0][headers.indexOf('付款状态')]).toBe('已付款')
     expect(rows[0][headers.indexOf('行驶路段')]).toBe(

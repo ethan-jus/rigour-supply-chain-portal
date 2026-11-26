@@ -437,7 +437,7 @@ import { displayRecordActor, displayRecordDateTime } from '@/utils/business-disp
 import HuolalaSyncDates from '../huolala/HuolalaSyncDates.vue'
 import {
   money,
-  ordersOf,
+  displayedOrderNumbers,
   receiversOf,
   routeOf,
   routeText,
@@ -521,7 +521,7 @@ function resetColumns() {
 }
 const platformOf = (r: CostRecord) => result.value.platformRecords[r.id]
 function businessOrderLines(r: CostRecord) {
-  const orderNos = [...new Set(ordersOf(r, platformOf(r)).filter(Boolean))]
+  const orderNos = displayedOrderNumbers(r, platformOf(r), result.value.shipmentRecords?.[r.id])
   return orderNos.length ? orderNos : ['-']
 }
 const peopleByRecord = computed(() =>
@@ -588,7 +588,7 @@ function value(
       importEmployees.value.find((e) => e.employeeCode === source?.facts?.mappedEmployeeCode)
         ?.employeeName || source?.facts?.mappedEmployeeCode,
     employeeRelation: source ? (source.facts?.mappedEmployeeCode ? '已关联' : '未关联') : '-',
-    relation: ordersOf(r, platform).some((no) => no?.trim()) ? '已关联' : '未关联',
+    relation: displayedOrderNumbers(r, platform, shipmentSources).length ? '已关联' : '未关联',
     billItems: source
       ? source.facts?.fees.map((item) => `${item.name}：${money(item.amount)}`).join('；')
       : r.data.ledger?.manualBillItems
@@ -1073,7 +1073,7 @@ async function doExport() {
           if (c.key === 'receivers') return receiversOf(r, p).join('\n')
           if (c.key === 'route') return routeText(routeOf(r, p))
           if (c.key === 'stopCount') return routeOf(r, p).receivers.length || null
-          if (c.key === 'orders') return ordersOf(r, p).join('\n')
+          if (c.key === 'orders') return displayedOrderNumbers(r, p, detail.shipments).join('\n')
           if (c.key === 'orderAllocations')
             return savedTransportAllocations(detail, frozenTransportSources(r))
               .map((s) => `${s.code}：${money(s.amount)}`)
