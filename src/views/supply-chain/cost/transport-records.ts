@@ -1,6 +1,7 @@
 import type { CostRecord, CostSource } from '@/api/core/cost'
 import type {
   PlatformTransport,
+  TransportDetail,
   ShipmentTransportSource,
   TransportDraft,
 } from '@/api/core/transport-records'
@@ -128,10 +129,16 @@ export const ordersOf = (row: CostRecord, platform?: PlatformTransport | null) =
     : undefined) ??
   row.sources.map((s) => s.documentNo)
 
-export function shipmentOrderNumbers(shipments: ShipmentTransportSource[] = []): string[] {
-  return [
-    ...new Set(shipments.map((source) => source.salesOrderNo?.trim()).filter((no): no is string => !!no)),
-  ]
+export function shipmentOrders(shipments: ShipmentTransportSource[] = []) {
+  const orders = new Map<string, { documentNo: string; sourceOnly: boolean }>()
+  for (const shipment of shipments) {
+    const canonical = shipment.salesOrderNo?.trim()
+    const documentNo = canonical || shipment.sourceSalesOrderNo?.trim()
+    if (documentNo && (canonical || !orders.has(documentNo))) {
+      orders.set(documentNo, { documentNo, sourceOnly: !canonical })
+    }
+  }
+  return [...orders.values()]
 }
 
 export function displayedOrderNumbers(
@@ -139,8 +146,18 @@ export function displayedOrderNumbers(
   platform?: PlatformTransport | null,
   shipments?: ShipmentTransportSource[],
 ): string[] {
-  return [...new Set([...ordersOf(row, platform), ...shipmentOrderNumbers(shipments)])].filter(
-    (no) => no?.trim(),
+  const shipmentNos = shipmentOrders(shipments).map(({ documentNo }) => documentNo)
+  return [...new Set([...ordersOf(row, platform), ...shipmentNos])].filter((no) => no?.trim())
+}
+
+export function shipmentReconciliationAvailable(detail: TransportDetail | null): boolean {
+  const source = detail?.platform?.source
+  if (detail?.record.statusCode !== 'ACTIVE' || source?.sourceChannel !== 'API') return false
+  const order = currentSource(source)
+  return (
+    order.status === '已完成' &&
+    order.raw?.['详情状态'] === 'DETAIL' &&
+    (order.facts?.stops?.length ?? 0) > 2
   )
 }
 

@@ -168,6 +168,14 @@
           <div ref="ordersSection" class="section-heading">
             <h3>关联业务订单</h3>
             <el-button
+              v-if="readonly && allowShipmentReconciliation && shipmentReconciliationAvailable(detail)"
+              type="primary"
+              plain
+              :loading="reconcilingShipmentOrders"
+              @click="emit('reconcile-shipment-orders')"
+              >补齐发货关联</el-button
+            >
+            <el-button
               v-if="!readonly && !advanced && !salesOrderId && !shipmentSources.length"
               type="primary"
               plain
@@ -180,9 +188,16 @@
             ><el-table-column
               prop="documentNo"
               label="业务单号"
-              min-width="205"
+              min-width="245"
               fixed="left"
-            /><el-table-column label="客户／收货仓库" min-width="180"
+            >
+              <template #default="{ row }">
+                <span>{{ row.documentNo }}</span>
+                <el-tag v-if="row.sourceOnly" type="info" size="small" class="shipment-source-tag"
+                  >来源销售单·待匹配</el-tag
+                >
+              </template>
+            </el-table-column><el-table-column label="客户／收货仓库" min-width="180"
               ><template #default="{ row }">{{
                 row.receiverName || '-'
               }}</template></el-table-column
@@ -406,8 +421,8 @@
               >均分</el-button
             >
           </div>
-          <p v-if="shipmentOnlyOrderNumbers.length" class="optional-label">
-            {{ shipmentOnlyOrderNumbers.length }} 笔订单通过发货关联展示。
+          <p v-if="shipmentOnlyOrders.length" class="optional-label">
+            {{ shipmentOnlyOrders.length }} 笔订单通过发货关联展示。
             {{ allocations.length ? '费用分摊以已保存的明细为准。' : '暂无已保存的订单分摊。' }}
           </p>
           <el-table v-if="allocations.length" :data="allocations" border scrollbar-always-on
@@ -752,7 +767,8 @@ import {
   transportDraft,
   transportReceivingMethod,
   shipmentCarrierNames,
-  shipmentOrderNumbers,
+  shipmentOrders,
+  shipmentReconciliationAvailable,
   shipmentRemark,
   receivingMethods,
   transportTypes,
@@ -801,6 +817,8 @@ const props = defineProps<{
   salesSource?: CostSource | null
   initialCarrierCode?: string | null
   initialDeliveryMode?: string
+  allowShipmentReconciliation?: boolean
+  reconcilingShipmentOrders?: boolean
 }>()
 const ordersSection = ref<HTMLElement>()
 const feesSection = ref<HTMLElement>()
@@ -809,6 +827,7 @@ const visible = defineModel<boolean>({ required: true })
 const emit = defineEmits<{
   saved: []
   'associate-employee': []
+  'reconcile-shipment-orders': []
 }>()
 const detail = ref(props.detail),
   platform = computed(() => detail.value?.platform)
@@ -892,17 +911,14 @@ const type = computed(() => transportTypes.find((t) => t.value === form.value.tr
 const selected = ref<CostSource[]>([]),
   employees = ref<CostEmployee[]>([]),
   history = ref<CostAudit[]>([])
-const shipmentOnlyOrderNumbers = computed(() =>
+const shipmentOnlyOrders = computed(() =>
   props.readonly
-    ? shipmentOrderNumbers(shipmentSources.value).filter(
-        (no) => !selected.value.some((source) => source.documentNo === no),
+    ? shipmentOrders(shipmentSources.value).filter(
+        ({ documentNo }) => !selected.value.some((source) => source.documentNo === documentNo),
       )
     : [],
 )
-const displayedOrders = computed(() => [
-  ...selected.value,
-  ...shipmentOnlyOrderNumbers.value.map((documentNo) => ({ documentNo })),
-])
+const displayedOrders = computed(() => [...selected.value, ...shipmentOnlyOrders.value])
 const orderBasedCity = computed(
   () => form.value.transportType === 'DELIVERY' || form.value.transportType === 'TRANSFER',
 )
@@ -1494,6 +1510,9 @@ async function save() {
 .optional-label {
   color: var(--el-text-color-secondary);
   font-weight: normal;
+}
+.shipment-source-tag {
+  margin-inline-start: 6px;
 }
 h3 {
   margin: 0 0 22px;

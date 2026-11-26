@@ -9,6 +9,7 @@ import type {
   TransportPage,
   PlatformTransport,
   ShipmentTransportSource,
+  TransportDetail,
 } from '@/api/core/transport-records'
 import type { CostRecord } from '@/api/core/cost'
 import {
@@ -18,10 +19,13 @@ import {
   receiversOf,
   vehicleOf,
   transportTimeOf,
+  shipmentReconciliationAvailable,
 } from '@/views/supply-chain/cost/transport-records'
 import { createLedgerCommand } from '@/views/supply-chain/cost/cost-ledger'
 const api = vi.hoisted(() => ({
   list: vi.fn(),
+  detail: vi.fn(),
+  reconcile: vi.fn(),
   huolalaSync: vi.fn(),
   selected: vi.fn(),
   workbook: vi.fn(),
@@ -42,7 +46,8 @@ vi.mock('@/api/core/transport-records', () => ({
   exportSelectedTransport: api.selected,
   getTransportVoucher: api.getVoucher,
   getTransportEvidenceContent: api.getEvidenceContent,
-  getTransport: vi.fn(),
+  getTransport: api.detail,
+  reconcileTransportShipmentOrders: api.reconcile,
   saveTransport: vi.fn(),
   confirmTransport: vi.fn(),
 }))
@@ -231,6 +236,45 @@ describe('统一运输记录 V2.6', () => {
     await flushPromises()
     expect(api.huolalaSync).toHaveBeenCalledWith('ORDERS', undefined, undefined, '123A')
     expect(dialog.get('.el-alert--error').text()).toContain('请输入完整的货拉拉数字订单号')
+  })
+
+  it('按单补齐发货关联时拒绝重复提交并刷新详情和原筛选列表', async () => {
+    const p = platform()
+    const savedOrder = p.source.order
+    p.source.order = { ...savedOrder, raw: { 详情状态: 'LIST' } }
+    p.source.latestOrder = { ...savedOrder, raw: { 详情状态: 'DETAIL' } }
+    const before: TransportDetail = { record: record(), platform: p }
+    const after: TransportDetail = { ...before, record: { ...before.record, revision: 3 } }
+    let finish: (result: TransportDetail) => void = () => {}
+    api.detail.mockResolvedValueOnce(before)
+    api.reconcile.mockImplementationOnce(
+      () => new Promise<TransportDetail>((resolve) => { finish = resolve }),
+    )
+    wrapper = mount(View, {
+      global: { plugins: [ElementPlus], stubs: { TransportRecordEditor: true } },
+    })
+    await flushPromises()
+    wrapper.findComponent({ name: 'TransportRecordActions' }).vm.$emit('view')
+    await flushPromises()
+    const editor = () => wrapper!.findComponent({ name: 'TransportRecordEditor' })
+    expect(editor().props('allowShipmentReconciliation')).toBe(true)
+    expect(shipmentReconciliationAvailable(before)).toBe(true)
+    expect(shipmentReconciliationAvailable({
+      ...before,
+      platform: { ...p, source: { ...p.source, latestOrder: p.source.order } },
+    })).toBe(false)
+    editor().vm.$emit('reconcile-shipment-orders')
+    editor().vm.$emit('reconcile-shipment-orders')
+    await flushPromises()
+    expect(api.reconcile).toHaveBeenCalledTimes(1)
+    expect(api.reconcile).toHaveBeenCalledWith('C1')
+    expect(editor().props('reconcilingShipmentOrders')).toBe(true)
+    finish(after)
+    await flushPromises()
+    expect(editor().props('reconcilingShipmentOrders')).toBe(false)
+    expect(editor().props('detail')).toEqual(after)
+    expect(editor().props('initialSection')).toBe('orders')
+    expect(api.list).toHaveBeenCalledTimes(2)
   })
 
   it('手工同步分别选择和修改起止日期，按选择提交并拦截倒序', async () => {
@@ -796,6 +840,13 @@ describe('统一运输记录 V2.6', () => {
           { ...shipment, id: 'SHIP-DUPLICATE' },
           {
             ...shipment,
+            id: 'SHIP-SNAPSHOT',
+            salesOrderNo: null,
+            sourceSalesOrderNo: 'SO-SNAPSHOT',
+            latest: { ...shipment.latest, salesOrderId: null },
+          },
+          {
+            ...shipment,
             id: 'SHIP-REVIEW',
             salesOrderNo: null,
             issue: '待核对',
@@ -847,7 +898,7 @@ describe('统一运输记录 V2.6', () => {
     expect(rows[0][headers.indexOf('下单／发货时间')]).toBe('2026-11-09 18:30:26')
     expect(rows[0][headers.indexOf('运输费用（元）')]).toBe(137.64)
     expect(rows[0][headers.indexOf('计入运输成本（元）')]).toBe(137.64)
-    expect(rows[0][headers.indexOf('业务单号')]).toBe('SO-VERIFIED')
+    expect(rows[0][headers.indexOf('业务单号')]).toBe('SO-VERIFIED\nSO-SNAPSHOT')
     expect(rows[0][headers.indexOf('订单分摊费用（元）')]).toBe('')
     expect(rows[0][headers.indexOf('快递单号')]).toBe('3624071813921329726')
     expect(rows[0][headers.indexOf('付款状态')]).toBe('已付款')

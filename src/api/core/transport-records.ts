@@ -44,7 +44,7 @@ export interface ShipmentTransportSource {
   latest: {
     shipmentId: string
     shipmentNo: string
-    salesOrderId: string | number
+    salesOrderId: string | number | null
     sourceStatus: string
     shipTime: string
     sourceUpdatedAt: string | null
@@ -58,6 +58,7 @@ export interface ShipmentTransportSource {
     goods: Record<string, unknown>[]
   }
   salesOrderNo?: string | null
+  sourceSalesOrderNo?: string | null
 }
 export interface TransportDetail {
   orderAllocations?: Record<string, number | null>
@@ -89,6 +90,12 @@ export const getTransportRecords = (params: TransportQuery, exporting = false) =
   apiClient.get<TransportPage>(base + (exporting ? '/export' : ''), { ...options, params })
 export const getTransport = (id: string) =>
   apiClient.get<TransportDetail>(`${base}/${encodeURIComponent(id)}`, options)
+export const reconcileTransportShipmentOrders = (id: string) =>
+  apiClient.post<TransportDetail>(
+    `${base}/${encodeURIComponent(id)}/reconcile-shipment-orders`,
+    {},
+    options,
+  )
 export const saveTransport = (id: string | null, draft: TransportDraft) =>
   id
     ? apiClient.put<TransportDetail>(`${base}/${encodeURIComponent(id)}`, draft, options)

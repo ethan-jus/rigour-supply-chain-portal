@@ -335,8 +335,11 @@
       v-model="editorOpen"
       :detail="active"
       :readonly="readonly"
+      :allow-shipment-reconciliation="can('order:logistics-cost:write')"
+      :reconciling-shipment-orders="reconcilingShipmentOrders"
       @saved="load"
       @associate-employee="associateEmployee"
+      @reconcile-shipment-orders="reconcileShipmentOrders"
       :initial-section="initialSection"
     />
     <CostExportDialog
@@ -425,6 +428,7 @@ import {
 import {
   getTransportRecords,
   getTransport,
+  reconcileTransportShipmentOrders,
   exportSelectedTransport,
   type TransportDetail,
   type TransportPage,
@@ -446,6 +450,7 @@ import {
   transportPeople,
   transportSourceLabel,
   shipmentCarrierNames,
+  shipmentReconciliationAvailable,
   statusName,
   transportTypes,
   typeName,
@@ -667,7 +672,8 @@ const editorOpen = ref(false),
   editorKey = ref(0),
   active = ref<TransportDetail | null>(null),
   readonly = ref(true),
-  initialSection = ref('')
+  initialSection = ref(''),
+  reconcilingShipmentOrders = ref(false)
 function create() {
   active.value = null
   initialSection.value = ''
@@ -688,6 +694,35 @@ async function open(r: CostRecord, mode: boolean, section = '') {
 }
 const view = (r: CostRecord) => open(r, true),
   edit = (r: CostRecord) => open(r, false)
+async function reconcileShipmentOrders() {
+  const current = active.value
+  if (
+    !current ||
+    !editorOpen.value ||
+    !readonly.value ||
+    reconcilingShipmentOrders.value ||
+    !can('order:logistics-cost:write') ||
+    !shipmentReconciliationAvailable(current)
+  ) return
+  const key = editorKey.value
+  reconcilingShipmentOrders.value = true
+  try {
+    const updated = await reconcileTransportShipmentOrders(current.record.id)
+    if (disposed) return
+    if (editorOpen.value && readonly.value && editorKey.value === key) {
+      active.value = updated
+      initialSection.value = 'orders'
+      editorKey.value++
+    }
+    const count = displayedOrderNumbers(updated.record, updated.platform, updated.shipments).length
+    ElMessage.success(`发货关联核对完成，当前关联 ${count} 个业务单号`)
+    await load()
+  } catch (e) {
+    if (!disposed) ElMessage.error(errorMessage(e, '补齐发货关联失败'))
+  } finally {
+    reconcilingShipmentOrders.value = false
+  }
+}
 async function act(row: CostRecord, action: 'void' | 'delete') {
   try {
     const label = { void: '作废', delete: '删除' }[action]

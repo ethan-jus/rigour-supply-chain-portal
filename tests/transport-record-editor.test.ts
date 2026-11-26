@@ -685,7 +685,7 @@ describe('通用手工账单', () => {
 })
 
 describe('物流详情的信息优先级', () => {
-  it('展示全部确认发货关联，已有分摊及编辑提交保留原销售单', async () => {
+  it('展示五张销售单和三张待匹配来源单，已有分摊及编辑提交保留原销售单', async () => {
     const d = detail()
     const ledger = validManualLedger()
     ledger.transportPurposeCode = 'DELIVERY'
@@ -706,16 +706,17 @@ describe('物流详情的信息优先级', () => {
     d.record.data.ledger = ledger
     d.orderAllocations = { SO1: 100.01 }
     const sales = Array.from({ length: 8 }, (_, index) => `SO${index + 1}`)
-    const shipments = sales.map((salesOrderNo): ShipmentTransportSource => ({
-      id: `SHIP-${salesOrderNo}`,
+    const shipments = sales.map((orderNo, index): ShipmentTransportSource => ({
+      id: `SHIP-${orderNo}`,
       costId: d.record.id,
-      salesOrderNo,
+      salesOrderNo: index < 5 ? orderNo : null,
+      sourceSalesOrderNo: index < 5 ? null : orderNo,
       issue: null,
       differencePending: false,
       latest: {
-        shipmentId: `SHIP-${salesOrderNo}`,
-        shipmentNo: `FH-${salesOrderNo}`,
-        salesOrderId: salesOrderNo,
+        shipmentId: `SHIP-${orderNo}`,
+        shipmentNo: `FH-${orderNo}`,
+        salesOrderId: index < 5 ? orderNo : null,
         sourceStatus: 'receivedin',
         shipTime: '2026-11-20T08:52:00Z',
         sourceUpdatedAt: null,
@@ -747,8 +748,11 @@ describe('物流详情的信息优先级', () => {
       const orderSection = w.findAll('.transport-section')
         .find((section) => section.find('h3').text() === '关联业务订单')!
       const orderNumbers = () => orderSection.findAll('.el-table__body tr.el-table__row')
-        .map((row) => row.get('td').text())
+        .map((row) => row.get('td span').text())
       expect(orderNumbers()).toEqual(sales)
+      expect(orderSection.findAll('.shipment-source-tag').map((tag) => tag.text())).toEqual(
+        Array.from({ length: 3 }, () => '来源销售单·待匹配'),
+      )
       const allocationTable = w.findAll('.el-table')
         .find((table) => table.text().includes('分摊运输费用（元）'))!
       const allocationRows = allocationTable.findAll('.el-table__body tr.el-table__row')
@@ -1221,6 +1225,7 @@ describe('物流详情的信息优先级', () => {
         state: 'GENERATED',
         revision: 2,
         fileName: '接口',
+        sourceChannel: 'API',
         sourceDifference: true,
         order: {
           enterpriseId: 'E1',
@@ -1228,7 +1233,7 @@ describe('物流详情的信息优先级', () => {
           useTime: '2026-11-10 10:00:00',
           status: '已完成',
           paidAmount: 120,
-          raw: { 车型: '微面', 下单时间: '2026-11-09 19:20:30', 运单号: 'LEGACY-HIDDEN' },
+          raw: { 车型: '微面', 下单时间: '2026-11-09 19:20:30', 运单号: 'LEGACY-HIDDEN', 详情状态: 'DETAIL' },
           line: 0,
           salesOrderNos: [],
           facts: {
@@ -1263,11 +1268,15 @@ describe('物流详情的信息优先级', () => {
       billHistory: [],
     }
     const w = mount(Editor, {
-      props: { modelValue: true, readonly: true, detail: d },
+      props: { modelValue: true, readonly: true, detail: d, allowShipmentReconciliation: true },
       global,
       attachTo: document.body,
     })
     await flushPromises()
+    await w.findAll('button').find((button) => button.text() === '补齐发货关联')!.trigger('click')
+    expect(w.emitted('reconcile-shipment-orders')).toHaveLength(1)
+    await w.setProps({ allowShipmentReconciliation: false })
+    expect(w.findAll('button').some((button) => button.text() === '补齐发货关联')).toBe(false)
     const sections = Array.from(document.body.querySelectorAll('.transport-section'))
     expect(sections[0]!.querySelector('h3')?.textContent).toBe('基本信息')
     const timeLabels = [
