@@ -36,6 +36,14 @@ export interface PlatformTransport {
   draft: TransportDraft | null
   billHistory: SourceOrder[]
 }
+export interface ShipmentSalesOrderDetails {
+  receiverName?: string | null
+  employeeName?: string | null
+  departmentName?: string | null
+  documentDate?: string | null
+  documentAmount?: number | string | null
+  linkedAt?: string | null
+}
 export interface ShipmentTransportSource {
   id: string
   costId: string | null
@@ -59,6 +67,7 @@ export interface ShipmentTransportSource {
   }
   salesOrderNo?: string | null
   sourceSalesOrderNo?: string | null
+  salesOrderDetails?: ShipmentSalesOrderDetails | null
 }
 export interface TransportDetail {
   orderAllocations?: Record<string, number | null>

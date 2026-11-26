@@ -685,7 +685,7 @@ describe('通用手工账单', () => {
 })
 
 describe('物流详情的信息优先级', () => {
-  it('展示五张销售单和三张待匹配来源单，已有分摊及编辑提交保留原销售单', async () => {
+  it('显示发货关联的订单事实，已有分摊及编辑提交保留原销售单', async () => {
     const d = detail()
     const ledger = validManualLedger()
     ledger.transportPurposeCode = 'DELIVERY'
@@ -711,6 +711,14 @@ describe('物流详情的信息优先级', () => {
       costId: d.record.id,
       salesOrderNo: index < 5 ? orderNo : null,
       sourceSalesOrderNo: index < 5 ? null : orderNo,
+      salesOrderDetails: {
+        receiverName: `客户${orderNo}`,
+        employeeName: index === 6 ? null : `业务员${orderNo}`,
+        departmentName: `部门${orderNo}`,
+        documentDate: '2026-11-20',
+        documentAmount: index === 6 ? null : index === 5 ? 0 : 198.5,
+        linkedAt: '2026-11-23T11:24:25Z',
+      },
       issue: null,
       differencePending: false,
       latest: {
@@ -730,7 +738,14 @@ describe('物流详情的信息优先级', () => {
         goods: [],
       },
     }))
-    d.shipments = [...shipments, { ...shipments[0]!, id: 'SHIP-DUPLICATE' }, {
+    const datedSource = shipments[1]!
+    d.shipments = [{
+      ...datedSource,
+      id: 'SHIP-SNAPSHOT-ALIAS',
+      salesOrderNo: null,
+      sourceSalesOrderNo: 'SO2',
+      salesOrderDetails: { receiverName: '来源客户快照' },
+    }, ...shipments, { ...shipments[0]!, id: 'SHIP-DUPLICATE' }, {
       ...shipments[0]!,
       id: 'SHIP-REVIEW',
       salesOrderNo: null,
@@ -750,6 +765,19 @@ describe('物流详情的信息优先级', () => {
       const orderNumbers = () => orderSection.findAll('.el-table__body tr.el-table__row')
         .map((row) => row.get('td span').text())
       expect(orderNumbers()).toEqual(sales)
+      const orderCells = (index: number) => orderSection
+        .findAll('.el-table__body tr.el-table__row')[index]!
+        .findAll('td').map((cell) => cell.text())
+      expect(orderCells(0)[1]).toBe('确认时的门店')
+      expect(orderCells(1)).toEqual([
+        'SO2', '客户SO2', '业务员SO2', '部门SO2', '2026-11-20', '198.50', '2026-11-23 19:24:25',
+      ])
+      expect(orderCells(5).slice(1)).toEqual([
+        '客户SO6', '业务员SO6', '部门SO6', '2026-11-20', '0.00', '2026-11-23 19:24:25',
+      ])
+      expect(orderCells(6).slice(1)).toEqual([
+        '客户SO7', '-', '部门SO7', '2026-11-20', '-', '2026-11-23 19:24:25',
+      ])
       expect(orderSection.findAll('.shipment-source-tag').map((tag) => tag.text())).toEqual(
         Array.from({ length: 3 }, () => '来源销售单·待匹配'),
       )

@@ -1,6 +1,7 @@
 import type { CostRecord, CostSource } from '@/api/core/cost'
 import type {
   PlatformTransport,
+  ShipmentSalesOrderDetails,
   TransportDetail,
   ShipmentTransportSource,
   TransportDraft,
@@ -130,12 +131,17 @@ export const ordersOf = (row: CostRecord, platform?: PlatformTransport | null) =
   row.sources.map((s) => s.documentNo)
 
 export function shipmentOrders(shipments: ShipmentTransportSource[] = []) {
-  const orders = new Map<string, { documentNo: string; sourceOnly: boolean }>()
+  const orders = new Map<
+    string,
+    ShipmentSalesOrderDetails & { documentNo: string; sourceOnly: boolean }
+  >()
   for (const shipment of shipments) {
     const canonical = shipment.salesOrderNo?.trim()
     const documentNo = canonical || shipment.sourceSalesOrderNo?.trim()
-    if (documentNo && (canonical || !orders.has(documentNo))) {
-      orders.set(documentNo, { documentNo, sourceOnly: !canonical })
+    if (!documentNo) continue
+    const existing = orders.get(documentNo)
+    if (!existing || (existing.sourceOnly && canonical)) {
+      orders.set(documentNo, { ...shipment.salesOrderDetails, documentNo, sourceOnly: !canonical })
     }
   }
   return [...orders.values()]
