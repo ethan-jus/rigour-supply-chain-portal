@@ -4,6 +4,7 @@
   --ov-blue: #3288ff;
   --ov-cyan: #55efb4;
   position: relative;
+  container: bi-overview / inline-size;
   height: 100%;
   min-height: 0;
   overflow-y: auto;
@@ -106,15 +107,20 @@
   }
   .overview-header {
     padding: 24px 32px 18px;
-    display: grid;
-    grid-template-columns: 1fr auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 12px 24px;
     border-bottom: 1px solid var(--ov-line);
   }
   .overview-heading {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 22px;
+    > * {
+      white-space: nowrap;
+    }
     strong {
       font-size: 26px;
       font-weight: 600;
@@ -128,8 +134,10 @@
   }
   .overview-filters {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: flex-end;
+    max-width: 100%;
+    margin-left: auto;
     gap: 12px;
     font-size: 13px;
     color: var(--ov-muted);
@@ -160,6 +168,7 @@
     padding: 8px;
   }
   .overview-period {
+    flex-basis: 100%;
     font-size: 12px;
     line-height: 1.7;
     color: var(--ov-muted);
@@ -706,7 +715,7 @@
       height: 420px !important;
     }
   }
-  @media (max-width: 1200px) {
+  @container bi-overview (max-width: 1200px) {
     .receipt-metrics {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       article:nth-child(3) {
@@ -717,9 +726,6 @@
     .overview-filters {
       gap: 8px;
       font-size: 12px;
-    }
-    .overview-period {
-      grid-column: 1 / -1;
     }
     .overview-trend-goals {
       grid-template-columns: 1fr;
@@ -742,16 +748,12 @@
       grid-template-columns: repeat(2, 1fr);
     }
   }
-  @media (max-width: 950px) {
-    .overview-header {
-      grid-template-columns: 1fr;
-    }
+  @container bi-overview (max-width: 950px) {
     .overview-filters {
-      justify-content: flex-start;
-      flex-wrap: wrap;
+      margin-left: 0;
     }
   }
-  @media (max-width: 850px) {
+  @container bi-overview (max-width: 850px) {
     .overview-trend-goals,
     .overview-customers-products {
       grid-template-columns: 1fr;
@@ -786,7 +788,7 @@
       }
     }
   }
-  @media (max-width: 550px) {
+  @container bi-overview (max-width: 550px) {
     .goal-grid {
       grid-template-columns: 1fr;
     }
@@ -798,9 +800,6 @@
     .overview-receipts,
     .overview-customers-products > article {
       padding: 20px 16px;
-    }
-    .overview-heading {
-      flex-wrap: wrap;
     }
     .overview-heading strong {
       font-size: 19px;

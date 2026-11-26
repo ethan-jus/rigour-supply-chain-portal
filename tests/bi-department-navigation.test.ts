@@ -61,6 +61,7 @@ describe('部门经营导航', () => {
     try {
       await flushPromises()
       expect(wrapper.findAll('.city-link').map((n) => n.text())).toEqual(['苏无部'])
+      expect(wrapper.findAllComponents(ElTreeSelect)[0]!.props('defaultExpandedKeys')).toContain('TEAM')
       const regions = wrapper
         .findAllComponents(ElTreeSelect)
         .find(

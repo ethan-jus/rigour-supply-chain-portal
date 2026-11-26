@@ -6,6 +6,7 @@
         :model-value="scope.department.value || undefined"
         :data="departments"
         :props="treeProps"
+        :default-expanded-keys="expandedDepartments"
         :teleported="light"
         popper-class="bi-scope-tree-popper"
         :show-arrow="false"
@@ -49,6 +50,10 @@ defineProps<{ period?: Record<string, string | undefined>; light?: boolean }>()
 const scope = useDashboardFilters()
 const treeProps = { value: 'code', label: 'name', children: 'children' }
 const departments = computed(() => departmentTree(scope?.options.value?.departments || []))
+const expandedDepartments = computed(() => [
+  scope?.options.value?.defaultDepartmentCode,
+  scope?.department.value,
+].filter((code): code is string => !!code))
 const regions = computed(() => departmentTree(scope?.options.value?.customerRegions || []))
 </script>
 <style scoped>

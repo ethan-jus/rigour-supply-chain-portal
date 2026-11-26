@@ -945,6 +945,7 @@ watch(orders, () => {
 .payment-risk-board {
   --line: #213b50;
   --muted: #bdd0e1;
+  container: payment-risk / inline-size;
   box-sizing: border-box;
   background: #0b1929;
   color: #e9f2fc;
@@ -988,6 +989,8 @@ watch(orders, () => {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 14px;
+  min-width: 0;
+  max-width: 100%;
   padding: 0;
   margin: 0;
 }
@@ -1005,6 +1008,7 @@ watch(orders, () => {
   display: flex;
   align-items: center;
   gap: 8px;
+  max-width: 100%;
 }
 .month-range > span {
   color: #8faac2;
@@ -1186,6 +1190,7 @@ a:focus-visible {
   padding: 12px 0 20px;
 }
 .risk-kpis article {
+  min-width: 0;
   padding: 0 18px;
   border-right: 1px solid var(--line);
 }
@@ -1238,6 +1243,7 @@ a:focus-visible {
 }
 .section-title {
   display: flex;
+  flex-wrap: wrap;
   min-height: 38px;
   align-items: center;
   justify-content: space-between;
@@ -1628,10 +1634,7 @@ footer {
     grid-template-columns: 1fr 1fr;
   }
 }
-@media (max-width: 1200px) {
-  .payment-risk-board {
-    padding: 20px;
-  }
+@container payment-risk (max-width: 1200px) {
   .risk-main-grid {
     grid-template-columns: 1fr;
   }
@@ -1653,10 +1656,7 @@ footer {
     grid-template-columns: 1fr;
   }
 }
-@media (max-width: 700px) {
-  .payment-risk-board {
-    padding: 14px;
-  }
+@container payment-risk (max-width: 700px) {
   .risk-kpis {
     grid-template-columns: repeat(2, 1fr);
     gap: 22px 0;
@@ -1668,7 +1668,7 @@ footer {
     border-right: 0;
   }
   .risk-kpis strong {
-    font-size: 30px;
+    font-size: clamp(21px, 4.2cqw, 30px);
   }
   .risk-kpis h2 {
     font-size: 14px;
@@ -1712,6 +1712,12 @@ footer {
   }
   .risk-filters {
     gap: 12px;
+  }
+  .month-filter {
+    max-width: 100%;
+  }
+  .month-range :deep(.el-date-editor.el-input) {
+    min-width: 0;
   }
   .risk-kpis p {
     line-height: 1.6;
