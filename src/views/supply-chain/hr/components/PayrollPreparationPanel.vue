@@ -73,33 +73,54 @@
           label="档案待完善"
           value="missing" /><el-option label="规则待完善" value="rules"
       /></el-select>
-      <el-button :disabled="busy || loading" @click="selectEligible">选择筛选结果</el-button>
-      <el-button :disabled="busy || !selected.length" @click="table?.clearSelection()"
-        >清空选择</el-button
+      <el-checkbox
+        v-if="formerRows.length || showFormer"
+        :model-value="showFormer"
+        :disabled="busy || loading"
+        @change="(value) => changeRoster(value === true)"
+        >离职结算</el-checkbox
       >
-      <el-checkbox v-model="onlySelected" :disabled="busy">仅看已选</el-checkbox>
-      <span>已选 {{ selectedEligible.length }} 人</span>
+      <el-button :disabled="busy || loading || !visibleEligible.length" @click="selectEligible"
+        >选择筛选结果</el-button
+      >
+      <el-button :disabled="busy || !selected.length" @click="clearSelection">清空选择</el-button>
+      <el-checkbox v-model="onlySelected" :disabled="busy || !selected.length">仅看已选</el-checkbox>
+      <span>已选 {{ selected.length }} 人</span>
     </div>
+    <p v-if="showFormer" class="hint">逐人试算，确认有当月提成或历史更正后可生成结算记录。</p>
     <p class="preparation-counts" aria-live="polite">
-      本月人员 {{ scoped.length }} 人 · 可生成 {{ eligible.length }} 人 · 档案待完善
-      {{ scoped.filter((e) => e.profileIssues.length).length }} 人 · 规则待完善
-      {{ scoped.filter((e) => e.ruleIssues.length).length }} 人 · 当前筛选 {{ filtered.length }} 人
+      {{ showFormer ? '离职结算候选' : '本月人员' }} {{ roster.length }} 人 · 当前筛选
+      {{ filtered.length }} 人 · 可生成
+      {{ visibleEligible.length }} 人 · 档案待完善
+      {{ filtered.filter((e) => e.profileIssues.length).length }} 人 · 规则待完善
+      {{ filtered.filter((e) => e.ruleIssues.length).length }} 人
     </p>
     <el-table
-      ref="table"
       v-loading="loading"
       :data="filtered"
       row-key="employeeCode"
       max-height="420"
       border
-      @selection-change="selected = $event"
     >
-      <el-table-column
-        type="selection"
-        reserve-selection
-        width="46"
-        :selectable="(row: PayrollPreparationEmployee) => !busy && !row.locked"
-      />
+      <el-table-column width="46" align="center" fixed="left">
+        <template #header>
+          <el-checkbox
+            aria-label="选择当前筛选中可生成的员工"
+            :model-value="allVisibleSelected"
+            :indeterminate="selected.length > 0 && !allVisibleSelected"
+            :disabled="busy || loading || !visibleEligible.length"
+            @change="(value) => (value ? selectEligible() : clearSelection())"
+          />
+        </template>
+        <template #default="{ row }">
+          <el-checkbox
+            :aria-label="`选择 ${row.employeeName}（${row.employeeCode}）`"
+            :model-value="selectedCodes.has(row.employeeCode)"
+            :disabled="busy || loading || !eligibleCodes.has(row.employeeCode)"
+            @change="(value) => toggleSelection(row.employeeCode, value === true)"
+          />
+        </template>
+      </el-table-column>
       <el-table-column
         prop="employeeName"
         label="员工姓名"
@@ -155,7 +176,7 @@
             v-if="can('hr:payroll:calculate')"
             link
             type="primary"
-            :disabled="busy"
+            :disabled="busy || loading"
             @click="runPreview([row as PayrollPreparationEmployee])"
             >只读试算</el-button
           ></template
@@ -200,9 +221,9 @@
         v-if="can('hr:payroll:calculate')"
         type="primary"
         :loading="busy && operation === 'generate'"
-        :disabled="loading || !selectedEligible.length"
+        :disabled="busy || loading || !selected.length"
         @click="run()"
-        >开始计算 {{ selectedEligible.length }} 人</el-button
+        >开始计算 {{ selected.length }} 人</el-button
       >
     </template>
   </el-dialog>
@@ -211,8 +232,7 @@
 import { displayBusinessLabel as costLabel } from '@/utils/business-display'
 import { displayCell } from '@/utils/business-display'
 import { departmentScopeTree } from '@/utils/hr-department-tree'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { type TableInstance } from 'element-plus'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { errorMessage } from '@/api/core/error'
 import {
   getPayrollPreparation,
@@ -247,10 +267,13 @@ const emit = defineEmits<{
   'update:month': [string]
 }>()
 const { can } = useSupplyPermissions()
-const rows = ref<PayrollPreparationEmployee[]>([]),
-  selected = ref<PayrollPreparationEmployee[]>([])
-const table = ref<TableInstance>(),
-  loading = ref(false),
+const rows = ref<PayrollPreparationEmployee[]>([])
+const formerRows = ref<PayrollPreparationEmployee[]>([])
+const showFormer = ref(false)
+const verifiedFormerCodes = ref(new Set<string>())
+const roster = computed(() => (showFormer.value ? formerRows.value : rows.value))
+const selectedCodes = ref(new Set<string>())
+const loading = ref(false),
   error = ref(''),
   busy = ref(false),
   filter = ref('all'),
@@ -261,7 +284,7 @@ const roleFilter = ref('')
 const onlySelected = ref(false)
 const employeeDepartments = computed(() => [
   ...new Map(
-    rows.value
+    roster.value
       .filter((e) => e.departmentId != null)
       .map((e) => [
         e.departmentId,
@@ -284,55 +307,101 @@ const departmentOptions = computed(() => {
   return options(nodes)
 })
 const scoped = computed(() =>
-  rows.value.filter(
+  roster.value.filter(
     (e) =>
       (!selectedDepartment.value || e.departmentId === selectedDepartment.value) &&
       (!roleFilter.value || e.payrollCategory === roleFilter.value),
   ),
 )
-const eligible = computed(() => eligiblePayrollEmployees(scoped.value))
-const selectedEligible = computed(() => eligiblePayrollEmployees(selected.value))
-const filtered = computed(() =>
+const eligibleCodes = computed(() => {
+  const eligible = showFormer.value
+    ? formerRows.value.filter((row) => !row.locked && verifiedFormerCodes.value.has(row.employeeCode))
+    : eligiblePayrollEmployees(rows.value)
+  return new Set(eligible.map((row) => row.employeeCode))
+})
+const matchingRows = computed(() =>
   scoped.value.filter(
     (e) =>
       (!employeeNameFilter.value.trim() ||
         e.employeeName.includes(employeeNameFilter.value.trim())) &&
-      (!employeeCodeFilter.value.trim() ||
-        e.employeeCode.includes(employeeCodeFilter.value.trim())) &&
-      (!onlySelected.value ||
-        selected.value.some((person) => person.employeeCode === e.employeeCode)) &&
+      (!employeeCodeFilter.value.trim() || e.employeeCode.includes(employeeCodeFilter.value.trim())) &&
       (filter.value === 'all' ||
         (filter.value === 'missing' && e.profileIssues.length) ||
-        (filter.value === 'eligible' && eligible.value.includes(e)) ||
-        (filter.value === 'uncalculated' &&
-          (e.canCalculate ?? e.payrollCategory === 'SALES') &&
-          !e.payrollStatus) ||
+        (filter.value === 'eligible' && eligibleCodes.value.has(e.employeeCode)) ||
+        (filter.value === 'uncalculated' && eligibleCodes.value.has(e.employeeCode) && !e.payrollStatus) ||
         (filter.value === 'rules' && e.ruleIssues.length)),
   ),
 )
+const matchingEligible = computed(() =>
+  matchingRows.value.filter((row) => eligibleCodes.value.has(row.employeeCode)),
+)
+const selected = computed(() =>
+  matchingEligible.value.filter((row) => selectedCodes.value.has(row.employeeCode)),
+)
+const filtered = computed(() => (onlySelected.value ? selected.value : matchingRows.value))
+const visibleEligible = computed(() =>
+  onlySelected.value ? selected.value : matchingEligible.value,
+)
+const allVisibleSelected = computed(
+  () => visibleEligible.value.length > 0 && selected.value.length === visibleEligible.value.length,
+)
+watch(matchingEligible, (employees) => {
+  const codes = new Set(employees.map((row) => row.employeeCode))
+  selectedCodes.value = new Set([...selectedCodes.value].filter((code) => codes.has(code)))
+  if (!selectedCodes.value.size) onlySelected.value = false
+})
+
+function clearSelection() {
+  selectedCodes.value.clear()
+  onlySelected.value = false
+}
+function toggleSelection(code: string, checked: boolean) {
+  if (busy.value || loading.value) return
+  if (checked && visibleEligible.value.some((row) => row.employeeCode === code))
+    selectedCodes.value.add(code)
+  else selectedCodes.value.delete(code)
+  if (!selectedCodes.value.size) onlySelected.value = false
+}
 const previews = ref<PayrollPreview[]>([])
 const operation = ref<'preview' | 'generate'>('generate')
+function changeRoster(former: boolean) {
+  showFormer.value = former
+  clearSelection()
+  previews.value = []
+  outcomes.value = []
+}
 async function runPreview(people: PayrollPreparationEmployee[]) {
-  if (busy.value || !people.length) return
+  if (busy.value || loading.value || !people.length) return
   busy.value = true
   operation.value = 'preview'
   error.value = ''
   previews.value = []
   stopRequested.value = false
   const targetMonth = props.month
+  const rosterVersion = version
   try {
     await runPayrollEmployees(
       people.map((e) => e.employeeCode),
       async (code) => {
         try {
           const result = await previewPayroll(targetMonth, [code])
-          if (!disposed.value && targetMonth === props.month) previews.value.push(...result)
+          if (disposed.value || targetMonth !== props.month || rosterVersion !== version) return
+          previews.value.push(...result)
+          if (showFormer.value) {
+            if (result.some((item) => item.employeeCode === code && item.canGenerateFormerSettlement === true)) {
+              verifiedFormerCodes.value.add(code)
+            } else {
+              verifiedFormerCodes.value.delete(code)
+            }
+          }
         } catch (e) {
+          if (rosterVersion !== version) return
+          verifiedFormerCodes.value.delete(code)
           error.value = `${people.find((person) => person.employeeCode === code)?.employeeName || code}：${errorMessage(e, '试算失败，可单独重试')}`
         }
       },
       () => {},
-      () => !stopRequested.value,
+      () => !stopRequested.value && targetMonth === props.month,
     )
   } finally {
     busy.value = false
@@ -343,15 +412,19 @@ async function refresh() {
   const current = ++version
   loading.value = true
   error.value = ''
+  verifiedFormerCodes.value.clear()
   try {
     const result = await getPayrollPreparation(props.month)
     if (current === version) {
       rows.value = result.employees
+      formerRows.value = result.formerEmployees ?? []
       emit('loaded', rows.value)
     }
   } catch (e) {
     if (current === version) {
       rows.value = []
+      formerRows.value = []
+      clearSelection()
       emit('loaded', [])
       error.value = errorMessage(e, '核算准备加载失败')
     }
@@ -359,10 +432,9 @@ async function refresh() {
     if (current === version) loading.value = false
   }
 }
-async function selectEligible() {
-  const candidates = eligiblePayrollEmployees(filtered.value)
-  await nextTick()
-  for (const row of candidates) table.value?.toggleRowSelection(row, true)
+function selectEligible() {
+  if (busy.value || loading.value) return
+  selectedCodes.value = new Set(visibleEligible.value.map((row) => row.employeeCode))
 }
 const outcomes = ref<{ name: string; message: string; failed: boolean }[]>([]),
   completed = ref(0),
@@ -377,14 +449,14 @@ const progress = computed(() =>
   operationTotal.value ? Math.round((completed.value / operationTotal.value) * 100) : 0,
 )
 async function run() {
-  if (busy.value || !selectedEligible.value.length) return
+  if (busy.value || loading.value || !selected.value.length) return
   busy.value = true
   operation.value = 'generate'
   stopRequested.value = false
   outcomes.value = []
   completed.value = 0
   error.value = ''
-  const people = [...selectedEligible.value],
+  const people = [...selected.value],
     targetMonth = props.month
   operationTotal.value = people.length
   try {
@@ -411,7 +483,7 @@ async function run() {
       (done) => {
         completed.value = done
       },
-      () => !stopRequested.value,
+      () => !stopRequested.value && targetMonth === props.month,
     )
     if (!disposed.value) {
       await refresh()
@@ -424,10 +496,7 @@ async function run() {
 watch(
   () => props.month,
   () => {
-    table.value?.clearSelection()
-    selected.value = []
-    outcomes.value = []
-    previews.value = []
+    changeRoster(false)
     void refresh()
   },
   { immediate: true },

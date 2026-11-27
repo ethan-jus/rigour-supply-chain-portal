@@ -120,7 +120,7 @@ import type { PayrollComponentVersionView } from '@/api/core/payroll-scheme/mode
 import { getPayrollComponents } from '@/api/core/payroll-scheme/components'
 import { errorMessage } from '@/api/core/error'
 import { componentVersionState } from '@/utils/payroll-component-versions'
-import { businessDate, businessMonthRange } from '@/utils/business-date'
+import { businessDate, businessInstant, businessMonthRange } from '@/utils/business-date'
 import {
   getHrEmployees,
   hrOrganizationApi,
@@ -200,21 +200,27 @@ const assignmentDate = computed(() => {
   if (!entry || entry <= salaryMonth.value) return salaryMonth.value
   return entry <= businessMonthRange(salaryMonth.value.slice(0, 7))[1] ? entry : ''
 })
-const matchingAssignments = computed(() =>
-  assignmentDate.value
-    ? assignments.value.filter(
+const assignedDepartment = computed(() => {
+  if (!assignmentDate.value) return null
+  const from = businessInstant(assignmentDate.value).getTime()
+  const until = from + 86_400_000
+  const departments = new Set(
+    assignments.value
+      .filter(
         (row) =>
-          businessDate(row.effectiveFrom) <= assignmentDate.value &&
-          (!row.effectiveTo || businessDate(row.effectiveTo) >= assignmentDate.value),
+          businessInstant(row.effectiveFrom).getTime() < until &&
+          (!row.effectiveTo || businessInstant(row.effectiveTo).getTime() > from),
       )
-    : [],
-)
+      .map((row) => row.departmentId),
+  )
+  return departments.size === 1 ? [...departments][0]! : null
+})
 const employmentIssue = computed(() => {
   if (!props.employeeCode || employmentLoading.value) return ''
   if (employmentError.value) return employmentError.value
   if (!salaryMonth.value) return '请先选择有效的薪资生效月份'
   if (!assignmentDate.value) return '薪资生效月份早于该员工档案的入职月份，请核对生效月份'
-  if (matchingAssignments.value.length !== 1)
+  if (assignedDepartment.value == null)
     return '该员工在薪资生效月份没有唯一有效的任职部门，请核对入职日期和任职记录'
   return ''
 })
@@ -228,8 +234,8 @@ const plans = computed(() =>
       (!props.employeeCode ||
         (!employmentLoading.value &&
           !employmentIssue.value &&
-          matchingAssignments.value.length === 1 &&
-          p.definition.departmentIds.includes(matchingAssignments.value[0]!.departmentId))),
+          assignedDepartment.value != null &&
+          p.definition.departmentIds.includes(assignedDepartment.value))),
   ),
 )
 const activeSelection = computed(() =>

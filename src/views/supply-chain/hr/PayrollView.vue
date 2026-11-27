@@ -1038,6 +1038,7 @@ import { exportCommissionReviewWorkbook } from '@/utils/payroll-commission-revie
 import { loadBusinessDictionaries } from '@/utils/business-dictionary'
 import { auditLabel } from '../cost/cost-audit'
 import { displayRecordDateTime } from '@/utils/business-display'
+import { businessMonth } from '@/utils/business-date'
 import { displayRecordActor as auditActorLabel } from '@/utils/business-display'
 import { displayRecordDateTime as displayDateTime } from '@/utils/business-display'
 import { payrollRoles } from '@/utils/payroll-scheme'
@@ -1060,8 +1061,7 @@ async function locateRuleReview(review: PayrollRuleReview) {
   if (row) await showDetail(row, 'review')
 }
 function thisMonth() {
-  const date = new Date()
-  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0')
+  return businessMonth(new Date())
 }
 const month = ref(previousPayrollMonth()),
   employeeNameFilter = ref(''),

@@ -415,6 +415,7 @@ export interface PayrollPreparationEmployee {
 export interface PayrollPreparation {
   month: string
   employees: PayrollPreparationEmployee[]
+  formerEmployees?: PayrollPreparationEmployee[]
 }
 export type { PayrollPreview } from './payroll/models/PayrollPreview'
 export interface PayrollProfilePatch {

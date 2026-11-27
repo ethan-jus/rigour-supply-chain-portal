@@ -83,8 +83,9 @@ describe('月度薪酬流程', () => {
     ).toBe('部分发放')
   })
   it('默认上一个已结束月份，包括跨年', () => {
-    expect(previousPayrollMonth(new Date(2026, 0, 12))).toBe('2025-12')
-    expect(previousPayrollMonth(new Date(2026, 9, 12))).toBe('2026-09')
+    expect(previousPayrollMonth(new Date('2026-12-31T15:59:59Z'))).toBe('2026-11')
+    expect(previousPayrollMonth(new Date('2026-12-31T16:00:00Z'))).toBe('2026-12')
+    expect(previousPayrollMonth(new Date('2026-10-31T16:00:00Z'))).toBe('2026-10')
   })
   it('只选择未锁定销售，缺类别和总部不推断为销售', () => {
     const people = [

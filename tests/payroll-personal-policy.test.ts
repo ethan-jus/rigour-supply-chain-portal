@@ -322,7 +322,7 @@ describe('个人补贴按所选档案的任职和生效月关联', () => {
     expect(offeredPlans()).toEqual(['总部补贴'])
     expect(form.personalPolicy?.allowanceVersionId).toBe('其他部门补贴')
   })
-  it.each([{ history: [] }, { history: [assignment(), assignment({ id: 2 })] }])(
+  it.each([{ history: [] }, { history: [assignment(), assignment({ id: 2, departmentId: 2 })] }])(
     '缺失或重叠任职时不提供任意部门补贴，也不清空原关联：%j',
     async ({ history }) => {
       const form = await openForEmployment(history, '十月销售补贴')
@@ -331,10 +331,31 @@ describe('个人补贴按所选档案的任职和生效月关联', () => {
       expect(form.personalPolicy?.allowanceVersionId).toBe('十月销售补贴')
     },
   )
+  it('同一日多个任职记录归属同一部门时仍可匹配补贴', async () => {
+    await openForEmployment([assignment(), assignment({ id: 2 })], '十月销售补贴')
+    expect(offeredPlans()).toEqual(['十月销售补贴'])
+    expect(wrapper.vm.validate()).toBeNull()
+  })
   it('本次档案下月才入职时不借用同名旧档在本月的任职', async () => {
     await openForEmployment([assignment()], '十月销售补贴', '2026-11-01T00:00:00Z')
     expect(offeredPlans()).toEqual([])
     expect(wrapper.vm.validate()).toContain('早于该员工档案的入职月份')
+  })
+  it('上海零点交接时只使用新任职，同日白天交接仍待核对', async () => {
+    const from = '2026-09-01T00:00:00Z'
+    const midnight = '2026-09-30T16:00:00Z'
+    const history = (handover: string) => [
+      assignment({ departmentId: 2, effectiveFrom: from, effectiveTo: handover }),
+      assignment({ id: 2, effectiveFrom: handover }),
+    ]
+    await openForEmployment(history(midnight), '十月销售补贴', from)
+    expect(offeredPlans()).toEqual(['十月销售补贴'])
+    expect(wrapper.vm.validate()).toBeNull()
+    wrapper.unmount()
+
+    await openForEmployment(history('2026-10-01T03:00:00Z'), '十月销售补贴', from)
+    expect(offeredPlans()).toEqual([])
+    expect(wrapper.vm.validate()).toContain('没有唯一有效的任职部门')
   })
   it('任职读取失败保留原关联且不展示未经核实的候选项', async () => {
     await openForEmployment([assignment()], '十月销售补贴')

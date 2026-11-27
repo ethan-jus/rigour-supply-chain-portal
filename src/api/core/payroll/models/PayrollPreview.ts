@@ -9,6 +9,7 @@ export interface PayrollPreview {
   previousFingerprint: string | null
   currentFingerprint: string | null
   savedStatus: string | null
+  canGenerateFormerSettlement?: boolean
   calculation: PayrollCalculation
   previousCalculation: PayrollCalculation | null
 }

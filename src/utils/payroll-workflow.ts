@@ -1,4 +1,5 @@
 import type { PayrollPreparationEmployee, PayrollRecord } from '@/api/core/payroll'
+import { businessPeriodRange } from '@/utils/business-date'
 
 export function payrollMoney(value: number | null | undefined) {
   return value == null
@@ -20,7 +21,7 @@ export function payrollRole(row: PayrollRecord) {
   )
 }
 export function previousPayrollMonth(now = new Date()) {
-  return new Date(now.getFullYear(), now.getMonth() - 1, 1).toLocaleDateString('sv-SE').slice(0, 7)
+  return businessPeriodRange('last-month', now)[0].slice(0, 7)
 }
 export function payrollPaid(row: PayrollRecord) {
   // 历史已发放单没有结构化登记，沿用已完成状态，不伪造付款日期和凭证。
